@@ -1,0 +1,43 @@
+# Build artifacts
+dist/
+build/
+*.egg-info/
+*.manifest
+
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.Python
+
+# Virtual environment
+.venv/
+venv/
+env/
+
+# PyInstaller + EXE 产物 (太大, 不入库; f1opt.spec 除外)
+f1opt-app/
+f1opt-release/
+*.tar.gz
+
+# Runtime data
+data_store/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

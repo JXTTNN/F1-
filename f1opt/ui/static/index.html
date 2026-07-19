@@ -1,0 +1,1271 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>F1 2026 调教优化系统</title>
+<style>
+  :root{
+    --bg:#08090b; --panel:#111317; --panel2:#16191f; --line:#262a32;
+    --txt:#e6e8ec; --muted:#8a909c; --dim:#5b616e;
+    --red:#ff2d2d; --cyan:#00e5ff; --green:#22c55e; --amber:#f59e0b; --purple:#a78bfa;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:
+      radial-gradient(1200px 600px at 80% -10%, rgba(255,45,45,.06), transparent 60%),
+      radial-gradient(1000px 500px at -10% 110%, rgba(0,229,255,.05), transparent 60%),
+      var(--bg);
+    color:var(--txt);
+    font:13px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif;
+    min-height:100vh;
+  }
+  .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;font-variant-numeric:tabular-nums}
+  a{color:var(--cyan);text-decoration:none}
+  .hidden{display:none !important}
+
+  /* ---------- header ---------- */
+  header{
+    display:flex;align-items:center;justify-content:space-between;gap:16px;
+    padding:10px 16px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,#0d0f13,#0a0b0e);position:sticky;top:0;z-index:10;
+  }
+  .title{font-size:17px;font-weight:700;letter-spacing:.5px}
+  .title .accent{color:var(--red)}
+  .badges{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  .dot{width:10px;height:10px;border-radius:50%;display:inline-block;box-shadow:0 0 8px currentColor}
+  .dot.on{background:var(--green);color:var(--green)}
+  .dot.off{background:var(--red);color:var(--red)}
+  .badge{
+    padding:3px 9px;border-radius:11px;font-size:11px;font-weight:600;
+    border:1px solid var(--line);background:var(--panel2);color:var(--muted);
+    white-space:nowrap;
+  }
+  .badge.ok{color:var(--green);border-color:rgba(34,197,94,.4)}
+  .badge.bad{color:var(--red);border-color:rgba(255,45,45,.4)}
+  #iter-link{font-size:12px}
+
+  /* ---------- layout ---------- */
+  .grid{display:grid;grid-template-columns:340px 1fr 400px;gap:12px;padding:12px}
+  @media (max-width:1200px){.grid{grid-template-columns:1fr 1fr}}
+  @media (max-width:820px){.grid{grid-template-columns:1fr}}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px}
+  .panel h2{margin:0 0 10px;font-size:12px;letter-spacing:1px;color:var(--muted);text-transform:uppercase;font-weight:700}
+  .sub{font-size:11px;color:var(--dim);margin:2px 0 8px}
+
+  /* ---------- gauges ---------- */
+  .gauge-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+  .speed-box{grid-column:1 / -1;display:flex;align-items:baseline;justify-content:center;gap:8px;
+    background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px}
+  .speed-val{font-size:46px;font-weight:700;line-height:1;color:var(--cyan)}
+  .speed-unit{color:var(--muted);font-size:13px}
+  .gear-box{display:flex;flex-direction:column;align-items:center;justify-content:center;
+    background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px}
+  .gear-val{font-size:34px;font-weight:700;color:var(--amber);line-height:1}
+  .gear-lbl{font-size:10px;color:var(--muted);margin-top:2px}
+  .rpm-wrap{display:flex;flex-direction:column;justify-content:center;gap:5px}
+  .rpm-bar{height:14px;background:#000;border:1px solid var(--line);border-radius:4px;overflow:hidden;position:relative}
+  .rpm-fill{height:100%;width:0;background:linear-gradient(90deg,#22c55e 0%,#22c55e 55%,#f59e0b 75%,#ff2d2d 92%);transition:width .08s linear}
+  .rpm-ticks{display:flex;justify-content:space-between;font-size:10px;color:var(--dim)}
+
+  .pedal-row{display:grid;grid-template-columns:1fr 1fr auto;gap:10px;margin-bottom:10px;align-items:end}
+  .vbar-wrap{display:flex;flex-direction:column;align-items:center;gap:4px}
+  .vbar{width:26px;height:90px;background:#000;border:1px solid var(--line);border-radius:4px;position:relative;overflow:hidden}
+  .vbar .fill{position:absolute;left:0;right:0;bottom:0;height:0;transition:height .08s linear}
+  .vbar.throttle .fill{background:linear-gradient(0deg,#0ea5e9,#00e5ff)}
+  .vbar.brake .fill{background:linear-gradient(0deg,#b91c1c,#ff2d2d)}
+  .vbar-lbl{font-size:10px;color:var(--muted)}
+  .vbar-val{font-size:11px;color:var(--txt)}
+
+  .steer-wrap{display:flex;flex-direction:column;align-items:center;gap:4px}
+
+  .gforce-wrap{display:flex;flex-direction:column;align-items:center;gap:4px}
+
+  .lap-box{display:flex;align-items:baseline;justify-content:space-between;gap:8px;
+    background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-bottom:10px}
+  .lap-box .lbl{font-size:11px;color:var(--muted)}
+  .lap-time{font-size:24px;font-weight:700;color:var(--cyan)}
+  .lap-delta{font-size:18px;font-weight:700}
+  .lap-delta.faster{color:var(--green)}
+  .lap-delta.slower{color:var(--red)}
+  .lap-best{font-size:12px;color:var(--amber)}
+
+  .mini-bars{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .mini{display:flex;flex-direction:column;gap:3px}
+  .mini .head{display:flex;justify-content:space-between;font-size:10px;color:var(--muted)}
+  .mini .track{height:8px;background:#000;border:1px solid var(--line);border-radius:3px;overflow:hidden}
+  .mini .fill{height:100%;width:0;transition:width .15s linear}
+  .tyre-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:4px}
+  .tyre{display:flex;flex-direction:column;gap:2px}
+  .tyre .head{display:flex;justify-content:space-between;font-size:10px;color:var(--muted)}
+  .tyre .track{height:7px;background:#000;border:1px solid var(--line);border-radius:3px;overflow:hidden}
+  .tyre .fill{height:100%;width:0;transition:width .2s linear;background:linear-gradient(90deg,#22c55e,#f59e0b 60%,#ff2d2d)}
+
+  /* ---------- center ---------- */
+  .ctl-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
+  select,input[type=text]{background:var(--panel2);color:var(--txt);border:1px solid var(--line);border-radius:6px;padding:6px 8px;font-size:12px;outline:none}
+  select:focus,input:focus{border-color:var(--cyan)}
+  .btn{background:var(--panel2);color:var(--txt);border:1px solid var(--line);border-radius:6px;padding:7px 12px;font-size:12px;font-weight:600;cursor:pointer;transition:.12s}
+  .btn:hover{border-color:var(--cyan);color:var(--cyan)}
+  .btn.primary{background:linear-gradient(180deg,#1b1e25,#111317);border-color:rgba(255,45,45,.5);color:#ff6b6b}
+  .btn.primary:hover{color:#fff;border-color:var(--red)}
+  .btn.cyan{border-color:rgba(0,229,255,.4);color:var(--cyan)}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+  .predict-out{font-size:13px;color:var(--cyan);margin-top:6px}
+
+  /* ---------- search ---------- */
+  .search-gain{
+    display:flex;align-items:baseline;justify-content:space-between;gap:8px;
+    background:var(--panel2);border:1px solid var(--line);border-radius:8px;
+    padding:10px 12px;margin-bottom:8px
+  }
+  .search-gain .lbl{font-size:11px;color:var(--muted)}
+  .search-gain .val{font-size:24px;font-weight:700;color:var(--cyan)}
+  .search-gain .val.pos{color:var(--green)}
+  .search-gain .val.neg{color:var(--red)}
+  .search-laprow{display:flex;justify-content:space-between;gap:8px;font-size:12px;
+    background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:6px 10px;margin-bottom:8px}
+  .search-laprow .arrow{color:var(--muted);margin:0 4px}
+  table.search-diff{width:100%;border-collapse:collapse;font-size:11px;margin:6px 0 10px}
+  table.search-diff th,table.search-diff td{text-align:left;padding:4px 6px;border-bottom:1px solid var(--line);vertical-align:middle}
+  table.search-diff th{color:var(--muted);font-weight:600;font-size:10px;text-transform:uppercase}
+  table.search-diff td.pname{color:var(--cyan);white-space:nowrap}
+  table.search-diff td.ba{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-variant-numeric:tabular-nums}
+  table.search-diff td.ba .arrow{color:var(--muted);margin:0 4px}
+  table.search-diff td.delta.up{color:var(--green)}
+  table.search-diff td.delta.down{color:var(--red)}
+  .search-spark{display:block;width:100%;height:36px;margin:6px 0 10px}
+  .search-actions{display:flex;gap:8px;margin-top:6px;flex-wrap:wrap}
+  .search-status{font-size:11px;color:var(--dim);margin-top:6px}
+
+  .setup-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media (max-width:520px){.setup-grid{grid-template-columns:1fr}}
+  .setup-group h3{margin:0 0 6px;font-size:11px;color:var(--cyan);text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid var(--line);padding-bottom:3px}
+  .setup-group .row{display:flex;justify-content:space-between;font-size:12px;padding:2px 0}
+  .setup-group .row .name{color:var(--muted)}
+  .setup-group .row .val{color:var(--txt)}
+  .setup-group .row .val .u{color:var(--dim);font-size:10px;margin-left:2px}
+
+  .laplog{max-height:120px;overflow:auto;font-size:11px;margin-top:8px}
+  .laplog .line{padding:2px 0;border-bottom:1px dashed var(--line)}
+  .laplog .line .fast{color:var(--green)}
+  .laplog .line .slow{color:var(--amber)}
+  .laplog .empty{color:var(--dim)}
+
+  /* ---------- right (feedback) ---------- */
+  #right .summary{font-size:13px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-bottom:10px;white-space:pre-wrap}
+  table.dims{width:100%;border-collapse:collapse;font-size:11px;margin-bottom:10px}
+  table.dims th,table.dims td{text-align:left;padding:4px 5px;border-bottom:1px solid var(--line);vertical-align:top}
+  table.dims th{color:var(--muted);font-weight:600;font-size:10px;text-transform:uppercase}
+  table.dims td.name{color:var(--cyan);white-space:nowrap}
+  table.dims td.advice{color:var(--muted)}
+  .sugg{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-bottom:8px;font-size:12px}
+  .sugg .head{display:flex;justify-content:space-between;gap:8px;margin-bottom:4px}
+  .sugg .pname{color:var(--cyan);font-weight:700}
+  .sugg .ba{color:var(--txt)}
+  .sugg .arrow{color:var(--muted);margin:0 4px}
+  .sugg .gain{color:var(--green);font-size:11px}
+  .sugg .reason{color:var(--muted);font-size:11px;line-height:1.45}
+  .sources{max-height:160px;overflow:auto;font-size:10px;color:var(--dim);background:#000;border:1px solid var(--line);border-radius:6px;padding:6px 8px}
+  .sources .s{padding:1px 0}
+  .empty-msg{color:var(--dim);font-size:12px;font-style:italic}
+
+  /* ---------- chat ---------- */
+  .chat-wrap{margin:0 12px 12px}
+  #conv-log{max-height:200px;overflow:auto;margin-bottom:10px}
+  #conv-log .msg{padding:6px 9px;border-radius:8px;margin-bottom:6px;font-size:12px;max-width:88%;white-space:pre-wrap}
+  #conv-log .msg.user{background:rgba(0,229,255,.1);border:1px solid rgba(0,229,255,.25);margin-left:auto;text-align:right}
+  #conv-log .msg.bot{background:var(--panel2);border:1px solid var(--line);margin-right:auto}
+  #conv-log .msg .role{font-size:10px;color:var(--dim);display:block;margin-bottom:2px}
+  .chat-input{display:flex;gap:8px}
+  .chat-input input{flex:1}
+
+  /* ---------- iter panel ---------- */
+  #iter-panel{margin:12px}
+  #iter-panel pre{margin:0;font-size:11px;color:var(--muted);white-space:pre-wrap;max-height:240px;overflow:auto}
+  .iter-layout{display:grid;grid-template-columns:280px 1fr;gap:12px}
+  @media (max-width:820px){.iter-layout{grid-template-columns:1fr}}
+  .iter-list{max-height:340px;overflow:auto;border:1px solid var(--line);border-radius:8px;background:#000}
+  .iter-item{padding:8px 10px;border-bottom:1px solid var(--line);cursor:pointer;transition:.12s}
+  .iter-item:hover{background:rgba(0,229,255,.08)}
+  .iter-item.active{background:rgba(0,229,255,.14);border-left:3px solid var(--cyan)}
+  .iter-item .it-title{font-size:12px;color:var(--txt);font-weight:600}
+  .iter-item .it-meta{font-size:10px;color:var(--dim);margin-top:1px}
+  .iter-item .it-prev{font-size:10px;color:var(--muted);margin-top:3px;line-height:1.4;
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .iter-detail{max-height:340px;overflow:auto;background:#000;border:1px solid var(--line);border-radius:8px;padding:10px 12px;font-size:12px;line-height:1.55;color:var(--txt)}
+  .iter-detail .md h1,.iter-detail .md h2,.iter-detail .md h3{color:var(--cyan);margin:10px 0 4px}
+  .iter-detail .md h1{font-size:15px}.iter-detail .md h2{font-size:13px}.iter-detail .md h3{font-size:12px}
+  .iter-detail .md p{margin:3px 0}.iter-detail .md strong{color:var(--amber)}
+  .iter-detail .md code{background:var(--panel2);padding:0 3px;border-radius:3px;font-size:11px;color:var(--green)}
+  .iter-detail .md ul{margin:3px 0 3px 18px;padding:0}
+  .iter-detail .md blockquote{border-left:3px solid var(--line);color:var(--muted);margin:4px 0;padding-left:8px}
+  .iter-detail .md pre{background:var(--panel2);padding:6px;border-radius:4px;overflow:auto;font-size:11px;margin:4px 0}
+  .iter-detail .md table{border-collapse:collapse;width:100%;font-size:11px;margin:4px 0}
+  .iter-detail .md th,.iter-detail .md td{border:1px solid var(--line);padding:2px 5px;text-align:left}
+
+  /* ---------- evidence highlight ---------- */
+  .speed-box{position:relative}
+  #evidence-marker{position:absolute;top:6px;right:8px;font-size:10px;color:var(--amber);
+    background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.45);border-radius:4px;
+    padding:1px 6px;display:none;white-space:nowrap}
+  .evidence-flash{animation:evidencePulse 1.3s ease-out}
+  @keyframes evidencePulse{0%{box-shadow:0 0 0 0 rgba(245,158,11,.7),0 0 0 0 rgba(245,158,11,.5)}
+    100%{box-shadow:0 0 0 14px rgba(245,158,11,0),0 0 0 14px rgba(245,158,11,0)}}
+  .sources .s.source-click{cursor:pointer;border-radius:3px;padding:1px 4px;transition:.1s}
+  .sources .s.source-click:hover{background:rgba(0,229,255,.12);color:var(--cyan)}
+
+  /* ---------- toast ---------- */
+  #toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);
+    background:var(--panel2);border:1px solid var(--cyan);color:var(--txt);
+    padding:8px 14px;border-radius:8px;font-size:12px;z-index:200;
+    box-shadow:0 4px 18px rgba(0,0,0,.55);opacity:0;transition:opacity .2s;pointer-events:none;max-width:80vw}
+  #toast.show{opacity:1}
+
+  ::-webkit-scrollbar{width:8px;height:8px}
+  ::-webkit-scrollbar-thumb{background:#2a2e36;border-radius:4px}
+  ::-webkit-scrollbar-track{background:transparent}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="title">F1 2026 <span class="accent">调教优化系统</span></div>
+  <div class="badges">
+    <span><span id="ws-dot" class="dot off"></span> <span id="ws-label" class="mono" style="font-size:11px;color:var(--muted)">WS 未连接</span></span>
+    <span id="health-badge" class="badge">API …</span>
+    <a href="#" id="iter-link">迭代历史</a>
+  </div>
+</header>
+
+<div id="iter-panel" class="panel hidden">
+  <h2>迭代历史</h2>
+  <div class="iter-layout">
+    <div id="iter-list" class="iter-list"><div class="empty-msg" style="padding:10px">加载中…</div></div>
+    <div id="iter-detail" class="iter-detail"><span class="empty-msg">选择左侧迭代记录查看详情</span></div>
+  </div>
+</div>
+
+<main class="grid">
+  <!-- ============ LEFT: gauges ============ -->
+  <section class="panel" id="left">
+    <h2>实时遥测</h2>
+
+    <div class="gauge-row">
+      <div class="speed-box">
+        <span id="evidence-marker"></span>
+        <span id="speed" class="speed-val mono">0</span>
+        <span class="speed-unit">km/h</span>
+      </div>
+    </div>
+
+    <div class="gauge-row">
+      <div class="gear-box">
+        <span id="gear" class="gear-val mono">N</span>
+        <span class="gear-lbl">档位</span>
+      </div>
+      <div class="rpm-wrap">
+        <div class="rpm-bar"><div id="rpm-fill" class="rpm-fill"></div></div>
+        <div class="rpm-ticks mono"><span>0</span><span id="rpm-val">0</span><span>13000</span></div>
+      </div>
+    </div>
+
+    <div class="pedal-row">
+      <div class="vbar-wrap">
+        <span class="vbar-lbl">油门</span>
+        <div class="vbar throttle"><div id="throttle-fill" class="fill"></div></div>
+        <span id="throttle-val" class="vbar-val mono">0%</span>
+      </div>
+      <div class="vbar-wrap">
+        <span class="vbar-lbl">刹车</span>
+        <div class="vbar brake"><div id="brake-fill" class="fill"></div></div>
+        <span id="brake-val" class="vbar-val mono">0%</span>
+      </div>
+      <div class="steer-wrap">
+        <span class="vbar-lbl">方向</span>
+        <svg id="steer-svg" width="74" height="74" viewBox="0 0 100 100">
+          <g id="steer-g" transform="rotate(0 50 50)">
+            <circle cx="50" cy="50" r="40" fill="none" stroke="#2a2e36" stroke-width="6"/>
+            <circle cx="50" cy="50" r="40" fill="none" stroke="#00e5ff" stroke-width="2" stroke-dasharray="4 6"/>
+            <line x1="50" y1="10" x2="50" y2="50" stroke="#e6e8ec" stroke-width="4" stroke-linecap="round"/>
+            <line x1="14" y1="64" x2="50" y2="50" stroke="#e6e8ec" stroke-width="4" stroke-linecap="round"/>
+            <line x1="86" y1="64" x2="50" y2="50" stroke="#e6e8ec" stroke-width="4" stroke-linecap="round"/>
+            <circle cx="50" cy="50" r="7" fill="#ff2d2d"/>
+          </g>
+        </svg>
+        <span id="steer-val" class="vbar-val mono">0.00</span>
+      </div>
+    </div>
+
+    <div class="gforce-wrap" style="margin-bottom:10px;display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:center">
+      <svg id="gforce-svg" width="120" height="120" viewBox="0 0 120 120">
+        <rect x="1" y="1" width="118" height="118" fill="#000" stroke="#262a32"/>
+        <line x1="60" y1="6" x2="60" y2="114" stroke="#1b1e25"/>
+        <line x1="6" y1="60" x2="114" y2="60" stroke="#1b1e25"/>
+        <circle cx="60" cy="60" r="20" fill="none" stroke="#1b1e25"/>
+        <circle cx="60" cy="60" r="40" fill="none" stroke="#1b1e25"/>
+        <text x="62" y="14" fill="#5b616e" font-size="8">+G 纵</text>
+        <text x="100" y="58" fill="#5b616e" font-size="8">+G 横</text>
+        <circle id="g-dot" cx="60" cy="60" r="5" fill="#00e5ff" stroke="#fff" stroke-width="1"/>
+      </svg>
+      <div class="mini" style="gap:6px">
+        <div class="head"><span>横向 G</span><span id="glat-val" class="mono">0.00</span></div>
+        <div class="head"><span>纵向 G</span><span id="glong-val" class="mono">0.00</span></div>
+        <div class="head"><span>DRS</span><span id="drs-val" class="mono" style="color:var(--amber)">—</span></div>
+        <div class="head"><span>圈距</span><span id="lapdist-val" class="mono">0 m</span></div>
+      </div>
+    </div>
+
+    <div class="lap-box">
+      <div>
+        <div class="lbl">当前圈速</div>
+        <div id="lap-time" class="lap-time mono">—</div>
+      </div>
+      <div style="text-align:right">
+        <div class="lbl">Δ 最佳</div>
+        <div id="lap-delta" class="lap-delta mono">—</div>
+        <div class="lap-best">最佳 <span id="best-lap" class="mono">—</span></div>
+      </div>
+    </div>
+
+    <div class="mini-bars" style="margin-bottom:10px">
+      <div class="mini">
+        <div class="head"><span>ERS 储能</span><span id="ers-val" class="mono">0%</span></div>
+        <div class="track"><div id="ers-fill" class="fill" style="background:linear-gradient(90deg,#a78bfa,#00e5ff)"></div></div>
+      </div>
+      <div class="mini">
+        <div class="head"><span>燃油</span><span id="fuel-val" class="mono">0 kg</span></div>
+        <div class="track"><div id="fuel-fill" class="fill" style="background:linear-gradient(90deg,#f59e0b,#22c55e)"></div></div>
+      </div>
+    </div>
+
+    <h2 style="margin-top:6px">轮胎磨损</h2>
+    <div class="tyre-grid">
+      <div class="tyre"><div class="head"><span>FL 前左</span><span id="tw-fl" class="mono">0%</span></div><div class="track"><div id="tw-fl-fill" class="fill"></div></div></div>
+      <div class="tyre"><div class="head"><span>FR 前右</span><span id="tw-fr" class="mono">0%</span></div><div class="track"><div id="tw-fr-fill" class="fill"></div></div></div>
+      <div class="tyre"><div class="head"><span>RL 后左</span><span id="tw-rl" class="mono">0%</span></div><div class="track"><div id="tw-rl-fill" class="fill"></div></div></div>
+      <div class="tyre"><div class="head"><span>RR 后右</span><span id="tw-rr" class="mono">0%</span></div><div class="track"><div id="tw-rr-fill" class="fill"></div></div></div>
+    </div>
+  </section>
+
+  <!-- ============ CENTER: control ============ -->
+  <section class="panel" id="center">
+    <h2>赛道与调教</h2>
+    <div class="ctl-row">
+      <select id="track-select"></select>
+      <span id="track-info" class="sub" style="margin:0">—</span>
+    </div>
+
+    <div class="ctl-row">
+      <button id="predict-btn" class="btn primary">预测圈速</button>
+      <button id="feedback-btn" class="btn cyan">获取反馈</button>
+      <span id="predict-out" class="predict-out mono"></span>
+    </div>
+
+    <div class="ctl-row">
+      <label class="sub" style="margin:0;white-space:nowrap">车手风格</label>
+      <select id="driver-style-select">
+        <option value="default">默认</option>
+        <option value="aggressive">激进</option>
+        <option value="conservative">稳健</option>
+      </select>
+      <label class="sub" style="margin:0;white-space:nowrap" title="胎耗保护权重：0=单目标圈速，越高越保护轮胎">胎耗保护</label>
+      <select id="tire-wear-select">
+        <option value="0">关闭</option>
+        <option value="1">低 (1)</option>
+        <option value="2">中 (2)</option>
+        <option value="3">高 (3)</option>
+      </select>
+      <button id="search-btn" class="btn primary">调教搜索</button>
+      <span id="search-status" class="search-status"></span>
+    </div>
+
+    <h2 style="margin-top:14px">当前调教 (19 项) <button id="export-setup-btn" class="btn cyan" style="margin-left:8px;padding:3px 9px;font-size:11px">导出调教</button></h2>
+    <div id="setup-container" class="setup-grid"></div>
+
+    <h2 style="margin-top:14px">圈速日志 <button id="export-samples-btn" class="btn cyan" style="margin-left:8px;padding:3px 9px;font-size:11px">导出样本 (Parquet)</button></h2>
+    <div id="laplog" class="laplog"><div class="empty">暂无完赛圈…</div></div>
+  </section>
+
+  <!-- ============ RIGHT: feedback ============ -->
+  <section class="panel" id="right">
+    <h2>调教搜索结果</h2>
+    <div id="search-empty" class="empty-msg">点击「调教搜索」基于代理模型搜索最小化圈速的调教…</div>
+    <div id="search-results-wrap" class="hidden">
+      <div class="search-gain">
+        <span class="lbl">预测圈速收益</span>
+        <span id="search-gain-val" class="val mono">—</span>
+      </div>
+      <div class="search-laprow mono">
+        <span><span style="color:var(--muted)">基线</span> <span id="search-baseline-lap">—</span></span>
+        <span class="arrow">→</span>
+        <span><span style="color:var(--muted)">推荐</span> <span id="search-recommended-lap">—</span></span>
+      </div>
+      <svg id="search-spark" class="search-spark" viewBox="0 0 200 36" preserveAspectRatio="none"></svg>
+      <table class="search-diff">
+        <thead><tr><th>参数</th><th>基线 → 推荐</th><th>Δ</th></tr></thead>
+        <tbody id="search-diff-body"></tbody>
+      </table>
+      <div class="search-actions">
+        <button id="apply-recommended-btn" class="btn cyan">应用推荐调教</button>
+        <button id="export-recommended-btn" class="btn">导出调教</button>
+        <span id="apply-status" class="search-status"></span>
+      </div>
+    </div>
+
+    <h2 style="margin-top:14px">智能反馈</h2>
+    <div id="fb-summary" class="summary empty-msg">点击「获取反馈」基于最近 600 帧遥测生成调教建议…</div>
+    <div id="fb-dims-wrap" class="hidden">
+      <table class="dims">
+        <thead><tr><th>维度</th><th>数值</th><th>证据</th><th>建议</th></tr></thead>
+        <tbody id="fb-dims"></tbody>
+      </table>
+    </div>
+    <div id="fb-sugg-wrap" class="hidden">
+      <h2>调教建议</h2>
+      <div id="fb-sugg"></div>
+    </div>
+    <div id="fb-src-wrap" class="hidden">
+      <h2>证据来源</h2>
+      <div id="fb-sources" class="sources"></div>
+    </div>
+  </section>
+</main>
+
+<!-- ============ chat ============ -->
+<section class="panel chat-wrap">
+  <h2>对话</h2>
+  <div id="conv-log"></div>
+  <div class="chat-input">
+    <input id="chat-input" type="text" placeholder="向反馈引擎提问（如：为什么推头？/ 如何改善轮胎？）" autocomplete="off">
+    <button id="chat-send" class="btn cyan">发送</button>
+  </div>
+</section>
+
+<div id="toast"></div>
+
+<script>
+"use strict";
+(function(){
+  // ---------- setup parameter metadata (grouped, with Chinese labels + units) ----------
+  var SETUP_GROUPS = [
+    {group:"空气动力学", fields:[
+      {name:"front_wing",label:"前翼",unit:"clicks"},
+      {name:"rear_wing",label:"后翼",unit:"clicks"}
+    ]},
+    {group:"传动", fields:[
+      {name:"on_throttle_diff",label:"油门差速",unit:"%"},
+      {name:"off_throttle_diff",label:"收油差速",unit:"%"}
+    ]},
+    {group:"悬挂几何", fields:[
+      {name:"front_camber",label:"前轮外倾",unit:"°"},
+      {name:"rear_camber",label:"后轮外倾",unit:"°"},
+      {name:"front_toe",label:"前轮前束",unit:"°"},
+      {name:"rear_toe",label:"后轮前束",unit:"°"}
+    ]},
+    {group:"悬挂", fields:[
+      {name:"front_suspension",label:"前弹簧",unit:"clicks"},
+      {name:"rear_suspension",label:"后弹簧",unit:"clicks"},
+      {name:"front_arb",label:"前防倾杆",unit:"clicks"},
+      {name:"rear_arb",label:"后防倾杆",unit:"clicks"},
+      {name:"front_ride_height",label:"前离地",unit:"clicks"},
+      {name:"rear_ride_height",label:"后离地",unit:"clicks"}
+    ]},
+    {group:"制动", fields:[
+      {name:"brake_pressure",label:"制动压力",unit:"%"},
+      {name:"front_brake_bias",label:"前制动力",unit:"%"}
+    ]},
+    {group:"轮胎", fields:[
+      {name:"front_tyre_pressure",label:"前胎压",unit:"psi"},
+      {name:"rear_tyre_pressure",label:"后胎压",unit:"psi"}
+    ]},
+    {group:"燃油", fields:[
+      {name:"fuel_load",label:"燃油",unit:"kg"}
+    ]}
+  ];
+
+  var MAX_FRAMES = 600;
+
+  // Flat lookup: setup field name -> {label, unit} (built from SETUP_GROUPS).
+  var SETUP_META = {};
+  SETUP_GROUPS.forEach(function(g){
+    g.fields.forEach(function(f){ SETUP_META[f.name] = {label:f.label, unit:f.unit}; });
+  });
+
+  // Game-format group mapping — mirrors python CarSetup.to_game_format() exactly
+  // (same 7 groups, field names, and unit strings as f1opt/data/setup_schema.py).
+  var SETUP_GAME_GROUPS = [
+    {group:"Aerodynamics", fields:[
+      {name:"front_wing", unit:"clicks"},
+      {name:"rear_wing", unit:"clicks"}
+    ]},
+    {group:"Transmission", fields:[
+      {name:"on_throttle_diff", unit:"percent"},
+      {name:"off_throttle_diff", unit:"percent"}
+    ]},
+    {group:"Suspension Geometry", fields:[
+      {name:"front_camber", unit:"degrees"},
+      {name:"rear_camber", unit:"degrees"},
+      {name:"front_toe", unit:"degrees"},
+      {name:"rear_toe", unit:"degrees"}
+    ]},
+    {group:"Suspension", fields:[
+      {name:"front_suspension", unit:"clicks"},
+      {name:"rear_suspension", unit:"clicks"},
+      {name:"front_arb", unit:"clicks"},
+      {name:"rear_arb", unit:"clicks"},
+      {name:"front_ride_height", unit:"clicks"},
+      {name:"rear_ride_height", unit:"clicks"}
+    ]},
+    {group:"Brakes", fields:[
+      {name:"brake_pressure", unit:"percent"},
+      {name:"front_brake_bias", unit:"percent"}
+    ]},
+    {group:"Tyres", fields:[
+      {name:"front_tyre_pressure", unit:"psi"},
+      {name:"rear_tyre_pressure", unit:"psi"}
+    ]},
+    {group:"Fuel", fields:[
+      {name:"fuel_load", unit:"kg"}
+    ]}
+  ];
+  var GAME_FORMAT_TAG = "f1-25-setup-v1";
+
+  var state = {
+    ws:null, wsBackoff:1000, wsClosedByUser:false,
+    tracks:[], currentTrackId:"melbourne",
+    setup:{}, frames:[], lastFrame:null,
+    bestLap:null, lastLap:null, lapCount:0,
+    healthTimer:null,
+    // Iter-07: stable per-page-load session id for multi-turn feedback memory.
+    feedbackSessionId:null,
+    // Iter-14: rAF render throttling — only one DOM render per display refresh.
+    pendingRenderFrame:null, renderScheduled:false
+  };
+
+  // ---------- helpers ----------
+  function el(id){return document.getElementById(id);}
+  function clamp(v,a,b){return v<a?a:(v>b?b:v);}
+  function num(v,d){
+    if(v===null||v===undefined||isNaN(v)) return "—";
+    var n=Number(v);
+    if(d===undefined) return String(n);
+    return n.toFixed(d);
+  }
+  function fmtTime(s){
+    if(s===null||s===undefined||isNaN(s)) return "—";
+    var t=Number(s);
+    if(!isFinite(t)||t<=0) return "—";
+    var m=Math.floor(t/60), sec=t-m*60;
+    return (m>0?m+":":"")+sec.toFixed(3);
+  }
+  function setWidth(id,pct){var e=el(id); if(e) e.style.width=clamp(pct,0,100)+"%";}
+  function setHeight(id,pct){var e=el(id); if(e) e.style.height=clamp(pct,0,100)+"%";}
+  function setText(id,t){var e=el(id); if(e) e.textContent=t;}
+
+  async function fetchJSON(url, opts){
+    var r = await fetch(url, opts||{});
+    if(!r.ok){
+      var detail = "";
+      try{ var j=await r.json(); detail = j.detail||JSON.stringify(j); }catch(e){ try{detail=await r.text();}catch(e2){} }
+      throw new Error(r.status+" "+r.statusText+(detail?(": "+detail):""));
+    }
+    return r.json();
+  }
+
+  // ---------- toast ----------
+  var toastTimer=null;
+  function showToast(msg){
+    var t=el("toast"); if(!t) return;
+    t.textContent=msg; t.classList.add("show");
+    if(toastTimer) clearTimeout(toastTimer);
+    toastTimer=setTimeout(function(){ t.classList.remove("show"); }, 2400);
+  }
+
+  // ---------- export setup (mirrors python CarSetup.to_game_format) ----------
+  function setupToGameFormat(setup){
+    var groups={};
+    SETUP_GAME_GROUPS.forEach(function(g){
+      groups[g.group]=g.fields.map(function(f){
+        return {name:f.name, value:setup?setup[f.name]:undefined, unit:f.unit};
+      });
+    });
+    return {format:GAME_FORMAT_TAG, groups:groups};
+  }
+  function exportSetup(setup, label){
+    if(!setup){ showToast("无可导出的调教"); return; }
+    var data=setupToGameFormat(setup);
+    var blob;
+    try{ blob=new Blob([JSON.stringify(data,null,2)], {type:"application/json"}); }
+    catch(e){ showToast("导出失败: "+e.message); return; }
+    var url=URL.createObjectURL(blob);
+    var a=document.createElement("a");
+    a.href=url;
+    a.download="f1-setup-"+(state.currentTrackId||"setup")+".json";
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function(){ try{URL.revokeObjectURL(url);}catch(e){} }, 1500);
+    showToast("已导出"+(label?"（"+label+"）":"")+"调教 → "+a.download);
+  }
+
+  // ---------- evidence highlight ----------
+  // Tolerance for matching a feedback source frame_t to a live buffer frame
+  // (60Hz → 1 frame ≈ 0.0167s; allow ~3 frames slack).
+  function findFrameByT(t){
+    if(t===null||t===undefined||isNaN(t)) return null;
+    var tt=Number(t), best=null, bestDiff=1e9;
+    for(var i=0;i<state.frames.length;i++){
+      var ft=Number(state.frames[i].t);
+      if(isNaN(ft)) continue;
+      var d=Math.abs(ft-tt);
+      if(d<bestDiff){ bestDiff=d; best=state.frames[i]; }
+    }
+    return (best && bestDiff<=0.05) ? best : null;
+  }
+  function onSourceClick(s){
+    var t=Number(s.frame_t);
+    var f=findFrameByT(t);
+    if(f){
+      var marker=el("evidence-marker");
+      if(marker){
+        marker.textContent="◀ 证据 t="+num(t,2)+"s · "+esc(s.field)+"="+fmtVal(s.value);
+        marker.style.display="inline-block";
+        setTimeout(function(){ marker.style.display="none"; }, 3200);
+      }
+      var sb=el("speed-box");
+      if(sb){
+        sb.classList.remove("evidence-flash");
+        void sb.offsetWidth; // force reflow so the animation restarts
+        sb.classList.add("evidence-flash");
+      }
+      showToast("已在实时遥测定位证据帧 t="+num(t,2)+"s");
+    }else{
+      showToast("帧 t="+num(t,2)+"s（不在当前实时缓冲中）");
+    }
+  }
+
+  // ---------- tiny dependency-free markdown renderer ----------
+  function renderMarkdown(md){
+    if(!md) return '<span class="empty-msg">(空)</span>';
+    var lines=String(md).replace(/\r\n?/g,"\n").split("\n");
+    var html=[], inUl=false, inCode=false, inTable=false;
+    function closeUl(){ if(inUl){ html.push("</ul>"); inUl=false; } }
+    function closeTable(){ if(inTable){ html.push("</tbody></table>"); inTable=false; } }
+    for(var i=0;i<lines.length;i++){
+      var line=lines[i];
+      // fenced code block
+      if(/^\s*```/.test(line)){ closeUl(); closeTable();
+        if(inCode){ html.push("</pre>"); inCode=false; }
+        else{ html.push("<pre>"); inCode=true; }
+        continue; }
+      if(inCode){ html.push(esc(line)); continue; }
+      var s=line.trim();
+      if(!s){ closeUl(); closeTable(); continue; }
+      // headings
+      var hm=/^(#{1,6})\s+(.*)$/.exec(s);
+      if(hm){ closeUl(); closeTable();
+        var lvl=Math.min(hm[1].length,3);
+        html.push("<h"+lvl+">"+inlineMd(hm[2])+"</h"+lvl+">"); continue; }
+      // table (pipe rows)
+      if(/^\|.*\|$/.test(s) && i+1<lines.length && /^\|[\s:|-]+\|$/.test(lines[i+1].trim())){
+        closeUl();
+        if(!inTable){ html.push("<table><thead>"); inTable=true; }
+        var cells=s.replace(/^\||\|$/g,"").split("|").map(function(c){return c.trim();});
+        html.push("<tr>"+cells.map(function(c){return "<th>"+inlineMd(c)+"</th>";}).join("")+"</tr></thead><tbody>");
+        i++; // skip separator
+        continue;
+      }
+      if(inTable){
+        if(/^\|.*\|$/.test(s)){
+          var rc=s.replace(/^\||\|$/g,"").split("|").map(function(c){return c.trim();});
+          html.push("<tr>"+rc.map(function(c){return "<td>"+inlineMd(c)+"</td>";}).join("")+"</tr>");
+          continue;
+        }else{ closeTable(); }
+      }
+      // blockquote
+      if(/^>/.test(s)){ closeUl(); closeTable();
+        html.push("<blockquote>"+inlineMd(s.replace(/^>\s?/,""))+"</blockquote>"); continue; }
+      // unordered list
+      if(/^[-*]\s+/.test(s)){
+        if(!inUl){ html.push("<ul>"); inUl=true; }
+        html.push("<li>"+inlineMd(s.replace(/^[-*]\s+/,""))+"</li>"); continue;
+      }
+      closeUl(); closeTable();
+      html.push("<p>"+inlineMd(s)+"</p>");
+    }
+    if(inCode) html.push("</pre>");
+    closeUl(); closeTable();
+    return html.join("");
+  }
+  function inlineMd(s){
+    return esc(s)
+      .replace(/`([^`]+)`/g,'<code>$1</code>')
+      .replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>')
+      .replace(/\[([^\]]+)\]\(([^)]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>');
+  }
+
+  // ---------- tracks ----------
+  async function loadTracks(){
+    try{
+      var data = await fetchJSON("/api/tracks");
+      state.tracks = data.tracks||[];
+      var sel = el("track-select");
+      sel.innerHTML = "";
+      state.tracks.forEach(function(t){
+        var o=document.createElement("option");
+        o.value=t.track_id;
+        o.textContent="R"+t.round_number+" · "+t.circuit_name+(t.is_sprint?" (Sprint)":"");
+        sel.appendChild(o);
+      });
+      if(state.tracks.length){
+        var found=false;
+        for(var i=0;i<state.tracks.length;i++){ if(state.tracks[i].track_id===state.currentTrackId){sel.value=state.currentTrackId;found=true;break;} }
+        if(!found){ state.currentTrackId=state.tracks[0].track_id; sel.value=state.currentTrackId; }
+      }
+      renderTrackInfo();
+    }catch(e){
+      el("track-select").innerHTML="<option>不可用</option>";
+      el("track-info").textContent="赛道列表不可用";
+    }
+  }
+  function renderTrackInfo(){
+    var t=null;
+    for(var i=0;i<state.tracks.length;i++){ if(state.tracks[i].track_id===state.currentTrackId){t=state.tracks[i];break;} }
+    if(!t){ el("track-info").textContent="—"; return; }
+    el("track-info").textContent = t.country+" · "+(t.length_m/1000).toFixed(3)+" km · "+t.corners+" 弯 · "+t.track_type;
+  }
+
+  // ---------- setup ----------
+  async function loadSetup(){
+    try{
+      state.setup = await fetchJSON("/api/setup/default");
+      renderSetup();
+    }catch(e){
+      el("setup-container").innerHTML='<div class="empty-msg">默认调教不可用</div>';
+    }
+  }
+  function renderSetup(){
+    var c=el("setup-container"); c.innerHTML="";
+    SETUP_GROUPS.forEach(function(g){
+      var div=document.createElement("div"); div.className="setup-group";
+      var h=document.createElement("h3"); h.textContent=g.group; div.appendChild(h);
+      g.fields.forEach(function(f){
+        var v=state.setup[f.name];
+        var row=document.createElement("div"); row.className="row";
+        row.innerHTML='<span class="name">'+f.label+'</span>'+
+                      '<span class="val mono">'+(v===undefined||v===null?"—":v)+'<span class="u">'+f.unit+'</span></span>';
+        div.appendChild(row);
+      });
+      c.appendChild(div);
+    });
+  }
+
+  // ---------- websocket ----------
+  function wsURL(){
+    var proto = (location.protocol==="https:")?"wss:":"ws:";
+    return proto+"//"+location.host+"/ws/telemetry";
+  }
+  function setWSState(connected){
+    el("ws-dot").className = "dot "+(connected?"on":"off");
+    el("ws-label").textContent = connected?"WS 已连接":"WS 未连接";
+  }
+  function openWS(){
+    try{ state.ws = new WebSocket(wsURL()); }catch(e){ scheduleReconnect(); return; }
+    state.ws.onopen = function(){ state.wsBackoff=1000; setWSState(true); try{state.ws.send(JSON.stringify({cmd:"ping"}));}catch(e){} };
+    state.ws.onclose = function(){ setWSState(false); if(!state.wsClosedByUser) scheduleReconnect(); };
+    state.ws.onerror = function(){ try{state.ws.close();}catch(e){} };
+    state.ws.onmessage = function(ev){
+      try{
+        var msg = JSON.parse(ev.data);
+        if(msg.type==="frame") onFrame(msg);
+        else if(msg.type==="lap") onLap(msg);
+        else if(msg.type==="pong"){ /* keepalive ack */ }
+      }catch(e){ /* ignore malformed */ }
+    };
+  }
+  function scheduleReconnect(){
+    if(state.wsClosedByUser) return;
+    var delay = state.wsBackoff;
+    state.wsBackoff = Math.min(state.wsBackoff*2, 10000);
+    setTimeout(function(){ openWS(); }, delay);
+  }
+
+  function pushFrame(f){
+    state.frames.push(f);
+    if(state.frames.length>MAX_FRAMES) state.frames.splice(0, state.frames.length-MAX_FRAMES);
+  }
+
+  function onFrame(f){
+    state.lastFrame=f;
+    pushFrame(f);
+    // Iter-14: rAF throttling — store the latest frame and schedule a single
+    // render per display refresh. 60Hz WS bursts coalesce into one DOM update
+    // per frame, avoiding forced-reflow jank from many setText/setAttribute
+    // calls. The frame buffer (state.frames) still receives every frame so the
+    // trace lookup / feedback path see full-resolution data.
+    state.pendingRenderFrame=f;
+    if(!state.renderScheduled){
+      state.renderScheduled=true;
+      requestAnimationFrame(renderPendingFrame);
+    }
+  }
+
+  function renderPendingFrame(){
+    state.renderScheduled=false;
+    var f=state.pendingRenderFrame;
+    if(!f) return;
+    setText("speed", num(f.speed,0));
+    var gear=f.gear;
+    setText("gear", (gear===0||gear===null||gear===undefined)?"N":String(gear));
+    var rpm=Number(f.rpm)||0;
+    setWidth("rpm-fill", clamp(rpm/13000*100,0,100));
+    setText("rpm-val", num(rpm,0));
+
+    var thr=clamp(Number(f.throttle)||0,0,1);
+    var brk=clamp(Number(f.brake)||0,0,1);
+    setHeight("throttle-fill", thr*100);
+    setHeight("brake-fill", brk*100);
+    setText("throttle-val", (thr*100).toFixed(0)+"%");
+    setText("brake-val", (brk*100).toFixed(0)+"%");
+
+    var steer=clamp(Number(f.steer)||0,-1,1);
+    el("steer-g").setAttribute("transform","rotate("+(steer*180)+" 50 50)");
+    setText("steer-val", steer.toFixed(2));
+
+    var glat=Number(f.g_lat)||0, glong=Number(f.g_long)||0;
+    var gx=60+clamp(glat,-3,3)/3*50;
+    var gy=60-clamp(glong,-3,3)/3*50;
+    el("g-dot").setAttribute("cx",gx);
+    el("g-dot").setAttribute("cy",gy);
+    setText("glat-val", glat.toFixed(2));
+    setText("glong-val", glong.toFixed(2));
+    setText("drs-val", f.drs_allowed? "允许":"—");
+    setText("lapdist-val", num(f.lap_distance,0)+" m");
+
+    // lap time + delta
+    var lt=Number(f.lap_time);
+    if(isFinite(lt)&&lt>0){
+      setText("lap-time", fmtTime(lt));
+      if(state.bestLap!=null){
+        var d=lt-state.bestLap;
+        var de=el("lap-delta");
+        de.textContent=(d>=0?"+":"")+d.toFixed(3);
+        de.className="lap-delta mono "+(d<0?"faster":"slower");
+      }else{
+        setText("lap-delta","—");
+      }
+    }
+
+    // ERS / fuel
+    var ers=Number(f.ers_store);
+    if(isFinite(ers)){
+      var epct = ers<=1? ers*100 : ers;
+      setWidth("ers-fill", epct);
+      setText("ers-val", epct.toFixed(1)+"%");
+    }
+    var fuel=Number(f.fuel_in_tank);
+    if(isFinite(fuel)){
+      setWidth("fuel-fill", clamp(fuel/110*100,0,100));
+      setText("fuel-val", fuel.toFixed(1)+" kg");
+    }
+
+    // tyre wear
+    [["fl","tyre_wear_fl"],["fr","tyre_wear_fr"],["rl","tyre_wear_rl"],["rr","tyre_wear_rr"]].forEach(function(p){
+      var w=Number(f[p[1]]);
+      if(isFinite(w)){
+        var pct = w<=1? w*100 : w;
+        setWidth("tw-"+p[0]+"-fill", clamp(pct,0,100));
+        setText("tw-"+p[0], pct.toFixed(0)+"%");
+      }
+    });
+  }
+
+  function onLap(l){
+    state.lapCount++;
+    var clean = l.clean!==false;
+    var lt=Number(l.lap_time);
+    if(!isFinite(lt)||lt<=0) return;
+    state.lastLap=lt;
+    var isBest=false;
+    if(clean && (state.bestLap===null || lt<state.bestLap)){
+      state.bestLap=lt; isBest=true;
+    }
+    setText("best-lap", state.bestLap!=null?fmtTime(state.bestLap):"—");
+
+    var log=el("laplog");
+    if(log.querySelector(".empty")) log.innerHTML="";
+    var line=document.createElement("div"); line.className="line";
+    var secs=l.sector_times||[];
+    var secStr = secs.map(function(s){return num(s,3);}).join(" / ");
+    line.innerHTML='<span class="'+(isBest?"fast":"")+(clean?"":" slow")+'">#'+state.lapCount+
+      ' '+fmtTime(lt)+(isBest?' ★':'')+(clean?'':' (无效)')+'</span>'+
+      ' <span style="color:var(--dim)">['+secStr+']</span>';
+    log.insertBefore(line, log.firstChild);
+  }
+
+  // ---------- predict ----------
+  async function predict(){
+    var btn=el("predict-btn"); btn.disabled=true;
+    el("predict-out").textContent="预测中…";
+    try{
+      var body={setup:state.setup, track_id:state.currentTrackId};
+      var r=await fetchJSON("/api/predict",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+      el("predict-out").textContent="预测圈速 "+fmtTime(r.predicted_lap_time)+"  (模型 "+r.model_version+")";
+    }catch(e){
+      el("predict-out").textContent="预测不可用: "+e.message;
+    }finally{ btn.disabled=false; }
+  }
+
+  // ---------- search ----------
+  async function runSearch(){
+    var btn=el("search-btn"); btn.disabled=true;
+    var status=el("search-status");
+    status.textContent="搜索中… (80 迭代)";
+    el("search-empty").classList.add("hidden");
+    el("search-results-wrap").classList.add("hidden");
+    try{
+      var body={
+        track_id:state.currentTrackId,
+        driver_style:el("driver-style-select").value,
+        tire_wear_weight:parseFloat(el("tire-wear-select").value)||0,
+        iterations:80
+      };
+      var r=await fetchJSON("/api/search",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+      state.lastSearchResult=r;
+      renderSearch(r);
+      status.textContent="";
+    }catch(e){
+      var msg=e.message||String(e);
+      // Map common backend errors to Chinese hints.
+      if(/503/.test(msg)) msg="优化器不可用";
+      else if(/404/.test(msg)) msg="赛道不存在";
+      else if(/400/.test(msg)) msg="参数校验失败: "+msg;
+      el("search-empty").textContent="搜索失败: "+msg;
+      el("search-empty").classList.remove("hidden");
+      el("search-empty").className="empty-msg";
+      status.textContent="";
+    }finally{ btn.disabled=false; }
+  }
+
+  function renderSearch(r){
+    el("search-empty").classList.add("hidden");
+    el("search-results-wrap").classList.remove("hidden");
+
+    // Gain: positive = improvement (green); display as "+X.XX s".
+    var gain=Number(r.predicted_gain_s)||0;
+    var gEl=el("search-gain-val");
+    gEl.textContent=(gain>=0?"+":"")+gain.toFixed(3)+" s";
+    gEl.className="val mono "+(gain>0?"pos":(gain<0?"neg":""));
+
+    el("search-baseline-lap").textContent=fmtTime(r.baseline_lap_time);
+    el("search-recommended-lap").textContent=fmtTime(r.recommended_lap_time);
+
+    renderSparkline(r.search_trace||[]);
+
+    // Diff table: param name, before → after (with unit), delta (colored).
+    var tb=el("search-diff-body"); tb.innerHTML="";
+    var diffs=r.diff||[];
+    if(!diffs.length){
+      tb.innerHTML='<tr><td colspan="3" style="color:var(--dim)">推荐调教与基线一致 (无差异)</td></tr>';
+    }else{
+      diffs.forEach(function(d){
+        var meta=SETUP_META[d.name]||{label:d.name,unit:(d.unit||"")};
+        var delta=Number(d.delta)||0;
+        // For most params direction is parameter-specific; we color "improvement"
+        // green when gain is positive and the param moved (any change is part of
+        // the recommended direction). Use neutral coloring except lap-time-style
+        // metrics; here we color non-zero deltas by sign of the global gain.
+        var deltaCls = (gain>=0 && delta!==0) ? "up" : (delta<0?"down":"");
+        var tr=document.createElement("tr");
+        tr.innerHTML='<td class="pname">'+esc(meta.label)+'</td>'+
+          '<td class="ba">'+fmtVal(d.before)+'<span class="arrow">→</span>'+fmtVal(d.after)+
+          ' <span style="color:var(--dim);font-size:10px">'+esc(meta.unit||"")+'</span></td>'+
+          '<td class="delta '+deltaCls+'">'+(delta>=0?"+":"")+delta.toFixed(2)+'</td>';
+        tb.appendChild(tr);
+      });
+    }
+  }
+
+  function renderSparkline(trace){
+    var svg=el("search-spark");
+    svg.innerHTML="";
+    var n=trace.length;
+    if(n<2){ svg.innerHTML='<text x="100" y="20" text-anchor="middle" fill="#5b616e" font-size="10">无搜索轨迹</text>'; return; }
+    var lo=Math.min.apply(null,trace), hi=Math.max.apply(null,trace);
+    var range=(hi-lo)||1.0;
+    var W=200,H=36,pad=2;
+    var pts=[];
+    for(var i=0;i<n;i++){
+      var x=pad+(i/(n-1))*(W-2*pad);
+      var y=H-pad-((trace[i]-lo)/range)*(H-2*pad);
+      pts.push(x.toFixed(2)+","+y.toFixed(2));
+    }
+    // Baseline reference line (top of trace = first/baseline value).
+    var d="M"+pts.join(" L");
+    var bg=document.createElementNS("http://www.w3.org/2000/svg","rect");
+    bg.setAttribute("x","0");bg.setAttribute("y","0");
+    bg.setAttribute("width",W);bg.setAttribute("height",H);
+    bg.setAttribute("fill","#000");bg.setAttribute("stroke","#262a32");
+    svg.appendChild(bg);
+    var path=document.createElementNS("http://www.w3.org/2000/svg","path");
+    path.setAttribute("d",d);
+    path.setAttribute("fill","none");
+    path.setAttribute("stroke","#00e5ff");
+    path.setAttribute("stroke-width","1.4");
+    svg.appendChild(path);
+  }
+
+  function applyRecommended(){
+    var st=el("apply-status");
+    if(!state.lastSearchResult || !state.lastSearchResult.recommended){
+      st.textContent="无推荐调教可应用";
+      return;
+    }
+    state.setup=state.lastSearchResult.recommended;
+    renderSetup();
+    st.textContent="已应用推荐调教到「当前调教」";
+    setTimeout(function(){ st.textContent=""; }, 2500);
+  }
+
+  // ---------- feedback ----------
+  async function feedback(question){
+    var btn=el("feedback-btn");
+    if(btn) btn.disabled=true;
+    var frames = state.frames.slice(-MAX_FRAMES);
+    var body={frames:frames, setup:state.setup, track_id:state.currentTrackId, driver_style:el("driver-style-select").value};
+    // Iter-07: attach the per-page-load session id so the engine can resolve
+    // multi-turn references (刚才/那个/它/上面) against prior turns. Without
+    // this the backend treats each call as stateless (backward compatible).
+    if(state.feedbackSessionId) body.session_id=state.feedbackSessionId;
+    if(question) body.question=question;
+    try{
+      var r=await fetchJSON("/api/feedback",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+      renderFeedback(r);
+      return r;
+    }catch(e){
+      if(question){
+        appendConv("bot","反馈不可用: "+e.message);
+      }else{
+        el("fb-summary").textContent="反馈不可用: "+e.message;
+        el("fb-summary").className="summary";
+      }
+      return null;
+    }finally{ if(btn) btn.disabled=false; }
+  }
+
+  function renderFeedback(r){
+    el("fb-summary").textContent = r.summary||"(无摘要)";
+    el("fb-summary").className="summary";
+
+    var dims = r.dimensions||[];
+    if(dims.length){
+      var tb=el("fb-dims"); tb.innerHTML="";
+      dims.forEach(function(d){
+        var tr=document.createElement("tr");
+        tr.innerHTML='<td class="name">'+esc(d.name)+'</td>'+
+          '<td>'+esc(String(d.value))+'</td>'+
+          '<td>'+esc(d.evidence||"")+'</td>'+
+          '<td class="advice">'+esc(d.advice||"")+'</td>';
+        tb.appendChild(tr);
+      });
+      el("fb-dims-wrap").classList.remove("hidden");
+    }else{ el("fb-dims-wrap").classList.add("hidden"); }
+
+    var sugs = r.setup_suggestions||[];
+    if(sugs.length){
+      var sc=el("fb-sugg"); sc.innerHTML="";
+      sugs.forEach(function(s){
+        var div=document.createElement("div"); div.className="sugg";
+        div.innerHTML='<div class="head"><span class="pname">'+esc(s.name)+'</span>'+
+          '<span class="gain">'+esc(s.expected_gain||"")+'</span></div>'+
+          '<div class="ba mono">'+fmtVal(s.before)+' <span class="arrow">→</span> '+fmtVal(s.after)+
+          ' <span style="color:var(--dim);font-size:10px">'+esc(s.unit||"")+'</span></div>'+
+          '<div class="reason">'+esc(s.reason||"")+'</div>';
+        sc.appendChild(div);
+      });
+      el("fb-sugg-wrap").classList.remove("hidden");
+    }else{ el("fb-sugg-wrap").classList.add("hidden"); }
+
+    var srcs = r.sources||[];
+    if(srcs.length){
+      var ss=el("fb-sources"); ss.innerHTML="";
+      srcs.slice(0,200).forEach(function(s){
+        var d=document.createElement("div"); d.className="s source-click";
+        d.textContent="t="+num(s.frame_t,2)+"s  "+s.field+"="+num(s.value,2);
+        d.title="点击在实时遥测中定位此证据帧";
+        (function(src){ d.addEventListener("click", function(){ onSourceClick(src); }); })(s);
+        ss.appendChild(d);
+      });
+      el("fb-src-wrap").classList.remove("hidden");
+    }else{ el("fb-src-wrap").classList.add("hidden"); }
+  }
+  function fmtVal(v){
+    if(v===null||v===undefined) return "—";
+    var n=Number(v);
+    if(isNaN(n)) return String(v);
+    return (Math.abs(n)>=100?n.toFixed(0):n.toFixed(2));
+  }
+  function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];}); }
+
+  // ---------- conversation ----------
+  function appendConv(role, text){
+    var log=el("conv-log");
+    var d=document.createElement("div"); d.className="msg "+role;
+    d.innerHTML='<span class="role">'+(role==="user"?"我":"反馈引擎")+'</span>'+esc(text);
+    log.appendChild(d);
+    log.scrollTop=log.scrollHeight;
+  }
+  async function sendChat(){
+    var inp=el("chat-input");
+    var q=inp.value.trim();
+    if(!q) return;
+    appendConv("user",q);
+    inp.value="";
+    appendConv("bot","分析中…");
+    var r=await feedback(q);
+    // remove the "分析中…" placeholder
+    var log=el("conv-log");
+    if(log.lastChild && log.lastChild.classList.contains("msg") && log.lastChild.classList.contains("bot")){
+      log.removeChild(log.lastChild);
+    }
+    if(r){
+      appendConv("bot", r.summary||"(无摘要)");
+    }
+  }
+
+  // ---------- iterations (history panel) ----------
+  var iterCache=null;
+  async function loadIterations(){
+    el("iter-panel").classList.remove("hidden");
+    var list=el("iter-list");
+    var detail=el("iter-detail");
+    if(iterCache){ renderIterList(iterCache); return; }
+    list.innerHTML='<div class="empty-msg" style="padding:10px">加载中…</div>';
+    detail.innerHTML='<span class="empty-msg">选择左侧迭代记录查看详情</span>';
+    try{
+      var r=await fetchJSON("/api/iterations");
+      iterCache=r.iterations||[];
+      renderIterList(iterCache);
+    }catch(e){
+      list.innerHTML='<div class="empty-msg" style="padding:10px">迭代历史不可用: '+esc(e.message)+'</div>';
+    }
+  }
+  function renderIterList(items){
+    var list=el("iter-list"); list.innerHTML="";
+    if(!items.length){
+      list.innerHTML='<div class="empty-msg" style="padding:10px">暂无迭代记录</div>';
+      return;
+    }
+    items.forEach(function(it){
+      var d=document.createElement("div"); d.className="iter-item";
+      d.innerHTML='<div class="it-title">'+esc(it.iter)+' · '+esc(it.title||"(无标题)")+'</div>'+
+        '<div class="it-meta">'+esc(it.file||"")+(it.mtime?(" · "+esc(String(it.mtime).slice(0,19).replace("T"," "))):"")+'</div>'+
+        '<div class="it-prev">'+esc(it.summary_preview||"")+'</div>';
+      (function(iterId, node){
+        d.addEventListener("click", function(){
+          var prev=list.querySelector(".iter-item.active");
+          if(prev) prev.classList.remove("active");
+          node.classList.add("active");
+          loadIterDetail(iterId);
+        });
+      })(it.iter, d);
+      list.appendChild(d);
+    });
+    // auto-open the most recent iteration (last in the ascending list).
+    var lastNode=list.lastChild;
+    if(lastNode){ lastNode.classList.add("active"); loadIterDetail(items[items.length-1].iter); }
+  }
+  async function loadIterDetail(iterId){
+    var detail=el("iter-detail");
+    detail.innerHTML='<span class="empty-msg">加载中…</span>';
+    try{
+      var r=await fetchJSON("/api/iterations/"+encodeURIComponent(iterId));
+      detail.innerHTML='<div class="md">'+renderMarkdown(r.content||"")+'</div>';
+      detail.scrollTop=0;
+    }catch(e){
+      detail.innerHTML='<span class="empty-msg">加载失败: '+esc(e.message)+'</span>';
+    }
+  }
+
+  // ---------- health ----------
+  async function checkHealth(){
+    try{
+      var h=await fetchJSON("/api/health");
+      var b=el("health-badge");
+      b.textContent="API "+h.version+" · UDP "+(h.udp_listening?"监听中":"未监听");
+      b.className="badge ok";
+    }catch(e){
+      var b2=el("health-badge");
+      b2.textContent="API 不可用";
+      b2.className="badge bad";
+    }
+  }
+
+  // ---------- wire up ----------
+  function init(){
+    // Iter-07: generate a stable per-page-load session id for multi-turn
+    // feedback memory. Prefers crypto.randomUUID() when available; falls back
+    // to a Date+random token so older browsers (and tests without
+    // crypto.randomUUID) still get a unique id.
+    state.feedbackSessionId = (function(){
+      try{
+        if(window.crypto && typeof window.crypto.randomUUID === "function"){
+          return window.crypto.randomUUID();
+        }
+      }catch(e){ /* fall through to fallback */ }
+      return "sess-" + Date.now() + "-" + Math.random().toString(36).slice(2, 10);
+    })();
+
+    el("track-select").addEventListener("change", function(){
+      state.currentTrackId=this.value; renderTrackInfo();
+    });
+    el("predict-btn").addEventListener("click", predict);
+    el("feedback-btn").addEventListener("click", function(){ feedback(null); });
+    el("search-btn").addEventListener("click", runSearch);
+    el("apply-recommended-btn").addEventListener("click", applyRecommended);
+    el("export-setup-btn").addEventListener("click", function(){
+      exportSetup(state.setup, "当前调教");
+    });
+    el("export-recommended-btn").addEventListener("click", function(){
+      if(!state.lastSearchResult || !state.lastSearchResult.recommended){
+        showToast("无推荐调教可导出，请先执行调教搜索");
+        return;
+      }
+      exportSetup(state.lastSearchResult.recommended, "推荐调教");
+    });
+    el("export-samples-btn").addEventListener("click", async function(){
+      try{
+        var r=await fetch("/api/samples/parquet");
+        if(!r.ok){ showToast("导出失败: "+r.status); return; }
+        var blob=await r.blob();
+        var url=URL.createObjectURL(blob);
+        var a=document.createElement("a");
+        a.href=url; a.download="laps.parquet";
+        document.body.appendChild(a); a.click(); a.remove();
+        URL.revokeObjectURL(url);
+        showToast("已导出完整圈样本 (Parquet)");
+      }catch(e){ showToast("导出失败: "+esc(e.message)); }
+    });
+    el("chat-send").addEventListener("click", sendChat);
+    el("chat-input").addEventListener("keydown", function(e){ if(e.key==="Enter") sendChat(); });
+    el("iter-link").addEventListener("click", function(e){
+      e.preventDefault();
+      var p=el("iter-panel");
+      if(p.classList.contains("hidden")) loadIterations();
+      else p.classList.add("hidden");
+    });
+
+    checkHealth();
+    state.healthTimer=setInterval(checkHealth,5000);
+
+    loadTracks();
+    loadSetup();
+    openWS();
+  }
+
+  if(document.readyState==="loading") document.addEventListener("DOMContentLoaded", init);
+  else init();
+})();
+</script>
+</body>
+</html>

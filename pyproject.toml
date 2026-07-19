@@ -1,0 +1,105 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "f1opt"
+version = "0.1.0"
+description = "F1 2026 Setup Optimizer: telemetry, driver feedback, and setup search"
+requires-python = ">=3.11"
+readme = { text = "F1 2026 Setup Optimization System.", content-type = "text/plain" }
+license = { text = "Proprietary" }
+authors = [{ name = "F1OPT Team" }]
+dependencies = [
+    "fastapi",
+    "uvicorn[standard]",
+    "pydantic>=2",
+    "pyarrow",
+    "torch",
+    "numpy",
+    "httpx",
+    "websockets",
+    "structlog",
+    "slowapi",
+    "opentelemetry-api",
+    "opentelemetry-sdk",
+    "opentelemetry-exporter-otlp-proto-grpc",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "pytest-cov",
+    "ruff",
+    "mypy",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["f1opt*"]
+exclude = ["tests*", "data_store*", ".trae*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.per-file-ignores]
+# 测试模块允许宽松断言与未使用的 fixture 参数
+"tests/**" = ["E501"]
+# __init__.py 允许未解析 re-export
+"f1opt/**/__init__.py" = ["F401"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["f1opt"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+addopts = "-ra"
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+warn_unused_ignores = false
+warn_redundant_casts = true
+check_untyped_defs = false
+
+[[tool.mypy.overrides]]
+module = ["torch.*", "pyarrow.*", "opentelemetry.*"]
+ignore_missing_imports = true
+
+# --- coverage ---
+[tool.coverage.run]
+source = ["f1opt"]
+branch = true
+parallel = true
+omit = [
+    "f1opt/__init__.py",
+    "*/__pycache__/*",
+    "tests/*",
+    "scripts/*",
+]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+skip_empty = true
+precision = 2
+exclude_lines = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+    "if __name__ == .__main__.:",
+    "@(abc\\.)?abstractmethod",
+    "\\.\\.\\.",  # protocol stubs
+]
+
+[tool.coverage.html]
+directory = "htmlcov"
+
+[tool.coverage.xml]
+output = "coverage.xml"
