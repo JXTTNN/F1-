@@ -1721,10 +1721,10 @@ def _dim_corner_analysis(
 
     try:
         from f1opt.data.corners import (
-            get_corners,
-            problematic_corner_heuristic,
             corner_demand_summary,
             corner_setup_recommendations,
+            get_corners,
+            problematic_corner_heuristic,
         )
         corners = get_corners(track_id)
         if not corners:
