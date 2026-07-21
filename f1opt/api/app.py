@@ -38,7 +38,7 @@ from f1opt.data.tracks import ALL_TRACKS, TRACKS_BY_ID, get_track
 from f1opt.model.online_correction import ObservationBuffer, add_observation
 from f1opt.observability.audit import get_audit_logger
 from f1opt.observability.metrics import MetricsRegistry
-from f1opt.observability.tracing import span, is_tracing_enabled
+from f1opt.observability.tracing import is_tracing_enabled, span
 from f1opt.telemetry.aggregator import LapAggregator
 from f1opt.telemetry.aligner import TelemetryAligner
 from f1opt.telemetry.listener import TelemetryListener

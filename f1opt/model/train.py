@@ -29,6 +29,8 @@
 
 from __future__ import annotations
 
+from datetime import UTC
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -1081,8 +1083,8 @@ def _evaluate_ood(
 
 def _persist_training_metrics(
     metrics: dict[str, Any],
-    log_path: "Path | None" = None,
-) -> "Path":
+    log_path: Path | None = None,
+) -> Path:
     """Iter-118: 把训练指标追加到 JSONL 文件 (每行一条 JSON 记录).
 
     路径默认 ``{data_dir}/models/training_log.jsonl``. 追加模式, 每次训练写一行,
@@ -1096,7 +1098,7 @@ def _persist_training_metrics(
         实际写入的路径.
     """
     import json
-    from datetime import datetime, timezone
+    from datetime import datetime
     from pathlib import Path
 
     def _to_native(obj: Any) -> Any:
@@ -1116,7 +1118,7 @@ def _persist_training_metrics(
     log_path = Path(log_path)
     log_path.parent.mkdir(parents=True, exist_ok=True)
     record = {
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "model_version": MODEL_VERSION,
         **_to_native(metrics),
     }

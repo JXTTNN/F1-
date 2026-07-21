@@ -21,7 +21,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from f1opt.data.setup_schema import ALL_SETUP_FIELDS, SETUP_FIELDS, CarSetup
-from f1opt.model.surrogate import predict_lap_time
 
 
 @dataclass

@@ -14,8 +14,8 @@ from __future__ import annotations
 import pytest
 
 from f1opt.data.setup_schema import DEFAULT_SETUP, CarSetup
-from f1opt.model.optimizer import search_setup
 from f1opt.model.online_correction import ObservationBuffer, add_observation
+from f1opt.model.optimizer import search_setup
 from f1opt.model.surrogate import predict_lap_time
 
 # 每种赛道类型选一个代表 + 3 个别名赛道, 共 8 赛道 (覆盖全类型 + 别名回归).

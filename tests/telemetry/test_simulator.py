@@ -232,8 +232,8 @@ class TestMultiplePacketTypes:
         different-type packets share overall_frame_identifier, causing
         delta=0 and negative loss.
         """
-        from f1opt.telemetry.simulator import TelemetrySimulator
         from f1opt.telemetry.packet_loss import PacketLossDetector
+        from f1opt.telemetry.simulator import TelemetrySimulator
         sim = TelemetrySimulator(
             duration_s=0.5, packet_rate_hz=60,
             packet_types=(0, 6, 7),
