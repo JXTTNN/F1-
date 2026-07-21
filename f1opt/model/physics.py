@@ -32,6 +32,8 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass, field
 
+from f1opt.numeric import clamp as _clamp
+
 # === Tire thermodynamics (Iter-15) =========================================
 # F1 tires produce peak grip in a narrow window centred on ~90 °C. Below ~70 °C
 # the compound is too cold (graining); above ~110 °C it overheats (blistering).
@@ -168,18 +170,6 @@ FUEL_DENSITY_KG_PER_L = 0.75
 """F1 fuel density (kg/L)."""
 FUEL_BURN_FUEL_COEFF = 0.05
 """Extra burn fraction at full tank vs. empty (heavier car burns more)."""
-
-
-# ---------------------------------------------------------------------------
-# Small clamping helpers
-# ---------------------------------------------------------------------------
-def _clamp(value: float, low: float, high: float) -> float:
-    """Clamp ``value`` to ``[low, high]``."""
-    if value < low:
-        return low
-    if value > high:
-        return high
-    return value
 
 
 # === Iter-15: Tire thermodynamics ==========================================

@@ -22,6 +22,7 @@ from typing import Any
 import pyarrow as pa
 import pyarrow.parquet as pq
 
+from f1opt.numeric import safe_float as _safe_float
 from f1opt.observability.logging import get_logger
 
 from .packets import PacketHeader
@@ -69,21 +70,6 @@ class _LapState:
     dirty: bool = False  # set True if flashback detected mid-lap
     invalid_reason: str | None = None  # set if a field-level validation failed
     worst_flag: str = "OK"  # worst sample flag seen during this lap
-
-
-def _safe_float(v: Any, default: float = 0.0) -> float:
-    """Iter-124: Coerce ``v`` to float; ``None`` / non-numeric → ``default``.
-
-    Defensive helper for telemetry fields that may be ``None`` (explicit null
-    in parsed packet) or missing. Prevents ``float(None)`` TypeError that
-    would crash the aggregator subscriber loop.
-    """
-    if v is None:
-        return default
-    try:
-        return float(v)
-    except (TypeError, ValueError):
-        return default
 
 
 def _ensure_quality_flag_column(table: pa.Table) -> pa.Table:

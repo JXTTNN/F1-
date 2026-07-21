@@ -14,6 +14,8 @@ import math
 from dataclasses import dataclass
 from typing import Any
 
+from f1opt.numeric import clamp as _clamp
+
 __all__ = [
     "TrackConditionSnapshot",
     "TrackEvolutionModel",
@@ -28,10 +30,6 @@ __all__ = [
 # --------------------------------------------------------------------------- #
 # Helpers
 # --------------------------------------------------------------------------- #
-def _clamp(x: float, lo: float, hi: float) -> float:
-    return lo if x < lo else hi if x > hi else x
-
-
 def _sigmoid(x: float) -> float:
     if x >= 0:
         z = math.exp(-x)

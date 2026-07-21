@@ -29,6 +29,9 @@ from typing import Any
 
 import numpy as np
 
+from f1opt.numeric import coefficient_of_variation as _cv
+from f1opt.numeric import safe_float as _as_float
+
 __all__ = [
     "LapComparator",
     "SectorAnalyzer",
@@ -48,16 +51,6 @@ _SIGNIFICANT_CONSISTENCY_IMPROV_PCT = 0.10
 # --------------------------------------------------------------------------- #
 # Helpers
 # --------------------------------------------------------------------------- #
-def _as_float(value: Any, default: float = 0.0) -> float:
-    """Coerce ``value`` to float; return ``default`` on failure / None."""
-    if value is None:
-        return default
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return default
-
-
 def _lap_time(lap: dict[str, Any]) -> float | None:
     v = lap.get("lap_time")
     if v is None:
@@ -85,18 +78,6 @@ def _speed(lap: dict[str, Any], key: str) -> float | None:
         return float(v)
     except (TypeError, ValueError):
         return None
-
-
-def _cv(values: list[float] | np.ndarray) -> float:
-    """Coefficient of variation (std / |mean|); 0.0 for empty / zero-mean."""
-    arr = np.asarray(values, dtype=np.float64)
-    arr = arr[np.isfinite(arr)]
-    if arr.size == 0:
-        return 0.0
-    mean = float(np.mean(arr))
-    if abs(mean) < 1e-12:
-        return 0.0
-    return float(np.std(arr) / abs(mean))
 
 
 def _verdict_lap(delta: float, *, no_ref: bool = False) -> str:

@@ -28,6 +28,8 @@ from __future__ import annotations
 
 import math
 
+from f1opt.numeric import clamp as _clamp
+
 # === Physical constants ====================================================
 G_EARTH = 9.81
 """Gravitational acceleration (m/s^2)."""
@@ -90,15 +92,6 @@ _TOE_KEYS = {"front": ("front_toe",), "rear": ("rear_toe",)}
 # ---------------------------------------------------------------------------
 # Small helpers
 # ---------------------------------------------------------------------------
-def _clamp(value: float, low: float, high: float) -> float:
-    """Clamp ``value`` to ``[low, high]``."""
-    if value < low:
-        return low
-    if value > high:
-        return high
-    return value
-
-
 def _lookup(setup: dict, keys: tuple[str, ...], default: float = 0.0) -> float:
     """Return the first present key in ``setup`` (as float), else ``default``."""
     for k in keys:

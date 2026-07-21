@@ -22,6 +22,8 @@ from typing import Any
 import numpy as np
 
 from f1opt.driver.profile import DriverProfile
+from f1opt.numeric import clamp01 as _clamp01
+from f1opt.numeric import coefficient_of_variation as _cv
 
 __all__ = [
     "LEVEL_THRESHOLDS",
@@ -210,15 +212,6 @@ _LEARNING_STAGES: list[dict[str, Any]] = [
 
 
 # --- 通用工具 --------------------------------------------------------------
-def _clamp01(x: float) -> float:
-    """将 ``x`` 钳位到 [0, 1]。"""
-    if x < 0.0:
-        return 0.0
-    if x > 1.0:
-        return 1.0
-    return float(x)
-
-
 def _f_opt(d: dict[str, Any], key: str) -> float | None:
     """安全取字段并转 float; 缺失或不可转换返回 None。"""
     v = d.get(key)
@@ -228,17 +221,6 @@ def _f_opt(d: dict[str, Any], key: str) -> float | None:
         return float(v)
     except (TypeError, ValueError):
         return None
-
-
-def _cv(values: list[float]) -> float:
-    """变异系数 std/|mean|; 样本不足或均值为 0 返回 0.0。"""
-    if len(values) < 2:
-        return 0.0
-    arr = np.asarray(values, dtype=np.float64)
-    m = float(np.mean(arr))
-    if m == 0.0:
-        return 0.0
-    return float(np.std(arr) / abs(m))
 
 
 def _collect_floats(lap_metrics: list[dict[str, Any]], key: str) -> list[float]:

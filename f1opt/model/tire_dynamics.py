@@ -29,6 +29,8 @@ import math
 from dataclasses import dataclass
 from typing import Any
 
+from f1opt.numeric import clamp as _clamp
+
 __all__ = [
     "COMPOUND_PARAMS",
     "MagicFormulaTire",
@@ -66,10 +68,6 @@ _DEFAULT_COMPOUND = "soft"
 # --------------------------------------------------------------------------- #
 # Helpers
 # --------------------------------------------------------------------------- #
-def _clamp(x: float, lo: float, hi: float) -> float:
-    return lo if x < lo else hi if x > hi else x
-
-
 def _magic_formula(x: float, b: float, c: float, d: float, e: float) -> float:
     """Core Pacejka: F = D*sin(C*atan(B*x - E*(B*x - atan(B*x)))).
 
