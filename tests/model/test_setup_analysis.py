@@ -10,17 +10,13 @@
 
 from __future__ import annotations
 
-import pytest
-
 from f1opt.data.setup_schema import DEFAULT_SETUP, SETUP_FIELDS
 from f1opt.driver.profile import AGGRESSIVE_PROFILE, CONSERVATIVE_PROFILE
 from f1opt.model.setup_analysis import (
-    ParameterContribution,
     analyze_setup_contributions,
     explain_setup_change,
     rank_parameter_sensitivity,
 )
-from f1opt.model.surrogate import predict_lap_time
 
 
 def test_analyze_returns_18_params_excluding_fuel() -> None:

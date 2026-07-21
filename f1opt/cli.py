@@ -120,7 +120,8 @@ def build_parser() -> argparse.ArgumentParser:
             "Driver feedback with three precision levels:\n"
             "  [corner]  精确到某个弯道 (T1、T130R、发卡弯):\n"
             "    f1opt feedback --track suzuka --question '为什么 T1 入弯总推头?'\n"
-            "    f1opt feedback --track silverstone --question 'How should I adjust the diff for T8?'\n"
+            "    f1opt feedback --track silverstone "
+            "--question 'How should I adjust the diff for T8?'\n"
             "    f1opt feedback --track suzuka --question 'T3 弯心的时候后轮总滑, 不敢加油'\n"
             "    f1opt feedback --track suzuka --question 'T130R 出弯速度上不去, 总被甩开'\n"
             "  [sector]  某一段/扇区 (S2、直道段、连续弯段):\n"
@@ -447,8 +448,8 @@ def cmd_setup_validate(args: argparse.Namespace) -> int:
 
 def cmd_feedback(args: argparse.Namespace) -> int:
     """Generate driver feedback (rule-based or LLM-enhanced)."""
-    from f1opt.feedback.prompts import FEEDBACK_EXAMPLES
     from f1opt.driver.profile import DriverProfile
+    from f1opt.feedback.prompts import FEEDBACK_EXAMPLES
 
     # --list-examples: 按 granularity 分组打印车手反馈示例并退出
     if args.list_examples:

@@ -63,7 +63,6 @@ class TestSWAWeights:
         """restore() 恢复原始权重."""
         model = SurrogateModel()
         swa = _SWAWeights(model, swa_start=0, swa_freq=1)
-        orig_param = next(model.parameters()).detach().clone()
         swa.collect(model)
         # Modify model weights
         with torch.no_grad():

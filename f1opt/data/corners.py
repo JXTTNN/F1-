@@ -18,13 +18,11 @@ F1 2026 各赛道的逐弯结构化数据: 弯角编号 / 类型 / apex 速度 /
 """
 from __future__ import annotations
 
-import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Literal
 
-from f1opt.data.tracks import get_track
 from f1opt.data.track_engineering import get_track_engineering
-
+from f1opt.data.tracks import get_track
 
 CornerType = Literal["slow", "medium", "fast"]
 CornerDemand = Literal[
@@ -225,22 +223,22 @@ def generate_corner_profile(track_id: str) -> list[Corner]:
     # 赛道类型决定弯角速度分布
     if track.track_type == "high_speed_low_downforce":
         # Monza-like: 多直道 + 少慢弯, 极速高
-        slow_frac, med_frac, fast_frac = 0.25, 0.30, 0.45
+        slow_frac, _med_frac, fast_frac = 0.25, 0.30, 0.45
         speed_range = (75, 280)
     elif track.track_type == "street":
         # Monaco-like: 多慢弯, 极速低
-        slow_frac, med_frac, fast_frac = 0.55, 0.35, 0.10
+        slow_frac, _med_frac, fast_frac = 0.55, 0.35, 0.10
         speed_range = (50, 200)
     elif track.track_type == "high_downforce":
         # Hungaroring-like: 多中慢弯, 少直道
-        slow_frac, med_frac, fast_frac = 0.40, 0.45, 0.15
+        slow_frac, _med_frac, fast_frac = 0.40, 0.45, 0.15
         speed_range = (70, 230)
     elif track.track_type == "mixed":
         # Suzuka-like: 各类型均衡
-        slow_frac, med_frac, fast_frac = 0.35, 0.40, 0.25
+        slow_frac, _med_frac, fast_frac = 0.35, 0.40, 0.25
         speed_range = (70, 270)
     else:  # medium
-        slow_frac, med_frac, fast_frac = 0.33, 0.45, 0.22
+        slow_frac, _med_frac, fast_frac = 0.33, 0.45, 0.22
         speed_range = (75, 250)
 
     n_slow = max(1, int(round(n * slow_frac)))

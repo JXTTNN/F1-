@@ -22,15 +22,15 @@ adaptive Gaussian perturbations + 坐标轮换 polish), 行为与 Iter-02 一致
 
 from __future__ import annotations
 
-from typing import Any
 from math import exp as _exp
+from typing import Any
 
 import numpy as np
 from pydantic import BaseModel
 
 from f1opt.data.setup_schema import ALL_SETUP_FIELDS, DEFAULT_SETUP, CarSetup
 from f1opt.driver.profile import DriverProfile
-from f1opt.model.surrogate import MODEL_VERSION, predict_full, predict_lap_time
+from f1opt.model.surrogate import MODEL_VERSION, predict_full
 
 # scipy 可选依赖: 不可用时回退 numpy 多起点局部搜索 (Iter-02 路径).
 try:
@@ -507,7 +507,7 @@ def _search(
             if uncached_setups:
                 items = [(s, track_id, driver_profile) for s in uncached_setups]
                 preds = model.predict_batch(items)
-                for idx, setup, pred in zip(
+                for idx, _setup, pred in zip(
                     uncached_idxs, uncached_setups, preds, strict=True,
                 ):
                     lap = float(pred["lap_time"])

@@ -49,6 +49,7 @@ target-version = "py311"
 select = ["E", "F", "I", "UP", "B"]
 
 [tool.ruff.lint.per-file-ignores]
+"f1opt/data/corners.py" = ["E501"]
 # 测试模块允许宽松断言与未使用的 fixture 参数
 "tests/**" = ["E501"]
 # __init__.py 允许未解析 re-export

@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from f1opt.data.setup_schema import DEFAULT_SETUP
 from f1opt.data.tracks import TRACKS_BY_ID
 from f1opt.model.confidence import confidence_label, prediction_confidence

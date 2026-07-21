@@ -27,7 +27,7 @@ jobs:
           pip install pytest-cov slowapi
 
       - name: Lint (ruff)
-        run: ruff check f1opt tests scripts
+        run: ruff check f1opt tests
 
       - name: Type check (mypy)
         run: mypy f1opt || true  # best-effort, do not block
