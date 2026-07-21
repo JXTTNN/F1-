@@ -12,6 +12,10 @@ from collections import OrderedDict
 from collections.abc import Callable
 from typing import Any
 
+from f1opt.observability.logging import get_logger
+
+log = get_logger(__name__)
+
 __all__ = [
     "SetupCache",
     "PrecomputedLookups",
@@ -172,7 +176,8 @@ class WarmupCache:
                 predict_lap_time(DEFAULT_SETUP, tid, None)
                 warmed += 1
             except Exception:
-                pass  # Skip tracks that fail (unknown / model unavailable).
+                # Skip tracks that fail (unknown / model unavailable).
+                log.debug("warmup_surrogate skipped track", track_id=tid, exc_info=True)
 
         elapsed = time.perf_counter() - start
 
@@ -190,7 +195,7 @@ class WarmupCache:
                     after = cache_info_before().hits
                     cache_hits = after - before
             except Exception:
-                pass
+                log.debug("warmup_surrogate cache-hit probe failed", exc_info=True)
 
         return {
             "tracks_warmed": warmed,

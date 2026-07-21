@@ -22,6 +22,10 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from f1opt.observability.logging import get_logger
+
+log = get_logger(__name__)
+
 __all__ = [
     "ConversationFlow",
     "ExplanationGenerator",
@@ -634,5 +638,6 @@ class ConversationFlow:
             from f1opt.data.tracks import get_track
 
             return get_track(track_id).circuit_name
-        except Exception:
+        except (ImportError, ValueError):
+            log.debug("circuit name lookup failed", track_id=track_id, exc_info=True)
             return track_id

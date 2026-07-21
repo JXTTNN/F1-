@@ -37,12 +37,15 @@ from f1opt.data.setup_schema import DEFAULT_SETUP, CarSetup
 from f1opt.data.tracks import ALL_TRACKS, TRACKS_BY_ID, get_track
 from f1opt.model.online_correction import ObservationBuffer, add_observation
 from f1opt.observability.audit import get_audit_logger
+from f1opt.observability.logging import get_logger
 from f1opt.observability.metrics import MetricsRegistry
 from f1opt.observability.tracing import span, is_tracing_enabled
 from f1opt.telemetry.aggregator import LapAggregator
 from f1opt.telemetry.aligner import TelemetryAligner
 from f1opt.telemetry.listener import TelemetryListener
 from f1opt.telemetry.packets import PacketHeader
+
+log = get_logger(__name__)
 
 # Fields exposed by the public Track dict (shared API contract).
 _TRACK_FIELDS: tuple[str, ...] = (
@@ -261,6 +264,7 @@ def _packet5_setup_to_carsetup(pkt5_setup: dict[str, Any]) -> CarSetup | None:
             kwargs["rear_tyre_pressure"] = (rl + rr) / 2.0
         return CarSetup(**kwargs)
     except Exception:
+        log.debug("failed to build CarSetup from packet 5 telemetry", exc_info=True)
         return None
 
 
@@ -315,7 +319,7 @@ def _feed_observation_buffer(state: _TelemetryState, row: dict[str, Any]) -> Non
         )
     except Exception:
         # 反馈闭环是 best-effort: 不阻塞遥测主路径
-        pass
+        log.debug("observation-buffer feed failed (best-effort)", exc_info=True)
 
 
 def _make_subscriber(state: _TelemetryState) -> Any:
@@ -551,6 +555,7 @@ def create_app(start_listener: bool = True) -> FastAPI:
             from f1opt.model.surrogate import predict_lap_time  # noqa: F401
             model_ready = True
         except Exception:
+            log.warning("readiness probe: surrogate model unavailable", exc_info=True)
             model_ready = False
         return {
             "ready": model_ready,

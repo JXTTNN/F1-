@@ -44,6 +44,9 @@ from f1opt.data.ea_f1_2026_benchmark import EA_F1_2026_LAP_TIME_BENCHMARK
 from f1opt.data.sector_times import sector_times_for
 from f1opt.data.setup_schema import CarSetup
 from f1opt.data.tracks import TRACKS_BY_ID, Track
+from f1opt.observability.logging import get_logger
+
+log = get_logger(__name__)
 
 # --- 维度常量 ---------------------------------------------------------------
 SETUP_DIM = 19
@@ -296,13 +299,13 @@ def _normalize_driver_vector(driver_profile: Any) -> np.ndarray:
         if isinstance(driver_profile, DriverProfile) and hasattr(driver_profile, "to_vector"):
             return _driver_vec_from_iterable(driver_profile.to_vector())
     except Exception:
-        pass
+        log.debug("driver_profile.to_vector() via DriverProfile failed", exc_info=True)
     # 鸭子类型: 任何带 to_vector() 的对象.
     if hasattr(driver_profile, "to_vector"):
         try:
             return _driver_vec_from_iterable(driver_profile.to_vector())
         except Exception:
-            pass
+            log.debug("driver_profile.to_vector() duck-typed conversion failed", exc_info=True)
     # Iter-93: 无法识别的输入回退到中性 [0.5]*8 (非全零)
     return np.full(DRIVER_DIM, 0.5, dtype=np.float32)
 

@@ -53,6 +53,9 @@ from f1opt.model.surrogate import (
     response_priors,
     sector_priors,
 )
+from f1opt.observability.logging import get_logger
+
+log = get_logger(__name__)
 
 # --- 分段结构 ---------------------------------------------------------------
 # 每段弯角数占比 (中段最多), 用于区分各段性质.
@@ -340,7 +343,7 @@ def _driver_exemplars() -> list[np.ndarray]:
         if any(np.any(v != 0) for v in exemplars):
             return exemplars
     except Exception:
-        pass
+        log.debug("driver.profile exemplars unavailable; using built-in fallback", exc_info=True)
     return [
         np.array([0.9, 0.8, 0.7, 0.6, 0.85, 0.5, 0.7, 0.8], dtype=np.float32),
         np.array([0.3, 0.4, 0.3, 0.5, 0.2, 0.6, 0.3, 0.3], dtype=np.float32),

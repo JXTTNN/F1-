@@ -23,6 +23,10 @@ from typing import Any
 
 import numpy as np
 
+from f1opt.observability.logging import get_logger
+
+log = get_logger(__name__)
+
 __all__ = [
     "ParetoFront",
     "MultiObjectiveOptimizer",
@@ -364,6 +368,7 @@ class MultiObjectiveOptimizer:
                 + float(resp["tyre_load_spread"])
             )
         except Exception:
+            log.debug("pareto objective prediction failed; using fallback", exc_info=True)
             lap, wear = 90.0, 0.7
         return [lap, wear]
 

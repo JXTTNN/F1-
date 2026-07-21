@@ -45,6 +45,7 @@ from f1opt.config import Settings, get_settings
 from f1opt.data.setup_schema import SETUP_FIELDS, _snap_to_step
 from f1opt.data.tracks import Track, get_track
 from f1opt.driver.profile import DriverProfile
+from f1opt.observability.logging import get_logger
 
 from .conversation import ConversationSession, get_session
 from .prompts import (
@@ -54,6 +55,8 @@ from .prompts import (
     format_driver_profile,
 )
 from .quality import assess_response_quality
+
+log = get_logger(__name__)
 
 __all__ = [
     "FEEDBACK_DIMENSIONS",
@@ -549,11 +552,13 @@ def _normalize_driver_profile(
         try:
             return DriverProfile(**driver_profile)
         except Exception:
+            log.debug("invalid driver_profile dict; ignoring personalisation", exc_info=True)
             return None
     if isinstance(driver_profile, (list, tuple)):
         try:
             return DriverProfile.from_vector(list(driver_profile))
         except Exception:
+            log.debug("invalid driver_profile vector; ignoring personalisation", exc_info=True)
             return None
     return None
 
@@ -2043,8 +2048,9 @@ def llm_enhance(
         if text:
             feedback = {**feedback, "summary": text}
     except Exception:
-        # Fall back silently to the rule-based summary. Iter-138: log the
+        # Fall back to the rule-based summary. Iter-138: log the
         # failed call (zero tokens) for call-count accuracy.
+        log.debug("LLM enhancement failed; using rule-based summary", exc_info=True)
         tk.record(backend, model_name, None, success=False, streamed=False)
     return feedback
 
@@ -2152,7 +2158,8 @@ async def llm_enhance_async(
         if text:
             feedback = {**feedback, "summary": text}
     except Exception:
-        # Fall back silently. Iter-138: log failed call for call-count accuracy.
+        # Fall back. Iter-138: log failed call for call-count accuracy.
+        log.debug("async LLM enhancement failed; using rule-based summary", exc_info=True)
         tk.record(backend, model_name, None, success=False, streamed=False)
     return feedback
 
@@ -2212,7 +2219,7 @@ def _build_llm_messages(
                 )
         except Exception:
             # Best-effort: if granularity classification fails, default to overall.
-            pass
+            log.debug("granularity classification failed; defaulting to overall", exc_info=True)
     # Stash granularity on the feedback dict so run() can surface it.
     feedback["granularity"] = granularity_str
     if corner_ref:
@@ -2361,8 +2368,9 @@ def llm_enhance_stream(
                             )
                             recorded = True
     except Exception:
-        # Fall back silently: stop yielding; caller keeps rule-based summary.
+        # Fall back: stop yielding; caller keeps rule-based summary.
         # Iter-138: log failed call only if we never recorded a success.
+        log.debug("streaming LLM enhancement failed; using rule-based summary", exc_info=True)
         if not recorded:
             tk.record(backend, model_name, None, success=False, streamed=True)
         return
@@ -2440,7 +2448,8 @@ async def llm_enhance_stream_async(
                             )
                             recorded = True
     except Exception:
-        # Fall back silently: stop yielding; caller keeps rule-based summary.
+        # Fall back: stop yielding; caller keeps rule-based summary.
+        log.debug("async streaming LLM enhancement failed; using rule-based summary", exc_info=True)
         if not recorded:
             tk.record(backend, model_name, None, success=False, streamed=True)
         return
