@@ -24,6 +24,10 @@ from typing import Any
 
 import numpy as np
 
+from f1opt.observability.logging import get_logger
+
+log = get_logger(__name__)
+
 __all__ = [
     "GaussianProcessSurrogate",
     "BayesianOptimizer",
@@ -164,7 +168,7 @@ class GaussianProcessSurrogate:
                 self.signal = max(float(res.x[1]), 1e-3)
                 self.noise = max(float(res.x[2]), _NOISE_FLOOR)
         except Exception:
-            pass  # keep defaults
+            log.debug("GP hyperparameter optimization failed; keeping defaults", exc_info=True)
 
     # ------------------------------------------------------------------ #
     def predict(self, X: np.ndarray) -> tuple[np.ndarray, np.ndarray]:

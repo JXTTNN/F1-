@@ -59,6 +59,9 @@ from f1opt.model.pu_2026 import (
 from f1opt.model.safety_car import SafetyCarModel
 from f1opt.model.tire_curve import lap_time_delta_s as tire_lap_delta_s
 from f1opt.model.tire_temperature import tire_temp_penalty_s as _tire_temp_penalty_s
+from f1opt.observability.logging import get_logger
+
+log = get_logger(__name__)
 
 # --------------------------------------------------------------------------- #
 # 校准锚点 (reference state)
@@ -764,7 +767,8 @@ class MultiStintSimulator2026:
             from f1opt.model.pit_crew import expected_pit_stop_time_s
             # pit_loss_s 已含平均换胎, crew offset = 该队 - 平均
             return expected_pit_stop_time_s(self.team_id) - 3.0
-        except Exception:
+        except (ImportError, KeyError, ValueError):
+            log.debug("pit crew offset unavailable", team_id=self.team_id, exc_info=True)
             return 0.0
 
     def _resolved_pit_loss_s(self) -> float:

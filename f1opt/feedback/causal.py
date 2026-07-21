@@ -40,6 +40,9 @@ from __future__ import annotations
 from typing import Any
 
 from f1opt.data.setup_schema import SETUP_FIELDS, CarSetup, SetupField, _snap_to_step
+from f1opt.observability.logging import get_logger
+
+log = get_logger(__name__)
 
 __all__ = [
     "ACCOMPANYING_RULES",
@@ -439,7 +442,8 @@ class WhatIfAnalyzer:
             from f1opt.data.tracks import get_track
 
             return get_track(self.track_id).track_type
-        except Exception:
+        except (ImportError, ValueError):
+            log.debug("track_type lookup failed", track_id=self.track_id, exc_info=True)
             return None
 
     def _base_lap(self) -> float:

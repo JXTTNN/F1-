@@ -25,6 +25,9 @@ from f1opt.model.surrogate import (
     predict_full,
     predict_lap_time,
 )
+from f1opt.observability.logging import get_logger
+
+log = get_logger(__name__)
 
 # 胎耗代理参考常数 (与 f1opt.model.optimizer 一致, 自然单位).
 _TYRE_TEMP_REF = 90.0
@@ -77,6 +80,10 @@ def batch_predict_lap_times(
         results = _batch_predict_full_vec(setups, track_id, driver_profile)
         return [float(r["lap_time"]) for r in results]
     except Exception:
+        log.warning(
+            "batch lap-time path failed; falling back to per-item prediction",
+            n_setups=len(setups), exc_info=True,
+        )
         return [
             float(predict_lap_time(s, track_id, driver_profile)) for s in setups
         ]
@@ -97,6 +104,10 @@ def batch_predict_full(
     try:
         return _batch_predict_full_vec(setups, track_id, driver_profile)
     except Exception:
+        log.warning(
+            "batch full-prediction path failed; falling back to per-item prediction",
+            n_setups=len(setups), exc_info=True,
+        )
         return [predict_full(s, track_id, driver_profile) for s in setups]
 
 

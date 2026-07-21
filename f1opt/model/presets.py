@@ -32,6 +32,9 @@ from f1opt.data.setup_schema import DEFAULT_SETUP, SETUP_FIELDS, CarSetup
 from f1opt.data.track_evolution import WeatherCondition
 from f1opt.data.tracks import get_track
 from f1opt.model.suspension import SetupHarmonics
+from f1opt.observability.logging import get_logger
+
+log = get_logger(__name__)
 
 __all__ = ["SetupPresets", "SetupAutoTuner"]
 
@@ -529,6 +532,7 @@ class SetupAutoTuner:
                 )
             return recommended
         except Exception:
+            log.debug("lap_time_potential optimizer search failed; keeping setup", exc_info=True)
             return setup
 
     # ------------------------------------------------------------------ #
