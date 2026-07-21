@@ -28,6 +28,8 @@ from typing import Any
 import numpy as np
 from pydantic import BaseModel, Field, PrivateAttr
 
+from f1opt.numeric import clamp01 as _clamp01
+
 # to_vector / from_vector 固定字段顺序 (8 维).
 _FIELD_ORDER: tuple[str, ...] = (
     "brake_point_norm",
@@ -45,15 +47,6 @@ _G_LAT_REF = 6.0       # 横向 g 力参考上限 (F1 量级约 6g).
 _CORNER_RATIO_K = 2.0  # corner_balance_pref 饱和常数。
 _VAR_K = 0.05          # consistency 方差饱和常数。
 _BRAKE_ONSET = 0.3     # 制动触发阈值 (brake > 该值视为开始制动)。
-
-
-def _clamp01(x: float) -> float:
-    """将 ``x`` 钳位到 [0, 1]。"""
-    if x < 0.0:
-        return 0.0
-    if x > 1.0:
-        return 1.0
-    return float(x)
 
 
 def _arr(frames: list[dict[str, Any]], key: str) -> np.ndarray:

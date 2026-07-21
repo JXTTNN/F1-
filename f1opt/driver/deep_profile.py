@@ -24,6 +24,8 @@ from typing import Any
 import numpy as np
 
 from f1opt.driver.profile import extract_driver_profile
+from f1opt.numeric import clamp01 as _clamp01
+from f1opt.numeric import coefficient_of_variation as _cv
 
 # 弯道四相位固定顺序.
 _PHASE_ORDER: tuple[str, ...] = (
@@ -40,15 +42,6 @@ _FATIGUE_RATE = 0.05
 
 
 # --- 通用工具 --------------------------------------------------------------
-def _clamp01(x: float) -> float:
-    """将 ``x`` 钳位到 [0, 1]。"""
-    if x < 0.0:
-        return 0.0
-    if x > 1.0:
-        return 1.0
-    return float(x)
-
-
 def _f(frame: dict[str, Any], key: str, default: float = 0.0) -> float:
     """安全取帧字段并转 float; None/不可转换返回 ``default``。"""
     v = frame.get(key)
@@ -58,17 +51,6 @@ def _f(frame: dict[str, Any], key: str, default: float = 0.0) -> float:
         return float(v)
     except (TypeError, ValueError):
         return default
-
-
-def _cv(values: list[float]) -> float:
-    """变异系数 std/|mean|; 样本不足或均值为 0 返回 0.0。"""
-    if len(values) < 2:
-        return 0.0
-    arr = np.asarray(values, dtype=np.float64)
-    m = float(np.mean(arr))
-    if m == 0.0:
-        return 0.0
-    return float(np.std(arr) / abs(m))
 
 
 # --- 驾驶风格原型 ----------------------------------------------------------
