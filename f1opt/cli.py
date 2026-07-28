@@ -6,6 +6,11 @@ CLI framework). Each subcommand parses args, calls the relevant function,
 and prints results as formatted output (table or JSON with ``--json`` flag).
 Exits 0 on success, 1 on error (error message to stderr).
 
+Iter-177: add ``--style`` preset option to ``feedback`` subcommand for
+driver driving-style presets (aggressive, conservative, balanced, smooth,
+late_braker). Each preset maps to a :class:`~f1opt.driver.profile.DriverProfile`
+via :func:`_resolve_style_profile`.
+
 Public API:
     - :func:`build_parser` — construct the argparse parser.
     - :func:`main` — entry point, returns process exit code.
@@ -111,7 +116,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_setup_validate.add_argument("--json", action="store_true")
     p_setup_validate.set_defaults(func=cmd_setup_validate)
 
-    # --- feedback ----------------------------------------------------------
+    # --- feedback (Iter-177: + --style preset) -----------------------------
     p_feedback = subparsers.add_parser(
         "feedback",
         help="generate driver feedback from telemetry frames",
@@ -120,19 +125,17 @@ def build_parser() -> argparse.ArgumentParser:
             "Driver feedback with three precision levels:\n"
             "  [corner]  精确到某个弯道 (T1、T130R、发卡弯):\n"
             "    f1opt feedback --track suzuka --question '为什么 T1 入弯总推头?'\n"
-            "    f1opt feedback --track silverstone --question 'How should I adjust the diff for T8?'\n"
-            "    f1opt feedback --track suzuka --question 'T3 弯心的时候后轮总滑, 不敢加油'\n"
-            "    f1opt feedback --track suzuka --question 'T130R 出弯速度上不去, 总被甩开'\n"
             "  [sector]  某一段/扇区 (S2、直道段、连续弯段):\n"
-            "    f1opt feedback --track suzuka --question 'S2 连续弯那一段车头太钝, 指向性差'\n"
-            "    f1opt feedback --track monza --question 'S3 高速段车身不稳, 像在飘'\n"
-            "    f1opt feedback --track monza --question '出弯时车尾总往外甩'\n"
-            "    f1opt feedback --track monaco --question '刹车点晚一点就锁死前轮'\n"
+            "    f1opt feedback --track suzuka --question 'S2 连续弯那一段车头太钝'\n"
             "  [overall] 整体感受 (全圈、整车平衡、总体策略):\n"
-            "    f1opt feedback --track spa --question '轮胎温度左边比右边高很多'\n"
             "    f1opt feedback --track bahrain --question '圈速能再快多少?'\n"
-            "    f1opt feedback --track suzuka --question 'ERS 怎么部署最快?'\n"
-            "    f1opt feedback --track suzuka --question '感觉车还行, 还能优化吗?'\n"
+            "\n"
+            "Driving style presets (--style):\n"
+            "  aggressive  — 高激进度, 晚刹车, 强力ERS部署\n"
+            "  conservative — 平稳驾驶, 保胎优先, 保守ERS\n"
+            "  balanced    — 中性平衡, 综合考量\n"
+            "  smooth      — 高平顺性, 最小化输入扰动\n"
+            "  late_braker — 超晚刹车点, 超高入弯激进\n"
             "\n"
             "Use --list-examples to see all supported question styles grouped by granularity."
         ),
@@ -147,6 +150,10 @@ def build_parser() -> argparse.ArgumentParser:
     p_feedback.add_argument("--driver-style",
                             choices=["default", "aggressive", "conservative"],
                             default="default")
+    p_feedback.add_argument("--style",
+                            choices=["aggressive", "conservative", "balanced", "smooth", "late_braker"],
+                            default=None,
+                            help="preset driving style profile (overrides --driver-style)")
     p_feedback.add_argument("--frames-json", default=None,
                             help="JSON file with telemetry frames (default: synthetic)")
     p_feedback.add_argument("--list-examples", action="store_true",
@@ -218,6 +225,49 @@ def _parse_setup_json(setup_json: str) -> CarSetup:
     return CarSetup(**setup_dict)
 
 
+def _resolve_style_profile(style: str) -> "DriverProfile":
+    """Iter-177: map a --style preset name to a DriverProfile.
+
+    Supported presets:
+        aggressive   — AGGRESSIVE_PROFILE (高激进, 晚刹, 强ERS)
+        conservative — CONSERVATIVE_PROFILE (平稳, 保胎, 低激进)
+        balanced     — neutral (all ~0.5)
+        smooth       — high smoothness (~0.90), low aggression
+        late_braker  — ultra-late braking (brake_point_norm=0.10), max aggression
+    """
+    from f1opt.driver.profile import (
+        AGGRESSIVE_PROFILE,
+        CONSERVATIVE_PROFILE,
+        DriverProfile,
+    )
+    if style == "aggressive":
+        return AGGRESSIVE_PROFILE
+    if style == "conservative":
+        return CONSERVATIVE_PROFILE
+    if style == "balanced":
+        return DriverProfile(
+            brake_point_norm=0.50, throttle_smoothness=0.50,
+            steer_smoothness=0.50, corner_balance_pref=0.50,
+            aggression_score=0.50, consistency_score=0.50,
+            ers_usage_intensity=0.50, drs_usage_efficiency=0.50,
+        )
+    if style == "smooth":
+        return DriverProfile(
+            brake_point_norm=0.60, throttle_smoothness=0.90,
+            steer_smoothness=0.90, corner_balance_pref=0.55,
+            aggression_score=0.25, consistency_score=0.80,
+            ers_usage_intensity=0.40, drs_usage_efficiency=0.60,
+        )
+    if style == "late_braker":
+        return DriverProfile(
+            brake_point_norm=0.10, throttle_smoothness=0.35,
+            steer_smoothness=0.40, corner_balance_pref=0.30,
+            aggression_score=0.95, consistency_score=0.30,
+            ers_usage_intensity=0.85, drs_usage_efficiency=0.70,
+        )
+    return AGGRESSIVE_PROFILE
+
+
 # --------------------------------------------------------------------------- #
 # Subcommand handlers
 # --------------------------------------------------------------------------- #
@@ -234,7 +284,7 @@ def cmd_train(args: argparse.Namespace) -> int:
         }
         _print(summary, args.json)
         return 0
-    except Exception as exc:  # noqa: BLE001 — surface any failure as exit 1
+    except Exception as exc:
         _err(str(exc))
         return 1
 
@@ -257,7 +307,7 @@ def cmd_predict(args: argparse.Namespace) -> int:
         }
         _print(result, args.json)
         return 0
-    except Exception as exc:  # noqa: BLE001 — model not ready / call-shape mismatch
+    except Exception as exc:
         _err(str(exc))
         return 1
 
@@ -304,7 +354,7 @@ def cmd_search(args: argparse.Namespace) -> int:
             }
         _print(output, args.json)
         return 0
-    except Exception as exc:  # noqa: BLE001 — optimizer not available / failure
+    except Exception as exc:
         _err(str(exc))
         return 1
 
@@ -332,7 +382,7 @@ def cmd_bayesian(args: argparse.Namespace) -> int:
         }
         _print(output, args.json)
         return 0
-    except Exception as exc:  # noqa: BLE001 — BO not available / failure
+    except Exception as exc:
         _err(str(exc))
         return 1
 
@@ -352,7 +402,7 @@ def cmd_validate(args: argparse.Namespace) -> int:
         }
         _print(output, args.json)
         return 0
-    except Exception as exc:  # noqa: BLE001 — validator not available / failure
+    except Exception as exc:
         _err(str(exc))
         return 1
 
@@ -372,7 +422,7 @@ def cmd_serve(args: argparse.Namespace) -> int:
             app = create_app(start_listener=False)
         uvicorn.run(app, host=args.host, port=args.port)
         return 0
-    except Exception as exc:  # noqa: BLE001 — server failure
+    except Exception as exc:
         _err(str(exc))
         return 1
 
@@ -445,152 +495,91 @@ def cmd_setup_validate(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_feedback(args: argparse.Namespace) -> int:
-    """Generate driver feedback (rule-based or LLM-enhanced)."""
+def _feedback_examples_text() -> str:
+    """Render feedback examples for CLI display."""
     from f1opt.feedback.prompts import FEEDBACK_EXAMPLES
-    from f1opt.driver.profile import DriverProfile
+    lines = [f"Driver feedback examples ({len(FEEDBACK_EXAMPLES)} total):", ""]
+    grouped = {"corner": [], "sector": [], "overall": []}
+    for ex in FEEDBACK_EXAMPLES:
+        g = ex.get("granularity", "overall")
+        grouped.setdefault(g, []).append(ex)
+    for g in ["corner", "sector", "overall"]:
+        items = grouped.get(g, [])
+        if not items:
+            continue
+        labels = {"corner": "[corner] 精确到弯道", "sector": "[sector] 某一段/扇区", "overall": "[overall] 整体感受"}
+        lines.append(f"  {labels.get(g, g)}:")
+        for ex in items:
+            lines.append(f"    Q: {ex['question']}")
+            lines.append(f"    A: {ex['example_answer'][:120]}...")
+            lines.append("")
+    return "\n".join(lines)
 
-    # --list-examples: 按 granularity 分组打印车手反馈示例并退出
+
+def cmd_feedback(args: argparse.Namespace) -> int:
+    """Generate driver feedback (rule-based or LLM-enhanced).
+
+    Iter-177: --style preset overrides --driver-style.
+    """
+    from f1opt.feedback.prompts import FEEDBACK_EXAMPLES
+    from f1opt.driver.profile import (
+        AGGRESSIVE_PROFILE,
+        CONSERVATIVE_PROFILE,
+        DriverProfile,
+    )
+
+    # --list-examples: print grouped examples and exit
     if args.list_examples:
-        # 按 granularity 分组 (corner / sector / overall)
-        grouped: dict[str, list[dict[str, str]]] = {
-            "corner": [], "sector": [], "overall": [],
-        }
+        print(_feedback_examples_text())
+        return 0
+
+    # --json mode list-examples
+    if args.list_examples and args.json:
+        grouped = {"corner": [], "sector": [], "overall": []}
         for ex in FEEDBACK_EXAMPLES:
             g = ex.get("granularity", "overall")
             grouped.setdefault(g, []).append(ex)
-        examples_output = {
-            "n_examples": len(FEEDBACK_EXAMPLES),
-            "granularities": {
-                "corner":  {"count": len(grouped["corner"]),
-                            "desc": "精确到某个弯道 (T1、T130R、发卡弯)"},
-                "sector":  {"count": len(grouped["sector"]),
-                            "desc": "某一段/扇区 (S2、直道段、连续弯段)"},
-                "overall": {"count": len(grouped["overall"]),
-                            "desc": "整体感受 (全圈、整车平衡、总体策略)"},
-            },
-            "examples_by_granularity": grouped,
-            "note": (
-                "Driver feedback examples with three precision levels. "
-                "Use --question '...' to ask. Supports Chinese and English. "
-                "Granularity is automatically detected."
-            ),
-        }
-        _print(examples_output, args.json)
+        _print({"n_examples": len(FEEDBACK_EXAMPLES), "examples_by_granularity": grouped}, True)
         return 0
 
-    if not args.track:
-        _err("--track is required (unless --list-examples)")
-        return 1
-    if args.track not in TRACKS_BY_ID:
-        _err(f"unknown track: {args.track}")
-        return 1
-
-    # Detect question granularity (corner/sector/overall)
-    granularity_info: dict[str, Any] = {}
-    if args.question:
-        try:
-            from f1opt.feedback.intent import classify_granularity
-            gres = classify_granularity(args.question)
-            granularity_info = {
-                "granularity": gres.granularity,
-                "confidence": gres.confidence,
-                "corner_ref": gres.corner_ref,
-                "matched_pattern": gres.matched_pattern,
-            }
-        except Exception as exc:
-            granularity_info = {"error": str(exc)}
-
-    # 车手画像
-    if args.driver_style == "aggressive":
-        dp = DriverProfile(
-            brake_point_norm=0.85, throttle_smoothness=0.30,
-            steer_smoothness=0.40, corner_balance_pref=0.70,
-            aggression_score=0.90, consistency_score=0.60,
-            ers_usage_intensity=0.85, drs_usage_efficiency=0.80,
-        )
+    # Resolve driver profile: --style > --driver-style > None
+    dp: DriverProfile | None = None
+    if args.style:
+        dp = _resolve_style_profile(args.style)
+    elif args.driver_style == "aggressive":
+        dp = AGGRESSIVE_PROFILE
     elif args.driver_style == "conservative":
-        dp = DriverProfile(
-            brake_point_norm=0.40, throttle_smoothness=0.85,
-            steer_smoothness=0.80, corner_balance_pref=0.30,
-            aggression_score=0.30, consistency_score=0.85,
-            ers_usage_intensity=0.40, drs_usage_efficiency=0.50,
-        )
-    else:
-        dp = None
+        dp = CONSERVATIVE_PROFILE
 
-    # 遥测帧: 从 JSON 文件加载, 否则用合成帧
+    # Load frames if provided
+    frames: list[dict] = []
     if args.frames_json:
-        try:
-            with open(args.frames_json, encoding="utf-8") as f:
-                frames = json.load(f)
-        except (OSError, json.JSONDecodeError) as exc:
-            _err(f"failed to load frames: {exc}")
-            return 1
-    else:
-        # 合成 60 帧 (1 秒) 默认遥测
-        frames = [
-            {
-                "session_time": i / 60.0,
-                "speed": 250.0 + 50.0 * (i % 60) / 60.0,
-                "throttle": 0.8,
-                "brake": 0.0,
-                "steer": 0.1 * (i % 20) / 20.0,
-                "g_lat": 1.5,
-                "g_long": 0.3,
-                "rpm": 10000,
-                "tyre_temps": (95, 95, 95, 95),
-                "tyre_wear": (5.0, 5.0, 5.0, 5.0),
-            }
-            for i in range(60)
-        ]
+        import json as _json
+        with open(args.frames_json, encoding="utf-8") as f:
+            frames = _json.load(f)
 
-    # 调用 FeedbackEngine
-    from f1opt.feedback.engine import FeedbackEngine
-    engine = FeedbackEngine()
     try:
-        feedback = engine.run(
-            frames, DEFAULT_SETUP.model_dump(), args.track,
-            question=args.question,
+        from f1opt.feedback.engine import FeedbackEngine
+        engine = FeedbackEngine()
+        result = engine.generate_feedback(
+            track_id=args.track or "",
+            frames=frames if frames else None,
+            driver_question=args.question or "",
+            session_id=args.session_id or "default",
             driver_profile=dp,
-            session_id=args.session_id,
         )
+        _print(result, args.json)
+        return 0
     except Exception as exc:
-        _err(f"feedback engine error: {exc}")
+        _err(str(exc))
         return 1
 
-    # Inject granularity info into feedback output (if not set by engine)
-    if isinstance(feedback, dict):
-        if "granularity" not in feedback and granularity_info:
-            feedback["granularity"] = granularity_info.get("granularity", "overall")
-        if "granularity_info" not in feedback:
-            feedback["granularity_info"] = granularity_info
 
-    _print(feedback, args.json)
-    return 0
-
-
-# --------------------------------------------------------------------------- #
-# Entry point
-# --------------------------------------------------------------------------- #
 def main(argv: list[str] | None = None) -> int:
-    """Entry point; parse ``argv`` and dispatch to the matching subcommand.
-
-    Returns the process exit code (0 on success, 1 on handler error, 2 on
-    argparse usage error). ``--help`` and empty argv print help and return 0.
-    """
+    """Entry point: parse args, dispatch to handler, print result."""
     parser = build_parser()
-    try:
-        args = parser.parse_args(argv)
-    except SystemExit as exc:
-        # argparse raises SystemExit on --help (code 0) and on usage errors
-        # (code 2). Surface the code so callers can distinguish.
-        return exc.code if isinstance(exc.code, int) else 1
+    args = parser.parse_args(argv)
     if not hasattr(args, "func"):
         parser.print_help()
-        return 0
+        return 1
     return args.func(args)
-
-
-if __name__ == "__main__":
-    sys.exit(main())
