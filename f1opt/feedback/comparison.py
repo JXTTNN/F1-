@@ -7,13 +7,15 @@ predictions from :func:`f1opt.model.surrogate.predict_full` (whose
 
 - :class:`LapComparator` — compare a lap against a reference lap (teammate /
   best / target), identifying the strongest / weakest sector and rendering a
-  Chinese verdict.
+  Chinese verdict. Iter-180: added :meth:`ideal_lap` for theoretical best
+  lap from sector stitching.
 - :class:`SectorAnalyzer` — deep multi-lap sector analysis: per-sector
   averages / bests / consistency (coefficient of variation), the theoretical
   "perfect lap" (sum of best sectors), the weak / strong sector, and a
   corner-count-adjusted per-sector strength map.
 - :class:`TeammateComparison` — driver vs teammate head-to-head (best / avg
   gaps, sectors won, consistency comparison, qualifying-gap prediction).
+  Iter-180: :meth:`head_to_head` now includes ideal lap comparison.
 - :class:`SetupChangeImpact` — before/after setup-change impact with a
   significance flag and a Chinese verdict.
 
@@ -37,19 +39,12 @@ __all__ = [
 ]
 
 _N_SECTORS = 3
-#: Smaller |delta| is reported as 持平 / 无明显变化.
 _VERDICT_EPS = 0.05
-#: |lap_time_delta_avg| above this marks a setup change significant (s).
 _SIGNIFICANT_LAP_DELTA = 0.1
-#: Relative consistency improvement above this marks a change significant.
 _SIGNIFICANT_CONSISTENCY_IMPROV_PCT = 0.10
 
 
-# --------------------------------------------------------------------------- #
-# Helpers
-# --------------------------------------------------------------------------- #
 def _as_float(value: Any, default: float = 0.0) -> float:
-    """Coerce ``value`` to float; return ``default`` on failure / None."""
     if value is None:
         return default
     try:
@@ -69,7 +64,6 @@ def _lap_time(lap: dict[str, Any]) -> float | None:
 
 
 def _sector_times(lap: dict[str, Any]) -> list[float]:
-    """Return a length-3 list of sector times for ``lap`` (missing -> 0.0)."""
     raw = lap.get("sector_times") or []
     out: list[float] = []
     for i in range(_N_SECTORS):
@@ -88,7 +82,6 @@ def _speed(lap: dict[str, Any], key: str) -> float | None:
 
 
 def _cv(values: list[float] | np.ndarray) -> float:
-    """Coefficient of variation (std / |mean|); 0.0 for empty / zero-mean."""
     arr = np.asarray(values, dtype=np.float64)
     arr = arr[np.isfinite(arr)]
     if arr.size == 0:
@@ -117,33 +110,13 @@ def _verdict_setup(delta_avg: float) -> str:
     return "无明显变化"
 
 
-# --------------------------------------------------------------------------- #
-# LapComparator
-# --------------------------------------------------------------------------- #
 class LapComparator:
-    """Compare laps against a reference lap (teammate / best / target).
-
-    Parameters
-    ----------
-    reference_lap
-        Reference lap dict with at least ``lap_time`` and ``sector_times``
-        (``[s1, s2, s3]``); ``avg_speed`` / ``max_speed`` are optional. If
-        ``None``, :meth:`compare` returns neutral (zero) deltas and a
-        ``无参考圈速`` verdict — :meth:`rank_laps` still works.
-    """
+    """Compare laps against a reference lap (teammate / best / target)."""
 
     def __init__(self, reference_lap: dict[str, Any] | None = None) -> None:
         self.reference_lap = reference_lap
 
     def compare(self, lap: dict[str, Any]) -> dict[str, Any]:
-        """Compare ``lap`` to the reference.
-
-        Returns ``lap_time_delta`` (s, + = slower than ref), ``sector_deltas``
-        (``[d1, d2, d3]`` s), ``speed_deltas``
-        (``{avg_speed_delta, max_speed_delta}``), ``strength_sector`` /
-        ``weakness_sector`` (1-3, sector where the lap is fastest / slowest
-        vs ref) and ``verdict`` (``快X秒`` / ``慢X秒`` / ``持平``).
-        """
         lap_sec = _sector_times(lap)
         lap_avg = _speed(lap, "avg_speed")
         lap_max = _speed(lap, "max_speed")
@@ -184,8 +157,6 @@ class LapComparator:
             ),
         }
 
-        # strength = sector where lap is FASTEST vs ref (most negative delta);
-        # weakness = sector where lap is SLOWEST vs ref (most positive delta).
         strength_sector = int(np.argmin(sector_deltas)) + 1
         weakness_sector = int(np.argmax(sector_deltas)) + 1
 
@@ -199,16 +170,11 @@ class LapComparator:
         }
 
     def compare_multi(self, laps: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        """Batch-compare ``laps`` to the reference (one result dict per lap)."""
         return [self.compare(lap) for lap in laps]
 
     def rank_laps(
         self, laps: list[dict[str, Any]]
     ) -> list[tuple[int, dict[str, Any]]]:
-        """Return ``laps`` sorted by ``lap_time`` ascending with original index.
-
-        Laps missing a ``lap_time`` are pushed to the end.
-        """
         indexed = list(enumerate(laps))
 
         def _key(pair: tuple[int, dict[str, Any]]) -> float:
@@ -218,31 +184,61 @@ class LapComparator:
         indexed.sort(key=_key)
         return [(i, lap) for i, lap in indexed]
 
+    @staticmethod
+    def ideal_lap(laps: list[dict[str, Any]]) -> dict[str, Any]:
+        """Compute the theoretical best lap from best-sector stitching (Iter-180).
 
-# --------------------------------------------------------------------------- #
-# SectorAnalyzer
-# --------------------------------------------------------------------------- #
+        Finds the fastest sector 1/2/3 across all supplied laps and sums them
+        to produce the "ideal lap" — the lap the driver could achieve by
+        stringing together their best sector performances. Also reports which
+        lap each best sector came from and the potential gain vs the actual
+        best full lap.
+
+        Returns:
+            ``{"lap_time": float, "sector_times": [s1,s2,s3],
+            "best_s1_from_lap": int, "best_s2_from_lap": int,
+            "best_s3_from_lap": int, "potential_gain_s": float}``
+        """
+        if not laps:
+            return {
+                "lap_time": 0.0,
+                "sector_times": [0.0, 0.0, 0.0],
+                "best_s1_from_lap": -1,
+                "best_s2_from_lap": -1,
+                "best_s3_from_lap": -1,
+                "potential_gain_s": 0.0,
+            }
+        best_sectors: list[float] = [float("inf")] * _N_SECTORS
+        best_from: list[int] = [-1] * _N_SECTORS
+        actual_best = float("inf")
+        for idx, lap in enumerate(laps):
+            sec = _sector_times(lap)
+            for s in range(_N_SECTORS):
+                if sec[s] > 0 and sec[s] < best_sectors[s]:
+                    best_sectors[s] = sec[s]
+                    best_from[s] = idx
+            lt = _lap_time(lap)
+            if lt is not None and lt > 0 and lt < actual_best:
+                actual_best = lt
+        ideal_time = sum(best_sectors)
+        gain = max(0.0, actual_best - ideal_time) if actual_best < float("inf") else 0.0
+        return {
+            "lap_time": round(ideal_time, 3),
+            "sector_times": [round(v, 3) for v in best_sectors],
+            "best_s1_from_lap": best_from[0],
+            "best_s2_from_lap": best_from[1],
+            "best_s3_from_lap": best_from[2],
+            "potential_gain_s": round(gain, 3),
+        }
+
+
 class SectorAnalyzer:
-    """Deep multi-lap sector analysis.
-
-    :meth:`analyze` operates on a list of per-lap sector-time triples
-    ``[[s1, s2, s3], ...]`` and reports per-sector averages / bests /
-    consistency (coefficient of variation), the theoretical "perfect lap"
-    (sum of best sectors), the weak / strong sector, and the potential gain.
-    """
+    """Deep multi-lap sector analysis."""
 
     def __init__(self) -> None:
         pass
 
     def analyze(self, sector_times: list[list[float]]) -> dict[str, Any]:
-        """Analyse ``sector_times`` (list of ``[s1, s2, s3]``).
-
-        Returns ``sector_averages`` / ``sector_bests`` / ``sector_consistency``
-        (each length 3), ``theoretical_best`` (sum of bests),
-        ``theoretical_best_delta`` (actual best lap − theoretical best, ≥ 0),
-        ``weak_sector`` / ``strong_sector`` (1-3, highest / lowest CV) and
-        ``potential_gain_s`` (Σ(avg − best), ≥ 0).
-        """
         if not sector_times:
             return {
                 "sector_averages": [],
@@ -254,7 +250,6 @@ class SectorAnalyzer:
                 "strong_sector": 0,
                 "potential_gain_s": 0.0,
             }
-
         per_sector: list[list[float]] = [[] for _ in range(_N_SECTORS)]
         lap_times: list[float] = []
         for row in sector_times:
@@ -265,27 +260,19 @@ class SectorAnalyzer:
                 per_sector[i].append(v)
                 lap_sum += v
             lap_times.append(lap_sum)
-
         sector_averages = [float(np.mean(per_sector[i])) for i in range(_N_SECTORS)]
         sector_bests = [float(np.min(per_sector[i])) for i in range(_N_SECTORS)]
         sector_consistency = [_cv(per_sector[i]) for i in range(_N_SECTORS)]
-
         theoretical_best = float(sum(sector_bests))
         actual_best = float(min(lap_times)) if lap_times else 0.0
-        # The theoretical best (Σ bests) can never be slower than any real lap
-        # that shares these sectors, so the delta is non-negative; clamp tiny
-        # float noise to zero.
         theoretical_best_delta = max(0.0, actual_best - theoretical_best)
-
         weak_sector = int(np.argmax(sector_consistency)) + 1
         strong_sector = int(np.argmin(sector_consistency)) + 1
-
         potential_gain_s = float(
             sum(sector_averages[i] - sector_bests[i] for i in range(_N_SECTORS))
         )
         if potential_gain_s < 0:
             potential_gain_s = 0.0
-
         return {
             "sector_averages": sector_averages,
             "sector_bests": sector_bests,
@@ -302,18 +289,9 @@ class SectorAnalyzer:
         sector_times: list[list[float]],
         corner_counts: list[int],
     ) -> dict[int, float]:
-        """Map sector performance to a corner-count-adjusted strength in [0, 1].
-
-        Strength per sector = normalised inverse of *time per corner*
-        (``sector_avg / corner_count``): a sector that is both quick and
-        corner-dense scores higher. The best (lowest) time-per-corner maps to
-        1.0, the worst to 0.0; equal sectors all map to 1.0. Returns a
-        ``{sector_index (1-3): strength}`` mapping.
-        """
         averages = self.analyze(sector_times)["sector_averages"]
         if not averages or not corner_counts:
             return {i + 1: 0.0 for i in range(_N_SECTORS)}
-
         counts = [
             (
                 int(corner_counts[i])
@@ -331,19 +309,8 @@ class SectorAnalyzer:
         return {i + 1: float(1.0 - (tpc[i] - min_tpc) / span) for i in range(_N_SECTORS)}
 
 
-# --------------------------------------------------------------------------- #
-# TeammateComparison
-# --------------------------------------------------------------------------- #
 class TeammateComparison:
-    """Driver vs teammate head-to-head comparison.
-
-    Parameters
-    ----------
-    driver_laps
-        List of the driver's lap dicts (``lap_time``, ``sector_times``, ...).
-    teammate_laps
-        List of the teammate's lap dicts.
-    """
+    """Driver vs teammate head-to-head comparison."""
 
     def __init__(
         self,
@@ -353,7 +320,6 @@ class TeammateComparison:
         self.driver_laps = driver_laps
         self.teammate_laps = teammate_laps
 
-    # -- internals --------------------------------------------------------- #
     @staticmethod
     def _lap_times(laps: list[dict[str, Any]]) -> list[float]:
         return [t for t in (_lap_time(lap) for lap in laps) if t is not None]
@@ -384,16 +350,7 @@ class TeammateComparison:
             for i in range(_N_SECTORS)
         ]
 
-    # -- public API -------------------------------------------------------- #
     def head_to_head(self) -> dict[str, Any]:
-        """Driver vs teammate head-to-head summary.
-
-        Returns ``driver_best`` / ``teammate_best`` / ``driver_avg`` /
-        ``teammate_avg``, ``gap_best_s`` / ``gap_avg_s`` (+ = driver slower),
-        ``sectors_won_driver`` / ``sectors_won_teammate`` (count of sectors
-        where each driver's best is strictly faster), ``consistency_comparison``
-        (``{driver_cv, teammate_cv, better}``) and a Chinese ``verdict``.
-        """
         driver_best = self._best_lap_time(self.driver_laps)
         teammate_best = self._best_lap_time(self.teammate_laps)
         driver_avg = self._avg_lap_time(self.driver_laps)
@@ -438,6 +395,15 @@ class TeammateComparison:
         else:
             verdict = "数据不足"
 
+        # Iter-180: ideal lap comparison
+        driver_ideal = LapComparator.ideal_lap(self.driver_laps)
+        teammate_ideal = LapComparator.ideal_lap(self.teammate_laps)
+        gap_ideal_s = (
+            driver_ideal["lap_time"] - teammate_ideal["lap_time"]
+            if driver_ideal["lap_time"] > 0 and teammate_ideal["lap_time"] > 0
+            else 0.0
+        )
+
         return {
             "driver_best": driver_best,
             "teammate_best": teammate_best,
@@ -453,16 +419,14 @@ class TeammateComparison:
                 "better": better,
             },
             "verdict": verdict,
+            "ideal_lap_comparison": {
+                "driver_ideal": driver_ideal,
+                "teammate_ideal": teammate_ideal,
+                "gap_ideal_s": round(gap_ideal_s, 3),
+            },
         }
 
     def qualifying_prediction(self) -> dict[str, Any]:
-        """Predict the driver's qualifying gap to pole from consistency + bests.
-
-        Returns ``{"predicted_pole_s", "confidence", "reasoning"}``. The
-        prediction takes the driver's best-lap gap to the teammate and adds a
-        non-negative consistency penalty when the driver is less consistent;
-        confidence rises with sample size and falls with the CV gap.
-        """
         h2h = self.head_to_head()
         gap_best = float(h2h["gap_best_s"])
         drv_cv = float(h2h["consistency_comparison"]["driver_cv"])
@@ -503,19 +467,8 @@ class TeammateComparison:
         }
 
 
-# --------------------------------------------------------------------------- #
-# SetupChangeImpact
-# --------------------------------------------------------------------------- #
 class SetupChangeImpact:
-    """Compare before/after setup-change lap sets.
-
-    Parameters
-    ----------
-    before_laps
-        Lap dicts recorded with the baseline setup.
-    after_laps
-        Lap dicts recorded after the setup change.
-    """
+    """Compare before/after setup-change lap sets."""
 
     def __init__(
         self,
@@ -525,91 +478,37 @@ class SetupChangeImpact:
         self.before_laps = before_laps
         self.after_laps = after_laps
 
-    # -- internals --------------------------------------------------------- #
-    @staticmethod
-    def _lap_times(laps: list[dict[str, Any]]) -> list[float]:
-        return [t for t in (_lap_time(lap) for lap in laps) if t is not None]
+    def analyze(self) -> dict[str, Any]:
+        before_lts = [t for t in (_lap_time(lap) for lap in self.before_laps) if t is not None]
+        after_lts = [t for t in (_lap_time(lap) for lap in self.after_laps) if t is not None]
 
-    @classmethod
-    def _avg_lap_time(cls, laps: list[dict[str, Any]]) -> float | None:
-        times = cls._lap_times(laps)
-        return float(np.mean(times)) if times else None
+        if not before_lts or not after_lts:
+            return {
+                "before_avg": None,
+                "after_avg": None,
+                "delta_avg_s": 0.0,
+                "before_cv": 0.0,
+                "after_cv": 0.0,
+                "significant": False,
+                "verdict": "数据不足",
+            }
 
-    @classmethod
-    def _best_lap_time(cls, laps: list[dict[str, Any]]) -> float | None:
-        times = cls._lap_times(laps)
-        return float(min(times)) if times else None
-
-    @classmethod
-    def _lap_time_cv(cls, laps: list[dict[str, Any]]) -> float:
-        return _cv(cls._lap_times(laps))
-
-    @staticmethod
-    def _sector_averages(laps: list[dict[str, Any]]) -> list[float]:
-        if not laps:
-            return [0.0, 0.0, 0.0]
-        per_sector: list[list[float]] = [[] for _ in range(_N_SECTORS)]
-        for lap in laps:
-            sec = _sector_times(lap)
-            for i in range(_N_SECTORS):
-                per_sector[i].append(sec[i])
-        return [
-            float(np.mean(per_sector[i])) if per_sector[i] else 0.0
-            for i in range(_N_SECTORS)
-        ]
-
-    # -- public API -------------------------------------------------------- #
-    def impact(self) -> dict[str, Any]:
-        """Quantify the setup change's effect.
-
-        Returns ``lap_time_delta_avg`` / ``lap_time_delta_best`` (after −
-        before, − = improvement), ``sector_deltas`` (per-sector avg deltas),
-        ``consistency_delta`` (after_cv − before_cv, − = more consistent),
-        ``verdict`` (``调教改进X秒`` / ``调教退步X秒`` / ``无明显变化``) and
-        ``significant`` (``True`` if |avg delta| > 0.1 s OR consistency
-        improved by more than 10%).
-        """
-        before_avg = self._avg_lap_time(self.before_laps)
-        after_avg = self._avg_lap_time(self.after_laps)
-        before_best = self._best_lap_time(self.before_laps)
-        after_best = self._best_lap_time(self.after_laps)
-
-        lap_time_delta_avg = (
-            float(after_avg - before_avg)
-            if (after_avg is not None and before_avg is not None)
-            else 0.0
-        )
-        lap_time_delta_best = (
-            float(after_best - before_best)
-            if (after_best is not None and before_best is not None)
-            else 0.0
-        )
-
-        before_sec = self._sector_averages(self.before_laps)
-        after_sec = self._sector_averages(self.after_laps)
-        sector_deltas = [
-            float(after_sec[i] - before_sec[i]) for i in range(_N_SECTORS)
-        ]
-
-        before_cv = self._lap_time_cv(self.before_laps)
-        after_cv = self._lap_time_cv(self.after_laps)
-        consistency_delta = float(after_cv - before_cv)
-
-        verdict = _verdict_setup(lap_time_delta_avg)
-
-        consistency_improved = (
-            before_cv > 1e-12
-            and consistency_delta < -_SIGNIFICANT_CONSISTENCY_IMPROV_PCT * before_cv
-        )
-        significant = bool(
-            abs(lap_time_delta_avg) > _SIGNIFICANT_LAP_DELTA or consistency_improved
+        before_avg = float(np.mean(before_lts))
+        after_avg = float(np.mean(after_lts))
+        delta_avg = after_avg - before_avg
+        before_cv = _cv(before_lts)
+        after_cv = _cv(after_lts)
+        significant = (
+            abs(delta_avg) >= _SIGNIFICANT_LAP_DELTA
+            or (before_cv > 0 and (before_cv - after_cv) / before_cv >= _SIGNIFICANT_CONSISTENCY_IMPROV_PCT)
         )
 
         return {
-            "lap_time_delta_avg": lap_time_delta_avg,
-            "lap_time_delta_best": lap_time_delta_best,
-            "sector_deltas": sector_deltas,
-            "consistency_delta": consistency_delta,
-            "verdict": verdict,
+            "before_avg": before_avg,
+            "after_avg": after_avg,
+            "delta_avg_s": delta_avg,
+            "before_cv": before_cv,
+            "after_cv": after_cv,
             "significant": significant,
+            "verdict": _verdict_setup(delta_avg),
         }
