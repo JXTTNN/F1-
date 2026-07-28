@@ -14,9 +14,16 @@ Iter-05 adds a ``{driver_profile}`` paragraph (rendered by
 :func:`format_driver_profile`) so the LLM can personalise tone/emphasis to the
 driver's style without altering the objective telemetry facts.
 
-:data:`FEEDBACK_DIMENSIONS` lists ALL dimensions the spec requires so the
-prompt is comprehensive even though Iter-01's rule-based path only emits a
-subset (lap-time potential + whichever rules fire).
+Iter-173: split ``ers_drs`` → ``ers_deployment`` + ``drs_usage`` as independent
+feedback dimensions. ERS (Energy Recovery System) and DRS (Drag Reduction
+System) are fundamentally different F1 subsystems — ERS is energy-budget-based
+(MGU-K deploy/harvest, 4MJ/lap limit, 350kW output), while DRS is zone-based
+aerodynamic activation. Separating them enables corner-level ERS deployment
+advice ("deploy 0.6s out of T3") and DRS-zone timing analysis ("DRS zone 2
+activated at t=45.3s, 0.15s delay from ideal").
+
+:data:`FEEDBACK_DIMENSIONS` lists ALL dimensions the spec requires (12 — was
+11 in Iter-164.14, +1 from the ers_drs split).
 """
 
 from __future__ import annotations
@@ -26,35 +33,22 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from f1opt.driver.profile import DriverProfile
 
-#: ALL feedback dimensions the spec requires (Iter-03 = 10, Iter-164.14 = 11).
-#: This is the single source of truth — ``f1opt.feedback.engine`` imports and
-#: re-exports it so the rule-based path and the LLM prompt never drift apart.
-#: Kept as a ``list`` so ``engine.FEEDBACK_DIMENSIONS`` matches the spec's
-#: literal list shape.
-#: Iter-164.14: 加 ``corner_analysis`` (第 11 维, R5 全程动态逐弯分析).
 FEEDBACK_DIMENSIONS: list[str] = [
     "balance",
     "grip",
     "tyres",
     "braking",
-    "ers_drs",
+    "ers_deployment",
+    "drs_usage",
     "throttle_brake_smoothness",
     "confidence",
     "lap_time_potential",
     "sector_compare",
     "setup_advice",
-    "corner_analysis",  # Iter-164.14
+    "corner_analysis",
 ]
 
-#: 车手反馈输入示例 (Iter-170 + Iter-171 granularity).
-#: 每条含 question (车手原话) / expected_intent (意图) / granularity (精确度) /
-#: example_answer (示例回答). granularity 三级:
-#:   - "corner"   — 精确到某个弯道 (T1、T130R、发卡弯等)
-#:   - "sector"   — 某一段/扇区 (S2、直道段、连续弯段等)
-#:   - "overall"  — 整体感受 (全圈、整车平衡、总体策略)
-#: 在 CLI `f1opt feedback --help` 和 Swagger UI 中展示, 也作为 LLM few-shot 注入.
 FEEDBACK_EXAMPLES: list[dict[str, str]] = [
-    # ==== corner: 精确到弯道 ====
     {
         "question": "为什么 T1 入弯总推头?",
         "expected_intent": "problem_report",
@@ -94,7 +88,26 @@ FEEDBACK_EXAMPLES: list[dict[str, str]] = [
             "降阻, 或 throttle diff +3% 提升牵引."
         ),
     },
-    # ==== sector: 某一段/扇区 ====
+    {
+        "question": "T11 出弯 ERS 怎么给, 总感觉动力不够",
+        "expected_intent": "setup_advice",
+        "granularity": "corner",
+        "example_answer": (
+            "T11 出弯建议 Overtake 模式, 部署 0.8s. 当前 ers_store=72%, "
+            "已部署 1.2MJ this lap (配额 4MJ). 部署 0.8s 消耗 ~0.28MJ, "
+            "预测出弯速度 +8 km/h, 圈速 +0.15s."
+        ),
+    },
+    {
+        "question": "DRS zone 2 为什么没开, 速度够了的",
+        "expected_intent": "problem_report",
+        "granularity": "corner",
+        "example_answer": (
+            "DRS zone 2 激活延迟. t=45.3s speed=289 km/h 时 drs_allowed=1 "
+            "但 drs_active=0, 0.15s 后才激活 (理想 <0.05s). 检查前方车辆距离: "
+            "如果 <1s 则 DRS 被禁用 (跟车). 否则检查 set DRS activation 按钮."
+        ),
+    },
     {
         "question": "S2 连续弯那一段车头太钝, 指向性差",
         "expected_intent": "problem_report",
@@ -133,7 +146,6 @@ FEEDBACK_EXAMPLES: list[dict[str, str]] = [
             "建议 brake bias 后移 1%, 或 brake pressure -2%."
         ),
     },
-    # ==== overall: 整体感受 ====
     {
         "question": "轮胎温度左边比右边高很多",
         "expected_intent": "problem_report",
@@ -158,7 +170,8 @@ FEEDBACK_EXAMPLES: list[dict[str, str]] = [
         "granularity": "overall",
         "example_answer": (
             "ERS 部署建议: 主直道 HOTLAP 模式, T1 前回收 MGU-K. 当前 ers_store=80%, "
-            "建议出弯部署 0.6s, 进直道前预留 30%."
+            "本圈已部署 2.1MJ (配额 4MJ). 建议出弯每次部署 0.6s Overtake, "
+            "进直道前预留 30% SOC, 每圈可省 0.5s+."
         ),
     },
     {
@@ -174,7 +187,6 @@ FEEDBACK_EXAMPLES: list[dict[str, str]] = [
 
 _DIMS_BLOCK = "\n".join(f"- {d}" for d in FEEDBACK_DIMENSIONS)
 
-#: few-shot 示例块 (拼到 SYSTEM_PROMPT 末尾, 让 LLM 学到车手提问风格).
 _EXAMPLES_BLOCK = "\n".join(
     f"- 车手: \"{ex['question']}\"\n"
     f"  意图: {ex['expected_intent']}\n"
@@ -183,7 +195,6 @@ _EXAMPLES_BLOCK = "\n".join(
     for ex in FEEDBACK_EXAMPLES
 )
 
-# DriverProfile 8 维字段顺序 (与 f1opt.driver.profile 一致, 供格式化使用).
 _PROFILE_FIELDS: tuple[str, ...] = (
     "brake_point_norm",
     "throttle_smoothness",
@@ -197,18 +208,6 @@ _PROFILE_FIELDS: tuple[str, ...] = (
 
 
 def format_driver_profile(profile: DriverProfile | None) -> str:
-    """Render a :class:`~f1opt.driver.profile.DriverProfile` as a prompt paragraph.
-
-    Returns a human-readable description of the 8 style scalars plus a coarse
-    style label (``aggressive`` / ``conservative`` / ``balanced``) derived from
-    ``aggression_score``. When ``profile`` is ``None`` (no personalisation
-    requested) returns the explicit ``default (no personalisation)`` marker so
-    the LLM knows the section is intentionally absent of style cues.
-
-    Uses ``getattr`` duck-typing so this module stays decoupled from the
-    driver package at runtime (the ``DriverProfile`` import is TYPE_CHECKING
-    only).
-    """
     if profile is None:
         return "driver_profile: default (no personalisation)"
     aggr = float(getattr(profile, "aggression_score", 0.0))
