@@ -1,13 +1,10 @@
 """LLM response quality assessment (Iter-146).
-
 EA F1 2026 professional standard: every LLM-generated feedback response must
 be assessed for groundedness, completeness, and actionability. This module
 provides automated quality scoring that can be embedded in the feedback
 pipeline — both for the rule-based path (self-check) and the LLM-enhanced
 path (external-audit).
-
 Key assessments:
-
 - **Groundedness** (0.0–1.0): Do numeric claims in the response trace back to
   telemetry evidence? Penalises invented numbers and hallucinated values.
 - **Completeness** (0.0–1.0): How many of the 10 feedback dimensions have
@@ -15,44 +12,35 @@ Key assessments:
 - **Actionability** (0.0–1.0): Does the response contain concrete, specific
   advice (setup changes, lap-time estimates, sector-specific guidance)?
 - **Overall** (0.0–1.0): Weighted average of the three scores.
-
 Usage::
-
     from f1opt.feedback.quality import assess_response_quality
     report = assess_response_quality(feedback_dict, telemetry_sources)
     print(report.overall, report.label)
 """
-
 from __future__ import annotations
-
 import re as _re
 from dataclasses import dataclass
-
-
 @dataclass
 class ResponseQualityReport:
     """Structured quality scores for a feedback response (Iter-146)."""
-
     groundedness: float
     """0.0–1.0: how well numeric claims are traceable to evidence."""
-
     completeness: float
     """0.0–1.0: fraction of dimensions with non-empty entries."""
-
     actionability: float
     """0.0–1.0: whether the response gives concrete, specific advice."""
-
     overall: float
     """0.0–1.0: weighted average (0.4×groundedness + 0.3×completeness + 0.3×actionability)."""
-
     label: str
     """Quality label: ``"excellent"`` (>=0.8), ``"good"`` (>=0.6),
     ``"fair"`` (>=0.4), ``"poor"`` (<0.4)."""
-
+    confidence_label: str
+    """Confidence label: ``"HIGH"``, ``"MEDIUM"``, or ``"LOW"`` based on
+    groundedness and completeness thresholds."""
+    confidence_explanation: str
+    """Chinese explanation of the confidence level."""
     issues: list[str]
     """Human-readable list of quality concerns found."""
-
-
 # Patterns for detecting numeric claims in response text.
 _NUMERIC_PATTERN = _re.compile(
     r"(\d+\.?\d*)\s*(s|秒|kph|km/h|mph|deg|°|C|℃|℃|%|G|g|bar|psi|mm|cm|m|kg|N|Nm|kW|hp)"
@@ -61,8 +49,6 @@ _NUMERIC_PATTERN = _re.compile(
 _CN_NUMERIC_PATTERN = _re.compile(
     r"(\d+\.?\d*)\s*(秒|度|公里|米|厘米|毫米|牛|千瓦|马力)"
 )
-
-
 def _extract_numeric_claims(text: str) -> list[tuple[float, str]]:
     """Extract all numeric claims (value, unit) from response text."""
     claims: list[tuple[float, str]] = []
@@ -71,8 +57,6 @@ def _extract_numeric_claims(text: str) -> list[tuple[float, str]]:
     for m in _CN_NUMERIC_PATTERN.finditer(text):
         claims.append((float(m.group(1)), m.group(2)))
     return claims
-
-
 def _extract_evidence_values(sources: list[dict]) -> set[str]:
     """Extract all distinct evidence snippets for groundedness comparison."""
     tokens: set[str] = set()
@@ -86,14 +70,11 @@ def _extract_evidence_values(sources: list[dict]) -> set[str]:
             else:
                 tokens.add(str(val))
     return tokens
-
-
 def _check_groundedness(text: str, sources: list[dict]) -> tuple[float, list[str]]:
     """Check whether numeric claims can be traced to telemetry evidence."""
     claims = _extract_numeric_claims(text)
     if not claims:
         return 1.0, []  # No numeric claims = no hallucination risk
-
     evidence = _extract_evidence_values(sources)
     issues: list[str] = []
     matched = 0
@@ -113,19 +94,15 @@ def _check_groundedness(text: str, sources: list[dict]) -> tuple[float, list[str
             matched += 1
         else:
             issues.append(f"Unverified claim: {val}{unit}")
-
     if not claims:
         return 1.0, issues
     score = matched / len(claims)
     return score, issues
-
-
 def _check_completeness(feedback: dict) -> tuple[float, list[str]]:
     """Check how many feedback dimensions have meaningful content."""
     dims = feedback.get("dimensions", [])
     if not dims:
         return 0.0, ["No feedback dimensions found"]
-
     total = len(dims)
     filled = 0
     issues: list[str] = []
@@ -137,11 +114,8 @@ def _check_completeness(feedback: dict) -> tuple[float, list[str]]:
             filled += 1
         else:
             issues.append(f"Dimension '{name}' has no meaningful value")
-
     score = filled / total if total > 0 else 0.0
     return score, issues
-
-
 def _check_actionability(text: str) -> tuple[float, list[str]]:
     """Check whether the response contains concrete, actionable advice."""
     actionable_patterns = [
@@ -157,7 +131,6 @@ def _check_actionability(text: str) -> tuple[float, list[str]]:
     for pat in actionable_patterns:
         if pat.search(text):
             hits += 1
-
     if hits == 0:
         issues.append("No actionable advice found")
         score = 0.0
@@ -168,21 +141,41 @@ def _check_actionability(text: str) -> tuple[float, list[str]]:
     else:
         score = 0.4
         issues.append("Limited actionable advice")
-
     return score, issues
-
-
+def confidence_label(groundedness: float, completeness: float) -> str:
+    """Return confidence label based on groundedness and completeness."""
+    if groundedness >= 0.8 and completeness >= 0.7:
+        return "HIGH"
+    elif groundedness >= 0.5 and completeness >= 0.4:
+        return "MEDIUM"
+    else:
+        return "LOW"
+def confidence_explanation(label: str, groundedness: float, completeness: float) -> str:
+    """Return Chinese explanation of the confidence level."""
+    if label == "HIGH":
+        return (
+            f"置信度较高：证据充分度 {groundedness:.0%}，完整性 {completeness:.0%}，"
+            f"评估结果可靠"
+        )
+    elif label == "MEDIUM":
+        return (
+            f"置信度中等：证据充分度 {groundedness:.0%}，完整性 {completeness:.0%}，"
+            f"评估结果可作为参考"
+        )
+    else:
+        return (
+            f"置信度较低：证据充分度 {groundedness:.0%}，完整性 {completeness:.0%}，"
+            f"评估结果需谨慎对待"
+        )
 def assess_response_quality(
     feedback: dict,
     telemetry_sources: list[dict] | None = None,
     *,
     weights: tuple[float, float, float] = (0.4, 0.3, 0.3),
 ) -> ResponseQualityReport:
-    """Assess the quality of a feedback response (Iter-146).
-
+    """Assess the quality of a feedback response (Iter-179).
     Evaluates three dimensions and produces a structured report suitable for
     logging, dashboard display, and automated quality gating.
-
     Args:
         feedback: The feedback dict returned by ``FeedbackEngine.run()``
             (must contain ``summary`` and ``dimensions`` keys).
@@ -191,30 +184,24 @@ def assess_response_quality(
             When ``None``, groundedness defaults to 1.0.
         weights: ``(groundedness_weight, completeness_weight, actionability_weight)``.
             Default ``(0.4, 0.3, 0.3)``.
-
     Returns:
         :class:`ResponseQualityReport` with scores and issues.
     """
     all_issues: list[str] = []
     text = feedback.get("summary", "")
-
     # Groundedness
     if telemetry_sources and len(telemetry_sources) > 0:
         g_score, g_issues = _check_groundedness(text, telemetry_sources)
     else:
         g_score, g_issues = 1.0, []
     all_issues.extend(g_issues)
-
     # Completeness
     c_score, c_issues = _check_completeness(feedback)
     all_issues.extend(c_issues)
-
     # Actionability
     a_score, a_issues = _check_actionability(text)
     all_issues.extend(a_issues)
-
     overall = weights[0] * g_score + weights[1] * c_score + weights[2] * a_score
-
     if overall >= 0.8:
         label = "excellent"
     elif overall >= 0.6:
@@ -223,18 +210,22 @@ def assess_response_quality(
         label = "fair"
     else:
         label = "poor"
-
+    # Confidence
+    conf_label = confidence_label(g_score, c_score)
+    conf_expl = confidence_explanation(conf_label, g_score, c_score)
     return ResponseQualityReport(
         groundedness=g_score,
         completeness=c_score,
         actionability=a_score,
         overall=overall,
         label=label,
+        confidence_label=conf_label,
+        confidence_explanation=conf_expl,
         issues=all_issues,
     )
-
-
 __all__ = [
     "ResponseQualityReport",
     "assess_response_quality",
+    "confidence_label",
+    "confidence_explanation",
 ]
