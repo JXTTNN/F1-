@@ -189,6 +189,9 @@ class SearchResult(BaseModel):
     confidence_label: str = "medium"
     change_explanation: list[dict] = []
     top_sensitive_params: list[dict] = []
+    # Iter-178 精英保留: 追踪每代精英存活数 (elite_count 个精英在下一代
+    # 种群中仍位列前 elite_count 的数量). 用于验证精英保留机制有效性.
+    elite_survival: list[int] = []
 
 
 def search_setup(
@@ -204,6 +207,7 @@ def search_setup(
     stint_aware: bool = False,
     stint_length: int = 20,
     stint_compound: str = "medium",
+    elite_count: int = 3,
 ) -> SearchResult:
     """搜索最小化预测圈速的调教, 返回 :class:`SearchResult`.
 
@@ -237,6 +241,13 @@ def search_setup(
     "结合胎耗" 的深度集成: 优化器直接最小化 stint 总时间, 让调教在 stint
     全程 (而非单圈) 最优. ``stint_aware`` 与 ``holistic`` 互斥 (stint_aware
     优先). ``stint_length`` 默认 20 圈, ``stint_compound`` 默认 medium.
+
+    Iter-178 精英保留: ``elite_count`` 控制每代保留的精英个体数 (默认 3).
+    在每代 DE 结束后, 保留前 ``elite_count`` 个最优个体作为精英, 注入到
+    下一代种群 (替换最差的 ``elite_count`` 个个体). 精英保留防止最优解在
+    变异/交叉中丢失, 加速收敛并提高 DE 稳定性. ``SearchResult.elite_survival``
+    记录每代精英存活数 (前一代精英中在新种群仍位列前 ``elite_count`` 的数量).
+    ``elite_count=0`` 禁用精英保留 (向后兼容原有行为).
     """
     return _search(
         track_id=track_id,
@@ -250,6 +261,7 @@ def search_setup(
         stint_aware=stint_aware,
         stint_length=stint_length,
         stint_compound=stint_compound,
+        elite_count=elite_count,
     )
 
 
@@ -322,6 +334,7 @@ def _search(
     stint_aware: bool = False,
     stint_length: int = 20,
     stint_compound: str = "medium",
+    elite_count: int = 3,
 ) -> SearchResult:
     base_setup = _coerce_baseline(baseline)
     # driver_profile 原样透传给 surrogate (其 _normalize_driver_vector 处理所有形态).
@@ -526,16 +539,18 @@ def _search(
                     cache[sv_key] = (lap, proxy)
             return results
 
-        best_vec, trace, algorithm = _vectorized_differential_evolution(
+        best_vec, trace, algorithm, elite_survival = _vectorized_differential_evolution(
             objective_vec=objective_vec,
             iterations=iterations,
             seed=seed,
+            elite_count=elite_count,
         )
     elif _de is not None:
-        best_vec, trace, algorithm = _differential_evolution(
+        best_vec, trace, algorithm, elite_survival = _differential_evolution(
             objective=objective,
             iterations=iterations,
             seed=seed,
+            elite_count=elite_count,
         )
     else:
         best_vec, trace = _hill_climb(
@@ -545,6 +560,7 @@ def _search(
             seed=seed,
         )
         algorithm = "numpy-local"
+        elite_survival = []
 
     # Iter-92: 钳制 best_vec 的 fuel_load 维度到 baseline (与 evaluate/objective_vec
     # 内部钳制一致). DE 搜索时 fuel_load 被钳制评估, 但 best_vec 本身是 DE 原始
@@ -624,6 +640,7 @@ def _search(
         confidence_label=conf_label,
         change_explanation=change_expl,
         top_sensitive_params=top_sensitive,
+        elite_survival=elite_survival,
     )
 
 
@@ -641,16 +658,78 @@ def _response_profile(
     return {name: float(val) for name, val in resp.items()}
 
 
+# --- Iter-178 精英保留辅助函数 ---------------------------------------------
+def _extract_population(result: Any) -> np.ndarray | None:
+    """从 scipy DE 结果中提取种群矩阵 (N, dim).
+
+    仅在 ``polish=False`` 时 scipy 会在结果中存储 ``population`` 和
+    ``population_energies``. 若不可用返回 None, 调用方应跳过精英保留.
+    """
+    if hasattr(result, "population") and result.population is not None:
+        return np.asarray(result.population, dtype=np.float64)
+    return None
+
+
+def _extract_energies(
+    result: Any, pop: np.ndarray, objective: Any,
+) -> np.ndarray:
+    """提取种群能量; 优先用 ``result.population_energies``, 不可用时逐条评估."""
+    if (
+        hasattr(result, "population_energies")
+        and result.population_energies is not None
+    ):
+        return np.asarray(result.population_energies, dtype=np.float64)
+    return np.array([float(objective(p)) for p in pop], dtype=np.float64)
+
+
+def _count_elite_survival(
+    pop: np.ndarray,
+    sorted_idx: np.ndarray,
+    prev_elites: list[np.ndarray],
+    elite_count: int,
+) -> int:
+    """统计上一代精英在当前种群 top-elite_count 中的存活数.
+
+    用 rounded 向量作为 key (与 ``evaluate`` 中的缓存键一致) 做集合成员检查.
+    """
+    elite_keys = {tuple(np.round(e, 6)) for e in prev_elites}
+    survived = 0
+    for i in range(min(elite_count, len(sorted_idx))):
+        key = tuple(np.round(pop[sorted_idx[i]], 6))
+        if key in elite_keys:
+            survived += 1
+    return survived
+
+
+def _inject_elites(
+    pop: np.ndarray,
+    sorted_idx: np.ndarray,
+    elite_vectors: list[np.ndarray],
+    elite_count: int,
+) -> np.ndarray:
+    """构建下一代种群: 用精英替换最差的 ``elite_count`` 个个体.
+
+    返回新种群 (copy), 不修改传入的 ``pop``.
+    """
+    n = min(elite_count, len(sorted_idx))
+    new_pop = pop.copy()
+    worst_idx = sorted_idx[-n:]
+    for i in range(min(n, len(elite_vectors))):
+        new_pop[worst_idx[i]] = elite_vectors[i]
+    return new_pop
+
+
 def _differential_evolution(
     objective: Any,
     iterations: int,
     seed: int | None,
-) -> tuple[np.ndarray, list[float], str]:
+    elite_count: int = 3,
+) -> tuple[np.ndarray, list[float], str, list[int]]:
     """``scipy.optimize.differential_evolution`` 全局优化.
 
     在归一化 [0,1]^19 空间上最小化 ``objective``; 用 callback 收集每代最优
     圈速 (非递增) 作为 ``search_trace``. 返回 ``(best_vec (snapped), trace,
-    "scipy-de")``.
+    "scipy-de", elite_survival)``.
 
     ``polish=True`` 让 scipy 在 DE 收敛后跑一次 L-BFGS-B 局部精修; 目标函数经
     ``_snap_vec`` 缓存后基本分段常量, L-BFGS-B 有限差分梯度 ≈ 0, 几乎瞬间完成
@@ -660,35 +739,90 @@ def _differential_evolution(
     cap 后延迟 ≤2s; numpy 回退路径不受 cap 约束 (其 ``iterations`` 即评估预算).
     ``popsize`` 取 3 (见 :data:`_DE_POPSIZE` 注释, Iter-84 消融实验) 兼顾全局性
     与时延 (1.67x 加速, gain 仅 -4%).
+
+    Iter-178 精英保留: ``elite_count > 0`` 时每代 DE 结束后保留前 ``elite_count``
+    个最优个体作为精英, 注入下一代种群 (替换最差个体). 精英保留防止最优解在
+    变异/交叉中丢失, 加速收敛. ``elite_count=0`` 时回退到原始行为 (单次 DE 调用,
+    无精英保留, ``elite_survival=[]``).
     """
     trace: list[float] = []
+    elite_survival: list[int] = []
 
-    def callback(intermediate_result: Any) -> None:
-        # scipy>=1.4 新式签名: intermediate_result 为 OptimizeResult, 含 .fun
-        # (当前代 best-yet). 不返回 True -> 不提前终止.
-        try:
-            trace.append(float(intermediate_result.fun))
-        except (AttributeError, TypeError):
-            # 兼容兜底: 旧式 callback(xk, convergence) 签名 (scipy 1.17 不会触发).
-            pass
+    maxiter = min(iterations, _DE_MAXITER_CAP)
 
-    result = _de(
-        objective,
-        _BOUNDS,
-        maxiter=min(iterations, _DE_MAXITER_CAP),
-        seed=seed,
-        polish=_DE_POLISH,
-        tol=1e-6,
-        popsize=_DE_POPSIZE,
-        callback=callback,
-    )
+    if elite_count <= 0:
+        def callback(intermediate_result: Any) -> None:
+            try:
+                trace.append(float(intermediate_result.fun))
+            except (AttributeError, TypeError):
+                pass
+
+        result = _de(
+            objective,
+            _BOUNDS,
+            maxiter=maxiter,
+            seed=seed,
+            polish=_DE_POLISH,
+            tol=1e-6,
+            popsize=_DE_POPSIZE,
+            callback=callback,
+        )
+        best_vec = _snap_vec(np.asarray(result.x, dtype=np.float64))
+        if not trace:
+            trace.append(float(objective(best_vec)))
+        return best_vec, trace, "scipy-de", elite_survival
+
+    # Iter-178 精英保留路径: 逐代运行 DE, 代间注入精英
+    elite_vectors: list[np.ndarray] = []
+    population: np.ndarray | None = None
+
+    for gen in range(maxiter):
+        gen_seed = seed if (gen == 0 and seed is not None) else None
+
+        kwargs: dict[str, Any] = {
+            "maxiter": 1,
+            "seed": gen_seed,
+            "polish": False,
+            "tol": 1e-6,
+        }
+        if population is not None:
+            kwargs["init"] = population
+        else:
+            kwargs["popsize"] = _DE_POPSIZE
+
+        result = _de(objective, _BOUNDS, **kwargs)
+
+        trace.append(float(result.fun))
+
+        pop = _extract_population(result)
+        if pop is not None:
+            energies = _extract_energies(result, pop, objective)
+            sorted_idx = np.argsort(energies)
+
+            if elite_vectors and gen > 0:
+                survived = _count_elite_survival(
+                    pop, sorted_idx, elite_vectors, elite_count,
+                )
+                elite_survival.append(survived)
+
+            elite_vectors = [
+                pop[sorted_idx[i]].copy()
+                for i in range(min(elite_count, len(sorted_idx)))
+            ]
+
+            if gen < maxiter - 1:
+                population = _inject_elites(
+                    pop, sorted_idx, elite_vectors, elite_count,
+                )
+        else:
+            elite_vectors = []
+            population = None
+
     best_vec = _snap_vec(np.asarray(result.x, dtype=np.float64))
-
-    # 兜底: callback 在 maxiter 过小或早收敛时可能未触发, 至少记录最优值保证 trace 非空.
     if not trace:
         trace.append(float(objective(best_vec)))
 
-    return best_vec, trace, "scipy-de"
+    return best_vec, trace, "scipy-de", elite_survival
 
 
 # --- Iter-85 向量化 DE (predict_batch 批量评估) -----------------------------
@@ -710,7 +844,8 @@ def _vectorized_differential_evolution(
     objective_vec: Any,
     iterations: int,
     seed: int | None,
-) -> tuple[np.ndarray, list[float], str]:
+    elite_count: int = 3,
+) -> tuple[np.ndarray, list[float], str, list[int]]:
     """``scipy.optimize.differential_evolution`` 配 ``vectorized=True``.
 
     Iter-85: scipy 的 ``vectorized=True`` 模式把整代种群 (N×dim) 一次性传给
@@ -719,38 +854,97 @@ def _vectorized_differential_evolution(
     (0.10 ms/each vs 0.72 ms/each @ N=57). DE cap=25 popsize=3 总 forwards
     从 ~1.5s 降到 ~0.2s, search_setup 总耗时从 ~1.5s 降到 ~0.3s.
 
-    返回 ``(best_vec (snapped), trace, "scipy-de-vec")``.
+    返回 ``(best_vec (snapped), trace, "scipy-de-vec", elite_survival)``.
 
     算法与 :func:`_differential_evolution` 一致 (相同 seed 下结果近似, 仅批次
     评估顺序不同), 故 gain 质量保持 Iter-84 水平 (avg 2.019s, sakhir 0.65s).
+
+    Iter-178 精英保留: ``elite_count > 0`` 时逐代运行 vectorized DE, 代间注入
+    精英 (与 :func:`_differential_evolution` 相同的精英保留逻辑).
+    ``elite_count=0`` 时回退到原始行为 (单次 DE 调用).
     """
     trace: list[float] = []
+    elite_survival: list[int] = []
 
-    def callback(intermediate_result: Any) -> None:
-        try:
-            trace.append(float(intermediate_result.fun))
-        except (AttributeError, TypeError):
-            pass
+    maxiter = min(iterations, _DE_MAXITER_CAP_VECTORIZED)
 
-    result = _de(
-        objective_vec,
-        _BOUNDS,
-        maxiter=min(iterations, _DE_MAXITER_CAP_VECTORIZED),
-        seed=seed,
-        polish=False,  # vectorized 模式下 polish 会走非批量路径, 反而慢
-        tol=1e-6,
-        popsize=_DE_POPSIZE,
-        callback=callback,
-        vectorized=True,
-        updating="deferred",  # 配合 vectorized: 整代评估后才更新最优
-    )
+    if elite_count <= 0:
+        def callback(intermediate_result: Any) -> None:
+            try:
+                trace.append(float(intermediate_result.fun))
+            except (AttributeError, TypeError):
+                pass
+
+        result = _de(
+            objective_vec,
+            _BOUNDS,
+            maxiter=maxiter,
+            seed=seed,
+            polish=False,
+            tol=1e-6,
+            popsize=_DE_POPSIZE,
+            callback=callback,
+            vectorized=True,
+            updating="deferred",
+        )
+        best_vec = _snap_vec(np.asarray(result.x, dtype=np.float64))
+        if not trace:
+            trace.append(float(objective_vec(best_vec)))
+        return best_vec, trace, "scipy-de-vec", elite_survival
+
+    # Iter-178 精英保留路径: 逐代运行 vectorized DE, 代间注入精英
+    elite_vectors: list[np.ndarray] = []
+    population: np.ndarray | None = None
+
+    for gen in range(maxiter):
+        gen_seed = seed if (gen == 0 and seed is not None) else None
+
+        kwargs: dict[str, Any] = {
+            "maxiter": 1,
+            "seed": gen_seed,
+            "polish": False,
+            "tol": 1e-6,
+            "vectorized": True,
+            "updating": "deferred",
+        }
+        if population is not None:
+            kwargs["init"] = population
+        else:
+            kwargs["popsize"] = _DE_POPSIZE
+
+        result = _de(objective_vec, _BOUNDS, **kwargs)
+
+        trace.append(float(result.fun))
+
+        pop = _extract_population(result)
+        if pop is not None:
+            energies = _extract_energies(result, pop, objective_vec)
+            sorted_idx = np.argsort(energies)
+
+            if elite_vectors and gen > 0:
+                survived = _count_elite_survival(
+                    pop, sorted_idx, elite_vectors, elite_count,
+                )
+                elite_survival.append(survived)
+
+            elite_vectors = [
+                pop[sorted_idx[i]].copy()
+                for i in range(min(elite_count, len(sorted_idx)))
+            ]
+
+            if gen < maxiter - 1:
+                population = _inject_elites(
+                    pop, sorted_idx, elite_vectors, elite_count,
+                )
+        else:
+            elite_vectors = []
+            population = None
+
     best_vec = _snap_vec(np.asarray(result.x, dtype=np.float64))
-
     if not trace:
-        # 兜底: 单条评估 (objective_vec 接受 1D)
         trace.append(float(objective_vec(best_vec)))
 
-    return best_vec, trace, "scipy-de-vec"
+    return best_vec, trace, "scipy-de-vec", elite_survival
 
 
 def _hill_climb(
