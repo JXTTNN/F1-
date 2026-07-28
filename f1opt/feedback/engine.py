@@ -1,12 +1,12 @@
 """LLM driver-feedback engine.
 
-Iter-03 Task 3.1: produces evidence-grounded feedback covering ALL 10 spec
-dimensions (balance / grip / tyres / braking / ers_drs /
+Iter-03 Task 3.1: produces evidence-grounded feedback covering ALL 12 spec
+dimensions (balance / grip / tyres / braking / ers_deployment / drs_usage /
 throttle_brake_smoothness / confidence / lap_time_potential / sector_compare /
 setup_advice). Works without an LLM API key via a comprehensive rule-based
 fallback, and supports a pluggable LLM backend (``config.llm_backend``) for
 richer natural language — the LLM-enhance path stays gated (default off) but
-its prompt already lists all 10 dimensions.
+its prompt already lists all 12 dimensions.
 
 Pipeline:
 
@@ -15,7 +15,7 @@ Pipeline:
    Iter-03 adds braking (lockup_proxy, brake_bias_assessment), confidence
    (steering_correction_freq, g_lat_stability) and sector_compare
    (sector_times derived from lap_distance crossings, else nominal split).
-2. :func:`rule_based_feedback` — emit ALL 10 dimension entries + setup
+2. :func:`rule_based_feedback` — emit ALL 12 dimension entries + setup
    suggestions via F1 setup knowledge encoded as rules; the ``setup_advice``
    dimension consumes :func:`f1opt.model.optimizer.search_setup` to present the
    model-driven recommended setup diff.
@@ -64,7 +64,7 @@ __all__ = [
     "rule_based_feedback",
 ]
 
-#: All 10 feedback dimensions required by the setup-optimizer spec (Iter-03).
+#: All 12 feedback dimensions required by the setup-optimizer spec (Iter-03).
 #: Re-exported from :mod:`f1opt.feedback.prompts` (single source of truth) so
 #: the rule-based path and the LLM prompt dimension list never drift apart.
 #: The rule-based path always emits one entry per name in this order.
@@ -896,17 +896,43 @@ def extract_metrics(
         metrics["values"]["max_g_lat"] = max_glat
         add_ref("max_g_lat", float(g_lat_t[mi]), "g_lat", float(g_lat[mi]))
 
-    # --- ERS usage efficiency: OLS slope of ers_store vs time ---
+    # --- ers_deployment: ERS store level, harvest/deploy totals, mode efficiency ---
     ers, ers_t = col("ers_store")
     if len(ers) >= 2:
+        ers_store_mean_val = float(np.mean(ers))
+        metrics["values"]["ers_store_mean"] = ers_store_mean_val
+        add_ref("ers_store_mean", float(ers_t[len(ers_t)//2]), "ers_store", ers_store_mean_val)
         xm = ers_t - ers_t.mean()
         denom = float(np.dot(xm, xm))
         slope = float(np.dot(xm, ers - ers.mean()) / denom) if denom > 0 else 0.0
         metrics["values"]["ers_slope_per_s"] = slope
         add_ref("ers_start", float(ers_t[0]), "ers_store", float(ers[0]))
         add_ref("ers_end", float(ers_t[-1]), "ers_store", float(ers[-1]))
+    ers_deploy, deploy_t = col("ers_deployed")
+    deployed_total = None
+    if len(ers_deploy) >= 2:
+        deployed_total = float(ers_deploy[-1] - ers_deploy[0])
+        metrics["values"]["ers_deployed_total"] = deployed_total
+        add_ref("ers_deployed_total", float(deploy_t[-1]), "ers_deployed", float(ers_deploy[-1]))
+    ers_harv, harv_t = col("ers_harvested")
+    if len(ers_harv) >= 2:
+        harvested_total = float(ers_harv[-1] - ers_harv[0])
+        metrics["values"]["ers_harvested_total"] = harvested_total
+        add_ref("ers_harvested_total", float(harv_t[-1]), "ers_harvested", float(ers_harv[-1]))
+    deploy_mode, mode_t = col("ers_deploy_mode")
+    if len(deploy_mode) >= 2:
+        hotlap_mask = deploy_mode == 1.0
+        hotlap_pct = float(np.mean(hotlap_mask)) * 100.0
+        metrics["values"]["deploy_mode_hotlap_pct"] = hotlap_pct
+        add_ref("deploy_mode_hotlap_pct", float(mode_t[0]), "ers_deploy_mode", float(hotlap_pct))
+    if deployed_total is not None:
+        ers_consum, consum_t = col("ers_mgu_k_deploy")
+        if len(ers_consum) >= 2:
+            total_consumed = float(ers_consum[-1] - ers_consum[0])
+            if total_consumed > 0:
+                metrics["values"]["ers_efficiency"] = deployed_total / total_consumed
 
-    # --- DRS activation count: 0 -> 1 transitions ---
+    # --- drs_usage: DRS activation timing, zone utilisation ---
     drs, drs_t = col("drs_allowed")
     if len(drs) >= 2:
         drs_int = np.round(drs).astype(int)
@@ -916,6 +942,32 @@ def extract_metrics(
         if transitions > 0:
             idx = int(np.where(diffs > 0)[0][0])
             add_ref("drs_first_activation", float(drs_t[idx + 1]), "drs_allowed", 1.0)
+    drs_active, drs_at = col("drs_active")
+    if len(drs_active) >= 2:
+        active_mask = drs_active >= 0.5
+        active_pct = float(np.mean(active_mask)) * 100.0
+        metrics["values"]["drs_active_pct"] = active_pct
+        add_ref("drs_active_pct", float(drs_at[0]), "drs_active", active_pct)
+    drs_zone, zone_t = col("drs_zone")
+    if len(drs_zone) >= 1:
+        zone_ids = np.unique(np.round(drs_zone).astype(int))
+        zone_ids = zone_ids[zone_ids > 0]
+        metrics["values"]["drs_zone_count"] = len(zone_ids)
+        add_ref("drs_zone_count", float(zone_t[0]), "drs_zone", float(len(zone_ids)))
+    if len(drs) >= 2 and len(drs_active) >= 2:
+        d_changes = np.diff(np.round(drs).astype(int))
+        d_up = np.where(d_changes > 0)[0] + 1
+        a_changes = np.diff(np.round(drs_active).astype(int))
+        a_up = np.where(a_changes > 0)[0] + 1
+        delays: list[float] = []
+        for d_idx in d_up:
+            d_t_val = float(drs_t[d_idx])
+            later = a_up[a_up >= d_idx]
+            if len(later) > 0:
+                a_t_val = float(drs_at[later[0]])
+                delays.append(a_t_val - d_t_val)
+        if delays:
+            metrics["values"]["drs_activation_delay_mean"] = float(np.mean(delays))
 
     # --- Lap time (from last frame) ---
     lap_times, lap_t = col("lap_time")
@@ -1400,12 +1452,65 @@ def _dim_braking(
     )
 
 
-def _dim_ers_drs(values: dict[str, Any], refs: dict[str, Any]) -> dict[str, Any]:
-    """ers_drs (ERS/DRS 使用): ers slope + drs activation count."""
+def _dim_ers_deployment(values: dict[str, Any], refs: dict[str, Any]) -> dict[str, Any]:
+    """ers_deployment (ERS部署与回收): ERS SOC level, deploy vs harvest balance, MGU-K efficiency."""
+    store_mean = values.get("ers_store_mean")
+    slope = values.get("ers_slope_per_s")
+    deployed = values.get("ers_deployed_total")
+    harvested = values.get("ers_harvested_total")
+    efficiency = values.get("ers_efficiency")
+    hotlap_pct = values.get("deploy_mode_hotlap_pct")
+    if store_mean is None and slope is None and deployed is None:
+        return _data_insufficient("ers_deployment")
+    parts: list[str] = []
+    ev_parts: list[str] = []
+    if store_mean is not None:
+        parts.append(f"ERS SOC mean {store_mean:.1f}")
+        r = refs.get("ers_store_mean")
+        if r:
+            ev_parts.append(_format_ref(r))
+    if slope is not None:
+        direction = "harvesting" if slope > 0 else "deploying"
+        parts.append(f"ERS trend {slope:.2f}/s ({direction})")
+        for k in ("ers_start", "ers_end"):
+            r = refs.get(k)
+            if r:
+                ev_parts.append(_format_ref(r))
+    if deployed is not None and harvested is not None:
+        balance = "deploy-heavy" if deployed > harvested * 1.1 else ("harvest-heavy" if harvested > deployed * 1.1 else "balanced")
+        parts.append(f"deploy {deployed:.1f} vs harvest {harvested:.1f} ({balance})")
+        for k in ("ers_deployed_total", "ers_harvested_total"):
+            r = refs.get(k)
+            if r:
+                ev_parts.append(_format_ref(r))
+    if efficiency is not None:
+        parts.append(f"ERS efficiency {efficiency:.2f}")
+    if hotlap_pct is not None:
+        parts.append(f"hotlap mode {hotlap_pct:.0f}%")
+        r = refs.get("deploy_mode_hotlap_pct")
+        if r:
+            ev_parts.append(_format_ref(r))
+    advice: str = "平衡 ERS 部署与回收; 优先在出弯与直道前段使用 Hotlap 模式."
+    if slope is not None and slope < -0.5:
+        advice = "ERS 消耗过快, 增加制动回收或减少低效区段部署."
+    elif deployed is not None and harvested is not None and deployed > harvested * 1.3:
+        advice = "部署量显著高于回收, 关注 MGU-K 效率及大直道前的 SoC 储备."
+    return {
+        "name": "ers_deployment",
+        "value": "; ".join(parts),
+        "evidence": "; ".join(ev_parts) if ev_parts else "no ERS deployment data",
+        "advice": advice,
+    }
+
+
+def _dim_drs_usage(values: dict[str, Any], refs: dict[str, Any]) -> dict[str, Any]:
+    """drs_usage (DRS使用): DRS activation timing, zone utilisation."""
     drs_count = values.get("drs_activation_count")
-    ers_slope = values.get("ers_slope_per_s")
-    if drs_count is None and ers_slope is None:
-        return _data_insufficient("ers_drs")
+    active_pct = values.get("drs_active_pct")
+    delay_mean = values.get("drs_activation_delay_mean")
+    zone_count = values.get("drs_zone_count")
+    if drs_count is None and active_pct is None:
+        return _data_insufficient("drs_usage")
     parts: list[str] = []
     ev_parts: list[str] = []
     if drs_count is not None:
@@ -1413,17 +1518,26 @@ def _dim_ers_drs(values: dict[str, Any], refs: dict[str, Any]) -> dict[str, Any]
         r = refs.get("drs_first_activation")
         if r:
             ev_parts.append(_format_ref(r))
-    if ers_slope is not None:
-        parts.append(f"ERS store slope {ers_slope:.2f}/s")
-        for k in ("ers_start", "ers_end"):
-            r = refs.get(k)
-            if r:
-                ev_parts.append(_format_ref(r))
+    if active_pct is not None:
+        parts.append(f"DRS active {active_pct:.1f}%")
+        r = refs.get("drs_active_pct")
+        if r:
+            ev_parts.append(_format_ref(r))
+    if zone_count is not None:
+        parts.append(f"DRS zones: {zone_count}")
+        r = refs.get("drs_zone_count")
+        if r:
+            ev_parts.append(_format_ref(r))
+    if delay_mean is not None:
+        parts.append(f"DRS activation delay mean {delay_mean:.3f}s")
+    advice: str = "充分利用 DRS 区段; 确保在每个检测区段都对准前车 1 秒以内."
+    if delay_mean is not None and delay_mean > 0.1:
+        advice = f"DRS 激活延迟 {delay_mean:.3f}s, 建议提前预判 DRS 窗口以减少延迟."
     return {
-        "name": "ers_drs",
+        "name": "drs_usage",
         "value": "; ".join(parts),
-        "evidence": "; ".join(ev_parts) if ev_parts else "no DRS/ERS events",
-        "advice": "充分利用 DRS 区段; 平衡 ERS 部署 across the lap.",
+        "evidence": "; ".join(ev_parts) if ev_parts else "no DRS usage data",
+        "advice": advice,
     }
 
 
@@ -1813,7 +1927,7 @@ def rule_based_feedback(
     track_id: str,
     driver_profile: DriverProfile | dict[str, Any] | list[float] | None = None,
 ) -> dict[str, Any]:
-    """Produce ALL 10 dimension entries + setup suggestions from F1 setup rules.
+    """Produce ALL 12 dimension entries + setup suggestions from F1 setup rules.
 
     Each dimension is ``{"name", "value", "evidence", "advice"}`` and every
     numeric claim in ``value`` / ``advice`` traces to an entry in
@@ -1838,7 +1952,7 @@ def rule_based_feedback(
     track = _resolve_track(track_id)
     ref_lap = _ref_lap_for(track)
 
-    # Build the 10 dimensions in FEEDBACK_DIMENSIONS order. Rule-based
+    # Build the 12 dimensions in FEEDBACK_DIMENSIONS order. Rule-based
     # suggestions accumulate from balance / grip / tyres / braking dims.
     dim_balance, sug = _dim_balance(values, refs, setup)
     dim_balance = _apply_personal_advice(dim_balance, profile, _balance_personal)
@@ -1850,7 +1964,8 @@ def rule_based_feedback(
     dim_braking, sug = _dim_braking(values, refs, setup)
     dim_braking = _apply_personal_advice(dim_braking, profile, _braking_personal)
     suggestions.extend(sug)
-    dim_ers_drs = _dim_ers_drs(values, refs)
+    dim_ers_deployment = _dim_ers_deployment(values, refs)
+    dim_drs_usage = _dim_drs_usage(values, refs)
     dim_smoothness = _dim_smoothness(values, refs)
     dim_smoothness = _apply_personal_advice(
         dim_smoothness, profile, _smoothness_personal
@@ -1908,13 +2023,14 @@ def rule_based_feedback(
         dim_grip,
         dim_tyres,
         dim_braking,
-        dim_ers_drs,
+        dim_ers_deployment,
+        dim_drs_usage,
         dim_smoothness,
         dim_confidence,
         dim_lap_time,
         dim_sector,
         dim_setup,
-        dim_corner,  # Iter-164.14: 逐弯分析 (第 11 维)
+        dim_corner,  # Iter-164.14: 逐弯分析 (第 12 维)
     ]
 
     summary = _general_summary(metrics, dimensions, track, ref_lap)
