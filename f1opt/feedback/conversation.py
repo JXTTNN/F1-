@@ -1,4 +1,4 @@
-"""Multi-turn conversation memory for F1OPT feedback (Iter-07 / Iter-25..28).
+"""Multi-turn conversation memory for F1OPT feedback (Iter-07 / Iter-25..28 / Iter-175).
 
 Iter-07 ships the :class:`ConversationSession` dataclass (bounded history,
 prompt rendering, process-wide registry).
@@ -17,14 +17,32 @@ and the new what-if / causal layer:
 - :class:`ConversationMemory` — a bounded LRU-style message store with topic
   extraction and serialization, for callers that want a lighter-weight memory
   than a full :class:`ConversationSession`.
+
+Iter-175 adds lap-time trend tracking to :class:`ConversationSession`:
+
+- :meth:`remember_lap` — record a completed lap (lap_time, track_id, position).
+- :meth:`get_lap_trend` — compute trend over the last N laps (improving / stable
+  / slowing + slope in s/lap).
+- :meth:`lap_trend_for_prompt` — format trend as LLM-injectable context text.
+- :attr:`lap_history` — bounded list of ``LapRecord`` dataclass instances.
+
+The trend engine uses a simple linear regression on the last N lap times to
+compute a per-lap delta; when N < 3 the result is neutral. This bridges the
+feedback engine's ring buffer (engine.FeedbackMemory) and the conversation
+session so the LLM can answer questions like "趋势怎么样?" / "上圈改善了吗?" /
+"Is the car getting faster across the stint?" with real data.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import NamedTuple
 
-#: Driver-focus keywords used by :meth:`ConversationSession.summarize_focus`
-#: and :meth:`ConversationMemory.topics`. Order is roughly handling-area then
-#: subsystem; clustering counts occurrences across recent user messages.
+class LapRecord(NamedTuple):
+    """A completed lap entry stored in the session's lap history (Iter-175)."""
+    lap_number: int
+    lap_time_s: float
+    track_id: str
+
 _FOCUS_KEYWORDS: tuple[str, ...] = (
     "推头",
     "甩尾",
@@ -38,9 +56,6 @@ _FOCUS_KEYWORDS: tuple[str, ...] = (
     "磨损",
 )
 
-#: Anaphora / follow-up triggers used by :meth:`ConversationSession.is_followup`.
-#: Ordered longest-first so multi-character triggers (怎么样 / 为什么) win over
-#: bare 这 / 那 — a bare "怎么调" (fresh how-to question) must NOT match "怎么样".
 _FOLLOWUP_TRIGGERS: tuple[str, ...] = (
     "怎么样",
     "为什么",
@@ -58,9 +73,6 @@ _FOLLOWUP_TRIGGERS: tuple[str, ...] = (
     "那",
 )
 
-#: Candidate reference noun phrases (setup / handling terms) scanned from a
-#: prior user turn by :meth:`ConversationSession.resolve_reference`. Ordered
-#: most-specific-first so e.g. "前翼" / "胎压" match before bare "胎".
 _REFERENCE_NOUNS: tuple[str, ...] = (
     "前翼",
     "后翼",
@@ -91,6 +103,8 @@ _REFERENCE_NOUNS: tuple[str, ...] = (
     "磨损",
 )
 
+_MAX_LAP_HISTORY = 100
+
 
 @dataclass
 class ConversationSession:
@@ -99,22 +113,18 @@ class ConversationSession:
     session_id: str
     history: list[dict[str, str]] = field(default_factory=list)
     max_turns: int = 10
-    # Iter-27: tracked setup-change proposals across turns (fed to the causal /
-    # what-if analyser so a chain of edits can be explained together).
     setup_changes: list[dict] = field(default_factory=list)
+    lap_history: list[LapRecord] = field(default_factory=list)
 
     def add(self, role: str, content: str) -> None:
-        """Append a turn (role='user'/'assistant'); trim to max_turns."""
         self.history.append({"role": role, "content": content})
         if len(self.history) > self.max_turns:
             self.history = self.history[-self.max_turns :]
 
     def recent(self, n: int = 5) -> list[dict[str, str]]:
-        """Return the last n turns (or all if fewer)."""
         return self.history[-n:] if n < len(self.history) else self.history[:]
 
     def format_for_prompt(self, n: int = 5) -> str:
-        """Render recent turns as context text for _answer_question / LLM prompt."""
         turns = self.recent(n)
         if not turns:
             return ""
@@ -125,19 +135,123 @@ class ConversationSession:
         return "\n".join(lines)
 
     # ------------------------------------------------------------------ #
+    # Iter-175: lap-time trend tracking
+    # ------------------------------------------------------------------ #
+    def remember_lap(
+        self, lap_time_s: float, track_id: str = "", lap_number: int = -1
+    ) -> None:
+        """Record a completed lap in the session's lap history.
+
+        If ``lap_number`` is negative (default), the next sequential lap
+        number is auto-assigned (``len(lap_history) + 1``). The lap history
+        is bounded to :data:`_MAX_LAP_HISTORY` entries, keeping the most
+        recent ones on overflow.
+        """
+        if lap_number < 0:
+            lap_number = len(self.lap_history) + 1
+        record = LapRecord(
+            lap_number=lap_number,
+            lap_time_s=float(lap_time_s),
+            track_id=track_id,
+        )
+        self.lap_history.append(record)
+        if len(self.lap_history) > _MAX_LAP_HISTORY:
+            self.lap_history = self.lap_history[-_MAX_LAP_HISTORY:]
+
+    def get_lap_trend(self, n: int = 5) -> dict:
+        """Compute the lap-time trend over the most recent ``n`` laps.
+
+        Uses simple linear regression (y = a + b*x) on the last n lap times
+        with x = lap index (0..n-1). The slope ``b`` is the per-lap delta
+        (negative = improving). When ``n < 3`` or lap history is empty, the
+        trend is neutral with zero confidence.
+
+        Returns:
+            ``{"trend": str, "slope_s_per_lap": float, "first_lap_s": float,
+            "last_lap_s": float, "n_laps": int, "delta_total_s": float}``
+
+        ``trend`` is one of ``"improving"`` (slope < -0.05),
+        ``"slowing"`` (slope > +0.05), or ``"stable"`` (within ±0.05).
+        """
+        if not self.lap_history or n < 3:
+            return {
+                "trend": "stable",
+                "slope_s_per_lap": 0.0,
+                "first_lap_s": 0.0,
+                "last_lap_s": 0.0,
+                "n_laps": len(self.lap_history),
+                "delta_total_s": 0.0,
+            }
+        laps = self.lap_history[-min(n, len(self.lap_history)):]
+        times = [r.lap_time_s for r in laps]
+        m = len(times)
+        if m < 2:
+            return {
+                "trend": "stable",
+                "slope_s_per_lap": 0.0,
+                "first_lap_s": times[0],
+                "last_lap_s": times[-1],
+                "n_laps": m,
+                "delta_total_s": 0.0,
+            }
+        x_mean = (m - 1) / 2.0
+        y_mean = sum(times) / m
+        num = sum((i - x_mean) * (times[i] - y_mean) for i in range(m))
+        den = sum((i - x_mean) ** 2 for i in range(m))
+        slope = num / den if den != 0 else 0.0
+        delta_total = times[-1] - times[0]
+        if slope < -0.05:
+            trend = "improving"
+        elif slope > 0.05:
+            trend = "slowing"
+        else:
+            trend = "stable"
+        return {
+            "trend": trend,
+            "slope_s_per_lap": round(slope, 4),
+            "first_lap_s": round(times[0], 3),
+            "last_lap_s": round(times[-1], 3),
+            "n_laps": m,
+            "delta_total_s": round(delta_total, 3),
+        }
+
+    def lap_trend_for_prompt(self, n: int = 5) -> str:
+        """Format the lap-time trend as prompt-injectable context text.
+
+        When there are >= 3 laps, returns a line like:
+        ``"圈速趋势 (5圈): 92.103s → 91.870s, 改善中 (-0.047s/圈, 合计 -0.233s)"``
+
+        When there are < 3 laps or the trend is stable (< ±0.05 s/lap),
+        returns a simpler summary. Returns an empty string when there is no
+        lap history at all.
+        """
+        info = self.get_lap_trend(n)
+        if info["n_laps"] == 0:
+            return ""
+        if info["n_laps"] < 3:
+            return (
+                f"Lap time ({info['n_laps']} lap{'s' if info['n_laps']>1 else ''}): "
+                f"{info['last_lap_s']:.3f}s"
+            )
+        delta_label = (
+            "改善中" if info["trend"] == "improving"
+            else "恶化中" if info["trend"] == "slowing"
+            else "稳定"
+        )
+        return (
+            f"圈速趋势 ({info['n_laps']}圈): "
+            f"{info['first_lap_s']:.3f}s → {info['last_lap_s']:.3f}s, "
+            f"{delta_label} ({info['slope_s_per_lap']:+.3f}s/圈, "
+            f"合计 {info['delta_total_s']:+.3f}s)"
+        )
+
+    # ------------------------------------------------------------------ #
     # Iter-25..28: cross-turn intelligence (setup tracking / focus /
-    # anaphora resolution). All additive — existing API unchanged.
+    # anaphora resolution)
     # ------------------------------------------------------------------ #
     def remember_setup_change(
         self, field: str, before: float, after: float, reason: str
     ) -> None:
-        """Record a proposed setup change across turns.
-
-        Appends ``{field, before, after, reason, turn}`` to
-        :attr:`setup_changes`. ``turn`` is the 1-based conversation turn index
-        at proposal time (``len(history) + 1``), so a chain of edits can be
-        ordered for causal / what-if analysis.
-        """
         self.setup_changes.append(
             {
                 "field": field,
@@ -149,22 +263,9 @@ class ConversationSession:
         )
 
     def get_setup_history(self) -> list[dict]:
-        """Return tracked setup-change proposals as a list of dicts.
-
-        Returns a shallow copy so callers cannot mutate the session's internal
-        log accidentally.
-        """
         return [dict(entry) for entry in self.setup_changes]
 
     def summarize_focus(self) -> str:
-        """Cluster recent user messages by handling keyword into a focus line.
-
-        Scans every ``role == "user"`` turn and counts occurrences of each
-        :data:`_FOCUS_KEYWORDS` term (推头/甩尾/胎/刹车/油门/ERS/DRS/平衡/
-        温度/磨损). Returns ``"本次对话焦点: <kw1>、<kw2> ..."`` with keywords
-        ranked by frequency (most-discussed first). Returns a neutral marker
-        when there are no user turns or no keyword hits.
-        """
         user_msgs = [t["content"] for t in self.history if t.get("role") == "user"]
         if not user_msgs:
             return "本次对话焦点: (暂无对话)"
@@ -179,24 +280,9 @@ class ConversationSession:
         return "本次对话焦点: " + "、".join(ranked)
 
     def is_followup(self, question: str) -> bool:
-        """Detect an anaphoric / follow-up question.
-
-        Returns ``True`` when ``question`` contains any follow-up trigger
-        (:data:`_FOLLOWUP_TRIGGERS`: 这/那/它/再/还/继续/为什么/怎么样 ...).
-        A fresh how-to question such as ``"前翼怎么调"`` does NOT contain a
-        trigger (``"怎么"`` without ``"样"``) and returns ``False``.
-        """
         return any(tr in question for tr in _FOLLOWUP_TRIGGERS)
 
     def resolve_reference(self, question: str) -> str:
-        """Resolve a demonstrative (这/那) against the prior user turn.
-
-        Extracts the most-recent prior ``role == "user"`` message, finds the
-        first matching reference noun (:data:`_REFERENCE_NOUNS`) in it, and
-        replaces the first demonstrative occurrence in ``question`` with that
-        noun. If there is no prior user turn, no extractable noun, or no
-        demonstrative, ``question`` is returned unchanged.
-        """
         prior_user: str | None = None
         for t in reversed(self.history):
             if t.get("role") == "user":
@@ -207,8 +293,6 @@ class ConversationSession:
         noun = _extract_reference_noun(prior_user)
         if not noun:
             return question
-        # Longer demonstratives first so "这个" / "那个" are replaced before a
-        # bare "这" / "那" would match their leading character.
         for demo in ("这个", "那个", "这", "那"):
             if demo in question:
                 return question.replace(demo, noun, 1)
@@ -216,7 +300,6 @@ class ConversationSession:
 
 
 def _extract_reference_noun(text: str) -> str | None:
-    """Return the first :data:`_REFERENCE_NOUNS` term found in ``text``."""
     for noun in _REFERENCE_NOUNS:
         if noun in text:
             return noun
@@ -224,17 +307,7 @@ def _extract_reference_noun(text: str) -> str | None:
 
 
 class ConversationMemory:
-    """Bounded LRU-style multi-turn memory (Iter-27).
-
-    Stores user / assistant messages in two independent bounded lists
-    (each trimmed to ``max_turns`` on overflow, keeping the most recent). This
-    is a lighter-weight alternative to :class:`ConversationSession` for
-    callers that only need message recall + topic extraction (no session
-    registry, no prompt rendering).
-
-    Topic extraction reuses :data:`_FOCUS_KEYWORDS` so :meth:`topics` aligns
-    with :meth:`ConversationSession.summarize_focus`.
-    """
+    """Bounded LRU-style multi-turn memory (Iter-27)."""
 
     def __init__(self, max_turns: int = 20) -> None:
         if max_turns < 1:
@@ -244,30 +317,21 @@ class ConversationMemory:
         self._bot: list[str] = []
 
     def add_user_message(self, text: str) -> None:
-        """Append a user message; trim to ``max_turns`` (keep most-recent)."""
         self._user.append(text)
         if len(self._user) > self.max_turns:
             self._user = self._user[-self.max_turns :]
 
     def add_bot_message(self, text: str) -> None:
-        """Append a bot/assistant message; trim to ``max_turns``."""
         self._bot.append(text)
         if len(self._bot) > self.max_turns:
             self._bot = self._bot[-self.max_turns :]
 
     def recent_user_messages(self, n: int = 3) -> list[str]:
-        """Return the last ``n`` user messages (or all if fewer)."""
         if n < len(self._user):
             return list(self._user[-n:])
         return list(self._user)
 
     def topics(self) -> list[str]:
-        """Extract focus keywords from recent user turns, ranked by frequency.
-
-        Returns unique keywords found across the most recent ``max_turns``
-        user messages, sorted by occurrence count (desc) then keyword. Empty
-        list when nothing matches.
-        """
         recent = self.recent_user_messages(self.max_turns)
         counts: dict[str, int] = {}
         for kw in _FOCUS_KEYWORDS:
@@ -277,7 +341,6 @@ class ConversationMemory:
         return sorted(counts, key=lambda k: (-counts[k], k))
 
     def to_dict(self) -> dict:
-        """Serialize the memory (max_turns + bounded user/bot message lists)."""
         return {
             "max_turns": self.max_turns,
             "user_messages": list(self._user),
@@ -285,19 +348,16 @@ class ConversationMemory:
         }
 
 
-# Global session registry (process-wide, lazy create)
 _sessions: dict[str, ConversationSession] = {}
 
 
 def get_session(session_id: str = "default") -> ConversationSession:
-    """Get or create a ConversationSession by id."""
     if session_id not in _sessions:
         _sessions[session_id] = ConversationSession(session_id=session_id)
     return _sessions[session_id]
 
 
 def reset_sessions() -> None:
-    """Clear all sessions (for testing)."""
     _sessions.clear()
 
 
@@ -306,23 +366,10 @@ def reset_sessions() -> None:
 # --------------------------------------------------------------------------- #
 
 def estimate_tokens(text: str) -> int:
-    """Estimate token count for a text string (Iter-150).
-
-    Uses a language-aware heuristic:
-    - CJK characters: ~1 token each
-    - ASCII words: ~0.75 tokens each (4 chars ≈ 3 tokens)
-    - Digits/punctuation: bundled into adjacent words
-
-    This is a fast approximation (no tokenizer dependency) suitable for
-    context-window gating. For exact counts, use the backend's tokenizer.
-    """
     if not text:
         return 0
-    # Count CJK characters (Unicode range U+4E00–U+9FFF, plus common extensions)
     cjk = sum(1 for c in text if "\u4e00" <= c <= "\u9fff" or "\u3400" <= c <= "\u4dbf")
-    # Count ASCII word characters
     ascii_chars = sum(1 for c in text if c.isascii() and c.isalnum())
-    # Approximate: CJK ≈ 1 token each, ASCII ≈ 0.75 tokens each
     return int(cjk + ascii_chars * 0.75)
 
 
@@ -333,64 +380,29 @@ def trim_conversation_history(
     preserve_system: bool = True,
     min_recent: int = 3,
 ) -> list[dict[str, str]]:
-    """Trim a conversation history to fit within a token budget (Iter-150).
-
-    Strategy:
-    1. Always keep the most recent ``min_recent`` messages (recency bias).
-    2. Always keep the system message (if ``preserve_system`` is True).
-    3. Remove older messages from the middle until the total estimated
-       tokens fit within ``max_tokens``.
-    4. Never remove the system message or the most recent messages.
-
-    This is a structural trim — it does not summarise or rewrite content.
-    For semantic compression, combine with a separate summarisation step.
-
-    Args:
-        history: List of ``{"role": str, "content": str}`` messages.
-        max_tokens: Maximum token budget for the trimmed history.
-        preserve_system: If True, never remove the ``role="system"`` message.
-        min_recent: Minimum number of most-recent messages to keep.
-
-    Returns:
-        A new trimmed list (does not mutate the original).
-    """
     if not history:
         return []
-
     n = len(history)
-    # Nothing to trim if already within budget
     total = sum(estimate_tokens(m.get("content", "")) for m in history)
     if total <= max_tokens:
         return list(history)
-
-    # Identify protected indices
     protected: set[int] = set()
-    # Always keep the most recent min_recent messages
     for i in range(max(0, n - min_recent), n):
         protected.add(i)
-    # Always keep the system message
     if preserve_system:
         for i, m in enumerate(history):
             if m.get("role") == "system":
                 protected.add(i)
                 break
-
-    # Build trimmed list: keep protected messages + trim from middle
     result: list[dict[str, str]] = []
     result_tokens = 0
-    # Phase 1: collect protected messages (in order)
     for i, m in enumerate(history):
         if i in protected:
             result.append(m)
             result_tokens += estimate_tokens(m.get("content", ""))
-
-    # Phase 2: if still over budget, we can't trim further (all remaining are protected)
     if result_tokens > max_tokens:
-        # Extreme case: even protected messages exceed budget.
-        # Keep only system + last min_recent, truncating if needed.
         result = []
         result_tokens = 0
-        # System first
         for m in history:
             if preserve_system and m.get("role") == "system":
                 sys_tokens = estimate_tokens(m.get("content", ""))
@@ -398,7 +410,6 @@ def trim_conversation_history(
                     result.append(m)
                     result_tokens += sys_tokens
                 break
-        # Add recent messages until budget is exhausted
         for m in history[-min_recent:]:
             t = estimate_tokens(m.get("content", ""))
             if result_tokens + t <= max_tokens:
@@ -406,18 +417,12 @@ def trim_conversation_history(
                 result_tokens += t
             else:
                 break
-
     return result
 
 
 def conversation_token_usage(
     history: list[dict[str, str]],
 ) -> dict[str, int]:
-    """Compute token usage statistics for a conversation history (Iter-150).
-
-    Returns:
-        ``{"total": int, "system": int, "user": int, "assistant": int, "message_count": int}``
-    """
     result = {"total": 0, "system": 0, "user": 0, "assistant": 0, "message_count": len(history)}
     for m in history:
         t = estimate_tokens(m.get("content", ""))
