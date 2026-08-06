@@ -1,0 +1,63 @@
+name: Benchmarks
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install
+        run: pip install -e ".[dev]"
+
+      - name: Benchmark packet parser
+        run: |
+          python -c "
+import time
+from f1opt.telemetry.packets import parse_packet
+import random, struct
+
+def fake_motion_packet():
+    header = struct.pack('<HBBBBBQfIIBB', 2025, 25, 1, 0, 1, 0, 0, 0.0, 0, 0, 0, 255)
+    body = bytes(random.randint(0, 255) for _ in range(1320))
+    return header + body
+
+n = 10000
+packets = [fake_motion_packet() for _ in range(n)]
+t0 = time.perf_counter()
+for pkt in packets:
+    parse_packet(pkt)
+elapsed = time.perf_counter() - t0
+print(f'Parsed {n} packets in {elapsed:.3f}s ({n/elapsed:.0f} pkts/s, {(elapsed/n)*1e6:.1f} us/pkt)')
+"
+
+      - name: Benchmark model prediction
+        run: |
+          python -c "
+import time
+from f1opt.data.setup_schema import DEFAULT_SETUP
+
+n = 500
+t0 = time.perf_counter()
+for _ in range(n):
+    try:
+        from f1opt.model.surrogate import predict_lap_time
+        predict_lap_time(DEFAULT_SETUP, 'suzuka')
+    except Exception:
+        pass
+t1 = time.perf_counter()
+print(f'{n} predictions in {t1-t0:.3f}s ({(t1-t0)/n*1e3:.1f} ms/pred)')
+"
+        continue-on-error: true
