@@ -4,12 +4,36 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "f1opt"
-version = "0.1.0"
-description = "F1 2026 Setup Optimizer: telemetry, driver feedback, and setup search"
-requires-python = ">=3.11"
-readme = { text = "F1 2026 Setup Optimization System.", content-type = "text/plain" }
+version = "0.1.1"
+description = "F1 2026 Setup Optimizer: real-time telemetry, AI driver feedback, and setup search"
+requires-python = ">=3.10"
+readme = "README.md"
 license = { text = "Proprietary" }
 authors = [{ name = "F1OPT Team" }]
+keywords = ["f1", "formula-1", "telemetry", "setup-optimizer", "racing", "simulation", "machine-learning", "bayesian-optimization"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: End Users/Desktop",
+    "License :: Other/Proprietary License",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Games/Entertainment :: Simulation",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+[project.urls]
+Homepage = "https://github.com/JXTTNN/F1-"
+"Bug Reports" = "https://github.com/JXTTNN/F1-/issues"
+"Source Code" = "https://github.com/JXTTNN/F1-"
+
+[project.scripts]
+f1opt = "f1opt.cli:main"
+
 dependencies = [
     "fastapi",
     "uvicorn[standard]",
@@ -34,6 +58,14 @@ dev = [
     "ruff",
     "mypy",
 ]
+win = [
+    "pywin32>=306; platform_system == 'Windows'",
+    "windows-curses>=2.3; platform_system == 'Windows'",
+]
+llm = [
+    "openai>=1.0",
+    "langchain>=0.3",
+]
 
 [tool.setuptools.packages.find]
 where = ["."]
@@ -48,9 +80,7 @@ target-version = "py311"
 select = ["E", "F", "I", "UP", "B"]
 
 [tool.ruff.lint.per-file-ignores]
-# 测试模块允许宽松断言与未使用的 fixture 参数
 "tests/**" = ["E501"]
-# __init__.py 允许未解析 re-export
 "f1opt/**/__init__.py" = ["F401"]
 
 [tool.ruff.lint.isort]
@@ -69,10 +99,9 @@ warn_redundant_casts = true
 check_untyped_defs = false
 
 [[tool.mypy.overrides]]
-module = ["torch.*", "pyarrow.*", "opentelemetry.*"]
+module = ["torch.*", "pyarrow.*", "opentelemetry.*", "ollama.*", "langchain.*"]
 ignore_missing_imports = true
 
-# --- coverage ---
 [tool.coverage.run]
 source = ["f1opt"]
 branch = true
@@ -94,8 +123,8 @@ exclude_lines = [
     "raise NotImplementedError",
     "if TYPE_CHECKING:",
     "if __name__ == .__main__.:",
-    "@(abc\\.)?abstractmethod",
-    "\\.\\.\\.",  # protocol stubs
+    "@(abc\\\\.)?abstractmethod",
+    "\\.\\.\\.",
 ]
 
 [tool.coverage.html]
