@@ -1,43 +1,61 @@
-# Build artifacts
+# Dependencies
 dist/
 build/
 *.egg-info/
-*.manifest
-
-# Python
+*.egg
 __pycache__/
 *.py[cod]
+*$py.class
 *.so
-.Python
 
-# Virtual environment
+# Data & Runtime
+data_store/
+*.parquet
+*.sqlite
+*.db
+models_cache/
+
+# Environment
+.env
+.env.local
+.env.*.local
 .venv/
 venv/
+ENV/
 env/
-
-# PyInstaller + EXE 产物 (太大, 不入库; f1opt.spec 除外)
-f1opt-app/
-f1opt-release/
-*.tar.gz
-
-# Runtime data
-data_store/
+.conda/
 
 # IDE
-.idea/
 .vscode/
+.idea/
 *.swp
 *.swo
+*~
+.trae/
 
-# Testing
-.pytest_cache/
-.coverage
+# Test & Coverage
 htmlcov/
+.coverage
+.coverage.*
 coverage.xml
+*.cover
+.pytest_cache/
+.tox/
+.nox/
 
 # OS
 .DS_Store
 Thumbs.db
+Desktop.ini
+ehthumbs.
 
-# Logs
-*.log
+# PyInstaller
+*.spec.bak
+*.manifest
+*.exe.manifest
+
+# Secrets
+.env.*
+!.env.example
+*.pem
+*.key
