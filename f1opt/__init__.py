@@ -10,6 +10,17 @@ Sub-packages by responsibility:
 - ``api``: FastAPI backend (REST + WebSocket)
 - ``ui``: Dashboard frontend
 - ``pipeline``: Training / inference orchestration
+- ``observability``: Metrics, logging, profiling, audit, tracing
 """
 
-__version__ = "0.1.0"
+import sys
+import asyncio
+
+__version__ = "0.1.1"
+
+
+if sys.platform == "win32":
+    try:
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+    except AttributeError:
+        pass
