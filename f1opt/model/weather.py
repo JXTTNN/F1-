@@ -257,3 +257,192 @@ class WeatherModel:
             wind_speed_ms=self.initial.wind_speed_ms,
             wind_dir_deg=self.initial.wind_dir_deg,
         )
+
+    # ------------------------------------------------------------------ #
+    # Weather-aware setup recommendations (Iter-215)
+    # ------------------------------------------------------------------ #
+    def setup_adjustments(self) -> dict[str, Any]:
+        """Recommend setup adjustments based on current weather conditions (Iter-215).
+
+        Analyzes rain, temperature, wind, and track wetness to suggest
+        specific setup changes for optimal performance in the current
+        conditions.
+
+        Returns:
+            Dict with ``conditions`` (weather summary), ``adjustments``
+            (list of recommended setup changes), ``confidence`` (overall
+            recommendation confidence), and ``rationale`` (explanation).
+        """
+        adjustments: list[dict[str, Any]] = []
+        confidence = 1.0
+
+        w = self.state.track_wetness
+        rain = self.state.rain_intensity_mmh
+        temp = self.state.track_temp_c
+        wind = self.state.wind_speed_ms
+
+        # Rain/wetness adjustments
+        if w > 0.2:
+            adjustments.append({
+                "category": "aero",
+                "change": "increase_downforce",
+                "description": "增加下压力配置，湿地下压力优势更大",
+                "priority": "high",
+                "magnitude": "medium" if w < 0.5 else "large",
+            })
+            adjustments.append({
+                "category": "suspension",
+                "change": "soften_suspension",
+                "description": "调软悬挂，提高湿地机械抓地力",
+                "priority": "high",
+                "magnitude": "medium",
+            })
+            adjustments.append({
+                "category": "differential",
+                "change": "reduce_diff_lock",
+                "description": "降低差速器锁止率，减少湿地出弯打滑",
+                "priority": "medium",
+                "magnitude": "small",
+            })
+            confidence = max(0.7, 1.0 - w * 0.3)
+
+        # Temperature adjustments
+        if temp < 25:
+            adjustments.append({
+                "category": "tyre",
+                "change": "increase_tyre_pressure",
+                "description": "低温下增加胎压以加速升温进入工作窗口",
+                "priority": "medium",
+                "magnitude": "small",
+            })
+            adjustments.append({
+                "category": "brakes",
+                "change": "close_brake_ducts",
+                "description": "关闭刹车通风导管以保持刹车温度",
+                "priority": "low",
+                "magnitude": "small",
+            })
+        elif temp > 45:
+            adjustments.append({
+                "category": "tyre",
+                "change": "reduce_tyre_pressure",
+                "description": "高温下降低胎压以防止过热退化",
+                "priority": "high",
+                "magnitude": "medium",
+            })
+            adjustments.append({
+                "category": "brakes",
+                "change": "open_brake_ducts",
+                "description": "打开刹车通风导管以加强散热",
+                "priority": "medium",
+                "magnitude": "medium",
+            })
+            confidence = max(0.6, confidence - 0.1)
+
+        # Wind adjustments
+        if wind > 10:
+            adjustments.append({
+                "category": "aero",
+                "change": "increase_downforce",
+                "description": "大风条件下增加下压力以保持稳定性",
+                "priority": "medium",
+                "magnitude": "small",
+            })
+            confidence = max(0.5, confidence - 0.05)
+
+        # Rain intensity specific
+        if rain > 5:
+            adjustments.append({
+                "category": "brakes",
+                "change": "rearward_brake_bias",
+                "description": "雨天刹车平衡向后移以减少前轮锁死",
+                "priority": "high",
+                "magnitude": "medium",
+            })
+            adjustments.append({
+                "category": "engine",
+                "change": "reduce_engine_braking",
+                "description": "降低发动机制动以减少湿地后轮不稳定",
+                "priority": "medium",
+                "magnitude": "small",
+            })
+
+        # Build rationale
+        conditions = []
+        if w > 0.2:
+            conditions.append(f"赛道湿润度 {w:.0%}")
+        if rain > 0:
+            conditions.append(f"降雨强度 {rain:.1f} mm/h")
+        if temp < 25:
+            conditions.append(f"低温 {temp:.0f}°C")
+        elif temp > 45:
+            conditions.append(f"高温 {temp:.0f}°C")
+        if wind > 10:
+            conditions.append(f"强风 {wind:.1f} m/s")
+
+        rationale = "、".join(conditions) if conditions else "正常天气条件"
+        if w > 0.5:
+            rationale += "；湿地条件显著影响调教选择"
+        if rain > 10:
+            rationale += "；大雨条件下安全优先于性能"
+
+        return {
+            "conditions": {
+                "rain_mmh": round(rain, 1),
+                "track_wetness": round(w, 3),
+                "track_temp_c": round(temp, 1),
+                "wind_speed_ms": round(wind, 1),
+                "rain_category": self.state.rain_category,
+                "is_dry": self.state.is_dry,
+            },
+            "adjustments": adjustments,
+            "adjustment_count": len(adjustments),
+            "confidence": round(confidence, 2),
+            "rationale": rationale,
+        }
+
+    # ------------------------------------------------------------------ #
+    def setup_impact_score(self, compound: str | None = None) -> float:
+        """Compute weather impact score on setup effectiveness (Iter-215).
+
+        Higher score = weather has more impact on optimal setup choice.
+        0.0 = dry conditions (no weather impact), 1.0 = extreme conditions.
+
+        Args:
+            compound: Current tyre compound for compound-specific impact.
+                If ``None``, uses the recommended compound.
+
+        Returns:
+            Impact score in [0.0, 1.0].
+        """
+        w = self.state.track_wetness
+        rain = self.state.rain_intensity_mmh
+        temp = self.state.track_temp_c
+        wind = self.state.wind_speed_ms
+
+        # Wetness contribution (0-0.6)
+        wetness_score = w * 0.6
+
+        # Rain intensity contribution (0-0.2)
+        rain_score = min(0.2, rain / 25.0 * 0.2)
+
+        # Temperature deviation contribution (0-0.15)
+        temp_dev = abs(temp - 35.0) / 25.0  # normalized deviation from 35°C
+        temp_score = min(0.15, temp_dev * 0.15)
+
+        # Wind contribution (0-0.05)
+        wind_score = min(0.05, wind / 20.0 * 0.05)
+
+        total = wetness_score + rain_score + temp_score + wind_score
+
+        # Compound-specific modifier
+        if compound:
+            c = compound.lower()
+            if c in ("intermediate", "wet"):
+                # Already on wet tyres, weather impact is more relevant
+                total = min(1.0, total * 1.1)
+            elif c in ("soft",):
+                # Soft tyres are most sensitive to weather
+                total = min(1.0, total * 1.05)
+
+        return round(min(1.0, total), 3)

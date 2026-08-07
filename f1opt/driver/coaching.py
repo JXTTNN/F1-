@@ -114,6 +114,36 @@ _WEAKNESS_TARGETS: dict[str, tuple[str, float]] = {
     "tire_management": ("tire_wear_score", 0.4),
 }
 
+# Iter-197: 赛道特定教练提示 (track_id → advice)
+_TRACK_COACHING_TIPS: dict[str, str] = {
+    "monaco": "摩纳哥: 重点练习低速弯出弯牵引, 减少路肩使用, 保持刹车温度窗口.",
+    "monza": "蒙扎: 优化低下压力翼面, 重点练习重刹入弯, 最大化直道尾速.",
+    "spa": "斯帕: 重点练习 Eau Rouge-Raidillon 全油门通过, 中段高速弯保持节奏.",
+    "silverstone": "银石: 重点练习 Maggotts-Becketts 连续弯节奏, 高速弯保持油门.",
+    "suzuka": "铃鹿: 重点练习 S-Curves 节奏, 130R 全油门信心, 刹车点准确性.",
+    "singapore": "新加坡: 高温高湿, 重点练习刹车冷却管理, 低速弯出弯牵引.",
+    "jeddah": "吉达: 重点练习高速墙信心, 连续弯节奏, 减少不必要的刹车.",
+    "baku": "巴库: 重点练习 2.2km 直道尾速, 城堡区低速弯精确走线.",
+    "hungaroring": "亨格罗林: 重点练习中速弯节奏, 减少转向过度, 保持轮胎窗口.",
+    "zandvoort": "赞德沃特: 重点练习倾斜弯 (Hugenholtz) 走线, 利用 banking 额外抓地力.",
+    "montreal": "蒙特利尔: 重点练习重刹降温, 路肩使用精确度, 冠军墙信心.",
+    "austin": "COTA: 重点练习 S1 快速 sweeps 节奏, S2 低速弯牵引, S3 长直道尾速.",
+    "las_vegas": "拉斯维加斯: 低温夜赛, 重点练习轮胎升温, 1.5km 直道尾速最大化.",
+    "interlagos": "英特拉格斯: 重点练习海拔变化弯道, Subida do Lago 全油门信心.",
+    "shanghai": "上海: 重点练习 1.2km 直道尾速, 螺旋弯组节奏, 低速弯出弯.",
+    "melbourne": "墨尔本: 重点练习半街道弯道走线, 路肩管理, 出弯牵引.",
+    "bahrain": "巴林: 重点练习重刹入弯, 牵引力出口, 三段 DRS 区最大化.",
+    "miami": "迈阿密: 重点练习街道弯道精确走线, 路肩使用, 刹车一致性.",
+    "barcelona": "巴塞罗那: 重点练习 T3 长右弯节奏, 最后 chicane 出弯速度.",
+    "spielberg": "红牛环: 10 弯短赛道, 重点练习 T1 重刹, 最后两弯全油门信心.",
+    "mexico_city": "墨西哥城: 高海拔低空气阻力, 重点练习弯道下压力不足的适应.",
+    "sao_paulo": "圣保罗: 重点练习 Senna S 弯节奏, 中段 infield 低速弯牵引.",
+    "lusail": "卢赛尔: 重点练习中高速弯节奏, 单长直道尾速, 夜赛适应.",
+    "yas_marina": "亚斯码头: 重点练习 S3 酒店区低速弯, 两段长直道尾速.",
+    "madrid": "马德里: 新赛道, 重点练习 IFEMA 混合街道弯道, La Monumental 倾斜弯.",
+    "sakhir": "萨基尔: 等同于巴林, 重点练习重刹入弯, 牵引力出口.",
+}
+
 #: 短板练习库 (name + 中文 description); target_metric/target_value 由计划填充.
 _EXERCISE_LIBRARY: dict[str, dict[str, str]] = {
     "braking_consistency": {
@@ -592,6 +622,14 @@ class DriverCoach:
         if pct >= 20.0:
             return "正在进步中, 不要气馁。建议复盘薄弱环节, 调整训练重点后再试。"
         return "暂未达成目标, 这很正常。回到基础练习, 逐步建立信心与节奏, 稳扎稳打。"
+
+    # -- 赛道特定建议 (Iter-197) ----------------------------------------------
+    def track_specific_tip(self) -> str:
+        """返回当前赛道的特定教练提示."""
+        return _TRACK_COACHING_TIPS.get(
+            self.track_id,
+            "通用建议: 重点练习刹车一致性与出弯油门控制, 保持稳定节奏。",
+        )
 
 
 # --- LearningPath ----------------------------------------------------------

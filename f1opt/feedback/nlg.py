@@ -39,6 +39,10 @@ _NARRATION_PRIORITY: dict[str, int] = {
     "tyres": 0,
     "braking": 1,
     "ers_deployment": 1,
+    "aero_balance": 1,  # Iter-214
+    "brake_temp": 1,  # Iter-225
+    "tyre_temp_gradient": 1,  # Iter-232
+    "ers_sector_efficiency": 1,  # Iter-232
     "drs_usage": 2,
     "throttle_brake_smoothness": 2,
     "confidence": 2,
@@ -46,6 +50,8 @@ _NARRATION_PRIORITY: dict[str, int] = {
     "sector_compare": 3,
     "setup_advice": 3,
     "corner_analysis": 3,
+    "fuel_consumption": 3,  # Iter-203
+    "throttle_brake_overlap": 2,  # Iter-210
 }
 
 _PARAM_ZH: dict[str, str] = {
@@ -83,7 +89,12 @@ _DIM_LABEL_ZH: dict[str, str] = {
     "sector_compare": "分段对比",
     "setup_advice": "调教建议",
     "corner_analysis": "逐弯分析",
+    "fuel_consumption": "燃油消耗",  # Iter-203
+    "throttle_brake_overlap": "油门刹车重叠",  # Iter-210
+    "aero_balance": "下压力平衡",  # Iter-214
+    "ers_sector_efficiency": "ERS扇区效率",  # Iter-242
 }
+
 
 _URGENCY_ZH: dict[str, str] = {
     "immediate": "[紧急]",
@@ -188,7 +199,43 @@ def _narrate_setup_advice(value: str, advice: str, evidence: str) -> str:
 
 
 def _narrate_corner_analysis(value: str, advice: str, evidence: str) -> str:
-    base = f"逐弯分析方面：{value}。"
+    """Iter-201: corner-specific Chinese narration with弯道问题详情."""
+    if "全过" in value or "无显著问题" in value:
+        base = f"逐弯分析方面：{value}。"
+    else:
+        base = f"逐弯分析方面：{value}。"
+    if advice and "逐弯建议" in advice:
+        return f"{base}{advice}"
+    return _append_advice(base, advice)
+
+
+def _narrate_fuel_consumption(value: str, advice: str, evidence: str) -> str:
+    """Iter-203: fuel consumption Chinese narration."""
+    base = f"燃油消耗方面：{value}。"
+    return _append_advice(base, advice)
+
+
+def _narrate_throttle_brake_overlap(value: str, advice: str, evidence: str) -> str:
+    """Iter-210: throttle/brake overlap Chinese narration."""
+    base = f"油门刹车重叠方面：{value}。"
+    return _append_advice(base, advice)
+
+
+def _narrate_aero_balance(value: str, advice: str, evidence: str) -> str:
+    """Iter-214: aero balance Chinese narration."""
+    v = value.lower()
+    if "aero-dominant" in v:
+        base = f"下压力平衡方面：气动主导, 高速下压力充足但低速机械抓地力不足。"
+    elif "mechanical-dominant" in v:
+        base = f"下压力平衡方面：机械主导, 低速抓地力好但高速下压力不足。"
+    else:
+        base = f"下压力平衡方面：{value}。"
+    return _append_advice(base, advice)
+
+
+def _narrate_ers_sector_efficiency(value: str, advice: str, evidence: str) -> str:
+    """Iter-242: ERS sector efficiency Chinese narration."""
+    base = f"ERS扇区效率方面：{value}。"
     return _append_advice(base, advice)
 
 
@@ -205,6 +252,10 @@ _NARRATORS_ZH: dict[str, Any] = {
     "sector_compare": _narrate_sector,
     "setup_advice": _narrate_setup_advice,
     "corner_analysis": _narrate_corner_analysis,
+    "fuel_consumption": _narrate_fuel_consumption,  # Iter-203
+    "throttle_brake_overlap": _narrate_throttle_brake_overlap,  # Iter-210
+    "aero_balance": _narrate_aero_balance,  # Iter-214
+    "ers_sector_efficiency": _narrate_ers_sector_efficiency,  # Iter-242
 }
 
 
@@ -447,6 +498,20 @@ class ExplanationGenerator:
             return self._explain_lockup(m)
         if "胎" in observation or "tyre" in obs_l or "tire" in obs_l:
             return self._explain_tyre(m)
+        if "ers" in obs_l or "电池" in observation or "能量" in observation:
+            return self._explain_ers(m)
+        if "下压力" in observation or "downforce" in obs_l or "气动" in observation:
+            return self._explain_downforce_balance(m)
+        if "抓地" in observation or "grip" in obs_l or "机械" in observation:
+            return self._explain_mech_grip(m)
+        if "刹车温度" in observation or "brake temp" in obs_l or "制动温度" in observation:
+            return self._explain_brake_temp(m)
+        if "ers扇区" in observation or "ers sector" in obs_l or "扇区ers" in observation or "sector ers" in obs_l:
+            return self._explain_ers_sector_efficiency(m)
+        if "油耗" in observation or "燃油" in observation or "fuel" in obs_l or "lift" in obs_l:
+            return self._explain_fuel_consumption(m)
+        if "重叠" in observation or "overlap" in obs_l or "同时踩" in observation:
+            return self._explain_throttle_brake_overlap(m)
         return self._explain_generic(observation, m)
 
     def _explain_understeer(self, m: dict) -> str:
@@ -498,6 +563,229 @@ class ExplanationGenerator:
         if temp is not None:
             parts.append(f"前胎温度为{temp}°C。")
         parts.append("建议调整胎压或驾驶节奏以恢复轮胎工作区间。")
+        return "".join(parts)
+
+    def _explain_ers(self, m: dict) -> str:
+        """Iter-207: ERS efficiency explanation."""
+        parts = ["ERS问题的原因是：部署与回收策略不匹配。"]
+        slope = m.get("ers_slope_per_s") or m.get("ers_trend")
+        if slope is not None:
+            try:
+                s = float(slope)
+                if s < -0.5:
+                    parts.append(f"ERS消耗速率 {s:.2f}/s, 部署过于激进。")
+                elif s < 0:
+                    parts.append(f"ERS消耗速率 {s:.2f}/s, 部署略高于回收。")
+                else:
+                    parts.append(f"ERS回收速率 {s:.2f}/s, 回收正常。")
+            except (TypeError, ValueError):
+                pass
+        store = m.get("ers_store_mean")
+        if store is not None:
+            try:
+                store_val = float(store)
+                parts.append(f"当前平均电量 {store_val:.0f}%。")
+            except (TypeError, ValueError):
+                pass
+        parts.append("建议出弯部署 Hotlap 模式, 直道末端回收 MGU-K。")
+        return "".join(parts)
+
+    def _explain_downforce_balance(self, m: dict) -> str:
+        """Iter-213: 下压力平衡 (aero balance) 中文解释."""
+        parts = ["下压力问题的原因是：前后气动平衡不匹配。"]
+        aero_ratio = m.get("aero_balance_ratio")
+        diag = m.get("diagnosis") or ""
+        if aero_ratio is not None:
+            try:
+                r = float(aero_ratio)
+                if r > 1.8:
+                    parts.append(
+                        f"高速下压力比低速大 {r:.1f} 倍, 气动主导。"
+                        "机械抓地力不足, 建议软化悬挂或增加前束角。"
+                    )
+                elif r < 1.1:
+                    parts.append(
+                        f"高低速下压力比仅 {r:.2f}, 机械主导。"
+                        "高速下压力不足, 建议增加前后翼角度。"
+                    )
+                else:
+                    parts.append(
+                        f"气动/机械平衡良好 (ratio={r:.2f})。"
+                    )
+            except (TypeError, ValueError):
+                pass
+        else:
+            parts.append(diag if diag else "请提供前后翼设置和高速弯g_lat数据。")
+        if m.get("front_wing") is not None:
+            parts.append(
+                f"前翼 {m['front_wing']} 档, 后翼 {m.get('rear_wing', '?')} 档。"
+            )
+        parts.append("建议根据赛道类型调整前后翼比例以优化气动效率。")
+        return "".join(parts)
+
+    def _explain_mech_grip(self, m: dict) -> str:
+        """Iter-218: 机械抓地力趋势中文解释."""
+        parts = ["机械抓地力问题的原因是：低速弯横向G力在衰退。"]
+        trend = m.get("mech_grip_trend") or ""
+        slope = m.get("mech_grip_slope")
+        if trend == "decaying":
+            parts.append(
+                "低速弯 g_lat 随圈数呈下降趋势, 轮胎可能过热或产生 graining。"
+            )
+            if slope is not None:
+                try:
+                    s = float(slope)
+                    parts.append(f"衰退斜率 {s:.4f} G/m, 机械抓地力持续减弱。")
+                except (TypeError, ValueError):
+                    pass
+            parts.append(
+                "建议降低胎压 0.3 psi 或减少入弯速度以保护轮胎表面。"
+            )
+        elif trend == "improving":
+            parts.append("低速弯 g_lat 趋势向好, 轮胎正在进入最佳工作窗口。")
+        elif trend == "stable":
+            parts.append("低速弯机械抓地力保持稳定, 轮胎工作状态良好。")
+        else:
+            parts.append("暂无足够低速弯数据进行趋势分析。")
+        return "".join(parts)
+
+    def _explain_brake_temp(self, m: dict) -> str:
+        """Iter-225: 刹车温度平衡中文解释."""
+        parts = ["刹车温度问题的原因是：前后刹车热负荷不均衡。"]
+        bt_ratio = m.get("brake_temp_f_r_ratio")
+        bt_diag = m.get("brake_temp_balance_diag") or ""
+        if bt_ratio is not None:
+            try:
+                r = float(bt_ratio)
+                if r > 1.3:
+                    parts.append(
+                        f"前刹车温度是后刹的 {r:.1f} 倍 (front-bias), "
+                        "前刹承受过多热负荷, 可能导致前轮刹车衰减。"
+                    )
+                    parts.append(
+                        "建议后移刹车偏置 1-2% 以将热负荷分配至后轴。"
+                    )
+                elif r < 0.7:
+                    parts.append(
+                        f"后刹车温度显著高于前刹 (ratio={r:.2f}), "
+                        "后刹过热可能导致制动不稳定。"
+                    )
+                    parts.append(
+                        "建议前移刹车偏置 1-2% 以平衡热负荷。"
+                    )
+                else:
+                    parts.append(
+                        f"前后刹车温度分布均匀 (ratio={r:.2f}), 刹车偏置设置合理。"
+                    )
+            except (TypeError, ValueError):
+                pass
+        else:
+            parts.append(bt_diag if bt_diag else "请提供刹车温度数据以进行诊断。")
+        return "".join(parts)
+
+    def _explain_ers_sector_efficiency(self, m: dict) -> str:
+        """Iter-242: ERS扇区效率中文解释."""
+        parts = ["ERS扇区效率问题的原因是：部署与回收在不同扇区不匹配。"]
+        sector_ers = m.get("ers_sector_efficiency")
+        if sector_ers and isinstance(sector_ers, list):
+            worst_sector = -1
+            worst_eff = 1.0
+            details: list[str] = []
+            for i, se in enumerate(sector_ers):
+                eff = se.get("efficiency", 0.0)
+                dep = se.get("deploy_total", 0.0)
+                rec = se.get("recover_total", 0.0)
+                details.append(f"S{i+1}: deploy={dep:.1f}, recover={rec:.1f}, eff={eff:.2f}")
+                if eff < worst_eff:
+                    worst_eff = eff
+                    worst_sector = i
+            if worst_sector >= 0 and worst_eff < 0.5:
+                parts.append(
+                    f"S{worst_sector+1} ERS效率最低 (eff={worst_eff:.2f}), "
+                    "部署量远大于回收量, 电池在该扇区过度消耗。"
+                )
+                parts.append(
+                    f"建议S{worst_sector+1}减少Hotlap模式时长, 增加MGU-K回收。"
+                )
+            elif worst_sector >= 0:
+                parts.append("各扇区ERS效率基本均衡, 部署策略合理。")
+            parts.append("各扇区详情: " + "; ".join(details) + "。")
+        elif m.get("ers_sector_worst") is not None:
+            worst = m["ers_sector_worst"]
+            parts.append(f"最差扇区S{worst+1}, 建议优化该扇区ERS部署策略。")
+        else:
+            parts.append("请提供各扇区ERS部署数据以进行诊断。")
+        return "".join(parts)
+
+    def _explain_fuel_consumption(self, m: dict) -> str:
+        """Iter-247: 燃油消耗中文解释."""
+        parts = ["燃油消耗问题的原因是：油门输入和ERS部署策略影响油耗。"]
+        fuel_used = m.get("fuel_used")
+        fuel_rate = m.get("fuel_consumption_rate_kg_per_km")
+        if fuel_used is not None:
+            try:
+                fu = float(fuel_used)
+                parts.append(f"当前燃油消耗 {fu:.3f} kg/圈。")
+            except (TypeError, ValueError):
+                pass
+        if fuel_rate is not None:
+            try:
+                fr = float(fuel_rate)
+                if fr > 0.35:
+                    parts.append(
+                        f"油耗率 {fr:.4f} kg/km 偏高, 超过目标 0.33 kg/km。"
+                        "建议 lift-and-coast 或提前升档以节省燃油。"
+                    )
+                elif fr < 0.28:
+                    parts.append(
+                        f"油耗率 {fr:.4f} kg/km 偏低, 低于目标 0.33 kg/km。"
+                        "如有余量可提高 ERS 部署功率或增加引擎出力。"
+                    )
+                else:
+                    parts.append(
+                        f"油耗率 {fr:.4f} kg/km 在目标范围内。"
+                    )
+            except (TypeError, ValueError):
+                pass
+        highest_sector = m.get("fuel_highest_sector")
+        if highest_sector is not None and highest_sector >= 0:
+            parts.append(f"S{highest_sector+1} 油耗最高, 建议在该扇区 lift-and-coast。")
+        if fuel_used is None and fuel_rate is None:
+            parts.append("请提供燃油数据以进行诊断。")
+        return "".join(parts)
+
+    def _explain_throttle_brake_overlap(self, m: dict) -> str:
+        """Iter-249: 油门刹车重叠中文解释."""
+        parts = ["油门刹车重叠的原因是：同时踩下油门和刹车, 浪费燃油且磨损刹车。"]
+        overlap_count = m.get("throttle_brake_overlap_count")
+        overlap_pct = m.get("throttle_brake_overlap_pct")
+        overlap_duration = m.get("overlap_duration_s")
+        if overlap_count is not None:
+            try:
+                oc = int(overlap_count)
+                if oc == 0:
+                    parts.append("当前未检测到油门刹车重叠, 驾驶习惯良好。")
+                else:
+                    parts.append(f"检测到 {oc} 帧油门刹车重叠。")
+                    if overlap_pct is not None:
+                        try:
+                            op = float(overlap_pct)
+                            parts.append(f"重叠比例 {op*100:.1f}%。")
+                        except (TypeError, ValueError):
+                            pass
+                    if overlap_duration is not None:
+                        try:
+                            od = float(overlap_duration)
+                            parts.append(f"重叠总时长 {od:.2f}s。")
+                        except (TypeError, ValueError):
+                            pass
+                    parts.append(
+                        "建议在刹车前完全松开油门, 避免左脚刹车时右脚仍带油门。"
+                    )
+            except (TypeError, ValueError):
+                pass
+        else:
+            parts.append("请提供油门刹车重叠数据以进行诊断。")
         return "".join(parts)
 
     def _explain_generic(self, observation: str, m: dict) -> str:

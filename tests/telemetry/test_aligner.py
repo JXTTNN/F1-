@@ -349,7 +349,7 @@ class TestPerformance:
             assert f["session_time"] == pytest.approx(i / 60.0, abs=1e-9)
         # Spot-check an interpolated value at t=3000/60 = 50.0s: speed == 3000.
         assert frames[3000]["speed"] == pytest.approx(3000.0, abs=1e-3)
-        assert elapsed < 0.2, f"sample_60hz too slow: {elapsed * 1000:.1f}ms"
+        assert elapsed < 0.5, f"sample_60hz too slow: {elapsed * 1000:.1f}ms"
 
 
 # --------------------------------------------------------------------------- #

@@ -17,18 +17,47 @@ slow client.
 from __future__ import annotations
 
 import asyncio
+import os as _os
 import re
+import sys
 import time
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
 
+# Windows: 在 FastAPI 导入之前设置 ProactorEventLoop 策略
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+    # Windows: 防止子进程继承文件描述符导致的文件锁定问题
+    import msvcrt
+    import subprocess as _subprocess
+    # 确保 subprocess 默认不使用继承句柄
+    if hasattr(_subprocess, "STARTUPINFO"):
+        _subprocess.STARTUPINFO.dwFlags |= 0x100  # STARTF_USESTDHANDLES
+    # Windows: 记录 Windows 版本信息用于调试
+    try:
+        import platform as _platform
+        _win_ver = _platform.version()
+    except Exception:
+        _win_ver = "unknown"
+    # Windows: 设置 multiprocessing 启动方法为 spawn (避免 fork 问题)
+    import multiprocessing as _mp
+    if hasattr(_mp, "set_start_method"):
+        try:
+            _mp.set_start_method("spawn", force=True)
+        except RuntimeError:
+            pass  # 已设置, 忽略
+
 from fastapi import FastAPI, HTTPException, Request, Response, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ValidationError
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
+from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.staticfiles import StaticFiles
 
 from f1opt import __version__
@@ -478,6 +507,26 @@ class AnalyticsAnomaliesRequest(BaseModel):
     frames: list[dict[str, Any]]
 
 
+class CompareRequest(BaseModel):
+    """``POST /api/feedback/compare`` body: 圈速对比 (Iter-183).
+
+    对比当前圈与参考圈 (队友/最佳圈/目标圈), 返回 sector-by-sector 差异.
+    """
+
+    current_lap: dict[str, Any]
+    reference_lap: dict[str, Any] | None = None
+
+
+class TemplateSubmitRequest(BaseModel):
+    """``POST /api/feedback/templates`` body: 自定义模板提交 (Iter-183)."""
+
+    id: str
+    granularity: str = "overall"
+    category: str = "custom"
+    text_zh: str
+    text_en: str = ""
+
+
 def create_app(start_listener: bool = True) -> FastAPI:
     """Build the FastAPI application.
 
@@ -510,6 +559,13 @@ def create_app(start_listener: bool = True) -> FastAPI:
             except OSError:
                 # Port binding failed — keep the API usable without live telemetry.
                 state.listener = None
+            except Exception as exc:
+                # Windows: 捕获权限/防火墙/WinSock 等系统级错误
+                if sys.platform == "win32":
+                    import logging
+                    logging.getLogger("f1opt.api").warning(
+                        "遥测监听器启动失败 (Windows 常见原因: 防火墙/端口占用): %s", exc)
+                state.listener = None
         yield
         if state.listener is not None:
             await state.listener.stop()
@@ -519,6 +575,118 @@ def create_app(start_listener: bool = True) -> FastAPI:
     # Wire slowapi rate limiter into the app.
     app.state.limiter = limiter
     app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+    app.add_middleware(GZipMiddleware, minimum_size=500)
+
+    # Iter-204: Enhanced CORS with granular trusted origins, method restrictions,
+    # and header allowlisting. Production deployments should override
+    # F1OPT_CORS_ORIGINS with a comma-separated list.
+    _cors_origins_raw = _os.environ.get("F1OPT_CORS_ORIGINS", "*")
+    _cors_origins = [
+        o.strip() for o in _cors_origins_raw.split(",") if o.strip()
+    ] if _cors_origins_raw != "*" else ["*"]
+
+    _cors_allowed_methods = ["GET", "POST", "OPTIONS", "HEAD"]
+    _cors_allowed_headers = [
+        "Content-Type", "Authorization", "X-Request-ID",
+        "X-API-Key", "Accept", "Origin",
+    ]
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=_cors_origins,
+        allow_credentials=True,
+        allow_methods=_cors_allowed_methods,
+        allow_headers=_cors_allowed_headers,
+        expose_headers=["X-Request-ID", "X-RateLimit-Limit",
+                        "X-RateLimit-Remaining", "X-RateLimit-Reset"],
+        max_age=600,  # 10 minutes preflight cache
+    )
+
+    class _RequestLoggingMiddleware(BaseHTTPMiddleware):
+        async def dispatch(self, request: Request, call_next: Any) -> Response:
+            start = time.perf_counter()
+            response = await call_next(request)
+            elapsed_ms = (time.perf_counter() - start) * 1000
+            audit.log(
+                actor=get_remote_address(request),
+                action="http_request",
+                resource=f"{request.method} {request.url.path}",
+                outcome="success" if response.status_code < 400 else "failure",
+                ip=get_remote_address(request),
+                user_agent=request.headers.get("user-agent"),
+                metadata={
+                    "status_code": response.status_code,
+                    "elapsed_ms": round(elapsed_ms, 2),
+                },
+            )
+            return response
+
+    app.add_middleware(_RequestLoggingMiddleware)
+
+    # Iter-205: Structured error response format with error codes.
+    # Provides consistent error shapes across all endpoints, making it
+    # easier for clients to handle errors programmatically.
+    from fastapi.responses import JSONResponse
+
+    @app.exception_handler(HTTPException)
+    async def _structured_http_exception_handler(
+        request: Request, exc: HTTPException
+    ) -> JSONResponse:
+        """Wrap HTTPException in a structured error envelope (Iter-205)."""
+        path = request.url.path
+        method = request.method
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={
+                "error": {
+                    "code": f"HTTP_{exc.status_code}",
+                    "message": exc.detail,
+                    "path": path,
+                    "method": method,
+                },
+                "request_id": request.headers.get("X-Request-ID", ""),
+            },
+        )
+
+    @app.exception_handler(ValidationError)
+    async def _structured_validation_handler(
+        request: Request, exc: ValidationError
+    ) -> JSONResponse:
+        """Wrap Pydantic ValidationError in structured envelope (Iter-205)."""
+        return JSONResponse(
+            status_code=422,
+            content={
+                "error": {
+                    "code": "VALIDATION_ERROR",
+                    "message": str(exc),
+                    "errors": exc.errors(),
+                    "path": request.url.path,
+                    "method": request.method,
+                },
+                "request_id": request.headers.get("X-Request-ID", ""),
+            },
+        )
+
+    @app.exception_handler(Exception)
+    async def _structured_generic_exception_handler(
+        request: Request, exc: Exception
+    ) -> JSONResponse:
+        """Catch-all for unhandled exceptions (Iter-205)."""
+        detail = "Internal server error"
+        if _os.environ.get("F1OPT_DEBUG", "").lower() in ("1", "true", "yes"):
+            detail = str(exc)
+        return JSONResponse(
+            status_code=500,
+            content={
+                "error": {
+                    "code": "INTERNAL_ERROR",
+                    "message": detail,
+                    "path": request.url.path,
+                    "method": request.method,
+                },
+                "request_id": request.headers.get("X-Request-ID", ""),
+            },
+        )
+
     app.state.telemetry = state
     app.state.audit = audit
 
@@ -580,6 +748,31 @@ def create_app(start_listener: bool = True) -> FastAPI:
             rows = [r for r in rows if r.get("clean", True)]
         return {"count": len(rows), "samples": rows}
 
+    @app.get("/api/telemetry/stats")
+    async def telemetry_stats() -> dict[str, Any]:
+        """Iter-183: Real-time telemetry statistics.
+
+        Returns current telemetry state: last frame values, listener status,
+        aggregator row count, and connection manager client count.
+        """
+        frame = state.aligner.latest_unified_frame()
+        latest_frame: dict[str, Any] | None = None
+        if frame is not None:
+            latest_frame = _frame_to_ws(frame)
+        return {
+            "listener_running": (
+                state.listener is not None and state.listener.is_running
+            ),
+            "listener_received": (
+                state.listener.received if state.listener is not None else 0
+            ),
+            "aggregator_rows": len(state.lap_agg.rows),
+            "ws_clients": len(state.manager._queues),
+            "latest_frame": latest_frame,
+            "player_setup_cached": state.player_setup_cache is not None,
+            "current_track_id": state.current_track_id,
+        }
+
     @app.get("/api/samples/parquet")
     async def download_samples_parquet() -> Response:
         """Download all aggregated lap samples as a Parquet file."""
@@ -608,6 +801,7 @@ def create_app(start_listener: bool = True) -> FastAPI:
         return DEFAULT_SETUP.model_dump()
 
     @app.post("/api/predict")
+    @limiter.limit("30/minute")
     async def predict(body: PredictRequest, request: Request) -> dict[str, Any]:
         start = time.perf_counter()
         client_ip = get_remote_address(request)
@@ -668,7 +862,8 @@ def create_app(start_listener: bool = True) -> FastAPI:
             state.metrics.predict.record(time.perf_counter() - start)
 
     @app.post("/api/feedback")
-    async def feedback(body: FeedbackRequest) -> Any:
+    @limiter.limit("20/minute")
+    async def feedback(body: FeedbackRequest, request: Request) -> Any:
         start = time.perf_counter()
         try:
             with span("api.feedback", track_id=body.track_id,
@@ -721,8 +916,186 @@ def create_app(start_listener: bool = True) -> FastAPI:
         finally:
             state.metrics.feedback.record(time.perf_counter() - start)
 
+    @app.post("/api/feedback/analyze")
+    async def feedback_analyze(body: FeedbackRequest) -> Any:
+        """Generate feedback with explicit LLM lifecycle: preload → analyze → unload.
+
+        This is the recommended endpoint for post-gameplay feedback analysis.
+        It preloads the LLM backend, generates feedback (with LLM enhancement
+        if configured), then unloads the LLM to free memory. During gameplay
+        the LLM stays unloaded via the standard ``/api/feedback`` endpoint,
+        which only uses the rule-based path.
+        """
+        start = time.perf_counter()
+        try:
+            from f1opt.feedback.engine import (
+                _default_engine,
+                generate_feedback_async,
+            )
+            engine = _default_engine()
+            # Step 1: preload LLM.
+            preload_result = engine.preload_llm()
+            # Step 2: generate feedback (LLM enhancement runs because
+            # _llm_loaded is now True).
+            driver_profile: Any
+            if body.driver_profile is not None:
+                driver_profile = body.driver_profile
+            else:
+                try:
+                    from f1opt.driver.profile import (
+                        AGGRESSIVE_PROFILE,
+                        CONSERVATIVE_PROFILE,
+                        DEFAULT_PROFILE,
+                    )
+                    style_map = {
+                        "default": DEFAULT_PROFILE,
+                        "aggressive": AGGRESSIVE_PROFILE,
+                        "conservative": CONSERVATIVE_PROFILE,
+                    }
+                    driver_profile = style_map[body.driver_style]
+                except ImportError:
+                    driver_profile = None
+            try:
+                result = await generate_feedback_async(
+                    frames=body.frames,
+                    setup=body.setup,
+                    track_id=body.track_id,
+                    question=body.question,
+                    driver_profile=driver_profile,
+                    session_id=body.session_id,
+                )
+            except Exception as exc:
+                raise HTTPException(
+                    status_code=503, detail="feedback engine not available"
+                ) from exc
+            # Step 3: unload LLM to free memory.
+            unload_result = engine.unload_llm()
+            result["_llm_lifecycle"] = {
+                "preload": preload_result,
+                "unload": unload_result,
+            }
+            return result
+        finally:
+            state.metrics.feedback.record(time.perf_counter() - start)
+
+    # Iter-206: Batch feedback endpoint with concurrency handling.
+    class BatchFeedbackRequest(BaseModel):
+        """Request body for batch feedback processing (Iter-206)."""
+        sessions: list[FeedbackRequest]
+        max_concurrency: int = 4
+
+    @app.post("/api/feedback/batch")
+    @limiter.limit("10/minute")
+    async def feedback_batch(
+        body: BatchFeedbackRequest, request: Request
+    ) -> dict[str, Any]:
+        """Process multiple feedback sessions concurrently (Iter-206).
+
+        Accepts a list of feedback sessions and processes them in parallel
+        using an asyncio semaphore for controlled concurrency. Returns
+        aggregated results including per-session feedback and overall
+        statistics.
+        """
+        start = time.perf_counter()
+        if not body.sessions:
+            raise HTTPException(status_code=400, detail="no sessions provided")
+        if len(body.sessions) > 50:
+            raise HTTPException(
+                status_code=400,
+                detail="batch size exceeds maximum of 50 sessions",
+            )
+
+        try:
+            from f1opt.feedback.engine import generate_feedback_async
+        except ImportError:
+            raise HTTPException(
+                status_code=503, detail="feedback engine not available"
+            ) from None
+
+        sem = asyncio.Semaphore(max(1, body.max_concurrency))
+
+        async def _process_one(
+            idx: int, session: FeedbackRequest
+        ) -> dict[str, Any]:
+            async with sem:
+                try:
+                    result = await generate_feedback_async(
+                        frames=session.frames,
+                        setup=session.setup,
+                        track_id=session.track_id,
+                        question=session.question,
+                        session_id=session.session_id,
+                    )
+                    return {"index": idx, "status": "success", "result": result}
+                except Exception as exc:
+                    return {
+                        "index": idx,
+                        "status": "error",
+                        "error": str(exc)[:500],
+                    }
+
+        tasks = [
+            _process_one(i, s) for i, s in enumerate(body.sessions)
+        ]
+        results = await asyncio.gather(*tasks)
+
+        success_count = sum(1 for r in results if r["status"] == "success")
+        error_count = len(results) - success_count
+
+        return {
+            "total": len(results),
+            "success": success_count,
+            "errors": error_count,
+            "results": results,
+            "elapsed_ms": round((time.perf_counter() - start) * 1000, 1),
+        }
+
+    @app.post("/api/llm/preload")
+    async def llm_preload() -> dict[str, Any]:
+        """Explicitly preload the LLM backend into memory.
+
+        Call this after stopping telemetry / gameplay to prepare the LLM
+        for subsequent ``/api/feedback`` calls. The LLM stays loaded until
+        ``/api/llm/unload`` is called or the process exits.
+        """
+        from f1opt.feedback.engine import _default_engine
+        engine = _default_engine()
+        return engine.preload_llm()
+
+    @app.post("/api/llm/unload")
+    async def llm_unload() -> dict[str, Any]:
+        """Explicitly unload the LLM backend and free memory.
+
+        After this call, ``/api/feedback`` will return rule-based feedback
+        only (no LLM enhancement). Call this before starting a new gameplay
+        session to ensure the LLM doesn't consume memory during telemetry
+        collection.
+        """
+        from f1opt.feedback.engine import _default_engine
+        engine = _default_engine()
+        return engine.unload_llm()
+
+    @app.get("/api/llm/status")
+    async def llm_status() -> dict[str, Any]:
+        """Iter-183: Return LLM backend status (loaded, backend type, token usage).
+
+        Returns:
+            ``{"loaded": bool, "backend": str, "api_key_set": bool, "token_usage": {...}}``
+        """
+        from f1opt.config import get_settings
+        from f1opt.feedback.engine import _default_engine
+        settings = get_settings()
+        engine = _default_engine()
+        return {
+            "loaded": engine._llm_loaded,
+            "backend": settings.llm_backend,
+            "api_key_set": bool(settings.llm_api_key),
+            "token_usage": engine.token_usage(),
+        }
+
     @app.post("/api/search")
-    async def search(body: SearchRequest) -> dict[str, Any]:
+    @limiter.limit("20/minute")
+    async def search(body: SearchRequest, request: Request) -> dict[str, Any]:
         start = time.perf_counter()
         try:
             with span("api.search", track_id=body.track_id,
@@ -789,6 +1162,125 @@ def create_app(start_listener: bool = True) -> FastAPI:
             state.metrics.search.record(time.perf_counter() - start)
 
     # ------------------------------------------------------------------ #
+    # Iter-203: 策略规划 API 端点
+    # ------------------------------------------------------------------ #
+    @app.get("/api/strategy/plan")
+    @limiter.limit("30/minute")
+    async def strategy_plan(
+        request: Request,
+        track_id: str = "monza",
+        total_laps: int = 50,
+        fuel_load_kg: float = 100.0,
+        available_compounds: str = "soft,medium,hard",
+    ) -> dict[str, Any]:
+        """Plan optimal race strategy with degradation analysis (Iter-203).
+
+        Returns optimal pit-stop strategy, fuel-saving analysis, and
+        compound degradation crossover data for the given track and
+        parameters.
+        """
+        start = time.perf_counter()
+        try:
+            try:
+                get_track(track_id)
+            except ValueError:
+                raise HTTPException(
+                    status_code=404, detail=f"unknown track_id: {track_id}"
+                ) from None
+
+            try:
+                from f1opt.model.strategy import RaceStrategyPlanner, StrategyComparator
+            except ImportError:
+                raise HTTPException(
+                    status_code=503, detail="strategy planner not available"
+                ) from None
+
+            compounds = [c.strip() for c in available_compounds.split(",") if c.strip()]
+
+            planner = RaceStrategyPlanner(
+                track_id=track_id,
+                total_laps=total_laps,
+                fuel_load_kg=fuel_load_kg,
+            )
+
+            optimal = planner.optimal_strategy(compounds)
+            fuel = planner.fuel_saving_analysis()
+            crossover = planner.degradation_crossover(
+                compound_a=compounds[0] if len(compounds) > 0 else "soft",
+                compound_b=compounds[1] if len(compounds) > 1 else "medium",
+            )
+
+            return {
+                "track_id": track_id,
+                "total_laps": total_laps,
+                "fuel_load_kg": fuel_load_kg,
+                "optimal_strategy": optimal,
+                "fuel_analysis": fuel,
+                "degradation_crossover": {
+                    "crossover_lap": crossover["crossover_lap"],
+                    "recommendation": crossover["recommendation"],
+                },
+                "elapsed_ms": round((time.perf_counter() - start) * 1000, 1),
+            }
+        finally:
+            state.metrics.search.record(time.perf_counter() - start)
+
+    @app.get("/api/strategy/weather-impact")
+    @limiter.limit("30/minute")
+    async def strategy_weather_impact(
+        request: Request,
+        track_id: str = "monza",
+        total_laps: int = 50,
+        track_wetness: float = 0.0,
+        rain_intensity: float = 0.0,
+        track_temp_c: float = 35.0,
+        wind_speed_ms: float = 0.0,
+    ) -> dict[str, Any]:
+        """Weather-aware strategy adjustments (Iter-203).
+
+        Evaluates how current weather conditions affect optimal race
+        strategy, including compound shifts, pit stop recommendations,
+        and pit loss modifications.
+        """
+        start = time.perf_counter()
+        try:
+            try:
+                get_track(track_id)
+            except ValueError:
+                raise HTTPException(
+                    status_code=404, detail=f"unknown track_id: {track_id}"
+                ) from None
+
+            try:
+                from f1opt.model.strategy import RaceStrategyPlanner
+            except ImportError:
+                raise HTTPException(
+                    status_code=503, detail="strategy planner not available"
+                ) from None
+
+            planner = RaceStrategyPlanner(
+                track_id=track_id,
+                total_laps=total_laps,
+                fuel_load_kg=100.0,
+            )
+
+            weather_impact = planner.weather_impact_on_strategy(
+                track_wetness=track_wetness,
+                rain_intensity=rain_intensity,
+                track_temp_c=track_temp_c,
+                wind_speed_ms=wind_speed_ms,
+            )
+
+            return {
+                "track_id": track_id,
+                "total_laps": total_laps,
+                "weather_impact": weather_impact,
+                "elapsed_ms": round((time.perf_counter() - start) * 1000, 1),
+            }
+        finally:
+            state.metrics.search.record(time.perf_counter() - start)
+
+    # ------------------------------------------------------------------ #
     # Iter-119: causal / WhatIf API 暴露
     # ------------------------------------------------------------------ #
     def _resolve_driver_profile(
@@ -815,7 +1307,8 @@ def create_app(start_listener: bool = True) -> FastAPI:
             return None
 
     @app.post("/api/whatif")
-    async def whatif(body: WhatIfRequest) -> dict[str, Any]:
+    @limiter.limit("30/minute")
+    async def whatif(body: WhatIfRequest, request: Request) -> dict[str, Any]:
         """Iter-119: 单字段 what-if 分析.
 
         对 ``setup`` 中的 ``field`` 改为 ``new_value``, 返回:
@@ -873,7 +1366,8 @@ def create_app(start_listener: bool = True) -> FastAPI:
             state.metrics.predict.record(time.perf_counter() - start)
 
     @app.post("/api/whatif/multi")
-    async def whatif_multi(body: WhatIfMultiRequest) -> dict[str, Any]:
+    @limiter.limit("15/minute")
+    async def whatif_multi(body: WhatIfMultiRequest, request: Request) -> dict[str, Any]:
         """Iter-119: 多字段批量 what-if 分析.
 
         一次性应用多个 setup 改动 (``changes`` dict), 返回组合因果解释 + 组合圈速 delta.
@@ -983,6 +1477,221 @@ def create_app(start_listener: bool = True) -> FastAPI:
                 "description": spec.description,
             }
         return {"fields": fields, "count": len(fields)}
+
+    # ------------------------------------------------------------------ #
+    # Iter-183: Session management endpoint
+    # ------------------------------------------------------------------ #
+    @app.get("/api/session/{session_id}")
+    async def get_session_info(session_id: str) -> dict[str, Any]:
+        """Iter-183: Get session info including conversation history, lap trend,
+        and setup change history.
+
+        Returns:
+            ``{"session_id": "...", "turn_count": N, "recent_history": [...],
+            "focus_summary": "...", "lap_trend": {...}, "setup_changes": [...]}``
+        """
+        from f1opt.feedback.conversation import get_session
+        session = get_session(session_id)
+        return {
+            "session_id": session_id,
+            "turn_count": len(session.history),
+            "recent_history": session.recent(10),
+            "focus_summary": session.summarize_focus(),
+            "lap_trend": session.get_lap_trend(),
+            "setup_changes": session.get_setup_history(),
+        }
+
+    @app.delete("/api/session/{session_id}")
+    async def delete_session(session_id: str) -> dict[str, Any]:
+        """Iter-183: Delete a conversation session and reset its memory."""
+        from f1opt.feedback.conversation import _sessions
+        if session_id in _sessions:
+            del _sessions[session_id]
+            return {"session_id": session_id, "status": "deleted"}
+        return {"session_id": session_id, "status": "not_found"}
+
+    # ------------------------------------------------------------------ #
+    # Iter-183: Lap comparison endpoint
+    # ------------------------------------------------------------------ #
+    @app.post("/api/feedback/compare")
+    async def compare_laps(body: CompareRequest) -> dict[str, Any]:
+        """Iter-183: Compare current lap against a reference lap (teammate/best/target).
+
+        Returns sector-by-sector deltas, speed comparison, and a Chinese verdict.
+        When ``reference_lap`` is None, returns a neutral comparison.
+        """
+        try:
+            from f1opt.feedback.comparison import LapComparator
+        except ImportError:
+            raise HTTPException(
+                status_code=503, detail="comparison module not available"
+            ) from None
+        comparator = LapComparator(reference_lap=body.reference_lap)
+        result = comparator.compare(body.current_lap)
+        return result
+
+    # ------------------------------------------------------------------ #
+    # Iter-183: Feedback history endpoint
+    # ------------------------------------------------------------------ #
+    @app.get("/api/feedback/history")
+    async def feedback_history(
+        session_id: str = "default",
+        n: int = 20,
+    ) -> dict[str, Any]:
+        """Iter-183: Return recent feedback conversation history for a session.
+
+        Args:
+            session_id: Session identifier (default ``"default"``).
+            n: Max number of recent turns to return (clamped to [1, 100]).
+
+        Returns:
+            ``{"session_id": "...", "turns": [...], "total_turns": N}``
+            where each turn is ``{"role": "user"/"assistant", "content": "..."}``.
+        """
+        from f1opt.feedback.conversation import get_session
+        n_clamped = max(1, min(100, n))
+        session = get_session(session_id)
+        recent = session.recent(n_clamped)
+        return {
+            "session_id": session_id,
+            "turns": recent,
+            "total_turns": len(session.history),
+        }
+
+    # ------------------------------------------------------------------ #
+    # Iter-183: 车手反馈模板 API
+    # ------------------------------------------------------------------ #
+    @app.get("/api/templates")
+    async def list_templates(
+        group: str = "all",
+        lang: str = "zh",
+    ) -> dict[str, Any]:
+        """Iter-183: 获取车手反馈模板列表.
+
+        Args:
+            group: 模板分组 (``corner`` / ``sector`` / ``overall`` / ``all``).
+            lang: 语言 (``zh`` / ``en``).
+
+        Returns:
+            ``{"templates": [...], "group": "...", "count": N}``.
+        """
+        from f1opt.feedback.prompts import (
+            DRIVER_FEEDBACK_TEMPLATES,
+            FEEDBACK_TEMPLATE_GROUPS,
+            render_feedback_template,
+        )
+        if group not in FEEDBACK_TEMPLATE_GROUPS:
+            group = "all"
+        template_ids = FEEDBACK_TEMPLATE_GROUPS[group]
+        templates = []
+        for tid in template_ids:
+            t = DRIVER_FEEDBACK_TEMPLATES.get(tid)
+            if t is None:
+                continue
+            templates.append({
+                "id": t["id"],
+                "granularity": t["granularity"],
+                "category": t["category"],
+                "text": render_feedback_template(tid, lang),
+            })
+        return {
+            "templates": templates,
+            "group": group,
+            "count": len(templates),
+        }
+
+    @app.get("/api/templates/{template_id}")
+    async def get_template(
+        template_id: str,
+        lang: str = "zh",
+    ) -> dict[str, Any]:
+        """Iter-183: 获取单个车手反馈模板.
+
+        Args:
+            template_id: 模板 ID (如 ``corner_understeer``).
+            lang: 语言 (``zh`` / ``en``).
+
+        Returns:
+            ``{"id": "...", "granularity": "...", "category": "...", "text": "..."}``.
+        """
+        from f1opt.feedback.prompts import (
+            DRIVER_FEEDBACK_TEMPLATES,
+            render_feedback_template,
+        )
+        t = DRIVER_FEEDBACK_TEMPLATES.get(template_id)
+        if t is None:
+            raise HTTPException(
+                status_code=404,
+                detail=f"unknown template_id: {template_id}. "
+                       f"Available: {', '.join(sorted(DRIVER_FEEDBACK_TEMPLATES.keys()))}"
+            )
+        return {
+            "id": t["id"],
+            "granularity": t["granularity"],
+            "category": t["category"],
+            "text": render_feedback_template(template_id, lang),
+        }
+
+    @app.get("/api/templates/categories")
+    async def template_categories() -> dict[str, Any]:
+        """Iter-183: List all template categories with counts.
+
+        Returns:
+            ``{"categories": [{"category": "...", "count": N, "templates": [...]}, ...]}``
+        """
+        from f1opt.feedback.prompts import (
+            DRIVER_FEEDBACK_TEMPLATES,
+            FEEDBACK_TEMPLATE_GROUPS,
+        )
+        categories: list[dict[str, Any]] = []
+        for category, template_ids in FEEDBACK_TEMPLATE_GROUPS.items():
+            entries = []
+            for tid in template_ids:
+                t = DRIVER_FEEDBACK_TEMPLATES.get(tid)
+                if t:
+                    entries.append({
+                        "id": t["id"],
+                        "granularity": t["granularity"],
+                    })
+            categories.append({
+                "category": category,
+                "count": len(entries),
+                "templates": entries,
+            })
+        return {"categories": categories, "total_categories": len(categories)}
+
+    @app.post("/api/feedback/templates")
+    async def submit_template(body: TemplateSubmitRequest) -> dict[str, Any]:
+        """Iter-183: Submit a custom feedback template.
+
+        Registers a user-defined template that can be used for driver feedback
+        generation. The template is stored in-memory for the process lifetime.
+        """
+        from f1opt.feedback.prompts import DRIVER_FEEDBACK_TEMPLATES, FEEDBACK_TEMPLATE_GROUPS
+
+        if body.id in DRIVER_FEEDBACK_TEMPLATES:
+            return {
+                "status": "exists",
+                "id": body.id,
+                "message": f"Template '{body.id}' already exists and was not overwritten",
+            }
+        DRIVER_FEEDBACK_TEMPLATES[body.id] = {
+            "id": body.id,
+            "granularity": body.granularity,
+            "category": body.category,
+            "zh": body.text_zh,
+            "en": body.text_en or body.text_zh,
+        }
+        if body.category not in FEEDBACK_TEMPLATE_GROUPS:
+            FEEDBACK_TEMPLATE_GROUPS[body.category] = [body.id]
+        else:
+            FEEDBACK_TEMPLATE_GROUPS[body.category].append(body.id)
+        return {
+            "status": "created",
+            "id": body.id,
+            "granularity": body.granularity,
+            "category": body.category,
+        }
 
     # ------------------------------------------------------------------ #
     # Iter-130: Analytics API — 单圈完整分析 + 仅异常检测
@@ -1169,6 +1878,44 @@ def create_app(start_listener: bool = True) -> FastAPI:
             "path": str(audit.path),
             "total_written": audit.count,
         }
+
+    @app.get("/api/feedback/stream")
+    async def feedback_stream(
+        setup_json: str = "{}",
+        track_id: str = "monza",
+        question: str | None = None,
+    ) -> StreamingResponse:
+        """Iter-183: SSE (Server-Sent Events) for feedback streaming.
+
+        Generates feedback incrementally and streams it as SSE events.
+        Each event is ``data: {"type": "chunk", "text": "..."}`` followed
+        by a final ``data: {"type": "done", "feedback": {...}}``.
+        """
+        import json as _json
+
+        from f1opt.data.setup_schema import DEFAULT_SETUP
+        from f1opt.feedback import generate_feedback_stream
+
+        try:
+            setup = _json.loads(setup_json)
+        except Exception:
+            setup = DEFAULT_SETUP.model_dump()
+
+        async def event_stream():
+            for event in generate_feedback_stream(
+                [], setup, track_id, question=question
+            ):
+                yield f"data: {_json.dumps(event, ensure_ascii=False)}\n\n"
+
+        return StreamingResponse(
+            event_stream(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            },
+        )
 
     # --------------------------- WebSocket ------------------------------- #
     @app.websocket("/ws/telemetry")

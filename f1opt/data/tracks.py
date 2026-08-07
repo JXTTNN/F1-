@@ -33,6 +33,39 @@ TrackType = Literal[
 - ``mixed``: 三段差异大, 需要折中调教 (如 Suzuka/Silverstone/Spa/COTA)
 """
 
+# Iter-192: 赛道特性扩展数据 (grip_level, kerb_sensitivity, top_speed_kmh)
+_TRACK_CHARACTERISTICS: dict[str, dict[str, float | None]] = {
+    "melbourne": {"grip_level": 0.75, "kerb_sensitivity": 0.4, "top_speed_kmh": 325},
+    "shanghai": {"grip_level": 0.80, "kerb_sensitivity": 0.5, "top_speed_kmh": 330},
+    "suzuka": {"grip_level": 0.85, "kerb_sensitivity": 0.7, "top_speed_kmh": 320},
+    "sakhir": {"grip_level": 0.70, "kerb_sensitivity": 0.3, "top_speed_kmh": 325},
+    "jeddah": {"grip_level": 0.90, "kerb_sensitivity": 0.2, "top_speed_kmh": 335},
+    "miami": {"grip_level": 0.65, "kerb_sensitivity": 0.5, "top_speed_kmh": 320},
+    "montreal": {"grip_level": 0.60, "kerb_sensitivity": 0.8, "top_speed_kmh": 330},
+    "monaco": {"grip_level": 0.55, "kerb_sensitivity": 0.9, "top_speed_kmh": 290},
+    "barcelona": {"grip_level": 0.80, "kerb_sensitivity": 0.5, "top_speed_kmh": 325},
+    "spielberg": {"grip_level": 0.75, "kerb_sensitivity": 0.6, "top_speed_kmh": 330},
+    "silverstone": {"grip_level": 0.85, "kerb_sensitivity": 0.5, "top_speed_kmh": 325},
+    "spa": {"grip_level": 0.80, "kerb_sensitivity": 0.6, "top_speed_kmh": 330},
+    "hungaroring": {"grip_level": 0.75, "kerb_sensitivity": 0.8, "top_speed_kmh": 310},
+    "zandvoort": {"grip_level": 0.80, "kerb_sensitivity": 0.7, "top_speed_kmh": 315},
+    "monza": {"grip_level": 0.70, "kerb_sensitivity": 0.4, "top_speed_kmh": 350},
+    "madrid": {"grip_level": 0.70, "kerb_sensitivity": 0.5, "top_speed_kmh": 340},
+    "baku": {"grip_level": 0.65, "kerb_sensitivity": 0.4, "top_speed_kmh": 345},
+    "singapore": {"grip_level": 0.60, "kerb_sensitivity": 0.9, "top_speed_kmh": 305},
+    "austin": {"grip_level": 0.80, "kerb_sensitivity": 0.6, "top_speed_kmh": 325},
+    "mexico_city": {"grip_level": 0.65, "kerb_sensitivity": 0.5, "top_speed_kmh": 320},
+    "sao_paulo": {"grip_level": 0.70, "kerb_sensitivity": 0.7, "top_speed_kmh": 320},
+    "las_vegas": {"grip_level": 0.60, "kerb_sensitivity": 0.3, "top_speed_kmh": 345},
+    "lusail": {"grip_level": 0.80, "kerb_sensitivity": 0.5, "top_speed_kmh": 330},
+    "yas_marina": {"grip_level": 0.75, "kerb_sensitivity": 0.4, "top_speed_kmh": 330},
+}
+
+
+def get_track_characteristics(track_id: str) -> dict[str, float | None]:
+    """Iter-192: 获取赛道特性 (grip_level, kerb_sensitivity, top_speed_kmh)."""
+    return _TRACK_CHARACTERISTICS.get(track_id, {"grip_level": 0.75, "kerb_sensitivity": 0.5, "top_speed_kmh": 325})
+
 
 class Track(BaseModel):
     """单条 F1 赛道元数据.

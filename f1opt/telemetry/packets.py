@@ -458,6 +458,8 @@ CONFIDENCE_CARSTATUS = (
     "Pack note (Iter-11, EA_Groguet official confirmation): the 2026 Season Pack 'boost' "
     "mode is covered by m_ersDeployMode — no separate boost field is required, so this "
     "parser already captures 2026 boost behaviour correctly."
+    "\nIter-191: Adds m_activeAeroX (float) and m_activeAeroZ (float) — F1 2026 active "
+    "aerodynamics front-wing angle (X) and rear-wing angle (Z) in degrees."
 )
 # per car: tractionControl, antiLockBrakes, fuelMix, frontBrakeBias, pitLimiterStatus,
 # fuelInTank(f), fuelCapacity(f), fuelRemainingLaps(f), maxRPM(H), idleRPM(H),
@@ -465,7 +467,8 @@ CONFIDENCE_CARSTATUS = (
 # tyresAgeLaps(b), vehicleFiaFlags(b), ersStoreEnergy(f), ersDeployMode,
 # ersHarvestedThisLapMGUK(f), ersHarvestedThisLapMGUH(f), ersDeployedThisLap(f),
 # networkPaused
-_STATUS_PER = "BBBBB fff HH BB H BB bb f B fff B".replace(" ", "")
+# Iter-191: + m_activeAeroX(f) + m_activeAeroZ(f) = 2026 Season Pack active aero
+_STATUS_PER = "BBBBB fff HH BB H BB bb f B fff B ff".replace(" ", "")
 _STATUS_NAMES = (
     "m_tractionControl", "m_antiLockBrakes", "m_fuelMix", "m_frontBrakeBias",
     "m_pitLimiterStatus", "m_fuelInTank", "m_fuelCapacity", "m_fuelRemainingLaps",
@@ -474,6 +477,7 @@ _STATUS_NAMES = (
     "m_vehicleFiaFlags", "m_ersStoreEnergy", "m_ersDeployMode",
     "m_ersHarvestedThisLapMGUK", "m_ersHarvestedThisLapMGUH", "m_ersDeployedThisLap",
     "m_networkPaused",
+    "m_activeAeroX", "m_activeAeroZ",  # Iter-191: F1 2026 active aero
 )
 _STATUS_BODY = struct.Struct("<" + _STATUS_PER * NUM_CARS)
 
@@ -840,6 +844,145 @@ def parse_packet(data: bytes) -> tuple[PacketHeader, dict[str, Any]]:
     return header, parsed
 
 
+# --------------------------------------------------------------------------- #
+# Packet size validation (Iter-192)
+# --------------------------------------------------------------------------- #
+# Expected minimum body sizes per packet type (after header).
+# These are derived from the EA F1 25 PDF reported sizes (total - 29B header).
+# Used for informational logging; parsing is still tolerant of truncation.
+_EXPECTED_BODY_SIZES: dict[int, int] = {
+    0: 1320,   # Motion: 1349 - 29
+    1: 614,    # Session (approx)
+    2: 1078,   # LapData
+    3: 4,      # Event (min: 4-byte code)
+    4: 1122,   # Participants
+    5: 1078,   # CarSetups
+    6: 1307,   # CarTelemetry
+    7: 1022,   # CarStatus (approximate)
+    8: 1013,   # FinalClassification: 1042 - 29
+    9: 925,    # LobbyInfo: 954 - 29
+    10: 1012,  # CarDamage: 1041 - 29
+    11: 526,   # SessionHistory
+    12: 110,   # TyreSets
+    13: 244,   # MotionEx: 273 - 29
+    14: 72,    # TimeTrial: 101 - 29
+    15: 1102,  # LapPositions: 1131 - 29
+}
+
+
+def validate_packet_size(packet_id: int, body_size: int) -> dict[str, Any]:
+    """Check if a packet body size matches the expected EA spec.
+
+    Iter-192: returns a dict with ``expected``, ``actual``, ``ok``, and
+    ``warning`` (if mismatch). Used for debugging and monitoring.
+    """
+    expected = _EXPECTED_BODY_SIZES.get(packet_id)
+    if expected is None:
+        return {"expected": None, "actual": body_size, "ok": True, "warning": "unknown packet type"}
+    if body_size >= expected:
+        return {"expected": expected, "actual": body_size, "ok": True, "warning": None}
+    return {
+        "expected": expected,
+        "actual": body_size,
+        "ok": False,
+        "warning": f"packet {packet_id} ({packet_name(packet_id)}): body {body_size}B < expected {expected}B (truncated?)",
+    }
+
+
+# --------------------------------------------------------------------------- #
+# Packet type statistics (Iter-208)
+# --------------------------------------------------------------------------- #
+class PacketTypeStats:
+    """Track per-packet-type count and rate (Iter-208).
+
+    Accumulates per-packet-id counts so callers can compute the real-time
+    packet rate distribution (e.g. 60 Hz Motion vs 2 Hz CarStatus).
+    Thread-safe counter increment; reset() is NOT thread-safe.
+    """
+
+    def __init__(self) -> None:
+        self._counts: dict[int, int] = {}
+        self._total: int = 0
+        self._start_time: float | None = None
+
+    def record(self, packet_id: int) -> None:
+        """Increment the counter for ``packet_id``."""
+        self._counts[packet_id] = self._counts.get(packet_id, 0) + 1
+        self._total += 1
+        if self._start_time is None:
+            import time
+            self._start_time = time.time()
+
+    def distribution(self) -> dict[str, Any]:
+        """Return per-packet-type counts and fractions.
+
+        Returns a dict with ``counts`` (``{name: count}``), ``total``,
+        and ``fractions`` (``{name: fraction}``).
+        """
+        if self._total == 0:
+            return {"counts": {}, "total": 0, "fractions": {}}
+        counts = {packet_name(k): v for k, v in self._counts.items()}
+        fractions = {k: v / self._total for k, v in counts.items()}
+        return {"counts": counts, "total": self._total, "fractions": fractions}
+
+    def reset(self) -> None:
+        """Clear all counters."""
+        self._counts.clear()
+        self._total = 0
+        self._start_time = None
+
+
+# --------------------------------------------------------------------------- #
+# Active aero mode helpers (Iter-219)
+# --------------------------------------------------------------------------- #
+# F1 2026 Season Pack introduces active aero with X (low-drag) and Z (high-
+# downforce) modes. The driver can switch between them on-the-fly, and the
+# DRS-style zone activation partly depends on the active aero state.
+#
+# Active aero mode values (packetFormat=2025, CarStatus / CarTelemetry):
+#   0 = Fixed (legacy static aero)
+#   1 = Active (X mode — low drag, straight-line speed)
+#   2 = Active (Z mode — high downforce, cornering grip)
+#   3 = Auto (car decides)
+
+_ACTIVE_AERO_MODE_NAMES: dict[int, str] = {
+    0: "Fixed",
+    1: "Active-X",
+    2: "Active-Z",
+    3: "Auto",
+}
+
+
+def active_aero_mode_name(mode: int) -> str:
+    """Return human-readable name for an active aero mode value."""
+    return _ACTIVE_AERO_MODE_NAMES.get(mode, f"Unknown({mode})")
+
+
+def is_low_drag_mode(mode: int) -> bool:
+    """Return True if the active aero mode is X (low-drag)."""
+    return mode == 1
+
+
+def is_high_downforce_mode(mode: int) -> bool:
+    """Return True if the active aero mode is Z (high-downforce)."""
+    return mode == 2
+
+
+def active_aero_mode_from_frame(frame: dict) -> str:
+    """Extract the active aero mode name from a unified frame dict.
+
+    Tries ``active_aero_mode``, ``aero_mode``, and ``active_aero`` keys.
+    Returns ``"unknown"`` when no key is present.
+    """
+    mode = frame.get("active_aero_mode") or frame.get("aero_mode") or frame.get("active_aero")
+    if mode is None:
+        return "unknown"
+    try:
+        return active_aero_mode_name(int(mode))
+    except (TypeError, ValueError):
+        return "unknown"
+
+
 __all__ = [
     "HEADER_FORMAT",
     "HEADER_SIZE",
@@ -848,8 +991,14 @@ __all__ = [
     "PACKET_PARSERS",
     "CONFIDENCE",
     "PacketHeader",
+    "PacketTypeStats",  # Iter-208
+    "active_aero_mode_name",  # Iter-219
+    "is_low_drag_mode",  # Iter-219
+    "is_high_downforce_mode",  # Iter-219
+    "active_aero_mode_from_frame",  # Iter-219
     "parse_header",
     "parse_packet",
+    "validate_packet_size",
     "packet_name",
     "parse_motion",
     "parse_session",

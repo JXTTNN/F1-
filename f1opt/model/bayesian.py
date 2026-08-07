@@ -364,6 +364,111 @@ class BayesianOptimizer:
     def history(self) -> list[dict[str, float]]:
         return list(self._acq_history)
 
+    # ------------------------------------------------------------------ #
+    # Convergence diagnostics (Iter-199)
+    # ------------------------------------------------------------------ #
+    def convergence_diagnostics(self, window: int = 5) -> dict[str, Any]:
+        """Compute convergence diagnostics for the optimization run (Iter-199).
+
+        Analyzes the improvement rate over the last ``window`` iterations
+        to determine whether the optimizer has converged or is still
+        making meaningful progress.
+
+        Args:
+            window: Number of recent iterations to analyze for stagnation.
+
+        Returns:
+            Dict with keys:
+            - ``converged``: ``True`` if improvement has stalled.
+            - ``improvement_rate``: Average improvement per iteration in
+              the last ``window`` (seconds).
+            - ``remaining_potential``: Estimated remaining improvement
+              based on GP uncertainty at the best point.
+            - ``stagnation_count``: Consecutive iterations with < 0.01s
+              improvement.
+            - ``best_y_trace``: Full trace of best observed values per
+              iteration.
+            - ``early_stop_recommended``: ``True`` if early stopping is
+              recommended (3+ stagnant iterations).
+        """
+        if len(self._y) < 2:
+            return {
+                "converged": False,
+                "improvement_rate": 0.0,
+                "remaining_potential": 0.0,
+                "stagnation_count": 0,
+                "best_y_trace": list(self._y),
+                "early_stop_recommended": False,
+            }
+
+        # Build best-y trace: cumulative minimum over iterations.
+        best_trace: list[float] = []
+        best_so_far = float("inf")
+        for y in self._y:
+            best_so_far = min(best_so_far, y)
+            best_trace.append(best_so_far)
+
+        # Improvement rate over last window.
+        w = min(window, len(self._y))
+        if w >= 2:
+            recent = best_trace[-w:]
+            delta = recent[0] - recent[-1]
+            improvement_rate = max(0.0, delta / max(1, w - 1))
+        else:
+            improvement_rate = 0.0
+
+        # Stagnation count: consecutive iterations with < 0.01s improvement.
+        stagnation_count = 0
+        for i in range(len(best_trace) - 1, 0, -1):
+            if best_trace[i - 1] - best_trace[i] < 0.01:
+                stagnation_count += 1
+            else:
+                break
+
+        converged = stagnation_count >= 3
+        early_stop = stagnation_count >= 3
+
+        # Remaining potential: GP posterior std at best point.
+        remaining_potential = 0.0
+        if len(self._y) >= 2:
+            try:
+                best_x = np.array(self._X)[int(np.argmin(self._y))]
+                self._gp.fit(np.array(self._X), np.array(self._y))
+                _, std = self._gp.predict(best_x.reshape(1, -1))
+                remaining_potential = float(std[0])
+            except Exception:
+                pass
+
+        return {
+            "converged": converged,
+            "improvement_rate": round(improvement_rate, 6),
+            "remaining_potential": round(remaining_potential, 6),
+            "stagnation_count": stagnation_count,
+            "best_y_trace": [round(y, 6) for y in best_trace],
+            "early_stop_recommended": early_stop,
+        }
+
+    # ------------------------------------------------------------------ #
+    def improvement_curve(self) -> dict[str, list[float]]:
+        """Return the improvement curve data for plotting (Iter-199).
+
+        Returns:
+            Dict with ``iterations`` (list of int), ``best_y`` (list of
+            float), and ``acquisition_values`` (list of float).
+        """
+        best_trace: list[float] = []
+        best_so_far = float("inf")
+        for y in self._y:
+            best_so_far = min(best_so_far, y)
+            best_trace.append(best_so_far)
+        return {
+            "iterations": list(range(1, len(self._y) + 1)),
+            "best_y": [round(y, 6) for y in best_trace],
+            "acquisition_values": [
+                round(a["acquisition_value"], 6) for a in self._acq_history
+            ],
+        }
+
 
 # --------------------------------------------------------------------------- #
 # High-level helper
@@ -385,8 +490,8 @@ def bayesian_search_setup(
     from f1opt.data.setup_schema import CarSetup
 
     # to_vector() normalizes each setup field to [0, 1], so BO operates in the
-    # unit hypercube of dimension 19.
-    n_dim = 19
+    # unit hypercube of dimension 21.
+    n_dim = 21
     bounds = np.array([[0.0, 1.0]] * n_dim)
 
     # Objective: predict_lap_time via surrogate (best-effort; fallback heuristic).
@@ -461,4 +566,6 @@ def bayesian_search_setup(
         "acquisition": acquisition,
         "history": history,
         "gp_final_std": gp_final_std,
+        "convergence": bo.convergence_diagnostics(),  # Iter-199
+        "improvement_curve": bo.improvement_curve(),  # Iter-199
     }

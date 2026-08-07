@@ -246,10 +246,11 @@ def test_qualifying_prediction_returns_required_keys() -> None:
 # SetupChangeImpact
 # --------------------------------------------------------------------------- #
 _IMPACT_KEYS = {
-    "lap_time_delta_avg",
-    "lap_time_delta_best",
-    "sector_deltas",
-    "consistency_delta",
+    "before_avg",
+    "after_avg",
+    "delta_avg_s",
+    "before_cv",
+    "after_cv",
     "verdict",
     "significant",
 }
@@ -258,31 +259,32 @@ _IMPACT_KEYS = {
 def test_impact_returns_all_keys() -> None:
     before = [_lap(92.0, [31, 31, 30]), _lap(91.5, [30, 31, 30.5])]
     after = [_lap(90.0, [30, 30, 30]), _lap(90.5, [30, 30, 30.5])]
-    out = SetupChangeImpact(before, after).impact()
+    out = SetupChangeImpact(before, after).analyze()
     assert _IMPACT_KEYS <= set(out)
-    assert len(out["sector_deltas"]) == 3
+    assert out["before_avg"] is not None
+    assert out["after_avg"] is not None
 
 
 def test_significant_true_for_big_improvement() -> None:
     before = [_lap(92.0, [31, 31, 30]), _lap(92.5, [31, 31, 30.5])]
     after = [_lap(90.0, [30, 30, 30]), _lap(90.5, [30, 30, 30.5])]
-    out = SetupChangeImpact(before, after).impact()
+    out = SetupChangeImpact(before, after).analyze()
     # after_avg ~ 90.25, before_avg ~ 92.25 -> delta ~ -2.0 -> significant
     assert out["significant"] is True
-    assert out["lap_time_delta_avg"] < 0
+    assert out["delta_avg_s"] < 0
 
 
 def test_impact_verdict_improvement() -> None:
     before = [_lap(92.0, [31, 31, 30]), _lap(92.5, [31, 31, 30.5])]
     after = [_lap(90.0, [30, 30, 30]), _lap(90.5, [30, 30, 30.5])]
-    out = SetupChangeImpact(before, after).impact()
+    out = SetupChangeImpact(before, after).analyze()
     assert "调教改进" in out["verdict"]
 
 
 def test_impact_verdict_no_change() -> None:
     before = [_lap(90.0, [30, 30, 30])]
     after = [_lap(90.0, [30, 30, 30])]
-    out = SetupChangeImpact(before, after).impact()
+    out = SetupChangeImpact(before, after).analyze()
     assert "无明显变化" in out["verdict"]
     assert out["significant"] is False
 
@@ -298,9 +300,9 @@ def test_impact_consistency_delta_negative_when_after_more_consistent() -> None:
         _lap(90.1, [30, 30, 30.1]),
         _lap(90.05, [30, 30, 30.05]),
     ]
-    out = SetupChangeImpact(before, after).impact()
-    # after is far more consistent -> consistency_delta (after_cv - before_cv) < 0
-    assert out["consistency_delta"] < 0
+    out = SetupChangeImpact(before, after).analyze()
+    # after is far more consistent -> after_cv < before_cv
+    assert out["after_cv"] < out["before_cv"]
 
 
 # --------------------------------------------------------------------------- #
@@ -327,10 +329,10 @@ def test_empty_laps_handled_gracefully() -> None:
 
     # SetupChangeImpact with no laps
     sci = SetupChangeImpact([], [])
-    imp = sci.impact()
+    imp = sci.analyze()
     assert _IMPACT_KEYS <= set(imp)
     assert imp["significant"] is False
-    assert "无明显变化" in imp["verdict"]
+    assert imp["verdict"] == "数据不足"
 
 
 def test_rank_laps_empty() -> None:

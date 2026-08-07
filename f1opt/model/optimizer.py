@@ -106,6 +106,34 @@ _SLIP_REF = 5.0
 # lap-time-optimal 胎温低 ~3°C, 滑移低 ~0.3°, 圈速慢 ~0.05s — 物理可信的折中.
 _HOLISTIC_DEFAULT_TIRE_WEIGHT = 0.3
 
+# Iter-186 调教约束验证: 对不可行的调教施加惩罚, 让 DE 自动避开不可行区域.
+# 约束: (1) 前 ride_height < 后 ride_height (rake >= 0); (2) 前 camber <= 后 camber
+# (前轮更负); (3) 前 tire_pressure 与后 tire_pressure 差 < 4 psi (F1 前后胎压常差 2-3.5 psi).
+# 惩罚系数: 每条约束违反 +100s 到 lap_time, 让 DE 远离不可行区域.
+_SETUP_CONSTRAINT_PENALTY_S = 100.0
+
+
+def _setup_constraint_penalty(setup: CarSetup) -> float:
+    """Iter-186: 对不可行调教施加圈速惩罚 (DE 不可行域惩罚).
+
+    检查 F1 物理约束:
+    - 前 ride_height < 后 ride_height (必须有 rake, 否则后扩散器失速)
+    - 前 camber <= 后 camber (前轮必须比后轮更负外倾)
+    - 前胎压与后胎压差 < 4 psi (过大的前后胎压差导致不平衡)
+    返回总惩罚 (0 = 可行, >0 = 违反约束).
+    """
+    penalty = 0.0
+    # 约束 1: 前 ride_height < 后 ride_height
+    if setup.front_ride_height >= setup.rear_ride_height:
+        penalty += _SETUP_CONSTRAINT_PENALTY_S
+    # 约束 2: 前 camber <= 后 camber
+    if setup.front_camber > setup.rear_camber:
+        penalty += _SETUP_CONSTRAINT_PENALTY_S
+    # 约束 3: 前后胎压差 < 4 psi
+    if abs(setup.front_tyre_pressure - setup.rear_tyre_pressure) > 4.0:
+        penalty += _SETUP_CONSTRAINT_PENALTY_S
+    return penalty
+
 
 def _tire_wear_proxy(setup: CarSetup, track_id: str, driver_profile: Any) -> float:
     """胎耗代理 (无量纲, 越大胎耗越快): 胎温偏离 + 后轴滑移 + 载荷离散.
@@ -208,6 +236,7 @@ def search_setup(
     stint_length: int = 20,
     stint_compound: str = "medium",
     elite_count: int = 3,
+    enable_constraints: bool = False,
 ) -> SearchResult:
     """搜索最小化预测圈速的调教, 返回 :class:`SearchResult`.
 
@@ -262,6 +291,7 @@ def search_setup(
         stint_length=stint_length,
         stint_compound=stint_compound,
         elite_count=elite_count,
+        enable_constraints=enable_constraints,
     )
 
 
@@ -335,6 +365,7 @@ def _search(
     stint_length: int = 20,
     stint_compound: str = "medium",
     elite_count: int = 3,
+    enable_constraints: bool = False,
 ) -> SearchResult:
     base_setup = _coerce_baseline(baseline)
     # driver_profile 原样透传给 surrogate (其 _normalize_driver_vector 处理所有形态).
@@ -449,14 +480,22 @@ def _search(
 
     def objective(vec: np.ndarray) -> float:
         lap, proxy = evaluate(vec)
+        # Iter-186: 约束惩罚 (仅当 enable_constraints=True)
+        if enable_constraints:
+            snapped = _snap_vec(vec)
+            snapped[_FUEL_LOAD_IDX] = _base_fuel_norm
+            setup = CarSetup.from_vector(snapped.tolist())
+            constraint_pen = _setup_constraint_penalty(setup)
+        else:
+            constraint_pen = 0.0
         if stint_aware:
             # Iter-164.18: 用 stint_total_time 作为目标 (从 _stint_cache 取)
             snapped = _snap_vec(vec)
             snapped[_FUEL_LOAD_IDX] = _base_fuel_norm
             key = tuple(np.round(snapped, 6))
             stint_total = _stint_cache.get(key, lap * stint_length)
-            return stint_total
-        return lap + weight * proxy
+            return stint_total + constraint_pen
+        return lap + weight * proxy + constraint_pen
 
     base_vec = np.asarray(base_setup.to_vector(), dtype=np.float64)
 
@@ -510,12 +549,15 @@ def _search(
             for i in range(N):
                 key = tuple(np.round(snapped[i], 6))
                 cached = cache.get(key)
+                setup = CarSetup.from_vector(snapped[i].tolist())
                 if cached is not None:
                     lap_c, proxy_c = cached
-                    results[i] = lap_c + weight * proxy_c
+                    # Iter-186: 约束惩罚 (仅当 enable_constraints=True)
+                    constraint_pen = _setup_constraint_penalty(setup) if enable_constraints else 0.0
+                    results[i] = lap_c + weight * proxy_c + constraint_pen
                 else:
                     uncached_idxs.append(i)
-                    uncached_setups.append(CarSetup.from_vector(snapped[i].tolist()))
+                    uncached_setups.append(setup)
             # 批量预测未缓存项
             if uncached_setups:
                 items = [(s, track_id, driver_profile) for s in uncached_setups]
@@ -533,7 +575,9 @@ def _search(
                         + float(resp["slip_angle"]) / _SLIP_REF
                         + float(resp["tyre_load_spread"])
                     )
-                    results[idx] = lap + weight * proxy
+                    # Iter-186: 约束惩罚 (仅当 enable_constraints=True)
+                    constraint_pen = _setup_constraint_penalty(setup) if enable_constraints else 0.0
+                    results[idx] = lap + weight * proxy + constraint_pen
                     # cache key 与 evaluate() 一致: tuple(round(snapped, 6))
                     sv_key = tuple(np.round(snapped[idx], 6))
                     cache[sv_key] = (lap, proxy)

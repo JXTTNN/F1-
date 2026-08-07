@@ -382,3 +382,35 @@ class BrakeModel:
         finally:
             self._thermal.cooling_duct_area_mm2 = orig_area
         return (best_area, best_temp)
+
+    def brake_migration_analysis(self, laps: int = 10) -> dict:
+        """Iter-191: 刹车偏置迁移分析 — 多圈偏置变化对圈速的影响.
+
+        模拟逐年 (每圈) 偏置微调的效果, 返回最优偏置路径.
+        """
+        track_load = get_brake_track_load(self.track_id)
+        best_penalty = float("inf")
+        best_path: list[float] = []
+        # 搜索从 0.52 到 0.60 的偏置路径
+        for start_bias in (0.52, 0.54, 0.56, 0.58, 0.60):
+            total_pen = 0.0
+            path: list[float] = []
+            current_bias = start_bias
+            temp = 450.0
+            for _ in range(laps):
+                self._bias = BrakeBias(front_fraction=current_bias)
+                r = self.simulate_lap(temp)
+                total_pen += r["total_lap_penalty_s"]
+                path.append(current_bias)
+                temp = r["temp_after_c"]
+                # 偏置微调: 向最优偏置渐进
+                current_bias += 0.005 * (0.56 - current_bias)
+            if total_pen < best_penalty:
+                best_penalty = total_pen
+                best_path = path
+        self._bias = BrakeBias(front_fraction=self.front_fraction)
+        return {
+            "optimal_path": best_path,
+            "total_penalty_s": float(best_penalty),
+            "laps": laps,
+        }

@@ -19,16 +19,16 @@ from f1opt.model.train import train
 
 # --- layout invariants ------------------------------------------------------ #
 def test_feature_names_length_matches_input_dim() -> None:
-    assert len(FEATURE_NAMES) == INPUT_DIM == 37
+    assert len(FEATURE_NAMES) == INPUT_DIM == 39
 
 
 def test_feature_groups_length_and_labels() -> None:
     assert len(FEATURE_GROUPS) == INPUT_DIM
     assert set(FEATURE_GROUPS) == {"setup", "track", "driver"}
-    # setup = first 19, track = next 10, driver = last 8.
-    assert all(g == "setup" for g in FEATURE_GROUPS[:19])
-    assert all(g == "track" for g in FEATURE_GROUPS[19:29])
-    assert all(g == "driver" for g in FEATURE_GROUPS[29:])
+    # setup = first 21, track = next 10, driver = last 8.
+    assert all(g == "setup" for g in FEATURE_GROUPS[:21])
+    assert all(g == "track" for g in FEATURE_GROUPS[21:31])
+    assert all(g == "driver" for g in FEATURE_GROUPS[31:])
 
 
 def test_feature_names_include_known_setup_fields() -> None:
@@ -46,7 +46,7 @@ def test_feature_names_include_track_and_driver_groups() -> None:
 
 # --- helpers ---------------------------------------------------------------- #
 def _make_batch(n: int = 64, seed: int = 0) -> np.ndarray:
-    """Build a (n, 37) batch by perturbing DEFAULT_SETUP across a few tracks."""
+    """Build a (n, 39) batch by perturbing DEFAULT_SETUP across a few tracks."""
     rng = np.random.default_rng(seed)
     tracks = ["silverstone", "monza", "spa", "monaco", "suzuka"]
     rows: list[np.ndarray] = []
@@ -74,7 +74,7 @@ def trained_model() -> SurrogateModel:
 
 
 # --- gradient_feature_importance -------------------------------------------- #
-def test_gradient_importance_returns_37_entries(trained_model: SurrogateModel) -> None:
+def test_gradient_importance_returns_39_entries(trained_model: SurrogateModel) -> None:
     x = _make_batch(32)
     imp = gradient_feature_importance(trained_model, x)
     assert set(imp.keys()) == set(FEATURE_NAMES)
@@ -108,7 +108,7 @@ def test_gradient_importance_deterministic(trained_model: SurrogateModel) -> Non
 
 
 # --- permutation_feature_importance ----------------------------------------- #
-def test_permutation_importance_returns_37_entries(
+def test_permutation_importance_returns_39_entries(
     trained_model: SurrogateModel,
 ) -> None:
     x = _make_batch(32)

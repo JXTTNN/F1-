@@ -53,6 +53,7 @@ class CompoundParams:
 
 
 COMPOUND_PARAMS: dict[str, CompoundParams] = {
+    "c6": CompoundParams("c6", 1.95, 29.0, 0.32, 85.0, 18.0),  # Iter-187: 2026 C6 ultra-soft
     "soft": CompoundParams("soft", 1.90, 28.0, 0.30, 90.0, 20.0),
     "medium": CompoundParams("medium", 1.70, 27.0, 0.28, 90.0, 22.0),
     "hard": CompoundParams("hard", 1.50, 26.0, 0.27, 95.0, 25.0),

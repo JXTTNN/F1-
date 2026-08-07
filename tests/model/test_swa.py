@@ -163,7 +163,7 @@ class TestTrainWithSWA:
             iterations=200, n_samples=500, seed=0, log=False, save=False,
             swa_start=100, swa_freq=20,
         )
-        x = torch.randn(10, 37)
+        x = torch.randn(10, 39)
         sr, rr = model(x)
         assert sr.shape == (10, 3)
         assert rr.shape == (10, 7)
@@ -178,6 +178,6 @@ class TestTrainWithSWA:
         )
         assert isinstance(model, SurrogateModel)
         # Model produces valid output
-        x = torch.randn(5, 37)
+        x = torch.randn(5, 39)
         sr, _ = model(x)
         assert not torch.isnan(sr).any()

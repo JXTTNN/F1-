@@ -111,7 +111,7 @@ class TestTrainWithLabelSmoothing:
             iterations=200, n_samples=500, seed=0, log=False, save=False,
             label_smoothing=0.1,
         )
-        x = torch.randn(10, 37)
+        x = torch.randn(10, 39)
         sr, rr = model(x)
         assert sr.shape == (10, 3)
         assert rr.shape == (10, 7)

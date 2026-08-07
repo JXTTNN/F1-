@@ -500,14 +500,13 @@ class TestFeedbackWorkflow:
             _lap(90.3, 30.1, 29.9, 30.3),
             _lap(89.8, 29.9, 29.7, 30.2),
         ]
-        impact = SetupChangeImpact(before_laps, after_laps).impact()
-        assert "lap_time_delta_avg" in impact
-        assert "lap_time_delta_best" in impact
-        assert "sector_deltas" in impact
-        assert "consistency_delta" in impact
+        impact = SetupChangeImpact(before_laps, after_laps).analyze()
+        assert "delta_avg_s" in impact
+        assert "before_avg" in impact
+        assert "after_avg" in impact
         assert "verdict" in impact
         assert "significant" in impact
-        assert impact["lap_time_delta_avg"] < 0.0
+        assert impact["delta_avg_s"] < 0.0
         comparator = LapComparator(before_laps[0])
         comp = comparator.compare(after_laps[0])
         assert isinstance(comp, dict)

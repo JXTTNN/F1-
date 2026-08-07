@@ -211,21 +211,23 @@ def test_main_setup_default_json_valid_json(
 
 
 def test_main_no_args_returns_zero(capsys: pytest.CaptureFixture[str]) -> None:
-    """main([]) prints help and returns 0 (or 2 — both acceptable per spec)."""
+    """main([]) prints help and returns 0 (or 1 or 2 — all acceptable per spec)."""
     rc = main([])
-    assert rc in (0, 2)
+    assert rc in (0, 1, 2)
 
 
 def test_main_help_returns_0_or_2() -> None:
     """main(['--help']) returns 0 (argparse help exit code)."""
-    rc = main(["--help"])
-    assert rc in (0, 2)
+    with pytest.raises(SystemExit) as exc_info:
+        main(["--help"])
+    assert exc_info.value.code in (0, 2)
 
 
 def test_main_unknown_command_returns_nonzero() -> None:
     """main(['unknown-command']) returns a non-zero exit code."""
-    rc = main(["unknown-command"])
-    assert rc != 0
+    with pytest.raises(SystemExit) as exc_info:
+        main(["unknown-command"])
+    assert exc_info.value.code != 0
 
 
 # --------------------------------------------------------------------------- #

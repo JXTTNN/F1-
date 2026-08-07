@@ -249,6 +249,7 @@ class TelemetryAnalytics:
             "tire_load": self.tire_load_analysis(),
             "lap_smoothing_score": self.lap_smoothing_score(),
             "racing_line_deviation": self.racing_line_deviation(),
+            "corner_exit_speed": self.corner_exit_speed_analysis(),
         }
 
     # ------------------------------------------------------------------ #
@@ -675,6 +676,848 @@ class TelemetryAnalytics:
             return 0.0
         # Scale: ~10 m of track-width-equivalent deviation per unit steering std.
         return float(min(corner.std() * 10.0, 20.0))
+
+    # ------------------------------------------------------------------ #
+    # Corner exit speed analysis (Iter-184)
+    # ------------------------------------------------------------------ #
+    def corner_exit_speed_analysis(self) -> dict[str, Any]:
+        """Identify corner exit speeds and flag slowest exits.
+
+        Iter-184: detects frames where |steer| transitions from >0.3 to <0.1
+        (corner exit), records the speed at that point, and reports the
+        minimum / average exit speeds + the N slowest exit indices.
+
+        Returns a dict with ``exit_speeds`` (list), ``min_exit_speed``,
+        ``avg_exit_speed``, ``exit_count``, and ``slowest_exits`` (top-5).
+        """
+        steer = _field(self.frames, "steer")
+        speed = _field(self.frames, "speed")
+        if steer.size < 2 or speed.size < 2:
+            return {
+                "exit_speeds": [],
+                "min_exit_speed": 0.0,
+                "avg_exit_speed": 0.0,
+                "exit_count": 0,
+                "slowest_exits": [],
+            }
+        exit_speeds: list[float] = []
+        in_corner = False
+        for i in range(1, len(steer)):
+            if np.abs(steer[i]) > 0.3:
+                in_corner = True
+            elif in_corner and np.abs(steer[i]) < 0.1:
+                # Transition: corner -> straight = exit point.
+                exit_speeds.append(float(speed[i]))
+                in_corner = False
+        if not exit_speeds:
+            return {
+                "exit_speeds": [],
+                "min_exit_speed": 0.0,
+                "avg_exit_speed": 0.0,
+                "exit_count": 0,
+                "slowest_exits": [],
+            }
+        # Sort ascending; slowest first.
+        sorted_exits = sorted(exit_speeds)
+        n_slowest = min(5, len(sorted_exits))
+        return {
+            "exit_speeds": exit_speeds,
+            "min_exit_speed": float(sorted_exits[0]),
+            "avg_exit_speed": float(np.mean(exit_speeds)),
+            "exit_count": len(exit_speeds),
+            "slowest_exits": sorted_exits[:n_slowest],
+        }
+
+    # ------------------------------------------------------------------ #
+    # Sector timing analysis (Iter-185)
+    # ------------------------------------------------------------------ #
+    def sector_timing_analysis(self, track_length_m: float | None = None) -> dict[str, Any]:
+        """Compute per-sector timing metrics from lap_distance.
+
+        Iter-185: splits the track into 3 sectors (by equal distance), computes
+        the time spent in each sector, and returns per-sector speed/steer/brake
+        aggregates. Uses ``track_length_m`` if supplied; otherwise falls back to
+        ``self.track_length_m``.
+
+        Returns a dict with ``sectors`` (list of 3 dicts) and ``total_time``.
+        """
+        track_len = track_length_m if track_length_m is not None else self.track_length_m
+        lap_dist = _field(self.frames, "lap_distance")
+        times = _times(self.frames)
+        speed = _field(self.frames, "speed")
+        steer = _field(self.frames, "steer")
+        brake = _field(self.frames, "brake")
+        throttle = _field(self.frames, "throttle")
+
+        if lap_dist.size < 2 or track_len <= 0:
+            return {"sectors": [], "total_time": 0.0}
+
+        # Sort by lap_distance for monotonic interpolation.
+        order = np.argsort(lap_dist)
+        ld_sorted = lap_dist[order]
+        t_sorted = times[order]
+        sp_sorted = speed[order]
+        st_sorted = steer[order]
+        b_sorted = brake[order]
+        thr_sorted = throttle[order]
+
+        # 3 equal-distance sectors.
+        boundaries = [track_len / 3.0, 2.0 * track_len / 3.0, track_len]
+        sectors: list[dict[str, Any]] = []
+        prev_bound = 0.0
+        total_time = 0.0
+        for bound in boundaries:
+            mask = (ld_sorted >= prev_bound) & (ld_sorted < bound + 1e-6)
+            if not mask.any():
+                sectors.append({
+                    "time_s": 0.0,
+                    "avg_speed": 0.0,
+                    "max_speed": 0.0,
+                    "avg_steer_abs": 0.0,
+                    "avg_brake": 0.0,
+                    "full_throttle_pct": 0.0,
+                })
+                prev_bound = bound
+                continue
+            t_sec = t_sorted[mask]
+            sector_time = float(t_sec[-1] - t_sec[0]) if len(t_sec) >= 2 else 0.0
+            total_time += sector_time
+            sectors.append({
+                "time_s": sector_time,
+                "avg_speed": float(np.mean(sp_sorted[mask])) if len(sp_sorted[mask]) else 0.0,
+                "max_speed": float(np.max(sp_sorted[mask])) if len(sp_sorted[mask]) else 0.0,
+                "avg_steer_abs": float(np.mean(np.abs(st_sorted[mask]))) if len(st_sorted[mask]) else 0.0,
+                "avg_brake": float(np.mean(b_sorted[mask])) if len(b_sorted[mask]) else 0.0,
+                "full_throttle_pct": float(np.mean(thr_sorted[mask] > 0.95)) if len(thr_sorted[mask]) else 0.0,
+            })
+            prev_bound = bound
+        return {"sectors": sectors, "total_time": total_time}
+
+    # ------------------------------------------------------------------ #
+    # ERS deploy mode distribution (Iter-186)
+    # ------------------------------------------------------------------ #
+    def ers_deploy_mode_analysis(self) -> dict[str, Any]:
+        """Analyse ERS deploy mode distribution across a lap.
+
+        Iter-186: classifies every frame into deploy mode buckets (0=off,
+        1=Medium, 2=Hotlap, 3=Overtake) and returns the fraction of time
+        spent in each mode plus the mode with the highest utilisation.
+
+        Returns a dict with ``mode_fractions``, ``dominant_mode``, and
+        ``n_frames``.
+        """
+        deploy_mode = _field_multi(self.frames, ("ers_deploy_mode", "deploy_mode"))
+        if deploy_mode.size == 0:
+            return {
+                "mode_fractions": {},
+                "dominant_mode": "unknown",
+                "n_frames": 0,
+            }
+        modes = np.round(deploy_mode).astype(int)
+        mode_names = {0: "off", 1: "Medium", 2: "Hotlap", 3: "Overtake"}
+        fractions: dict[str, float] = {}
+        for mode_val, name in mode_names.items():
+            fractions[name] = float(np.mean(modes == mode_val))
+        dominant = max(fractions.items(), key=lambda kv: kv[1])[0] if fractions else "unknown"
+        return {
+            "mode_fractions": fractions,
+            "dominant_mode": dominant,
+            "n_frames": int(modes.size),
+        }
+
+    # ------------------------------------------------------------------ #
+    # Tyre degradation rate estimation (Iter-187)
+    # ------------------------------------------------------------------ #
+    def tyre_degradation_analysis(self) -> dict[str, Any]:
+        """Estimate tyre degradation rate from wear trends.
+
+        Iter-187: fits a linear regression to tyre_wear_* fields over
+        lap_distance to estimate % wear per lap. Returns per-tyre
+        degradation rates and the fastest-wearing tyre.
+
+        Returns a dict with ``per_tyre``, ``fastest_wearing``, and ``r_squared``.
+        """
+        wear_fields = (
+            ("fl", "tyre_wear_fl"),
+            ("fr", "tyre_wear_fr"),
+            ("rl", "tyre_wear_rl"),
+            ("rr", "tyre_wear_rr"),
+        )
+        lap_dist = _field(self.frames, "lap_distance")
+        if lap_dist.size < 2:
+            return {"per_tyre": {}, "fastest_wearing": "", "r_squared": {}}
+
+        per_tyre: dict[str, dict[str, float]] = {}
+        best_r2 = -1.0
+        fastest = ""
+        for label, field in wear_fields:
+            wear = _field(self.frames, field)
+            if wear.size < 2:
+                per_tyre[label] = {"rate_pct_per_lap": 0.0, "r_squared": 0.0}
+                continue
+            # Linear regression: wear ~ lap_distance.
+            x = lap_dist
+            y = wear
+            x_mean = float(np.mean(x))
+            y_mean = float(np.mean(y))
+            num = float(np.sum((x - x_mean) * (y - y_mean)))
+            den = float(np.sum((x - x_mean) ** 2))
+            slope = num / den if den > 0 else 0.0
+            # R²
+            y_pred = y_mean + slope * (x - x_mean)
+            ss_res = float(np.sum((y - y_pred) ** 2))
+            ss_tot = float(np.sum((y - y_mean) ** 2))
+            r2 = 1.0 - (ss_res / ss_tot) if ss_tot > 0 else 0.0
+            per_tyre[label] = {
+                "rate_pct_per_lap": slope * self.track_length_m / 100.0,
+                "r_squared": r2,
+            }
+            if slope > best_r2:
+                best_r2 = slope
+                fastest = label
+        return {"per_tyre": per_tyre, "fastest_wearing": fastest, "r_squared": {k: v["r_squared"] for k, v in per_tyre.items()}}
+
+    # ------------------------------------------------------------------ #
+    # Throttle/brake overlap detection (Iter-188)
+    # ------------------------------------------------------------------ #
+    def throttle_brake_overlap_analysis(self) -> dict[str, Any]:
+        """Detect throttle/brake overlap — simultaneous input > 0.3.
+
+        Iter-188: counts frames where both throttle and brake > 0.3
+        (inefficient driving — wastes fuel and brakes). Returns
+        overlap count, fraction, and total duration.
+
+        Returns a dict with ``overlap_count``, ``overlap_fraction``,
+        ``overlap_duration_s``, and ``overlap_frames``.
+        """
+        throttle = _field(self.frames, "throttle")
+        brake = _field(self.frames, "brake")
+        if throttle.size < 1 or brake.size < 1:
+            return {"overlap_count": 0, "overlap_fraction": 0.0, "overlap_duration_s": 0.0, "overlap_frames": []}
+        n = min(len(throttle), len(brake))
+        overlap_mask = (throttle[:n] > 0.3) & (brake[:n] > 0.3)
+        overlap_count = int(np.sum(overlap_mask))
+        dt = _deltas(_times(self.frames))
+        overlap_duration = float(dt[:n][overlap_mask].sum()) if overlap_count > 0 else 0.0
+        overlap_frames = [int(i) for i in np.where(overlap_mask)[0][:10]]
+        return {
+            "overlap_count": overlap_count,
+            "overlap_fraction": float(overlap_count / n) if n > 0 else 0.0,
+            "overlap_duration_s": overlap_duration,
+            "overlap_frames": overlap_frames,
+        }
+
+    # ------------------------------------------------------------------ #
+    # Corner entry/exit speed ratio (Iter-189)
+    # ------------------------------------------------------------------ #
+    def corner_entry_exit_ratio_analysis(self) -> dict[str, Any]:
+        """Compute corner entry-vs-exit speed ratio.
+
+        Iter-189: for each corner (|steer| > 0.3 run), find the minimum
+        speed (apex) and compare entry speed (start of corner) vs exit
+        speed (end of corner). Lower ratio = better exit drive.
+
+        Returns a dict with ``ratios`` (list), ``avg_ratio``, and ``min_ratio``.
+        """
+        steer = _field(self.frames, "steer")
+        speed = _field(self.frames, "speed")
+        if steer.size < 3 or speed.size < 3:
+            return {"ratios": [], "avg_ratio": 0.0, "min_ratio": 0.0}
+        ratios: list[float] = []
+        in_corner = False
+        corner_start = 0
+        for i in range(1, len(steer)):
+            if not in_corner and np.abs(steer[i]) > 0.3:
+                in_corner = True
+                corner_start = i
+            elif in_corner and np.abs(steer[i]) < 0.1:
+                in_corner = False
+                if i - corner_start >= 3:
+                    entry_speed = float(speed[corner_start])
+                    exit_speed = float(speed[i])
+                    if entry_speed > 0:
+                        ratios.append(exit_speed / entry_speed)
+        if not ratios:
+            return {"ratios": [], "avg_ratio": 0.0, "min_ratio": 0.0}
+        return {
+            "ratios": ratios,
+            "avg_ratio": float(np.mean(ratios)),
+            "min_ratio": float(np.min(ratios)),
+        }
+
+    # ------------------------------------------------------------------ #
+    # Gear usage efficiency analysis (Iter-197)
+    # ------------------------------------------------------------------ #
+    def gear_usage_analysis(self) -> dict[str, Any]:
+        """Analyse gear usage distribution and upshift RPM behaviour.
+
+        Iter-197: computes time spent in each gear, average upshift RPM,
+        and the fraction of shifts that occur near the redline (optimal
+        power band). A driver who short-shifts loses acceleration.
+
+        Returns a dict with ``gear_time_fractions``, ``avg_upshift_rpm``,
+        ``redline_shift_pct``, and ``gear_counts``.
+        """
+        gear = _field(self.frames, "gear")
+        rpm = _field(self.frames, "rpm")
+        if gear.size < 2 or rpm.size < 2:
+            return {
+                "gear_time_fractions": {},
+                "avg_upshift_rpm": 0.0,
+                "redline_shift_pct": 0.0,
+                "gear_counts": {},
+            }
+        # Time fraction per gear (gear 1-8).
+        gear_int = np.round(gear).astype(int)
+        gear_int = np.clip(gear_int, 0, 8)
+        gear_counts: dict[int, int] = {}
+        for g in gear_int:
+            gear_counts[g] = gear_counts.get(g, 0) + 1
+        total = gear.size
+        fractions = {str(g): c / total for g, c in sorted(gear_counts.items())}
+        # Upshift RPM: detect gear increases and record the RPM at shift point.
+        upshift_rpms: list[float] = []
+        for i in range(1, len(gear_int)):
+            if gear_int[i] > gear_int[i - 1]:
+                upshift_rpms.append(float(rpm[i - 1]))
+        avg_upshift = float(np.mean(upshift_rpms)) if upshift_rpms else 0.0
+        # Redline shift fraction: shifts at > 90% of max RPM observed.
+        max_rpm = float(np.max(rpm)) if rpm.size > 0 else 13000.0
+        redline_threshold = max_rpm * 0.90
+        redline_count = sum(1 for r in upshift_rpms if r >= redline_threshold)
+        redline_pct = redline_count / len(upshift_rpms) if upshift_rpms else 0.0
+        gear_counts_serializable = {str(k): v for k, v in sorted(gear_counts.items())}
+        return {
+            "gear_time_fractions": fractions,
+            "avg_upshift_rpm": avg_upshift,
+            "redline_shift_pct": redline_pct,
+            "gear_counts": gear_counts_serializable,
+        }
+
+    # ------------------------------------------------------------------ #
+    # Sector-level throttle smoothness (Iter-205)
+    # ------------------------------------------------------------------ #
+    def sector_throttle_smoothness(self, track_length_m: float | None = None) -> dict[str, Any]:
+        """Compute per-sector throttle application smoothness.
+
+        Iter-205: splits the lap into 3 sectors and computes throttle jerk
+        RMS per sector. A higher jerk means rougher throttle application —
+        causes traction loss on corner exit.
+
+        Returns a dict with ``sector_smoothness`` (list of 3 floats, 0-1)
+        and ``worst_sector``.
+        """
+        track_len = track_length_m if track_length_m is not None else self.track_length_m
+        throttle = _field(self.frames, "throttle")
+        lap_dist = _field(self.frames, "lap_distance")
+        if throttle.size < 3 or lap_dist.size < 2:
+            return {"sector_smoothness": [1.0, 1.0, 1.0], "worst_sector": -1}
+        # Sort by lap_distance.
+        order = np.argsort(lap_dist)
+        ld_sorted = lap_dist[order]
+        thr_sorted = throttle[order]
+        boundaries = [track_len / 3.0, 2.0 * track_len / 3.0, track_len]
+        smoothness: list[float] = []
+        prev = 0.0
+        for bound in boundaries:
+            mask = (ld_sorted >= prev) & (ld_sorted < bound + 1e-6)
+            prev = bound
+            sector_thr = thr_sorted[mask]
+            if sector_thr.size < 3:
+                smoothness.append(1.0)
+                continue
+            # Throttle jerk: second difference of throttle.
+            jerk = np.diff(np.diff(sector_thr))
+            jerk_rms = float(np.sqrt(np.mean(jerk**2))) if jerk.size else 0.0
+            s = max(0.0, 1.0 - jerk_rms / 2.0)
+            smoothness.append(s)
+        worst = int(np.argmin(smoothness)) if smoothness else -1
+        return {"sector_smoothness": smoothness, "worst_sector": worst}
+
+    # ------------------------------------------------------------------ #
+    # Engine braking / lift-off deceleration (Iter-199)
+    # ------------------------------------------------------------------ #
+    def engine_braking_analysis(self) -> dict[str, Any]:
+        """Analyse lift-off deceleration (engine braking) on throttle release.
+
+        Iter-199: measures the average deceleration rate (km/h per s) when
+        throttle transitions from >0.8 to <0.1 without brake application.
+        Strong engine braking helps turn-in without wearing physical brakes.
+
+        Returns a dict with ``avg_lift_off_decel_kmh_s``, ``lift_off_count``,
+        and ``max_decel_kmh_s``.
+        """
+        throttle = _field(self.frames, "throttle")
+        brake = _field(self.frames, "brake")
+        speed = _field(self.frames, "speed")
+        times = _times(self.frames)
+        if throttle.size < 3 or speed.size < 3:
+            return {"avg_lift_off_decel_kmh_s": 0.0, "lift_off_count": 0, "max_decel_kmh_s": 0.0}
+        decel_rates: list[float] = []
+        for i in range(1, len(throttle) - 1):
+            if throttle[i - 1] > 0.8 and throttle[i] < 0.1 and brake[i] < 0.1:
+                # Found lift-off event. Measure deceleration over next 0.5s.
+                dt_total = 0.0
+                j = i
+                v_start = float(speed[i])
+                while j + 1 < len(speed) and dt_total < 0.5:
+                    dt_total += float(times[j + 1] - times[j]) if j + 1 < len(times) else 1.0 / 60.0
+                    j += 1
+                if dt_total > 0.05:
+                    v_end = float(speed[j])
+                    decel = (v_start - v_end) / dt_total
+                    if decel > 0:
+                        decel_rates.append(decel)
+        return {
+            "avg_lift_off_decel_kmh_s": float(np.mean(decel_rates)) if decel_rates else 0.0,
+            "lift_off_count": len(decel_rates),
+            "max_decel_kmh_s": float(max(decel_rates)) if decel_rates else 0.0,
+        }
+
+    # ------------------------------------------------------------------ #
+    # Grip utilization ratio (Iter-211)
+    # ------------------------------------------------------------------ #
+    def grip_utilization_analysis(self) -> dict[str, Any]:
+        """Compute front vs rear grip utilization ratio.
+
+        Iter-211: compares max g_lat at high speed vs low speed to determine
+        if the car is aero-limited or mechanical-grip-limited. Also computes
+        the ratio of lateral g to longitudinal g (braking) to assess if the
+        driver is using the full traction circle.
+
+        Returns a dict with ``front_rear_ratio``, ``aero_mech_ratio``, and
+        ``traction_circle_utilization``.
+        """
+        g_lat = _field(self.frames, "g_lat")
+        g_long = _field(self.frames, "g_long")
+        speed = _field(self.frames, "speed")
+        if g_lat.size < 2 or g_long.size < 2 or speed.size < 2:
+            return {"front_rear_ratio": 0.0, "aero_mech_ratio": 0.0, "traction_circle_utilization": 0.0}
+        # Front/rear g_lat balance proxy: compare high-g (>3G) vs low-g (<2G) frequency.
+        high_g = np.sum(np.abs(g_lat) > 3.0)
+        low_g = np.sum(np.abs(g_lat) < 2.0)
+        front_rear_ratio = float(high_g / max(low_g, 1))
+        # Aero vs mechanical: max g_lat at high speed / max g_lat at low speed.
+        high_spd_mask = speed > 250.0
+        low_spd_mask = speed < 150.0
+        high_g_max = float(np.max(np.abs(g_lat[high_spd_mask]))) if high_spd_mask.any() else 0.0
+        low_g_max = float(np.max(np.abs(g_lat[low_spd_mask]))) if low_spd_mask.any() else 0.0
+        aero_mech = high_g_max / low_g_max if low_g_max > 0 else 0.0
+        # Traction circle utilization: RMS of (g_lat, g_long) vs max possible.
+        combined = np.sqrt(g_lat**2 + g_long**2)
+        max_combined = float(np.max(combined))
+        traction_util = max_combined / 5.0  # typical F1 peak ~5G
+        return {
+            "front_rear_ratio": front_rear_ratio,
+            "aero_mech_ratio": aero_mech,
+            "traction_circle_utilization": min(traction_util, 1.0),
+        }
+
+    # ------------------------------------------------------------------ #
+    # Downforce balance estimation (Iter-190)
+    # ------------------------------------------------------------------ #
+    def downforce_balance_analysis(self) -> dict[str, Any]:
+        """Estimate aero balance from g_lat distribution.
+
+        Iter-190: compares g_lat at high speed (>250 km/h) corners vs
+        low speed (<150 km/h) corners. If low-speed g_lat is low relative
+        to high-speed, the car lacks mechanical grip (suspension/tyres).
+        If high-speed g_lat is low, the car lacks downforce.
+
+        Returns a dict with ``high_speed_g_lat_avg``, ``low_speed_g_lat_avg``,
+        ``aero_balance_ratio``, and ``diagnosis``.
+        """
+        speed = _field(self.frames, "speed")
+        g_lat = _field(self.frames, "g_lat")
+        steer = _field(self.frames, "steer")
+        if speed.size < 2 or g_lat.size < 2:
+            return {"high_speed_g_lat_avg": 0.0, "low_speed_g_lat_avg": 0.0, "aero_balance_ratio": 0.0, "diagnosis": "insufficient data"}
+        corner_mask = np.abs(steer) > 0.3
+        if not corner_mask.any():
+            return {"high_speed_g_lat_avg": 0.0, "low_speed_g_lat_avg": 0.0, "aero_balance_ratio": 0.0, "diagnosis": "no cornering data"}
+        high_speed_mask = corner_mask & (speed > 250.0)
+        low_speed_mask = corner_mask & (speed < 150.0)
+        high_g = float(np.mean(np.abs(g_lat[high_speed_mask]))) if high_speed_mask.any() else 0.0
+        low_g = float(np.mean(np.abs(g_lat[low_speed_mask]))) if low_speed_mask.any() else 0.0
+        ratio = high_g / low_g if low_g > 0 else 0.0
+        if ratio > 1.8:
+            diag = "aero-dominant: strong downforce, may need more mechanical grip"
+        elif ratio < 1.1:
+            diag = "mechanical-dominant: good mechanical grip, may need more downforce"
+        else:
+            diag = "balanced aero/mechanical grip"
+        return {
+            "high_speed_g_lat_avg": high_g,
+            "low_speed_g_lat_avg": low_g,
+            "aero_balance_ratio": ratio,
+            "diagnosis": diag,
+        }
+
+    # ------------------------------------------------------------------ #
+    # Mechanical grip trend (Iter-216)
+    # ------------------------------------------------------------------ #
+    def mechanical_grip_trend_analysis(self) -> dict[str, Any]:
+        """Track mechanical grip degradation over a lap.
+
+        Iter-216: computes the slope of g_lat vs lap_distance for low-speed
+        corners (<150 km/h). A negative slope means mechanical grip is
+        fading (tyre overheating / graining). A positive slope means the
+        tyres are coming into their window.
+
+        Returns a dict with ``low_speed_g_lat_slope``, ``low_speed_g_lat_r2``,
+        and ``trend`` (``"decaying"`` / ``"stable"`` / ``"improving"``).
+        """
+        speed = _field(self.frames, "speed")
+        g_lat = _field(self.frames, "g_lat")
+        steer = _field(self.frames, "steer")
+        lap_dist = _field(self.frames, "lap_distance")
+        if speed.size < 2 or g_lat.size < 2 or steer.size < 2 or lap_dist.size < 2:
+            return {"low_speed_g_lat_slope": 0.0, "low_speed_g_lat_r2": 0.0, "trend": "insufficient data"}
+        corner_mask = np.abs(steer) > 0.3
+        low_speed_mask = corner_mask & (speed < 150.0)
+        if not low_speed_mask.any() or low_speed_mask.sum() < 3:
+            return {"low_speed_g_lat_slope": 0.0, "low_speed_g_lat_r2": 0.0, "trend": "insufficient low-speed cornering data"}
+        g_low = np.abs(g_lat[low_speed_mask])
+        d_low = lap_dist[low_speed_mask]
+        x_mean = float(np.mean(d_low))
+        y_mean = float(np.mean(g_low))
+        num = float(np.sum((d_low - x_mean) * (g_low - y_mean)))
+        den = float(np.sum((d_low - x_mean) ** 2))
+        slope = num / den if den > 0 else 0.0
+        y_pred = y_mean + slope * (d_low - x_mean)
+        ss_res = float(np.sum((g_low - y_pred) ** 2))
+        ss_tot = float(np.sum((g_low - y_mean) ** 2))
+        r2 = 1.0 - (ss_res / ss_tot) if ss_tot > 0 else 0.0
+        if slope < -0.001:
+            trend = "decaying"
+        elif slope > 0.001:
+            trend = "improving"
+        else:
+            trend = "stable"
+        return {
+            "low_speed_g_lat_slope": slope,
+            "low_speed_g_lat_r2": r2,
+            "trend": trend,
+        }
+
+    # ------------------------------------------------------------------ #
+    # Brake temperature balance (Iter-221)
+    # ------------------------------------------------------------------ #
+    def brake_temp_balance_analysis(self) -> dict[str, Any]:
+        """Compute front/rear brake temperature balance.
+
+        Iter-221: compares front vs rear brake temperatures to detect bias
+        issues. A large front-rear temp difference indicates the brake bias
+        is too far forward or rearward, causing uneven thermal load.
+
+        Returns a dict with ``front_avg``, ``rear_avg``, ``f_r_ratio``,
+        ``diagnosis``, and ``front_peak`` / ``rear_peak``.
+        """
+        fields = (
+            ("brake_temp_fl", "brake_temp_fr", "brake_temp_rl", "brake_temp_rr"),
+        )
+        f_temp_fl = _field(self.frames, "brake_temp_fl")
+        f_temp_fr = _field(self.frames, "brake_temp_fr")
+        f_temp_rl = _field(self.frames, "brake_temp_rl")
+        f_temp_rr = _field(self.frames, "brake_temp_rr")
+        if f_temp_fl.size < 2 or f_temp_rl.size < 2:
+            return {"front_avg": 0.0, "rear_avg": 0.0, "f_r_ratio": 0.0, "diagnosis": "insufficient data", "front_peak": 0.0, "rear_peak": 0.0}
+        front_avg = float((np.mean(f_temp_fl) + np.mean(f_temp_fr)) / 2.0)
+        rear_avg = float((np.mean(f_temp_rl) + np.mean(f_temp_rr)) / 2.0)
+        ratio = front_avg / rear_avg if rear_avg > 0 else 0.0
+        if ratio > 1.3:
+            diag = "front-bias: 前刹车温度显著高于后刹, 刹车偏置偏前"
+        elif ratio < 0.7:
+            diag = "rear-bias: 后刹车温度显著高于前刹, 刹车偏置偏后"
+        else:
+            diag = "balanced: 前后刹车温度分布均匀"
+        front_peak = float(max(np.max(f_temp_fl), np.max(f_temp_fr)))
+        rear_peak = float(max(np.max(f_temp_rl), np.max(f_temp_rr)))
+        return {
+            "front_avg": front_avg,
+            "rear_avg": rear_avg,
+            "f_r_ratio": ratio,
+            "diagnosis": diag,
+            "front_peak": front_peak,
+            "rear_peak": rear_peak,
+        }
+
+    # ------------------------------------------------------------------ #
+    # Tyre temperature gradient (Iter-224)
+    # ------------------------------------------------------------------ #
+    def tyre_temp_gradient_analysis(self) -> dict[str, Any]:
+        """Compute tyre surface temperature gradients across axles and sides.
+
+        Iter-224: analyses left-right and front-rear tyre surface temperature
+        differences to detect setup asymmetry, overheating, or pressure issues.
+        Large side-to-side differences indicate camber or pressure imbalance;
+        large front-rear differences indicate aero or brake balance issues.
+
+        Returns a dict with ``left_right_delta``, ``front_rear_delta``,
+        ``max_inner_surface_delta``, and ``diagnosis``.
+        """
+        ts_fl = _field(self.frames, "tyre_temp_fl")
+        ts_fr = _field(self.frames, "tyre_temp_fr")
+        ts_rl = _field(self.frames, "tyre_temp_rl")
+        ts_rr = _field(self.frames, "tyre_temp_rr")
+        ti_fl = _field(self.frames, "tyre_inner_temp_fl")
+        ti_fr = _field(self.frames, "tyre_inner_temp_fr")
+        ti_rl = _field(self.frames, "tyre_inner_temp_rl")
+        ti_rr = _field(self.frames, "tyre_inner_temp_rr")
+        if ts_fl.size < 2 or ts_fr.size < 2:
+            return {
+                "left_right_delta": 0.0, "front_rear_delta": 0.0,
+                "max_inner_surface_delta": 0.0, "diagnosis": "insufficient data",
+            }
+        # Left-right delta: average of (FL - FR) and (RL - RR).
+        lr_front = float(np.mean(ts_fl - ts_fr))
+        lr_rear = float(np.mean(ts_rl - ts_rr))
+        left_right_delta = (lr_front + lr_rear) / 2.0
+        # Front-rear delta: average of (FL - RL) and (FR - RR).
+        fr_left = float(np.mean(ts_fl - ts_rl))
+        fr_right = float(np.mean(ts_fr - ts_rr))
+        front_rear_delta = (fr_left + fr_right) / 2.0
+        # Inner-surface delta: how much hotter the inner carcass is vs surface.
+        inner_surface_deltas: list[float] = []
+        for surf, inner in [(ts_fl, ti_fl), (ts_fr, ti_fr), (ts_rl, ti_rl), (ts_rr, ti_rr)]:
+            if inner.size >= 2:
+                inner_surface_deltas.append(float(np.mean(inner - surf)))
+        max_is_delta = max(inner_surface_deltas) if inner_surface_deltas else 0.0
+        # Diagnosis
+        diag_parts: list[str] = []
+        if abs(left_right_delta) > 3.0:
+            side = "左" if left_right_delta > 0 else "右"
+            diag_parts.append(f"{side}侧轮胎温度偏高 {abs(left_right_delta):.1f}°C")
+        if abs(front_rear_delta) > 5.0:
+            axle = "前" if front_rear_delta > 0 else "后"
+            diag_parts.append(f"{axle}轴轮胎温度偏高 {abs(front_rear_delta):.1f}°C")
+        if max_is_delta > 5.0:
+            diag_parts.append(f"胎内温度过高 (inner-surface delta={max_is_delta:.1f}°C)")
+        return {
+            "left_right_delta": left_right_delta,
+            "front_rear_delta": front_rear_delta,
+            "max_inner_surface_delta": max_is_delta,
+            "diagnosis": "; ".join(diag_parts) if diag_parts else "balanced",
+        }
+
+    # ------------------------------------------------------------------ #
+    # Fuel consumption per sector (Iter-230, Iter-243)
+    # ------------------------------------------------------------------ #
+    def fuel_per_sector_analysis(self, track_length_m: float | None = None) -> dict[str, Any]:
+        """Compute fuel consumption per sector.
+
+        Iter-230: splits the lap into 3 sectors and estimates fuel consumed
+        per sector using throttle × speed as a proxy for fuel flow. Returns
+        per-sector fuel estimates and the sector with highest consumption.
+
+        Iter-243: adds total lap fuel proxy, per-sector fuel fractions, and
+        estimated fuel consumption rate per km for fuel economy monitoring.
+        """
+        track_len = track_length_m if track_length_m is not None else self.track_length_m
+        throttle = _field(self.frames, "throttle")
+        speed = _field(self.frames, "speed")
+        lap_dist = _field(self.frames, "lap_distance")
+        if throttle.size < 2 or speed.size < 2 or lap_dist.size < 2:
+            return {"sectors": [], "highest_consumption_sector": -1, "total_fuel_proxy": 0.0, "fuel_proxy_per_km": 0.0}
+        n = min(len(throttle), len(speed), len(lap_dist))
+        order = np.argsort(lap_dist[:n])
+        thr_s = throttle[:n][order]
+        spd_s = speed[:n][order]
+        ld_s = lap_dist[:n][order]
+        boundaries = [track_len / 3.0, 2.0 * track_len / 3.0, track_len]
+        sectors = []
+        prev = 0.0
+        highest = -1
+        highest_val = 0.0
+        total_fuel = 0.0
+        for si, bound in enumerate(boundaries):
+            mask = (ld_s >= prev) & (ld_s < bound + 1e-6)
+            prev = bound
+            if not mask.any():
+                sectors.append({"sector": si + 1, "fuel_estimate": 0.0, "fuel_fraction": 0.0, "avg_throttle": 0.0})
+                continue
+            # Fuel proxy: throttle × speed × distance-step (higher = more fuel).
+            fuel_proxy = float(np.sum(thr_s[mask] * spd_s[mask]))
+            avg_thr = float(np.mean(thr_s[mask]))
+            total_fuel += fuel_proxy
+            sectors.append({"sector": si + 1, "fuel_estimate": fuel_proxy, "fuel_fraction": 0.0, "avg_throttle": avg_thr})
+            if fuel_proxy > highest_val:
+                highest_val = fuel_proxy
+                highest = si
+        # Compute per-sector fuel fractions and per-km rate.
+        if total_fuel > 0:
+            for se in sectors:
+                se["fuel_fraction"] = se["fuel_estimate"] / total_fuel
+        fuel_per_km = total_fuel / (track_len / 1000.0) if track_len > 0 else 0.0
+        return {
+            "sectors": sectors,
+            "highest_consumption_sector": highest,
+            "total_fuel_proxy": total_fuel,
+            "fuel_proxy_per_km": fuel_per_km,
+        }
+
+    # ------------------------------------------------------------------ #
+    # ERS deploy per sector (Iter-236)
+    # ------------------------------------------------------------------ #
+    def ers_sector_analysis(self, track_length_m: float | None = None) -> dict[str, Any]:
+        """Compute ERS deploy efficiency per sector.
+
+        Iter-236: splits the lap into 3 sectors and computes ERS deploy vs
+        recover ratio per sector. Identifies sectors where ERS is over/under
+        deployed relative to recovery opportunities.
+        """
+        track_len = track_length_m if track_length_m is not None else self.track_length_m
+        deploy = _field_multi(self.frames, ("ers_deploy", "ers_deployed"))
+        brake = _field(self.frames, "brake")
+        lap_dist = _field(self.frames, "lap_distance")
+        if deploy.size < 2 or brake.size < 2 or lap_dist.size < 2:
+            return {"sectors": [], "worst_sector": -1}
+        n = min(len(deploy), len(brake), len(lap_dist))
+        order = np.argsort(lap_dist[:n])
+        dep_s = deploy[:n][order]
+        brk_s = brake[:n][order]
+        ld_s = lap_dist[:n][order]
+        boundaries = [track_len / 3.0, 2.0 * track_len / 3.0, track_len]
+        sectors = []
+        prev = 0.0
+        worst = -1
+        worst_eff = 1.0
+        for si, bound in enumerate(boundaries):
+            mask = (ld_s >= prev) & (ld_s < bound + 1e-6)
+            prev = bound
+            if not mask.any():
+                sectors.append({"sector": si + 1, "deploy_total": 0.0, "recover_total": 0.0, "efficiency": 0.0})
+                continue
+            dep_total = float(np.sum(dep_s[mask]))
+            rec_total = float(np.sum(np.clip(brk_s[mask] - 0.3, 0.0, 1.0)))
+            eff = dep_total / rec_total if rec_total > 0 else 0.0
+            sectors.append({"sector": si + 1, "deploy_total": dep_total, "recover_total": rec_total, "efficiency": eff})
+            if eff < worst_eff:
+                worst_eff = eff
+                worst = si
+        return {"sectors": sectors, "worst_sector": worst}
+
+    # ------------------------------------------------------------------ #
+    # Grip consistency across sectors (Iter-239)
+    # ------------------------------------------------------------------ #
+    def grip_consistency_analysis(self, track_length_m: float | None = None) -> dict[str, Any]:
+        """Compute grip consistency (g_lat std) per sector.
+
+        Iter-239: measures how consistent the lateral g is within each sector.
+        High std means the driver is struggling to maintain consistent cornering
+        force — could indicate tyre graining, setup imbalance, or driver error.
+        """
+        track_len = track_length_m if track_length_m is not None else self.track_length_m
+        g_lat = _field(self.frames, "g_lat")
+        steer = _field(self.frames, "steer")
+        lap_dist = _field(self.frames, "lap_distance")
+        if g_lat.size < 2 or steer.size < 2 or lap_dist.size < 2:
+            return {"sectors": [], "worst_consistency_sector": -1, "overall_std": 0.0}
+        n = min(len(g_lat), len(steer), len(lap_dist))
+        corner_mask = np.abs(steer[:n]) > 0.3
+        order = np.argsort(lap_dist[:n])
+        g_s = np.abs(g_lat[:n][order])
+        ld_s = lap_dist[:n][order]
+        cm_s = corner_mask[order]
+        boundaries = [track_len / 3.0, 2.0 * track_len / 3.0, track_len]
+        sectors = []
+        prev = 0.0
+        worst = -1
+        worst_std = 0.0
+        for si, bound in enumerate(boundaries):
+            mask = (ld_s >= prev) & (ld_s < bound + 1e-6)
+            prev = bound
+            corner_in_sector = mask & cm_s
+            if not corner_in_sector.any():
+                sectors.append({"sector": si + 1, "g_lat_std": 0.0, "g_lat_mean": 0.0, "n_corner_frames": 0})
+                continue
+            g_sec = g_s[corner_in_sector]
+            g_std = float(np.std(g_sec))
+            g_mean = float(np.mean(g_sec))
+            n_frames = int(np.sum(corner_in_sector))
+            sectors.append({"sector": si + 1, "g_lat_std": g_std, "g_lat_mean": g_mean, "n_corner_frames": n_frames})
+            if g_std > worst_std:
+                worst_std = g_std
+                worst = si
+        overall_std = float(np.std(np.abs(g_lat[:n][corner_mask]))) if corner_mask.any() else 0.0
+        return {"sectors": sectors, "worst_consistency_sector": worst, "overall_std": overall_std}
+
+    # ------------------------------------------------------------------ #
+    # ERS recovery efficiency analysis (Iter-245)
+    # ------------------------------------------------------------------ #
+    def ers_recovery_efficiency_analysis(self) -> dict[str, Any]:
+        """Analyse MGU-K recovery efficiency during braking zones.
+
+        Iter-245: identifies individual braking events (brake > 0.3 runs),
+        computes the average ERS deploy during each braking event (recovery
+        is proportional to brake pressure), and reports per-event recovery
+        scores and overall recovery efficiency.
+
+        Returns a dict with ``recovery_events``, ``avg_recovery_per_event``,
+        ``total_recovery_score``, ``recovery_event_count``, and
+        ``braking_zone_count``.
+        """
+        brake = _field(self.frames, "brake")
+        deploy = _field_multi(self.frames, ("ers_deploy", "ers_deployed"))
+        times = _times(self.frames)
+        dt = _deltas(times)
+        if brake.size < 2:
+            return {
+                "recovery_events": [],
+                "avg_recovery_per_event": 0.0,
+                "total_recovery_score": 0.0,
+                "recovery_event_count": 0,
+                "braking_zone_count": 0,
+            }
+        # Find braking zones: contiguous runs of brake > 0.3.
+        brake_mask = brake > 0.3
+        # Build runs manually.
+        brake_runs: list[tuple[int, int]] = []
+        in_run = False
+        run_start = 0
+        for i, m in enumerate(brake_mask):
+            if m and not in_run:
+                in_run = True
+                run_start = i
+            elif not m and in_run:
+                in_run = False
+                brake_runs.append((run_start, i))
+        if in_run:
+            brake_runs.append((run_start, len(brake_mask)))
+        n = min(len(brake), len(deploy))
+        recovery_events: list[dict[str, float]] = []
+        total_recovery = 0.0
+        for start, end in brake_runs:
+            if start >= n:
+                continue
+            end = min(end, n)
+            if end <= start + 1:
+                continue
+            # Recovery is proportional to brake pressure; deploy during
+            # braking is typically 0 (MGU-K harvests, doesn't deploy).
+            brake_intensity = float(np.sum(brake[start:end]))
+            deploy_during = float(np.sum(deploy[start:end]))
+            # Recovery efficiency: 1.0 means no deploy during braking
+            # (pure recovery), 0.0 means full deploy during braking.
+            rec_eff = 1.0 - (deploy_during / max(brake_intensity, 1.0))
+            rec_eff = max(0.0, min(1.0, rec_eff))
+            recovery_events.append({
+                "start_frame": start,
+                "end_frame": end,
+                "brake_intensity": brake_intensity,
+                "deploy_during_brake": deploy_during,
+                "recovery_efficiency": rec_eff,
+            })
+            total_recovery += rec_eff
+        recovery_count = len(recovery_events)
+        avg_rec = total_recovery / recovery_count if recovery_count > 0 else 0.0
+        return {
+            "recovery_events": recovery_events,
+            "avg_recovery_per_event": avg_rec,
+            "total_recovery_score": total_recovery,
+            "recovery_event_count": recovery_count,
+            "braking_zone_count": len(brake_runs),
+        }
 
 
 # --------------------------------------------------------------------------- #

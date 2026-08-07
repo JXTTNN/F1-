@@ -312,7 +312,7 @@ class TestSetupSchemaEdgeCases:
         # Re-constructing DEFAULT_SETUP from its dump should not raise.
         rebuilt = CarSetup(**DEFAULT_SETUP.model_dump())
         assert rebuilt == DEFAULT_SETUP
-        assert len(rebuilt.to_vector()) == 19
+        assert len(rebuilt.to_vector()) == 21
 
 
 # --------------------------------------------------------------------------- #
@@ -643,7 +643,7 @@ class TestFeedbackEdgeCases:
         out = generate_feedback([], DEFAULT_SETUP.model_dump(), "melbourne")
         assert isinstance(out, dict)
         assert "dimensions" in out
-        assert len(out["dimensions"]) == 11  # Iter-164.14: +corner_analysis
+        assert len(out["dimensions"]) == 12  # Iter-164.14: +corner_analysis → 12 dims
         # Data-dependent dimensions report 数据不足.
         data_dep_dims = {
             "balance",
@@ -671,7 +671,7 @@ class TestFeedbackEdgeCases:
         }
         out = generate_feedback([frame], DEFAULT_SETUP.model_dump(), "melbourne")
         assert isinstance(out, dict)
-        assert len(out["dimensions"]) == 11  # Iter-164.14: +corner_analysis
+        assert len(out["dimensions"]) == 12  # Iter-164.14: +corner_analysis → 12 dims
 
     def test_rule_based_feedback_all_zero_frames_does_not_crash(self) -> None:
         frames = [
@@ -693,7 +693,7 @@ class TestFeedbackEdgeCases:
         metrics = extract_metrics(frames, DEFAULT_SETUP.model_dump(), "melbourne")
         out = rule_based_feedback(metrics, DEFAULT_SETUP.model_dump(), "melbourne")
         assert isinstance(out, dict)
-        assert len(out["dimensions"]) == 11  # Iter-164.14: +corner_analysis
+        assert len(out["dimensions"]) == 12  # Iter-164.14: +corner_analysis → 12 dims
 
     def test_extract_metrics_empty_list_returns_n_frames_zero(self) -> None:
         metrics = extract_metrics([], {}, "melbourne")
@@ -764,10 +764,10 @@ class TestBatchPredictEdgeCases:
         assert isinstance(result[0], float)
         assert math.isfinite(result[0])
 
-    def test_sensitivity_analysis_returns_19_keys(self) -> None:
+    def test_sensitivity_analysis_returns_21_keys(self) -> None:
         result = sensitivity_analysis(DEFAULT_SETUP, "melbourne")
         assert isinstance(result, dict)
-        assert len(result) == 19
+        assert len(result) == 21
         assert set(result.keys()) == set(SETUP_FIELDS.keys())
         for v in result.values():
             assert isinstance(v, float)

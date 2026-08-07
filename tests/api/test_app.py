@@ -296,7 +296,7 @@ async def test_iterations_detail_ok(app: FastAPI) -> None:
         body = r.json()
         assert body["iter"] == "iter-01"
         assert isinstance(body["content"], str) and body["content"]
-        assert "Iter-01" in body["content"] or "迭代" in body["content"]
+        assert "iter-01" in body["content"] or "迭代" in body["content"]
 
 
 async def test_iterations_detail_missing_404(app: FastAPI) -> None:
@@ -304,7 +304,10 @@ async def test_iterations_detail_missing_404(app: FastAPI) -> None:
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         r = await client.get("/api/iterations/iter-99")
         assert r.status_code == 404
-        assert r.json()["detail"] == "iteration not found"
+        data = r.json()
+        # Iter-205: structured error format uses "error.message" instead of "detail"
+        assert data.get("detail") == "iteration not found" or \
+            data.get("error", {}).get("message") == "iteration not found"
 
 
 async def test_iterations_bad_id_400(app: FastAPI) -> None:

@@ -1,6 +1,6 @@
 """F1 25 / 2026 调教参数 Schema.
 
-定义与游戏内 garage 完全一致的调教参数集合（19 项，分 7 组），
+定义与游戏内 garage 完全一致的调教参数集合（21 项，分 8 组），
 包含取值范围与档位步长。:class:`CarSetup` 提供：
 
 - 合法性校验（范围 + 档位对齐）；
@@ -24,6 +24,7 @@ from pydantic import BaseModel, Field, model_validator
 
 GroupName = Literal[
     "Aerodynamics",
+    "Active Aero",
     "Transmission",
     "Suspension Geometry",
     "Suspension",
@@ -54,6 +55,9 @@ _FIELD_DEFS: list[tuple[str, GroupName, FieldKind, float, float, float, str, str
     # Aerodynamics
     ("front_wing", "Aerodynamics", "int", 0.0, 50.0, 1.0, "clicks", "前翼下压力等级"),
     ("rear_wing", "Aerodynamics", "int", 0.0, 50.0, 1.0, "clicks", "后翼下压力等级"),
+    # Active Aero (Iter-194: F1 2026 active aero settings)
+    ("active_aero_mode", "Active Aero", "int", 0.0, 2.0, 1.0, "mode", "主动空动模式 (0=Z-Mode, 1=Balanced, 2=X-Mode)"),
+    ("x_mode_activations", "Active Aero", "int", 0.0, 3.0, 1.0, "count", "X-Mode 每圈激活次数"),
     # Transmission
     ("on_throttle_diff", "Transmission", "int", 50.0, 100.0, 1.0, "percent", "油门差速器锁止率"),
     ("off_throttle_diff", "Transmission", "int", 10.0, 100.0, 1.0, "percent", "收油滑行差速率"),
@@ -95,7 +99,7 @@ SETUP_FIELDS: dict[str, SetupField] = {
 
 
 def ALL_SETUP_FIELDS() -> list[SetupField]:
-    """按游戏 garage 显示顺序（分组连续）返回全部 19 项调教参数。"""
+    """按游戏 garage 显示顺序（分组连续）返回全部 21 项调教参数。"""
     return [SETUP_FIELDS[d[0]] for d in _FIELD_DEFS]
 
 
@@ -131,11 +135,14 @@ def _check_value(name: str, spec: SetupField, value: float) -> None:
 
 
 class CarSetup(BaseModel):
-    """一份完整的 F1 25 / 2026 调教（19 项参数，与游戏 garage 一一对应）。"""
+    """一份完整的 F1 25 / 2026 调教（21 项参数，与游戏 garage 一一对应）。"""
 
     # --- Aerodynamics ---
     front_wing: int = Field(description="前翼下压力等级")
     rear_wing: int = Field(description="后翼下压力等级")
+    # --- Active Aero (Iter-194) ---
+    active_aero_mode: int = Field(description="主动空动模式 (0=Z-Mode, 1=Balanced, 2=X-Mode)")
+    x_mode_activations: int = Field(description="X-Mode 每圈激活次数")
     # --- Transmission ---
     on_throttle_diff: int = Field(description="油门差速器锁止率")
     off_throttle_diff: int = Field(description="收油滑行差速率")
@@ -235,6 +242,8 @@ class CarSetup(BaseModel):
 DEFAULT_SETUP = CarSetup(
     front_wing=25,
     rear_wing=27,
+    active_aero_mode=1,
+    x_mode_activations=2,
     on_throttle_diff=80,
     off_throttle_diff=55,
     front_camber=-3.50,
@@ -253,3 +262,114 @@ DEFAULT_SETUP = CarSetup(
     rear_tyre_pressure=20.5,
     fuel_load=30.0,
 )
+
+# Iter-195: 赛道类型预设调教 (high_downforce / low_downforce / street / mixed)
+HIGH_DOWNFORCE_PRESET = CarSetup(
+    front_wing=45,
+    rear_wing=48,
+    active_aero_mode=0,
+    x_mode_activations=1,
+    on_throttle_diff=85,
+    off_throttle_diff=60,
+    front_camber=-3.50,
+    rear_camber=-2.00,
+    front_toe=0.05,
+    rear_toe=0.20,
+    front_suspension=18,
+    rear_suspension=10,
+    front_arb=8,
+    rear_arb=18,
+    front_ride_height=18,
+    rear_ride_height=38,
+    brake_pressure=100,
+    front_brake_bias=55,
+    front_tyre_pressure=23.5,
+    rear_tyre_pressure=20.0,
+    fuel_load=30.0,
+)
+
+LOW_DOWNFORCE_PRESET = CarSetup(
+    front_wing=5,
+    rear_wing=3,
+    active_aero_mode=2,
+    x_mode_activations=3,
+    on_throttle_diff=75,
+    off_throttle_diff=50,
+    front_camber=-3.20,
+    rear_camber=-1.80,
+    front_toe=0.06,
+    rear_toe=0.22,
+    front_suspension=25,
+    rear_suspension=13,
+    front_arb=12,
+    rear_arb=22,
+    front_ride_height=22,
+    rear_ride_height=42,
+    brake_pressure=100,
+    front_brake_bias=55,
+    front_tyre_pressure=24.5,
+    rear_tyre_pressure=21.0,
+    fuel_load=30.0,
+)
+
+STREET_PRESET = CarSetup(
+    front_wing=42,
+    rear_wing=45,
+    active_aero_mode=0,
+    x_mode_activations=0,
+    on_throttle_diff=82,
+    off_throttle_diff=58,
+    front_camber=-3.40,
+    rear_camber=-1.90,
+    front_toe=0.04,
+    rear_toe=0.18,
+    front_suspension=16,
+    rear_suspension=9,
+    front_arb=7,
+    rear_arb=16,
+    front_ride_height=25,
+    rear_ride_height=45,
+    brake_pressure=98,
+    front_brake_bias=54,
+    front_tyre_pressure=23.0,
+    rear_tyre_pressure=19.5,
+    fuel_load=25.0,
+)
+
+MIXED_PRESET = CarSetup(
+    front_wing=25,
+    rear_wing=27,
+    active_aero_mode=1,
+    x_mode_activations=2,
+    on_throttle_diff=80,
+    off_throttle_diff=55,
+    front_camber=-3.40,
+    rear_camber=-1.90,
+    front_toe=0.05,
+    rear_toe=0.20,
+    front_suspension=21,
+    rear_suspension=11,
+    front_arb=10,
+    rear_arb=20,
+    front_ride_height=20,
+    rear_ride_height=40,
+    brake_pressure=100,
+    front_brake_bias=55,
+    front_tyre_pressure=24.0,
+    rear_tyre_pressure=20.5,
+    fuel_load=30.0,
+)
+
+# Iter-195: 赛道类型 → 预设调教映射
+TRACK_TYPE_PRESETS: dict[str, CarSetup] = {
+    "high_downforce": HIGH_DOWNFORCE_PRESET,
+    "high_speed_low_downforce": LOW_DOWNFORCE_PRESET,
+    "street": STREET_PRESET,
+    "mixed": MIXED_PRESET,
+    "medium": MIXED_PRESET,
+}
+
+
+def get_track_type_preset(track_type: str) -> CarSetup:
+    """Iter-195: 根据赛道类型返回预设调教."""
+    return TRACK_TYPE_PRESETS.get(track_type, DEFAULT_SETUP)

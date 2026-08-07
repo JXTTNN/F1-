@@ -49,6 +49,13 @@ _MAX_ACTIVATIONS_PER_LAP = 3
 # X-mode 收益系数 (s/m 直道长度)
 _X_MODE_GAIN_PER_M_S = 0.0003  # 每 m 直道约 0.0003s 收益
 
+# Iter-188: 空气阻力减少估算 (X-mode 的低阻力特性).
+# X-mode 下翼面张开, 阻力系数 Cd 降低约 15%, 等效于 ~25% 下压力降低.
+# 在 300 km/h (83.3 m/s) 时, 阻力降低约 60 N, 对应 ~0.15s 增益.
+_X_MODE_DRAG_REDUCTION_PCT = 0.15  # X-mode 阻力降低百分比
+_X_MODE_REF_SPEED_MS = 83.3  # 参考速度 300 km/h
+_X_MODE_REF_DRAG_N = 400.0  # 参考速度下参考阻力 (N)
+
 # 最小直道长度 (m), 短于此激活无意义
 _MIN_STRAIGHT_M_FOR_ACTIVATION = 400
 
@@ -173,11 +180,20 @@ def optimal_activation_plan(
 # --------------------------------------------------------------------------- #
 # 便捷函数
 # --------------------------------------------------------------------------- #
-def active_aero_gain_s(straight_length_m: float) -> float:
-    """便捷: 估算直道激活收益 (s)."""
+def active_aero_gain_s(straight_length_m: float, speed_ms: float = 83.3) -> float:
+    """便捷: 估算直道激活收益 (s), 含速度依赖的阻力减少.
+
+    Iter-188: 加入速度依赖的阻力减少估算. 低速时阻力减少更小.
+    """
     if straight_length_m < _MIN_STRAIGHT_M_FOR_ACTIVATION:
         return 0.0
-    return straight_length_m * _X_MODE_GAIN_PER_M_S
+    base_gain = straight_length_m * _X_MODE_GAIN_PER_M_S
+    # 速度依赖的阻力减少: 阻力 ∝ v², 低速时阻力减少更小
+    speed_factor = min(1.0, (speed_ms / _X_MODE_REF_SPEED_MS) ** 2)
+    drag_reduction = _X_MODE_DRAG_REDUCTION_PCT * _X_MODE_REF_DRAG_N * speed_factor
+    # 阻力减少 → 驱动力更多用于加速, 近似线性增益
+    drag_benefit_s = drag_reduction / 4000.0 * straight_length_m / 1000.0  # ~0.02s per 100m
+    return base_gain + drag_benefit_s
 
 
 def can_activate_x_mode(

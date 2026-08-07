@@ -205,6 +205,21 @@ CAUSAL_RULES: dict[str, dict[str, Any]] = {
         "secondary_dec": ["车重减轻", "圈速提升", "制动距离缩短"],
         "metric_deltas": {"lap_time": 0.03, "top_speed": -0.1, "tyre_wear": 0.5},
     },
+    # --- Active Aero (Iter-219) ---
+    "active_aero_mode": {
+        "primary_effect_inc": "切换至更高下压力模式",
+        "primary_effect_dec": "切换至更低阻力模式",
+        "secondary_inc": ["弯中抓地力提升", "直道尾速下降", "胎耗增加"],
+        "secondary_dec": ["直道尾速提升", "弯中抓地力下降", "胎耗降低"],
+        "metric_deltas": {"grip": 0.05, "top_speed": -2.0, "tyre_wear": 1.0},
+    },
+    "x_mode_activations": {
+        "primary_effect_inc": "增加 X-Mode 激活次数",
+        "primary_effect_dec": "减少 X-Mode 激活次数",
+        "secondary_inc": ["直道尾速提升幅度增大", "出弯加速后更快切换低阻", "弯中下压力不足风险增加"],
+        "secondary_dec": ["弯中下压力保持更稳定", "直道尾速提升幅度减小", "连续弯段稳定性提升"],
+        "metric_deltas": {"top_speed": 0.5, "grip": -0.02, "lap_time": -0.01},
+    },
 }
 
 
@@ -405,6 +420,27 @@ def _coerce_setup(setup: CarSetup | dict) -> CarSetup:
     )
 
 
+# Iter-183: Compound sensitivity matrix — maps tyre compound to grip multiplier.
+# Soft compounds have higher grip but amplify setup sensitivity; hard compounds
+# are more forgiving but have lower absolute grip.
+_COMPOUND_GRIP_MULT: dict[str, float] = {
+    "soft": 1.10,
+    "medium": 1.00,
+    "hard": 0.90,
+    "intermediate": 0.70,
+    "wet": 0.55,
+}
+
+# Iter-183: Weather sensitivity — maps weather condition to confidence modifier.
+# Rain reduces predictability significantly.
+_WEATHER_CONFIDENCE_MOD: dict[str, float] = {
+    "dry": 1.00,
+    "damp": 0.92,
+    "wet": 0.80,
+    "storm": 0.65,
+}
+
+
 class WhatIfAnalyzer:
     """Combine causal explanation with a surrogate lap-time prediction.
 
@@ -419,6 +455,13 @@ class WhatIfAnalyzer:
         Track id forwarded to the surrogate (e.g. ``"melbourne"``).
     driver_profile
         Optional driver profile forwarded to the surrogate.
+    compound
+        Optional tyre compound (``"soft"`` / ``"medium"`` / ``"hard"`` /
+        ``"intermediate"`` / ``"wet"``). Affects grip multiplier and
+        confidence scoring.
+    weather
+        Optional weather condition (``"dry"`` / ``"damp"`` / ``"wet"`` /
+        ``"storm"``). Affects confidence scoring.
     """
 
     def __init__(
@@ -426,10 +469,14 @@ class WhatIfAnalyzer:
         setup: CarSetup | dict,
         track_id: str,
         driver_profile: Any = None,
+        compound: str = "medium",
+        weather: str = "dry",
     ) -> None:
         self.setup_obj = _coerce_setup(setup)
         self.track_id = track_id
         self.driver_profile = driver_profile
+        self.compound = compound
+        self.weather = weather
         self.causal_engine = CausalExplanationEngine(SETUP_FIELDS, track=None)
         self._base_lap_cached: float | None = None
 
@@ -492,8 +539,28 @@ class WhatIfAnalyzer:
         accompanying = self.suggest_accompanying(field, direction)
 
         clicks = _num_steps(delta, spec)
-        # Confidence: high (0.95) for ~0 clicks, decays ~0.05/click, floor 0.4.
-        confidence = max(0.4, min(0.95, 0.95 - 0.05 * clicks))
+        # Iter-183: Non-linear confidence decay (exponential) with track-awareness.
+        # Confidence = 0.95 * exp(-0.15 * clicks), floor 0.3 (was 0.4).
+        # Small changes (≤2 clicks) retain > 0.7 confidence; large changes (≥10)
+        # asymptote to 0.3.  Track-specific modifiers adjust confidence further.
+        import math as _math
+        confidence = max(0.3, min(0.98, 0.95 * _math.exp(-0.15 * clicks)))
+        # Track-type modifier: high-speed tracks amplify setup sensitivity
+        track_type = self._track_type()
+        if track_type in ("high_speed", "street"):
+            confidence *= 0.95  # high-speed tracks are less predictable
+        elif track_type in ("technical", "mixed"):
+            confidence *= 0.98  # technical tracks have more predictable sensitivities
+        # Compound modifier: soft tyres amplify setup effects, hard tyres dampen
+        compound_mod = _COMPOUND_GRIP_MULT.get(self.compound, 1.0)
+        if compound_mod > 1.0:
+            confidence *= 0.93  # soft compounds: wider operating window = less predictable
+        elif compound_mod < 1.0:
+            confidence *= 1.02  # hard compounds: narrower window = more predictable
+        # Weather modifier: rain reduces confidence substantially
+        weather_mod = _WEATHER_CONFIDENCE_MOD.get(self.weather, 1.0)
+        confidence *= weather_mod
+        confidence = max(0.25, min(0.98, confidence))
 
         return {
             "field": field,
