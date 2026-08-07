@@ -279,6 +279,145 @@ class ParetoFront:
             "spread": spread,
         }
 
+    # ------------------------------------------------------------------ #
+    # Diversity metrics (Iter-200)
+    # ------------------------------------------------------------------ #
+    def diversity_index(self, front_indices: list[int] | None = None) -> float:
+        """Compute the average pairwise Euclidean distance on the front (Iter-200).
+
+        Higher values indicate a more diverse (spread-out) Pareto front.
+        Normalized by the number of objectives so the metric is comparable
+        across different numbers of objectives.
+
+        Args:
+            front_indices: Indices of front members. If ``None``, uses
+                :meth:`compute_front`.
+
+        Returns:
+            Average pairwise distance in [0, inf). Returns 0.0 for fronts
+            with fewer than 2 members.
+        """
+        if front_indices is None:
+            front_indices = self.compute_front()
+        n = len(front_indices)
+        if n < 2:
+            return 0.0
+
+        # Extract normalized objective values for front members.
+        m = len(self.objectives)
+        vals = np.array([self._samples[i][0] for i in front_indices])
+
+        # Normalize each objective to [0, 1] for fair comparison.
+        mins = vals.min(axis=0)
+        maxs = vals.max(axis=0)
+        spans = np.where(maxs - mins > 0, maxs - mins, 1.0)
+        normalized = (vals - mins) / spans
+
+        # Compute pairwise distances.
+        total_dist = 0.0
+        count = 0
+        for i in range(n):
+            for j in range(i + 1, n):
+                total_dist += float(np.linalg.norm(normalized[i] - normalized[j]))
+                count += 1
+        return total_dist / max(count, 1) / max(m, 1)
+
+    # ------------------------------------------------------------------ #
+    def front_spacing(self, front_indices: list[int] | None = None) -> float:
+        """Compute the spacing metric (uniformity) of the Pareto front (Iter-200).
+
+        Spacing measures how evenly distributed the solutions are along the
+        front. Lower values indicate more uniform distribution. The metric
+        is the standard deviation of the nearest-neighbor distances.
+
+        Args:
+            front_indices: Indices of front members. If ``None``, uses
+                :meth:`compute_front`.
+
+        Returns:
+            Spacing metric in [0, inf). Returns 0.0 for fronts with fewer
+            than 3 members (perfect spacing for 2-point front).
+        """
+        if front_indices is None:
+            front_indices = self.compute_front()
+        n = len(front_indices)
+        if n < 3:
+            return 0.0
+
+        vals = np.array([self._samples[i][0] for i in front_indices])
+        mins = vals.min(axis=0)
+        maxs = vals.max(axis=0)
+        spans = np.where(maxs - mins > 0, maxs - mins, 1.0)
+        normalized = (vals - mins) / spans
+
+        # Nearest-neighbor distances.
+        nn_dists: list[float] = []
+        for i in range(n):
+            min_dist = float("inf")
+            for j in range(n):
+                if i == j:
+                    continue
+                d = float(np.linalg.norm(normalized[i] - normalized[j]))
+                if d < min_dist:
+                    min_dist = d
+            nn_dists.append(min_dist)
+
+        mean_nn = float(np.mean(nn_dists))
+        if mean_nn <= 0:
+            return 0.0
+        # Standard deviation of nearest-neighbor distances.
+        variance = sum((d - mean_nn) ** 2 for d in nn_dists) / n
+        return float(np.sqrt(variance)) / mean_nn
+
+    # ------------------------------------------------------------------ #
+    def coverage_spread(self, front_indices: list[int] | None = None) -> dict[str, dict[str, float]]:
+        """Compute coverage spread for each objective on the front (Iter-200).
+
+        Args:
+            front_indices: Indices of front members. If ``None``, uses
+                :meth:`compute_front`.
+
+        Returns:
+            Dict mapping objective name to ``{"min": float, "max": float,
+            "range": float, "mean": float, "std": float}``.
+        """
+        if front_indices is None:
+            front_indices = self.compute_front()
+        n = len(front_indices)
+        if n == 0:
+            return {name: {"min": 0.0, "max": 0.0, "range": 0.0, "mean": 0.0, "std": 0.0}
+                    for name in self.objectives}
+
+        result: dict[str, dict[str, float]] = {}
+        for k, name in enumerate(self.objectives):
+            vals = [self._samples[i][0][k] for i in front_indices]
+            arr = np.array(vals)
+            result[name] = {
+                "min": float(arr.min()),
+                "max": float(arr.max()),
+                "range": float(arr.max() - arr.min()),
+                "mean": float(arr.mean()),
+                "std": float(arr.std()),
+            }
+        return result
+
+    # ------------------------------------------------------------------ #
+    def diversity_report(self) -> dict[str, Any]:
+        """Generate a comprehensive diversity report (Iter-200).
+
+        Returns:
+            Dict with ``front_size``, ``diversity_index``, ``spacing``,
+            ``coverage``, and ``knee_index``.
+        """
+        front = self.compute_front()
+        return {
+            "front_size": len(front),
+            "diversity_index": round(self.diversity_index(front), 6),
+            "spacing": round(self.front_spacing(front), 6),
+            "coverage": self.coverage_spread(front),
+            "knee_index": self.knee_point(front) if front else -1,
+        }
+
 
 # --------------------------------------------------------------------------- #
 # Pure-python hypervolume helpers (minimization space)
@@ -530,6 +669,7 @@ class MultiObjectiveOptimizer:
             "knee_setup": to_setup(knee_vec),
             "history": history,
             "iterations": self.n_iterations,
+            "diversity": final_front.diversity_report(),  # Iter-200
         }
 
 

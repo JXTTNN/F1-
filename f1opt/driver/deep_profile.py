@@ -209,6 +209,37 @@ def _phase_signal(phase: str, frame: dict[str, Any]) -> float:
     return 0.0
 
 
+# Iter-198: 弯道出口速度分析
+def _exit_speed_analysis(frames: list[dict[str, Any]]) -> dict[str, Any]:
+    """分析弯道出口速度 (exit 相位结束时的 speed 值).
+
+    返回每个弯道的出口速度 (km/h) 和一致性.
+    """
+    corners = _detect_corners(frames)
+    if not corners:
+        return {"exit_speeds_kmh": [], "mean_exit_speed": 0.0, "exit_speed_cv": 0.0}
+    exit_speeds: list[float] = []
+    for s_idx, e_idx in corners:
+        seg = frames[s_idx:e_idx]
+        exit_frames = [f for f in seg if _classify_phase(f) == "exit"]
+        if exit_frames:
+            # 取 exit 相位最后一帧的速度
+            last_exit = exit_frames[-1]
+            speed = _f(last_exit, "speed")
+            if speed > 0:
+                exit_speeds.append(speed)
+    if not exit_speeds:
+        return {"exit_speeds_kmh": [], "mean_exit_speed": 0.0, "exit_speed_cv": 0.0}
+    mean_speed = float(np.mean(exit_speeds))
+    cv = _cv(exit_speeds)
+    return {
+        "exit_speeds_kmh": [float(s) for s in exit_speeds],
+        "mean_exit_speed": mean_speed,
+        "exit_speed_cv": cv,
+        "n_corners": len(exit_speeds),
+    }
+
+
 def _phase_peak(phase: str, frames: list[dict[str, Any]]) -> float:
     if not frames:
         return 0.0
@@ -610,6 +641,8 @@ class DeepDriverProfiler:
         }
         archetype = classify_archetype(metrics)
         corner_phases = analyze_corner_phases(self.frames)
+        # Iter-198: 弯道出口速度分析
+        exit_speed = _exit_speed_analysis(self.frames)
 
         consistency: dict[str, Any] | None = None
         if self.lap_metrics:
@@ -640,6 +673,7 @@ class DeepDriverProfiler:
         return {
             "archetype": archetype,
             "corner_phases": corner_phases,
+            "exit_speed_analysis": exit_speed,
             "consistency": consistency,
             "fatigue_projection": fatigue_projection,
             "strengths": strengths,

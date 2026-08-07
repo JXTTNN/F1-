@@ -103,6 +103,8 @@ _TRACK_PRESETS: dict[str, dict[str, Any]] = {
         "setup": {
             "front_wing": 8,
             "rear_wing": 6,
+            "active_aero_mode": 2,
+            "x_mode_activations": 3,
             "on_throttle_diff": 75,
             "off_throttle_diff": 60,
             "front_camber": -3.20,
@@ -132,6 +134,8 @@ _TRACK_PRESETS: dict[str, dict[str, Any]] = {
         "setup": {
             "front_wing": 45,
             "rear_wing": 48,
+            "active_aero_mode": 0,
+            "x_mode_activations": 1,
             "on_throttle_diff": 85,
             "off_throttle_diff": 50,
             "front_camber": -3.50,
@@ -161,6 +165,8 @@ _TRACK_PRESETS: dict[str, dict[str, Any]] = {
         "setup": {
             "front_wing": 35,
             "rear_wing": 37,
+            "active_aero_mode": 0,
+            "x_mode_activations": 0,
             "on_throttle_diff": 82,
             "off_throttle_diff": 52,
             "front_camber": -3.40,

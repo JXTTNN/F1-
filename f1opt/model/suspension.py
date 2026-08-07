@@ -374,6 +374,25 @@ class VehicleDynamicsModel:
             "balance_shift": float(balance_shift),
         }
 
+    def ride_height_optimization(self, speed_ms: float) -> dict:
+        """Iter-190: 给定速度下的最优 ride height 推荐 (mm).
+        
+        基于地效模型: 太低会触底失速, 太高会损失下压力. 返回最优前后高度.
+        """
+        v = max(0.0, float(speed_ms))
+        # 速度越高, 下压力越大, 可用更低 ride height (但不低于 stall 阈值)
+        min_safe = STALL_RIDE_HEIGHT_MM + 2.0  # 7 mm 安全边际
+        max_rh = 40.0
+        # 最优高度随速度线性下降, 在 300 km/h 时接近最小安全值
+        opt = max(min_safe, max_rh - (v / 83.3) * (max_rh - min_safe))
+        # 前轴略低 2 mm (rake)
+        return {
+            "optimal_front_mm": float(opt - 1.0),
+            "optimal_rear_mm": float(opt + 1.0),
+            "speed_ms": float(v),
+            "rake_mm": 2.0,
+        }
+
     def setup_balance_diagnosis(self) -> dict:
         """Return a Chinese setup-balance diagnosis.
 

@@ -21,9 +21,9 @@ class TestPredictionIntervals:
         """prediction_intervals 返回有效的 PredictionInterval."""
         model = _train_small_model()
         rng = np.random.RandomState(0)
-        x_cal = rng.randn(50, 37).astype(np.float32)
+        x_cal = rng.randn(50, 39).astype(np.float32)
         y_cal = rng.rand(50).astype(np.float32) * 5 + 80
-        x_new = rng.randn(10, 37).astype(np.float32)
+        x_new = rng.randn(10, 39).astype(np.float32)
         result = prediction_intervals(model, x_cal, y_cal, x_new, confidence=0.90)
         assert isinstance(result, PredictionInterval)
         assert result.confidence == 0.90
@@ -36,9 +36,9 @@ class TestPredictionIntervals:
         """lower <= center <= upper."""
         model = _train_small_model()
         rng = np.random.RandomState(1)
-        x_cal = rng.randn(40, 37).astype(np.float32)
+        x_cal = rng.randn(40, 39).astype(np.float32)
         y_cal = rng.rand(40).astype(np.float32) * 5 + 80
-        x_new = rng.randn(10, 37).astype(np.float32)
+        x_new = rng.randn(10, 39).astype(np.float32)
         result = prediction_intervals(model, x_cal, y_cal, x_new)
         assert np.all(result.lower <= result.center)
         assert np.all(result.center <= result.upper)
@@ -47,9 +47,9 @@ class TestPredictionIntervals:
         """margin 为正数 (除非残差全为零)."""
         model = _train_small_model()
         rng = np.random.RandomState(2)
-        x_cal = rng.randn(40, 37).astype(np.float32)
+        x_cal = rng.randn(40, 39).astype(np.float32)
         y_cal = rng.rand(40).astype(np.float32) * 5 + 80
-        x_new = rng.randn(5, 37).astype(np.float32)
+        x_new = rng.randn(5, 39).astype(np.float32)
         result = prediction_intervals(model, x_cal, y_cal, x_new)
         assert result.margin > 0
 
@@ -57,9 +57,9 @@ class TestPredictionIntervals:
         """margin 对称: upper - center == center - lower == margin."""
         model = _train_small_model()
         rng = np.random.RandomState(3)
-        x_cal = rng.randn(40, 37).astype(np.float32)
+        x_cal = rng.randn(40, 39).astype(np.float32)
         y_cal = rng.rand(40).astype(np.float32) * 5 + 80
-        x_new = rng.randn(5, 37).astype(np.float32)
+        x_new = rng.randn(5, 39).astype(np.float32)
         result = prediction_intervals(model, x_cal, y_cal, x_new)
         np.testing.assert_array_almost_equal(
             result.upper - result.center,
@@ -76,9 +76,9 @@ class TestPredictionIntervals:
         """经验覆盖率应接近 confidence (允许一定偏差)."""
         model = _train_small_model()
         rng = np.random.RandomState(4)
-        x_cal = rng.randn(100, 37).astype(np.float32)
+        x_cal = rng.randn(100, 39).astype(np.float32)
         y_cal = rng.rand(100).astype(np.float32) * 5 + 80
-        x_new = rng.randn(5, 37).astype(np.float32)
+        x_new = rng.randn(5, 39).astype(np.float32)
         result = prediction_intervals(model, x_cal, y_cal, x_new, confidence=0.90)
         # Coverage should be >= 0.90 - tolerance (conformal guarantee)
         # or at least reasonable
@@ -88,9 +88,9 @@ class TestPredictionIntervals:
         """更高 confidence → 更宽 margin."""
         model = _train_small_model()
         rng = np.random.RandomState(5)
-        x_cal = rng.randn(50, 37).astype(np.float32)
+        x_cal = rng.randn(50, 39).astype(np.float32)
         y_cal = rng.rand(50).astype(np.float32) * 5 + 80
-        x_new = rng.randn(5, 37).astype(np.float32)
+        x_new = rng.randn(5, 39).astype(np.float32)
         result_90 = prediction_intervals(model, x_cal, y_cal, x_new, confidence=0.90)
         result_99 = prediction_intervals(model, x_cal, y_cal, x_new, confidence=0.99)
         assert result_99.margin >= result_90.margin
@@ -98,27 +98,27 @@ class TestPredictionIntervals:
     def test_invalid_confidence_zero(self) -> None:
         """confidence=0 抛出 ValueError."""
         model = _train_small_model()
-        x_cal = np.zeros((10, 37), dtype=np.float32)
+        x_cal = np.zeros((10, 39), dtype=np.float32)
         y_cal = np.ones(10, dtype=np.float32) * 80
-        x_new = np.zeros((5, 37), dtype=np.float32)
+        x_new = np.zeros((5, 39), dtype=np.float32)
         with pytest.raises(ValueError, match="confidence must be in"):
             prediction_intervals(model, x_cal, y_cal, x_new, confidence=0.0)
 
     def test_invalid_confidence_one(self) -> None:
         """confidence=1 抛出 ValueError."""
         model = _train_small_model()
-        x_cal = np.zeros((10, 37), dtype=np.float32)
+        x_cal = np.zeros((10, 39), dtype=np.float32)
         y_cal = np.ones(10, dtype=np.float32) * 80
-        x_new = np.zeros((5, 37), dtype=np.float32)
+        x_new = np.zeros((5, 39), dtype=np.float32)
         with pytest.raises(ValueError, match="confidence must be in"):
             prediction_intervals(model, x_cal, y_cal, x_new, confidence=1.0)
 
     def test_too_few_calibration_samples(self) -> None:
         """校准集 < 2 样本抛出 ValueError."""
         model = _train_small_model()
-        x_cal = np.zeros((1, 37), dtype=np.float32)
+        x_cal = np.zeros((1, 39), dtype=np.float32)
         y_cal = np.ones(1, dtype=np.float32) * 80
-        x_new = np.zeros((5, 37), dtype=np.float32)
+        x_new = np.zeros((5, 39), dtype=np.float32)
         with pytest.raises(ValueError, match="calibration set must have"):
             prediction_intervals(model, x_cal, y_cal, x_new)
 
@@ -126,9 +126,9 @@ class TestPredictionIntervals:
         """x_new 为空时返回空数组."""
         model = _train_small_model()
         rng = np.random.RandomState(6)
-        x_cal = rng.randn(20, 37).astype(np.float32)
+        x_cal = rng.randn(20, 39).astype(np.float32)
         y_cal = rng.rand(20).astype(np.float32) * 5 + 80
-        x_new = np.zeros((0, 37), dtype=np.float32)
+        x_new = np.zeros((0, 39), dtype=np.float32)
         result = prediction_intervals(model, x_cal, y_cal, x_new)
         assert len(result.lower) == 0
         assert len(result.upper) == 0
@@ -138,11 +138,11 @@ class TestPredictionIntervals:
         # Use a model and make y_cal exactly equal to predictions
         model = _train_small_model()
         rng = np.random.RandomState(7)
-        x_cal = rng.randn(20, 37).astype(np.float32)
+        x_cal = rng.randn(20, 39).astype(np.float32)
         # Make y_cal equal to model predictions
         from f1opt.model.diagnostics import _predict_lap
         y_cal = _predict_lap(model, x_cal)
-        x_new = rng.randn(5, 37).astype(np.float32)
+        x_new = rng.randn(5, 39).astype(np.float32)
         result = prediction_intervals(model, x_cal, y_cal, x_new, confidence=0.90)
         assert result.margin == pytest.approx(0.0, abs=1e-6)
         assert result.empirical_coverage == pytest.approx(1.0)
@@ -151,9 +151,9 @@ class TestPredictionIntervals:
         """单个新点的区间."""
         model = _train_small_model()
         rng = np.random.RandomState(8)
-        x_cal = rng.randn(20, 37).astype(np.float32)
+        x_cal = rng.randn(20, 39).astype(np.float32)
         y_cal = rng.rand(20).astype(np.float32) * 5 + 80
-        x_new = rng.randn(1, 37).astype(np.float32)
+        x_new = rng.randn(1, 39).astype(np.float32)
         result = prediction_intervals(model, x_cal, y_cal, x_new)
         assert len(result.lower) == 1
         assert result.lower[0] <= result.center[0] <= result.upper[0]

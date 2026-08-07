@@ -23,13 +23,13 @@ from f1opt.model.setup_analysis import (
 from f1opt.model.surrogate import predict_lap_time
 
 
-def test_analyze_returns_18_params_excluding_fuel() -> None:
-    """analyze_setup_contributions 返回 18 个参数 (fuel_load 除外)."""
+def test_analyze_returns_20_params_excluding_fuel() -> None:
+    """analyze_setup_contributions 返回 20 个参数 (fuel_load 除外)."""
     contribs = analyze_setup_contributions(DEFAULT_SETUP, "melbourne", None)
-    assert len(contribs) == 18
+    assert len(contribs) == 20
     names = {c.field_name for c in contribs}
     assert "fuel_load" not in names
-    # 所有 18 个非 fuel 参数都在
+    # 所有 20 个非 fuel 参数都在
     expected = set(SETUP_FIELDS.keys()) - {"fuel_load"}
     assert names == expected
 
@@ -66,7 +66,7 @@ def test_default_setup_on_medium_track_near_optimal() -> None:
     neutral_count = sum(1 for c in contribs if c.optimal_direction == 0)
     # 至少一半参数在最优附近 (medium 赛道 + medium 最优 setup).
     assert neutral_count >= 9, (
-        f"DEFAULT_SETUP 在 melbourne 上仅 {neutral_count}/18 参数最优, "
+        f"DEFAULT_SETUP 在 melbourne 上仅 {neutral_count}/20 参数最优, "
         f"预期 ≥9 (medium 最优 setup)"
     )
 
@@ -85,9 +85,9 @@ def test_rank_parameter_sensitivity_top_n() -> None:
 
 
 def test_rank_top_n_clamped() -> None:
-    """top_n > 18 时返回全部 18 个."""
+    """top_n > 20 时返回全部 20 个."""
     top = rank_parameter_sensitivity(DEFAULT_SETUP, "melbourne", None, top_n=100)
-    assert len(top) == 18
+    assert len(top) == 20
 
 
 def test_explain_setup_change_basic() -> None:

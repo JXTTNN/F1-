@@ -41,6 +41,14 @@ _DEPLOY_BOOST_FACTOR = 1.3            # attack 模式效率增益
 _CONSERVE_FACTOR = 0.7                # conserve 模式效率折扣
 _DRAG_LIMITED_MIN_LENGTH_M = 600.0    # 长直道阈值 (m)
 
+# Iter-189: 电池温度效应. 锂电池最佳工作温度 25-45°C.
+# 温度过低 (< 10°C) 内阻增大, 部署效率降低 20%.
+# 温度过高 (> 50°C) 热管理介入, 部署效率降低 15%.
+_BATTERY_OPTIMAL_TEMP_LOW = 25.0
+_BATTERY_OPTIMAL_TEMP_HIGH = 45.0
+_BATTERY_COLD_PENALTY = 0.20  # 低温效率折扣
+_BATTERY_HOT_PENALTY = 0.15   # 高温效率折扣
+
 
 # --------------------------------------------------------------------------- #
 # 赛道 ERS profile
@@ -266,6 +274,15 @@ class ERSDeploymentModel:
     def reset(self) -> None:
         self._soc = self.initial_soc
 
+    def _battery_temp_efficiency(self, batt_temp_c: float) -> float:
+        """Iter-189: 电池温度 → 部署效率乘数 (0..1)."""
+        t = max(0.0, float(batt_temp_c))
+        if _BATTERY_OPTIMAL_TEMP_LOW <= t <= _BATTERY_OPTIMAL_TEMP_HIGH:
+            return 1.0
+        if t < _BATTERY_OPTIMAL_TEMP_LOW:
+            return 1.0 - _BATTERY_COLD_PENALTY * (1.0 - t / _BATTERY_OPTIMAL_TEMP_LOW)
+        return 1.0 - _BATTERY_HOT_PENALTY * min(1.0, (t - _BATTERY_OPTIMAL_TEMP_HIGH) / 15.0)
+
     # ------------------------------------------------------------------ #
     # 部署分配 (MJ per zone)
     # ------------------------------------------------------------------ #
@@ -326,6 +343,9 @@ class ERSDeploymentModel:
             gain = total_deploy * _DEPLOY_GAIN_S_PER_MJ * 0.95
         else:
             gain = total_deploy * _DEPLOY_GAIN_S_PER_MJ
+        # Iter-189: 电池温度效率修正
+        batt_eff = self._battery_temp_efficiency(35.0)  # 默认 35°C 中值
+        gain *= batt_eff
 
         # 回收代价 (发动机阻力 + 电池充电损耗)
         drag_cost = harvest * _HARVEST_DRAG_S_PER_MJ

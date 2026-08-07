@@ -17,7 +17,7 @@ class TestCalibrationCurve:
     def test_perfect_prediction(self) -> None:
         from f1opt.model.train import train
         m = train(iterations=50, n_samples=200, seed=0, log=False, save=False)
-        x = np.random.randn(100, 37).astype(np.float32)
+        x = np.random.randn(100, 39).astype(np.float32)
         y = np.random.rand(100).astype(np.float32) * 5 + 80
         r = calibration_curve(m, x, y)
         assert isinstance(r, CalibrationReport)
@@ -32,7 +32,7 @@ class TestCalibrationCurve:
     def test_small_dataset(self) -> None:
         from f1opt.model.train import train
         m = train(iterations=20, n_samples=50, seed=1, log=False, save=False)
-        x = np.random.randn(10, 37).astype(np.float32)
+        x = np.random.randn(10, 39).astype(np.float32)
         y = np.array([80.0, 81.0, 82.0, 83.0, 84.0, 85.0, 86.0, 87.0, 88.0, 89.0])
         r = calibration_curve(m, x, y, n_bins=5)
         assert r.bin_counts.sum() == 10
@@ -40,7 +40,7 @@ class TestCalibrationCurve:
     def test_constant_y(self) -> None:
         from f1opt.model.train import train
         m = train(iterations=20, n_samples=50, seed=2, log=False, save=False)
-        x = np.random.randn(20, 37).astype(np.float32)
+        x = np.random.randn(20, 39).astype(np.float32)
         y = np.ones(20) * 85.0
         r = calibration_curve(m, x, y)
         assert r.r_squared <= 1.0
@@ -48,7 +48,7 @@ class TestCalibrationCurve:
     def test_heteroscedasticity_detected(self) -> None:
         from f1opt.model.train import train
         m = train(iterations=50, n_samples=200, seed=3, log=False, save=False)
-        x = np.random.randn(100, 37).astype(np.float32)
+        x = np.random.randn(100, 39).astype(np.float32)
         y = np.linspace(75, 95, 100)
         r = calibration_curve(m, x, y, n_bins=5)
         assert r.heteroscedasticity_ratio >= 1.0
@@ -95,7 +95,7 @@ class TestPerTrackBreakdown:
     def test_basic(self) -> None:
         from f1opt.model.train import train
         m = train(iterations=30, n_samples=100, seed=7, log=False, save=False)
-        x = np.random.randn(60, 37).astype(np.float32)
+        x = np.random.randn(60, 39).astype(np.float32)
         y = np.random.rand(60).astype(np.float32) * 5 + 80
         tracks = ["melbourne"] * 30 + ["monza"] * 30
         bd = per_track_error_breakdown(m, x, y, tracks)
@@ -109,7 +109,7 @@ class TestPredictionUncertainty:
     def test_single_model_basic(self) -> None:
         from f1opt.model.train import train
         m = train(iterations=50, n_samples=200, seed=0, log=False, save=False)
-        x = np.random.randn(20, 37).astype(np.float32)
+        x = np.random.randn(20, 39).astype(np.float32)
         result = prediction_uncertainty(m, x, n_samples=30, noise_std=0.01, seed=42)
         assert 'mean' in result
         assert 'std' in result
@@ -124,7 +124,7 @@ class TestPredictionUncertainty:
     def test_single_model_larger_noise(self) -> None:
         from f1opt.model.train import train
         m = train(iterations=50, n_samples=200, seed=1, log=False, save=False)
-        x = np.random.randn(10, 37).astype(np.float32)
+        x = np.random.randn(10, 39).astype(np.float32)
         r1 = prediction_uncertainty(m, x, n_samples=20, noise_std=0.001, seed=42)
         r2 = prediction_uncertainty(m, x, n_samples=20, noise_std=0.05, seed=42)
         assert np.mean(r2['std']) >= np.mean(r1['std']) * 0.5
@@ -133,7 +133,7 @@ class TestPredictionUncertainty:
         from f1opt.model.train import train_ensemble
         ens = train_ensemble(n_members=3, base_seed=0, iterations=50,
                               n_samples=200, save=False, log=False)
-        x = np.random.randn(10, 37).astype(np.float32)
+        x = np.random.randn(10, 39).astype(np.float32)
         result = prediction_uncertainty(ens, x, seed=42)
         assert result['mean'].shape == (10,)
         assert result['std'].shape == (10,)
@@ -142,7 +142,7 @@ class TestPredictionUncertainty:
     def test_single_point(self) -> None:
         from f1opt.model.train import train
         m = train(iterations=30, n_samples=100, seed=3, log=False, save=False)
-        x = np.random.randn(1, 37).astype(np.float32)
+        x = np.random.randn(1, 39).astype(np.float32)
         result = prediction_uncertainty(m, x, n_samples=20, noise_std=0.01, seed=42)
         assert result['mean'].shape == (1,)
         assert result['std'].shape == (1,)
@@ -158,9 +158,9 @@ class TestFeatureImportance:
         assert 'names' in result
         assert 'importance_mean' in result
         assert 'importance_std' in result
-        assert len(result['names']) == 37
-        assert len(result['importance_mean']) == 37
-        assert len(result['importance_std']) == 37
+        assert len(result['names']) == 39
+        assert len(result['importance_mean']) == 39
+        assert len(result['importance_std']) == 39
         # Importance should be sorted descending
         imps = result['importance_mean']
         assert np.all(imps[:-1] >= imps[1:])
@@ -171,7 +171,7 @@ class TestFeatureImportance:
         data = generate_dataset(n_samples=100, seed=3, label_source='physics')
         x, sec_y, resp_y, sp, rp = _build_tensors(data)
         y_lap = np.asarray(sec_y.sum(dim=1))
-        names = ['fw_angle', 'rw_angle'] + [f'f{i}' for i in range(2, 37)]
+        names = ['fw_angle', 'rw_angle'] + [f'f{i}' for i in range(2, 39)]
         result = feature_importance(m, np.asarray(x), y_lap, feature_names=names, n_repeats=2, seed=42)
         assert result['names'][0] in names
 

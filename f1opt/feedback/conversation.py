@@ -361,6 +361,37 @@ def reset_sessions() -> None:
     _sessions.clear()
 
 
+def list_sessions() -> list[dict[str, Any]]:
+    """Iter-183: List all active sessions with stats."""
+    result: list[dict[str, Any]] = []
+    for sid, session in _sessions.items():
+        result.append({
+            "session_id": sid,
+            "turn_count": len(session.history),
+            "setup_changes": len(session.setup_changes),
+            "lap_count": len(session.lap_history),
+            "focus": session.summarize_focus(),
+        })
+    return result
+
+
+def session_stats() -> dict[str, Any]:
+    """Iter-183: Aggregate stats across all sessions."""
+    total_turns = 0
+    total_setup_changes = 0
+    total_laps = 0
+    for session in _sessions.values():
+        total_turns += len(session.history)
+        total_setup_changes += len(session.setup_changes)
+        total_laps += len(session.lap_history)
+    return {
+        "total_sessions": len(_sessions),
+        "total_turns": total_turns,
+        "total_setup_changes": total_setup_changes,
+        "total_laps": total_laps,
+    }
+
+
 # --------------------------------------------------------------------------- #
 # Iter-150: context window management
 # --------------------------------------------------------------------------- #

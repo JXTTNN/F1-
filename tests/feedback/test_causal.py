@@ -60,7 +60,7 @@ def _expected_magnitude_pct(current: float, proposed: float, name: str) -> float
 # --------------------------------------------------------------------------- #
 def test_causal_rules_covers_all_19_setup_fields() -> None:
     assert set(CAUSAL_RULES) == set(SETUP_FIELDS)
-    assert len(CAUSAL_RULES) == 19
+    assert len(CAUSAL_RULES) == 21  # Iter-219: +active_aero_mode, +x_mode_activations
 
 
 def test_causal_rules_entry_structure_has_required_keys() -> None:

@@ -142,6 +142,73 @@ def _check_actionability(text: str) -> tuple[float, list[str]]:
         score = 0.4
         issues.append("Limited actionable advice")
     return score, issues
+
+
+def _check_coherence(text: str) -> tuple[float, list[str]]:
+    """Check response coherence: sentence structure, length, and readability (Iter-183).
+
+    Evaluates:
+    - Sentence count (>= 3 sentences = better coherence)
+    - Average sentence length (not too short)
+    - Presence of structured content (bullet points, numbered lists)
+    """
+    issues: list[str] = []
+    # Split into sentences (Chinese: 。！？； English: .!?;)
+    sentences = _re.split(r"[。！？；.!?;]+", text)
+    sentences = [s.strip() for s in sentences if len(s.strip()) > 3]
+    n_sentences = len(sentences)
+
+    if n_sentences == 0:
+        return 0.0, ["Response is empty or too short"]
+
+    score = 0.0
+    # Sentence count scoring
+    if n_sentences >= 5:
+        score += 0.4
+    elif n_sentences >= 3:
+        score += 0.3
+    elif n_sentences >= 1:
+        score += 0.1
+    else:
+        issues.append("Response too short")
+
+    # Average sentence length
+    avg_len = sum(len(s) for s in sentences) / max(n_sentences, 1)
+    if avg_len >= 20:
+        score += 0.3
+    elif avg_len >= 10:
+        score += 0.2
+    else:
+        issues.append("Sentences are too short on average")
+
+    # Structured content presence
+    if _re.search(r"[-•\d+\.]\s", text):
+        score += 0.3
+    else:
+        score += 0.1
+
+    return min(score, 1.0), issues
+
+
+def _check_specificity(feedback: dict) -> tuple[float, list[str]]:
+    """Check response specificity: how many dimensions have concrete values (Iter-183).
+
+    A dimension is "specific" if its value contains a number or specific measurement.
+    """
+    dims = feedback.get("dimensions", [])
+    if not dims:
+        return 0.0, ["No dimensions to evaluate"]
+    issues: list[str] = []
+    specific = 0
+    _num_re = _re.compile(r"\d+\.?\d*")
+    for d in dims:
+        value = str(d.get("value", ""))
+        if _num_re.search(value):
+            specific += 1
+        else:
+            issues.append(f"Dimension '{d.get('name', 'unknown')}' lacks specific values")
+    score = specific / len(dims) if dims else 0.0
+    return score, issues
 def confidence_label(groundedness: float, completeness: float) -> str:
     """Return confidence label based on groundedness and completeness."""
     if groundedness >= 0.8 and completeness >= 0.7:
@@ -201,7 +268,19 @@ def assess_response_quality(
     # Actionability
     a_score, a_issues = _check_actionability(text)
     all_issues.extend(a_issues)
-    overall = weights[0] * g_score + weights[1] * c_score + weights[2] * a_score
+    # Coherence (Iter-183)
+    coh_score, coh_issues = _check_coherence(text)
+    all_issues.extend(coh_issues)
+    # Specificity (Iter-183)
+    s_score, s_issues = _check_specificity(feedback)
+    all_issues.extend(s_issues)
+    overall = (
+        weights[0] * g_score
+        + weights[1] * c_score
+        + weights[2] * a_score * 0.5
+        + weights[2] * coh_score * 0.25
+        + weights[2] * s_score * 0.25
+    )
     if overall >= 0.8:
         label = "excellent"
     elif overall >= 0.6:
@@ -226,6 +305,42 @@ def assess_response_quality(
 __all__ = [
     "ResponseQualityReport",
     "assess_response_quality",
+    "assess_response_quality_weighted",
     "confidence_label",
     "confidence_explanation",
 ]
+
+
+# Iter-183: Driver-style-specific quality weights.
+# Aggressive drivers care more about actionability; conservative drivers
+# value groundedness; default balances all equally.
+_DRIVER_STYLE_WEIGHTS: dict[str, tuple[float, float, float]] = {
+    "aggressive": (0.25, 0.25, 0.50),   # actionability-heavy
+    "conservative": (0.50, 0.30, 0.20),  # groundedness-heavy
+    "default": (0.40, 0.30, 0.30),       # balanced
+}
+
+
+def assess_response_quality_weighted(
+    feedback: dict,
+    telemetry_sources: list[dict] | None = None,
+    *,
+    driver_style: str = "default",
+) -> ResponseQualityReport:
+    """Assess quality with driver-style-specific weights (Iter-183).
+
+    Uses different weight distributions based on driver style:
+    - ``"aggressive"``: weights actionability more (0.25/0.25/0.50)
+    - ``"conservative"``: weights groundedness more (0.50/0.30/0.20)
+    - ``"default"``: balanced (0.40/0.30/0.30)
+
+    Args:
+        feedback: The feedback dict from ``FeedbackEngine.run()``.
+        telemetry_sources: Optional telemetry evidence for groundedness.
+        driver_style: One of ``"aggressive"``, ``"conservative"``, ``"default"``.
+
+    Returns:
+        :class:`ResponseQualityReport` with driver-style-weighted scores.
+    """
+    weights = _DRIVER_STYLE_WEIGHTS.get(driver_style, _DRIVER_STYLE_WEIGHTS["default"])
+    return assess_response_quality(feedback, telemetry_sources, weights=weights)

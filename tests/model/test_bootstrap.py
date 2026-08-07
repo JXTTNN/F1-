@@ -152,7 +152,7 @@ class TestCompareModels:
         model_a = _train_small_model(seed=0)
         model_b = _train_small_model(seed=1)
         rng = np.random.RandomState(0)
-        x = rng.randn(50, 37).astype(np.float32)
+        x = rng.randn(50, 39).astype(np.float32)
         y = rng.rand(50) * 5 + 80
         r = compare_models(model_a, model_b, x, y, n_bootstrap=200, seed=0)
         assert isinstance(r, ModelComparisonReport)
@@ -165,7 +165,7 @@ class TestCompareModels:
         model_a = _train_small_model(seed=0)
         model_b = _train_small_model(seed=1)
         rng = np.random.RandomState(1)
-        x = rng.randn(80, 37).astype(np.float32)
+        x = rng.randn(80, 39).astype(np.float32)
         y = rng.rand(80) * 5 + 80
         r = compare_models(model_a, model_b, x, y, n_bootstrap=300, seed=1)
         assert r.delta_mae_lower <= r.delta_mae_upper
@@ -175,7 +175,7 @@ class TestCompareModels:
         model_a = _train_small_model(seed=0)
         model_b = _train_small_model(seed=1)
         rng = np.random.RandomState(2)
-        x = rng.randn(60, 37).astype(np.float32)
+        x = rng.randn(60, 39).astype(np.float32)
         y = rng.rand(60) * 5 + 80
         r = compare_models(model_a, model_b, x, y, n_bootstrap=200, seed=2)
         assert 0.0 <= r.p_b_better_mae <= 1.0
@@ -184,7 +184,7 @@ class TestCompareModels:
         """Comparing a model to itself: delta ≈ 0, p ≈ 0.5."""
         model_a = _train_small_model(seed=0)
         rng = np.random.RandomState(3)
-        x = rng.randn(100, 37).astype(np.float32)
+        x = rng.randn(100, 39).astype(np.float32)
         y = rng.rand(100) * 5 + 80
         r = compare_models(model_a, model_a, x, y, n_bootstrap=500, seed=3)
         # MAE_A == MAE_B exactly, so delta == 0 in expectation.
@@ -199,7 +199,7 @@ class TestCompareModels:
         model_a = _train_small_model(seed=0)
         model_b = _train_small_model(seed=1)
         rng = np.random.RandomState(4)
-        x = rng.randn(60, 37).astype(np.float32)
+        x = rng.randn(60, 39).astype(np.float32)
         y = rng.rand(60) * 5 + 80
         r = compare_models(model_a, model_b, x, y, n_bootstrap=200, seed=4)
 
@@ -214,7 +214,7 @@ class TestCompareModels:
         model_a = _train_small_model(seed=0)
         model_b = _train_small_model(seed=1)
         rng = np.random.RandomState(5)
-        x = rng.randn(40, 37).astype(np.float32)
+        x = rng.randn(40, 39).astype(np.float32)
         y = rng.rand(40) * 5 + 80
         r1 = compare_models(model_a, model_b, x, y, n_bootstrap=200, seed=99)
         r2 = compare_models(model_a, model_b, x, y, n_bootstrap=200, seed=99)
@@ -225,7 +225,7 @@ class TestCompareModels:
         """confidence out of (0, 1) raises ValueError."""
         model_a = _train_small_model(seed=0)
         model_b = _train_small_model(seed=1)
-        x = np.zeros((10, 37), dtype=np.float32)
+        x = np.zeros((10, 39), dtype=np.float32)
         y = np.ones(10) * 80
         with pytest.raises(ValueError, match="confidence must be in"):
             compare_models(model_a, model_b, x, y, confidence=0.0)
@@ -236,7 +236,7 @@ class TestCompareModels:
         """n_bootstrap < 2 raises ValueError."""
         model_a = _train_small_model(seed=0)
         model_b = _train_small_model(seed=1)
-        x = np.zeros((10, 37), dtype=np.float32)
+        x = np.zeros((10, 39), dtype=np.float32)
         y = np.ones(10) * 80
         with pytest.raises(ValueError, match="n_bootstrap must be >= 2"):
             compare_models(model_a, model_b, x, y, n_bootstrap=1)
@@ -245,7 +245,7 @@ class TestCompareModels:
         """Fewer than 2 samples raises ValueError."""
         model_a = _train_small_model(seed=0)
         model_b = _train_small_model(seed=1)
-        x = np.zeros((1, 37), dtype=np.float32)
+        x = np.zeros((1, 39), dtype=np.float32)
         y = np.ones(1) * 80
         with pytest.raises(ValueError, match="need at least 2 samples"):
             compare_models(model_a, model_b, x, y)
@@ -254,7 +254,7 @@ class TestCompareModels:
         """Mismatched x and y_lap lengths raise ValueError."""
         model_a = _train_small_model(seed=0)
         model_b = _train_small_model(seed=1)
-        x = np.zeros((10, 37), dtype=np.float32)
+        x = np.zeros((10, 39), dtype=np.float32)
         y = np.ones(8) * 80
         with pytest.raises(ValueError, match="x.shape"):
             compare_models(model_a, model_b, x, y)

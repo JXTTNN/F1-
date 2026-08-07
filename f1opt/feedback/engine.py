@@ -32,6 +32,9 @@ Public entry: :func:`generate_feedback` (constructs a cached default engine).
 
 from __future__ import annotations
 
+import gc as _gc
+import logging as _logging
+import os as _os
 import threading as _threading
 import time as _time
 from collections import deque as _deque
@@ -39,11 +42,13 @@ from dataclasses import dataclass as _dataclass
 from functools import lru_cache
 from typing import Any
 
+_logger = _logging.getLogger(__name__)
+
 import numpy as np
 
 from f1opt.config import Settings, get_settings
 from f1opt.data.setup_schema import SETUP_FIELDS, _snap_to_step
-from f1opt.data.tracks import Track, get_track
+from f1opt.data.tracks import TRACKS_BY_ID, Track, get_track
 from f1opt.driver.profile import DriverProfile
 
 from .conversation import ConversationSession, get_session
@@ -712,6 +717,24 @@ def extract_metrics(
             np.asarray(ts, dtype=np.float64),
         )
 
+    # Iter-229: batch extraction of multiple fields in a single pass.
+    def col_multi(*fields: str) -> dict[str, tuple[np.ndarray, np.ndarray]]:
+        """Extract multiple fields from frames in one pass (O(n) instead of O(n*k))."""
+        result: dict[str, tuple[list[float], list[float]]] = {
+            f: ([], []) for f in fields
+        }
+        for frm in frames:
+            ts_val = float(frm.get("session_time") or 0.0)
+            for field in fields:
+                v = _num(frm, field)
+                if v is not None:
+                    result[field][0].append(v)
+                    result[field][1].append(ts_val)
+        return {
+            f: (np.asarray(vals, dtype=np.float64), np.asarray(ts, dtype=np.float64))
+            for f, (vals, ts) in result.items()
+        }
+
     # --- Speed ---
     speed, speed_t = col("speed")
     if len(speed):
@@ -888,6 +911,58 @@ def extract_metrics(
         add_ref("tyre_temp_rl", mid_t, "tyre_temp_rl", float(temps[2]))
         add_ref("tyre_temp_rr", mid_t, "tyre_temp_rr", float(temps[3]))
 
+    # --- Tyre temp gradient (inner/outer spread) — Iter-198 ---
+    # Detects camber misalignment: if inner tyre temp is much hotter than
+    # outer, the camber is too negative (excessive inner edge wear).
+    inner_temp_fields = ("tyre_inner_temp_fl", "tyre_inner_temp_fr")
+    outer_temp_fields = ("tyre_outer_temp_fl", "tyre_outer_temp_fr")
+    inner_temps: list[float] = []
+    outer_temps: list[float] = []
+    for k in inner_temp_fields:
+        t_arr, _ = col(k)
+        inner_temps.append(float(np.mean(t_arr)) if len(t_arr) else None)
+    for k in outer_temp_fields:
+        t_arr, _ = col(k)
+        outer_temps.append(float(np.mean(t_arr)) if len(t_arr) else None)  # type: ignore[arg-type]
+    if all(t is not None for t in inner_temps + outer_temps):
+        # Average inner vs outer across FL+FR.
+        avg_inner = sum(inner_temps) / 2.0  # type: ignore[arg-type]
+        avg_outer = sum(outer_temps) / 2.0  # type: ignore[arg-type]
+        temp_gradient = avg_inner - avg_outer
+        metrics["values"]["tyre_temp_gradient"] = temp_gradient
+        mid_t = float(frames[len(frames) // 2].get("session_time") or 0.0)
+        add_ref("tyre_inner_temp_fl", mid_t, "tyre_inner_temp_fl", float(inner_temps[0]))  # type: ignore[arg-type]
+        add_ref("tyre_outer_temp_fl", mid_t, "tyre_outer_temp_fl", float(outer_temps[0]))  # type: ignore[arg-type]
+
+    # --- Aero balance (downforce) — Iter-214 ---
+    # Compares g_lat at high speed (>250 km/h) vs low speed (<150 km/h) while
+    # cornering to determine if the car is aero-dominant or mechanical-grip-dominant.
+    if len(g_lat) >= 2 and len(speed) >= 2 and len(steer) >= 2:
+        n_aero = min(len(g_lat), len(speed), len(steer))
+        g_a = g_lat[:n_aero]
+        sp_a = speed[:n_aero]
+        st_a = steer[:n_aero]
+        corner_mask = np.abs(st_a) > 0.3
+        if corner_mask.any():
+            high_mask = corner_mask & (sp_a > 250.0)
+            low_mask = corner_mask & (sp_a < 150.0)
+            high_g = float(np.mean(np.abs(g_a[high_mask]))) if high_mask.any() else 0.0
+            low_g = float(np.mean(np.abs(g_a[low_mask]))) if low_mask.any() else 0.0
+            aero_ratio = high_g / low_g if low_g > 0 else 0.0
+            metrics["values"]["high_speed_g_lat_avg"] = high_g
+            metrics["values"]["low_speed_g_lat_avg"] = low_g
+            metrics["values"]["aero_balance_ratio"] = aero_ratio
+            if aero_ratio > 1.8:
+                diag = "aero-dominant: strong downforce, may need more mechanical grip"
+            elif aero_ratio < 1.1:
+                diag = "mechanical-dominant: good mechanical grip, may need more downforce"
+            else:
+                diag = "balanced aero/mechanical grip"
+            metrics["values"]["aero_balance_diagnosis"] = diag
+            mid_ab = len(g_a) // 2
+            add_ref("aero_balance_high_g", float(g_lat_t[min(mid_ab, len(g_lat_t)-1)]), "g_lat", high_g)
+            add_ref("aero_balance_low_g", float(g_lat_t[min(mid_ab, len(g_lat_t)-1)]), "g_lat", low_g)
+
     # --- Max g_lat (grip proxy) ---
     if len(g_lat):
         abs_g = np.abs(g_lat)
@@ -1016,6 +1091,146 @@ def extract_metrics(
         metrics["values"]["fuel_used"] = fuel_used
         add_ref("fuel_start", float(fuel_t[0]), "fuel_in_tank", float(fuel[0]))
         add_ref("fuel_end", float(fuel_t[-1]), "fuel_in_tank", float(fuel[-1]))
+        # Iter-200: fuel consumption rate (kg/lap) and per-sector efficiency.
+        lap_dist, _ = col("lap_distance")
+        if len(lap_dist) >= 2:
+            track_len = float(lap_dist[-1] - lap_dist[0])
+            if track_len > 0:
+                fuel_per_km = fuel_used / (track_len / 1000.0) if fuel_used > 0 else 0.0
+                metrics["values"]["fuel_consumption_rate_kg_per_km"] = fuel_per_km
+                metrics["values"]["fuel_consumption_rate_kg_per_lap"] = fuel_used
+
+    # --- Fuel per sector (Iter-246) ---
+    # Use TelemetryAnalytics fuel_per_sector_analysis to get sector-level
+    # fuel consumption proxy data for richer fuel feedback.
+    try:
+        from f1opt.telemetry.analytics import TelemetryAnalytics as _TA
+        ta = _TA(frames, track_length_m=track_len)
+        sector_fuel = ta.fuel_per_sector_analysis()
+        metrics["values"]["fuel_sector_data"] = sector_fuel
+        metrics["values"]["fuel_total_proxy"] = sector_fuel.get("total_fuel_proxy", 0.0)
+        metrics["values"]["fuel_proxy_per_km"] = sector_fuel.get("fuel_proxy_per_km", 0.0)
+        highest = sector_fuel.get("highest_consumption_sector", -1)
+        if highest >= 0:
+            metrics["values"]["fuel_highest_sector"] = highest
+    except Exception:
+        pass  # Fallback gracefully if analytics unavailable.
+
+    # --- Throttle/brake overlap (Iter-206) ---
+    thr_arr, _ = col("throttle")
+    brk_arr, _ = col("brake")
+    if len(thr_arr) >= 2 and len(brk_arr) >= 2:
+        n_overlap = min(len(thr_arr), len(brk_arr))
+        overlap_mask = (thr_arr[:n_overlap] > 0.3) & (brk_arr[:n_overlap] > 0.3)
+        overlap_count = int(np.sum(overlap_mask))
+        metrics["values"]["throttle_brake_overlap_count"] = overlap_count
+        metrics["values"]["throttle_brake_overlap_pct"] = float(overlap_count / n_overlap) if n_overlap > 0 else 0.0
+
+    # --- Mechanical grip trend (Iter-217) ---
+    # Slope of low-speed g_lat over lap_distance to detect grip degradation.
+    if len(g_lat) >= 3 and len(speed) >= 3 and len(steer) >= 3:
+        lap_dist_m, _ = col("lap_distance")
+        if len(lap_dist_m) >= 3:
+            n_m = min(len(g_lat), len(speed), len(steer), len(lap_dist_m))
+            g_m = g_lat[:n_m]
+            sp_m = speed[:n_m]
+            st_m = steer[:n_m]
+            ld_m = lap_dist_m[:n_m]
+            corner_mask_m = np.abs(st_m) > 0.3
+            low_mask_m = corner_mask_m & (sp_m < 150.0)
+            if low_mask_m.sum() >= 3:
+                g_low_m = np.abs(g_m[low_mask_m])
+                d_low_m = ld_m[low_mask_m]
+                x_mean_m = float(np.mean(d_low_m))
+                y_mean_m = float(np.mean(g_low_m))
+                num_m = float(np.sum((d_low_m - x_mean_m) * (g_low_m - y_mean_m)))
+                den_m = float(np.sum((d_low_m - x_mean_m) ** 2))
+                slope_m = num_m / den_m if den_m > 0 else 0.0
+                if slope_m < -0.001:
+                    metrics["values"]["mech_grip_trend"] = "decaying"
+                elif slope_m > 0.001:
+                    metrics["values"]["mech_grip_trend"] = "improving"
+                else:
+                    metrics["values"]["mech_grip_trend"] = "stable"
+                metrics["values"]["mech_grip_slope"] = slope_m
+
+    # --- Brake temperature balance (Iter-223) ---
+    # Front/rear brake temp ratio to detect brake bias imbalance.
+    btf_arr, _ = col("brake_temp_fl")
+    btr_arr, _ = col("brake_temp_rl")
+    if len(btf_arr) >= 2 and len(btr_arr) >= 2:
+        btf_fr_arr, _ = col("brake_temp_fr")
+        btr_rr_arr, _ = col("brake_temp_rr")
+        n_bt = min(len(btf_arr), len(btf_fr_arr), len(btr_arr), len(btr_rr_arr))
+        front_avg = float((np.mean(btf_arr[:n_bt]) + np.mean(btf_fr_arr[:n_bt])) / 2.0)
+        rear_avg = float((np.mean(btr_arr[:n_bt]) + np.mean(btr_rr_arr[:n_bt])) / 2.0)
+        if rear_avg > 0:
+            bt_ratio = front_avg / rear_avg
+            metrics["values"]["brake_temp_f_r_ratio"] = bt_ratio
+            if bt_ratio > 1.3:
+                metrics["values"]["brake_temp_balance_diag"] = "front-bias"
+            elif bt_ratio < 0.7:
+                metrics["values"]["brake_temp_balance_diag"] = "rear-bias"
+            else:
+                metrics["values"]["brake_temp_balance_diag"] = "balanced"
+
+    # --- Tyre temperature gradient (Iter-227) ---
+    ts_fl_arr, _ = col("tyre_temp_fl")
+    ts_fr_arr, _ = col("tyre_temp_fr")
+    ts_rl_arr, _ = col("tyre_temp_rl")
+    ts_rr_arr, _ = col("tyre_temp_rr")
+    if len(ts_fl_arr) >= 2 and len(ts_fr_arr) >= 2:
+        n_tt = min(len(ts_fl_arr), len(ts_fr_arr), len(ts_rl_arr), len(ts_rr_arr))
+        lr_front = float(np.mean(ts_fl_arr[:n_tt] - ts_fr_arr[:n_tt]))
+        lr_rear = float(np.mean(ts_rl_arr[:n_tt] - ts_rr_arr[:n_tt]))
+        lr_delta = (lr_front + lr_rear) / 2.0
+        fr_left = float(np.mean(ts_fl_arr[:n_tt] - ts_rl_arr[:n_tt]))
+        fr_right = float(np.mean(ts_fr_arr[:n_tt] - ts_rr_arr[:n_tt]))
+        fr_delta = (fr_left + fr_right) / 2.0
+        metrics["values"]["tyre_temp_left_right_delta"] = lr_delta
+        metrics["values"]["tyre_temp_front_rear_delta"] = fr_delta
+        diag_parts = []
+        if abs(lr_delta) > 3.0:
+            diag_parts.append(f"{'左' if lr_delta > 0 else '右'}侧偏热")
+        if abs(fr_delta) > 5.0:
+            diag_parts.append(f"{'前' if fr_delta > 0 else '后'}轴偏热")
+        metrics["values"]["tyre_temp_gradient_diag"] = "; ".join(diag_parts) if diag_parts else "balanced"
+
+    # --- Grip consistency (Iter-241) ---
+    # g_lat standard deviation during cornering as a consistency measure.
+    if len(g_lat) >= 3 and len(steer) >= 3:
+        corner_mask_gc = np.abs(steer) > 0.3
+        if corner_mask_gc.any():
+            g_corner = np.abs(g_lat[corner_mask_gc])
+            gc_std = float(np.std(g_corner))
+            metrics["values"]["grip_consistency_overall_std"] = gc_std
+            # Per-sector worst determination via lap_distance.
+            lap_dist_gc, _ = col("lap_distance")
+            if len(lap_dist_gc) >= 2:
+                track_len = 5000.0  # default
+                track_info = TRACKS_BY_ID.get(track_id)
+                if track_info is not None:
+                    track_len = track_info.length_m
+                n_gc = min(len(g_lat), len(steer), len(lap_dist_gc))
+                order_gc = np.argsort(lap_dist_gc[:n_gc])
+                g_gc = np.abs(g_lat[:n_gc][order_gc])
+                st_gc = steer[:n_gc][order_gc]
+                ld_gc = lap_dist_gc[:n_gc][order_gc]
+                cm_gc = np.abs(st_gc) > 0.3
+                boundaries_gc = [track_len / 3.0, 2.0 * track_len / 3.0, track_len]
+                worst_std = 0.0
+                worst_sec = -1
+                prev_gc = 0.0
+                for si, bound in enumerate(boundaries_gc):
+                    mask = (ld_gc >= prev_gc) & (ld_gc < bound + 1e-6)
+                    prev_gc = bound
+                    corner_in = mask & cm_gc
+                    if corner_in.any():
+                        s_std = float(np.std(g_gc[corner_in]))
+                        if s_std > worst_std:
+                            worst_std = s_std
+                            worst_sec = si
+                metrics["values"]["grip_consistency_worst_sector"] = worst_sec
 
     return metrics
 
@@ -1208,9 +1423,19 @@ def _dim_balance(
         s_ref = refs.get("understeer_steer")
         g_ref = refs.get("understeer_g_lat")
         ev = "; ".join(_format_ref(r) for r in (s_ref, g_ref) if r)
+        # Iter-193: enhanced understeer assessment with corner context.
+        severity = "严重" if understeer > 0.7 else ("中等" if understeer > 0.55 else "轻微")
+        phase_hint = ""
+        if s_ref and g_ref:
+            steer_val = s_ref.get("value", 0)
+            g_lat_val = g_ref.get("value", 0)
+            if abs(steer_val) > 0.7 and abs(g_lat_val) < 1.5:
+                phase_hint = " (高速弯中转向输入大但横向G不足, 前轴气动抓地力不足)"
+            elif abs(steer_val) < 0.5:
+                phase_hint = " (低速弯中前轮机械抓地力不足)"
         dim = {
             "name": "balance",
-            "value": f"understeer indicator {understeer:.2f} (推头)",
+            "value": f"understeer indicator {understeer:.2f} ({severity}推头){phase_hint}",
             "evidence": ev or f"understeer={understeer:.2f}",
             "advice": "增加前轴抓地: 提高 front_wing 或软化 front_arb。",
         }
@@ -1236,9 +1461,18 @@ def _dim_balance(
         rl_ref = refs.get("oversteer_wear_rl")
         rr_ref = refs.get("oversteer_wear_rr")
         ev = "; ".join(_format_ref(r) for r in (rl_ref, rr_ref) if r)
+        # Iter-194: enhanced oversteer assessment with severity level.
+        severity = "严重" if oversteer > 0.7 else ("中等" if oversteer > 0.55 else "轻微")
+        rear_wear_info = ""
+        twb = values.get("tyre_wear_balance")
+        if twb and isinstance(twb, dict):
+            rear_avg = twb.get("rear_avg", 0)
+            front_avg = twb.get("front_avg", 0)
+            if rear_avg > front_avg + 5:
+                rear_wear_info = f" (后轴磨损比前轴高{rear_avg - front_avg:.1f}%)"
         dim = {
             "name": "balance",
-            "value": f"oversteer indicator {oversteer:.2f} (甩尾, rear wear high)",
+            "value": f"oversteer indicator {oversteer:.2f} ({severity}甩尾{rear_wear_info})",
             "evidence": ev or f"oversteer={oversteer:.2f}",
             "advice": "稳定后轴: 提高 rear_wing 或软化 rear_arb。",
         }
@@ -1324,6 +1558,20 @@ def _dim_grip(
         )
     elif max_glat is not None and max_glat < 3.0:
         advice = "弯中横向 G 偏低，可提高下压力以增加整体抓地。"
+    # Iter-217: mechanical grip trend in grip dimension.
+    mech_trend = values.get("mech_grip_trend")
+    if mech_trend and mech_trend != "stable":
+        parts.append(f"mech_grip_trend={mech_trend}")
+        if mech_trend == "decaying":
+            if advice is None:
+                advice = "低速弯机械抓地力在衰退, 注意轮胎管理。"
+            else:
+                advice += " 低速弯机械抓地力在衰退, 注意轮胎管理。"
+        elif mech_trend == "improving":
+            if advice is None:
+                advice = "机械抓地力趋势向好, 轮胎正在进入工作窗口。"
+            else:
+                advice += " 机械抓地力趋势向好, 轮胎正在进入工作窗口。"
     return (
         {
             "name": "grip",
@@ -1377,6 +1625,20 @@ def _dim_tyres(
                 expected_gain="~0.05-0.15s/lap + improved tyre life",
             )
         )
+    # Iter-212: tyre temp gradient feedback (inner vs outer edge).
+    temp_gradient = values.get("tyre_temp_gradient")
+    if temp_gradient is not None and abs(temp_gradient) > 5.0:
+        if temp_gradient > 0:
+            camber_advice = (
+                f"前轮内肩比外肩热 {temp_gradient:.1f}°C, 负外倾角过大; "
+                "建议 front_camber +0.3° (减少负倾角) 以均匀胎面温度。"
+            )
+        else:
+            camber_advice = (
+                f"前轮外肩比内肩热 {abs(temp_gradient):.1f}°C, 负外倾角不足; "
+                "建议 front_camber -0.3° (增加负倾角) 以提升弯中抓地。"
+            )
+        advice = camber_advice if advice is None else f"{advice} {camber_advice}"
     return (
         {
             "name": "tyres",
@@ -1424,9 +1686,11 @@ def _dim_braking(
         bias_note = ""
         if bb is not None and bb >= 53:
             bias_note = f" (front_brake_bias={bb:.0f}% 偏前)"
+        # Iter-195: classify lockup severity and add progressive braking advice.
+        sev_label = "严重" if lockup > 0.6 else ("中等" if lockup > 0.45 else "轻微")
         advice = (
-            f"前轮锁死(lockup)风险偏高{bias_note}：降低 brake_pressure 或后移 "
-            "front_brake_bias，并采用渐近刹车。"
+            f"前轮锁死(lockup)风险{sev_label}{bias_note}：降低 brake_pressure 或后移 "
+            f"front_brake_bias，并采用渐近刹车。建议刹车时先轻踩再逐步加重 (trail braking)。"
         )
         suggestions.append(
             _make_suggestion(
@@ -1450,6 +1714,106 @@ def _dim_braking(
         },
         suggestions,
     )
+
+
+def _dim_brake_temp(values: dict[str, Any]) -> dict[str, Any]:
+    """Iter-222: brake temperature balance dimension."""
+    bt_ratio = values.get("brake_temp_f_r_ratio")
+    bt_diag = values.get("brake_temp_balance_diag") or ""
+    if bt_ratio is None:
+        return _data_insufficient("brake_temp")
+    if bt_ratio > 1.3:
+        advice = "前刹车温度过高, 建议后移刹车偏置 1-2% 以平衡热负荷。"
+    elif bt_ratio < 0.7:
+        advice = "后刹车温度过高, 建议前移刹车偏置 1-2% 以平衡热负荷。"
+    else:
+        advice = "前后刹车温度分布均匀, 刹车偏置设置合理。"
+    return {
+        "name": "brake_temp",
+        "value": f"brake_temp_f_r_ratio={bt_ratio:.2f} ({bt_diag})",
+        "evidence": f"brake_temp_f_r_ratio={bt_ratio:.2f}",
+        "advice": advice,
+    }
+
+
+def _dim_tyre_temp_gradient(values: dict[str, Any]) -> dict[str, Any]:
+    """Iter-227: tyre temperature gradient dimension (left-right / front-rear)."""
+    lr_delta = values.get("tyre_temp_left_right_delta")
+    fr_delta = values.get("tyre_temp_front_rear_delta")
+    diag = values.get("tyre_temp_gradient_diag") or ""
+    if lr_delta is None and fr_delta is None:
+        return _data_insufficient("tyre_temp_gradient")
+    parts = []
+    if lr_delta is not None:
+        parts.append(f"left_right_delta={lr_delta:.1f}°C")
+    if fr_delta is not None:
+        parts.append(f"front_rear_delta={fr_delta:.1f}°C")
+    if diag:
+        parts.append(f"({diag})")
+    if abs(lr_delta or 0) > 3.0:
+        side = "左" if (lr_delta or 0) > 0 else "右"
+        advice = f"{side}侧轮胎温度偏高, 检查 camber 和胎压对称性。"
+    elif abs(fr_delta or 0) > 5.0:
+        axle = "前" if (fr_delta or 0) > 0 else "后"
+        advice = f"{axle}轴轮胎温度偏高, 检查前后气动平衡和刹车偏置。"
+    else:
+        advice = "轮胎温度梯度分布均匀, 胎压和 camber 设置合理。"
+    return {
+        "name": "tyre_temp_gradient",
+        "value": "; ".join(parts),
+        "evidence": "; ".join(parts),
+        "advice": advice,
+    }
+
+
+def _dim_ers_sector_efficiency(values: dict[str, Any]) -> dict[str, Any]:
+    """Iter-231: ERS per-sector efficiency dimension."""
+    sector_ers = values.get("ers_sector_efficiency")
+    if sector_ers is None:
+        return _data_insufficient("ers_sector_efficiency")
+    parts = []
+    worst_sector = -1
+    worst_eff = 1.0
+    for i, se in enumerate(sector_ers):
+        eff = se.get("efficiency", 0.0)
+        parts.append(f"S{i+1}_eff={eff:.2f}")
+        if eff < worst_eff:
+            worst_eff = eff
+            worst_sector = i
+    if worst_sector >= 0 and worst_eff < 0.5:
+        advice = f"S{worst_sector+1} ERS 效率偏低 ({worst_eff:.2f}), 建议优化该扇区部署策略。"
+    else:
+        advice = "各扇区 ERS 效率良好, 部署策略合理。"
+    return {
+        "name": "ers_sector_efficiency",
+        "value": "; ".join(parts),
+        "evidence": "; ".join(parts),
+        "advice": advice,
+    }
+
+
+def _dim_grip_consistency(values: dict[str, Any]) -> dict[str, Any]:
+    """Iter-241: grip consistency dimension (g_lat std deviation across sectors)."""
+    overall_std = values.get("grip_consistency_overall_std")
+    worst_sector = values.get("grip_consistency_worst_sector")
+    if overall_std is None:
+        return _data_insufficient("grip_consistency")
+    if overall_std > 0.5:
+        advice = (
+            f"弯中 g_lat 波动较大 (std={overall_std:.2f}g), 抓地力一致性不足. "
+            "建议检查轮胎温度和胎压, 或降低入弯激进程度."
+        )
+    elif overall_std > 0.3:
+        advice = "弯中抓地力有一定波动, 关注轮胎管理. 继续维持当前驾驶风格."
+    else:
+        advice = "弯中抓地力一致性良好, 轮胎工作状态稳定."
+    sector_info = f" (worst=S{worst_sector+1})" if worst_sector is not None and worst_sector >= 0 else ""
+    return {
+        "name": "grip_consistency",
+        "value": f"g_lat_std={overall_std:.3f}g{sector_info}",
+        "evidence": f"grip_consistency_overall_std={overall_std:.3f}",
+        "advice": advice,
+    }
 
 
 def _dim_ers_deployment(values: dict[str, Any], refs: dict[str, Any]) -> dict[str, Any]:
@@ -1495,6 +1859,11 @@ def _dim_ers_deployment(values: dict[str, Any], refs: dict[str, Any]) -> dict[st
         advice = "ERS 消耗过快, 增加制动回收或减少低效区段部署."
     elif deployed is not None and harvested is not None and deployed > harvested * 1.3:
         advice = "部署量显著高于回收, 关注 MGU-K 效率及大直道前的 SoC 储备."
+    # Iter-204: low SOC warning.
+    if store_mean is not None and store_mean < 30.0:
+        advice = f"ERS 电量偏低 (SOC={store_mean:.0f}%), 建议切换到回收模式, 减少部署。"
+    elif store_mean is not None and store_mean < 50.0:
+        advice = f"ERS 电量偏低 (SOC={store_mean:.0f}%), 注意大直道前储备电量。"
     return {
         "name": "ers_deployment",
         "value": "; ".join(parts),
@@ -1806,6 +2175,56 @@ def _dim_setup_advice(
         }
 
 
+def _dim_throttle_brake_overlap(values: dict[str, Any]) -> dict[str, Any]:
+    """Iter-206: throttle/brake overlap detection dimension."""
+    overlap_count = values.get("throttle_brake_overlap_count")
+    if overlap_count is None:
+        return _data_insufficient("throttle_brake_overlap")
+    overlap_pct = values.get("throttle_brake_overlap_pct", 0.0)
+    parts = [f"overlap frames: {overlap_count}"]
+    if overlap_pct:
+        parts.append(f"{overlap_pct:.1%} of lap")
+    advice: str | None = None
+    if overlap_count > 10:
+        advice = "油门刹车同时踩踏次数过多, 浪费燃料和刹车; 提高入弯前收油习惯。"
+    return {
+        "name": "throttle_brake_overlap",
+        "value": "; ".join(parts),
+        "evidence": f"overlap_count={overlap_count}",
+        "advice": advice,
+    }
+
+
+def _dim_fuel_consumption(values: dict[str, Any]) -> dict[str, Any]:
+    """Iter-202, Iter-246: fuel consumption efficiency dimension with sector data."""
+    fuel_used = values.get("fuel_used")
+    fuel_rate = values.get("fuel_consumption_rate_kg_per_km")
+    if fuel_used is None:
+        return _data_insufficient("fuel_consumption")
+    parts = [f"fuel used {fuel_used:.3f} kg/lap"]
+    if fuel_rate is not None:
+        parts.append(f"{fuel_rate:.4f} kg/km")
+    advice: str | None = None
+    # F1 2026 race fuel budget: ~100 kg, ~305 km race → ~0.33 kg/km target.
+    if fuel_rate is not None and fuel_rate > 0.35:
+        advice = "燃油消耗偏高, 建议 lift-and-coast 或提前升档以节省燃油。"
+    elif fuel_rate is not None and fuel_rate < 0.28:
+        advice = "燃油消耗偏低, 可考虑提高 ERS 部署功率或增加引擎出力。"
+    # Iter-246: add sector-level fuel insight.
+    highest_sector = values.get("fuel_highest_sector")
+    if highest_sector is not None and highest_sector >= 0:
+        if advice:
+            advice += f" S{highest_sector+1} 油耗最高, 重点关注该扇区油门控制。"
+        else:
+            advice = f"S{highest_sector+1} 油耗最高, 建议在该扇区 lift-and-coast。"
+    return {
+        "name": "fuel_consumption",
+        "value": "; ".join(parts),
+        "evidence": f"fuel_used={fuel_used:.3f} kg/lap",
+        "advice": advice,
+    }
+
+
 def _dim_corner_analysis(
     metrics: dict[str, Any],
     track_id: str,
@@ -1921,6 +2340,45 @@ def _dim_corner_analysis(
         }
 
 
+def _dim_aero_balance(values: dict[str, Any]) -> dict[str, Any]:
+    """Iter-214: 下压力平衡 (aero balance) 维度.
+
+    从 extract_metrics 中读取 high_speed_g_lat_avg / low_speed_g_lat_avg /
+    aero_balance_ratio / aero_balance_diagnosis, 判断车辆是气动主导还是
+    机械抓地主导, 给出前后翼配比建议.
+    """
+    aero_ratio = values.get("aero_balance_ratio")
+    diag = values.get("aero_balance_diagnosis") or ""
+    high_g = values.get("high_speed_g_lat_avg")
+    low_g = values.get("low_speed_g_lat_avg")
+    if aero_ratio is None:
+        return _data_insufficient("aero_balance")
+    if aero_ratio > 1.8:
+        advice = (
+            "气动主导: 高速下压力充足但低速机械抓地力不足. "
+            "建议软化前防倾杆 +1 档, 增加前束角以提升机械抓地力."
+        )
+    elif aero_ratio < 1.1:
+        advice = (
+            "机械主导: 低速机械抓地力良好但高速气动抓地力不足. "
+            "建议前翼+2 档, 后翼+1 档以增加整体下压力."
+        )
+    else:
+        advice = "气动/机械抓地力平衡良好, 继续维持当前前后翼配比."
+    return {
+        "name": "aero_balance",
+        "value": (
+            f"aero_balance_ratio {aero_ratio:.2f} ({diag}), "
+            f"high_speed_g={high_g:.2f}g, low_speed_g={low_g:.2f}g"
+        ),
+        "evidence": (
+            f"aero_balance_ratio={aero_ratio:.2f}, "
+            f"high_speed_g_lat_avg={high_g:.2f}, low_speed_g_lat_avg={low_g:.2f}"
+        ),
+        "advice": advice,
+    }
+
+
 def rule_based_feedback(
     metrics: dict[str, Any],
     setup: dict[str, Any],
@@ -2018,6 +2476,24 @@ def rule_based_feedback(
     # Iter-164.14: 逐弯分析维度 (R5 全程动态)
     dim_corner = _dim_corner_analysis(metrics, track_id)
 
+    # Iter-202: fuel consumption dimension
+    dim_fuel = _dim_fuel_consumption(values)
+
+    # Iter-206: throttle/brake overlap dimension
+    dim_overlap = _dim_throttle_brake_overlap(values)
+
+    # Iter-214: aero balance (downforce) dimension
+    dim_aero = _dim_aero_balance(values)
+
+    # Iter-222: brake temperature balance dimension
+    dim_brake_temp = _dim_brake_temp(values)
+
+    # Iter-227: tyre temperature gradient dimension
+    dim_tyre_temp_grad = _dim_tyre_temp_gradient(values)
+
+    # Iter-241: grip consistency dimension
+    dim_grip_consistency = _dim_grip_consistency(values)
+
     dimensions = [
         dim_balance,
         dim_grip,
@@ -2031,6 +2507,12 @@ def rule_based_feedback(
         dim_sector,
         dim_setup,
         dim_corner,  # Iter-164.14: 逐弯分析 (第 12 维)
+        dim_fuel,   # Iter-202: 燃油消耗 (第 13 维)
+        dim_overlap,  # Iter-206: 油门刹车重叠 (第 14 维)
+        dim_aero,   # Iter-214: 下压力平衡 (第 15 维)
+        dim_brake_temp,  # Iter-222: 刹车温度平衡 (第 16 维)
+        dim_tyre_temp_grad,  # Iter-227: 轮胎温度梯度 (第 17 维)
+        dim_grip_consistency,  # Iter-241: 抓地力一致性 (第 18 维)
     ]
 
     summary = _general_summary(metrics, dimensions, track, ref_lap)
@@ -2575,6 +3057,12 @@ class FeedbackEngine:
         self._token_tracker: TokenUsageTracker | None = None
         # Iter-142: per-engine feedback memory for context-aware LLM responses.
         self._feedback_memory: FeedbackMemory | None = None
+        # Lazy LLM loading: the LLM backend is NOT loaded at init time.
+        # It must be explicitly loaded via preload_llm() before any LLM
+        # enhancement runs. This ensures the LLM stays out of memory
+        # during gameplay (telemetry collection) and is only loaded when
+        # the user stops telemetry and requests feedback analysis.
+        self._llm_loaded: bool = False
 
     @property
     def config(self) -> Settings:
@@ -2636,6 +3124,133 @@ class FeedbackEngine:
         """Clear the engine's token-usage log (Iter-138)."""
         self.token_tracker.reset()
 
+    def _get_memory_usage_bytes(self) -> int:
+        """Return the current process RSS (resident set size) in bytes.
+
+        Uses ``/proc/self/status`` on Linux; falls back to 0 on other
+        platforms or when the file is unreadable.
+        """
+        try:
+            with open("/proc/self/status") as f:
+                for line in f:
+                    if line.startswith("VmRSS:"):
+                        parts = line.split()
+                        if len(parts) >= 2:
+                            return int(parts[1]) * 1024  # kB → bytes
+        except Exception:
+            pass
+        return 0
+
+    def preload_llm(self) -> dict[str, Any]:
+        """Explicitly load the LLM backend for feedback enhancement.
+
+        Validates the backend configuration (``llm_backend``, ``llm_api_key``),
+        records the pre-load memory snapshot, and sets ``_llm_loaded = True``.
+        After this call, ``run()`` / ``run_async()`` / ``run_stream()`` /
+        ``run_stream_async()`` will invoke the LLM enhance step.
+
+        Must be called explicitly after gameplay ends (telemetry stopped).
+        During gameplay the LLM stays unloaded so it never consumes memory
+        or CPU while the game is running.
+
+        Returns:
+            A dict with ``loaded`` (bool), ``backend``, ``memory_before_bytes``,
+            and ``memory_after_bytes``.
+        """
+        mem_before = self._get_memory_usage_bytes()
+        backend = self.config.llm_backend
+        api_key = self.config.llm_api_key
+
+        if backend == "none" or not api_key:
+            _logger.info(
+                "preload_llm: backend=%s, api_key_set=%s — LLM disabled, "
+                "skipping load",
+                backend, bool(api_key),
+            )
+            self._llm_loaded = False
+            return {
+                "loaded": False,
+                "backend": backend,
+                "reason": "LLM backend is 'none' or API key is empty",
+                "memory_before_bytes": mem_before,
+                "memory_after_bytes": mem_before,
+            }
+
+        endpoint = _LLM_ENDPOINTS.get(backend)
+        model_name = _LLM_DEFAULT_MODEL.get(backend)
+        if endpoint is None:
+            _logger.warning(
+                "preload_llm: unknown backend=%s, skipping load", backend,
+            )
+            self._llm_loaded = False
+            return {
+                "loaded": False,
+                "backend": backend,
+                "reason": f"Unknown backend: {backend}",
+                "memory_before_bytes": mem_before,
+                "memory_after_bytes": mem_before,
+            }
+
+        self._llm_loaded = True
+        mem_after = self._get_memory_usage_bytes()
+        _logger.info(
+            "preload_llm: backend=%s model=%s endpoint=%s loaded. "
+            "memory: %d → %d bytes (delta=%+d)",
+            backend, model_name, endpoint,
+            mem_before, mem_after, mem_after - mem_before,
+        )
+        return {
+            "loaded": True,
+            "backend": backend,
+            "model": model_name,
+            "endpoint": endpoint,
+            "memory_before_bytes": mem_before,
+            "memory_after_bytes": mem_after,
+        }
+
+    def unload_llm(self) -> dict[str, Any]:
+        """Release the LLM backend and free associated memory.
+
+        Sets ``_llm_loaded = False``, clears any cached backend state,
+        triggers Python garbage collection, and logs the memory delta.
+        After this call, ``run()`` / ``run_async()`` / ``run_stream()`` /
+        ``run_stream_async()`` will skip the LLM enhance step and return
+        rule-based feedback only.
+
+        Calling this when the LLM is already unloaded is a no-op (returns
+        ``loaded=False`` with the current memory snapshot).
+
+        Returns:
+            A dict with ``loaded`` (False), ``memory_before_bytes``,
+            ``memory_after_bytes``, and ``memory_delta_bytes``.
+        """
+        mem_before = self._get_memory_usage_bytes()
+        if not self._llm_loaded:
+            _logger.debug("unload_llm: already unloaded, no-op")
+            return {
+                "loaded": False,
+                "memory_before_bytes": mem_before,
+                "memory_after_bytes": mem_before,
+                "memory_delta_bytes": 0,
+            }
+
+        self._llm_loaded = False
+        # Trigger garbage collection to release any cached objects
+        # (e.g. httpx connection pools, cached prompt templates).
+        _gc.collect()
+        mem_after = self._get_memory_usage_bytes()
+        delta = mem_after - mem_before
+        _logger.info(
+            "unload_llm: LLM unloaded. memory: %d → %d bytes (delta=%+d)",
+            mem_before, mem_after, delta,
+        )
+        return {
+            "loaded": False,
+            "memory_before_bytes": mem_before,
+            "memory_after_bytes": mem_after,
+            "memory_delta_bytes": delta,
+        }
+
     def run(
         self,
         frames: list[dict[str, Any]],
@@ -2670,14 +3285,18 @@ class FeedbackEngine:
             if conversation is not None:
                 conversation.add("user", question)
                 conversation.add("assistant", answer)
-        feedback = llm_enhance(
-            feedback,
-            question,
-            self.config,
-            driver_profile=profile,
-            conversation_history=prior_history,
-            tracker=self.token_tracker,
-        )
+        # LLM enhancement is gated by _llm_loaded: during gameplay the LLM
+        # stays unloaded (rule-based only). The caller must explicitly call
+        # preload_llm() after stopping telemetry to enable LLM enhancement.
+        if self._llm_loaded:
+            feedback = llm_enhance(
+                feedback,
+                question,
+                self.config,
+                driver_profile=profile,
+                conversation_history=prior_history,
+                tracker=self.token_tracker,
+            )
         # Iter-146: attach quality assessment to every feedback response.
         feedback["_quality"] = _assess_quality(
             feedback, metrics.get("sources", [])
@@ -2726,14 +3345,16 @@ class FeedbackEngine:
                 conversation.add("assistant", answer)
         # Iter-122: async LLM enhancement (non-blocking).
         # Iter-125: pass prior conversation history for multi-turn context.
-        feedback = await llm_enhance_async(
-            feedback,
-            question,
-            self.config,
-            driver_profile=profile,
-            conversation_history=prior_history,
-            tracker=self.token_tracker,
-        )
+        # Gated by _llm_loaded (lazy loading).
+        if self._llm_loaded:
+            feedback = await llm_enhance_async(
+                feedback,
+                question,
+                self.config,
+                driver_profile=profile,
+                conversation_history=prior_history,
+                tracker=self.token_tracker,
+            )
         # Iter-146: attach quality assessment.
         feedback["_quality"] = _assess_quality(feedback, metrics.get("sources", []))
         return feedback
@@ -2782,17 +3403,19 @@ class FeedbackEngine:
                 conversation.add("user", question)
                 conversation.add("assistant", answer)
         # Iter-134: stream LLM chunks; accumulate and replace summary on done.
+        # Gated by _llm_loaded (lazy loading).
         accumulated: list[str] = []
-        for delta in llm_enhance_stream(
-            feedback,
-            question,
-            self.config,
-            driver_profile=profile,
-            conversation_history=prior_history,
-            tracker=self.token_tracker,
-        ):
-            accumulated.append(delta)
-            yield {"type": "chunk", "text": delta}
+        if self._llm_loaded:
+            for delta in llm_enhance_stream(
+                feedback,
+                question,
+                self.config,
+                driver_profile=profile,
+                conversation_history=prior_history,
+                tracker=self.token_tracker,
+            ):
+                accumulated.append(delta)
+                yield {"type": "chunk", "text": delta}
         if accumulated:
             feedback = {**feedback, "summary": "".join(accumulated)}
         # Iter-146: attach quality assessment.
@@ -2835,16 +3458,17 @@ class FeedbackEngine:
                 conversation.add("user", question)
                 conversation.add("assistant", answer)
         accumulated: list[str] = []
-        async for delta in llm_enhance_stream_async(
-            feedback,
-            question,
-            self.config,
-            driver_profile=profile,
-            conversation_history=prior_history,
-            tracker=self.token_tracker,
-        ):
-            accumulated.append(delta)
-            yield {"type": "chunk", "text": delta}
+        if self._llm_loaded:
+            async for delta in llm_enhance_stream_async(
+                feedback,
+                question,
+                self.config,
+                driver_profile=profile,
+                conversation_history=prior_history,
+                tracker=self.token_tracker,
+            ):
+                accumulated.append(delta)
+                yield {"type": "chunk", "text": delta}
         if accumulated:
             feedback = {**feedback, "summary": "".join(accumulated)}
         # Iter-146: attach quality assessment.

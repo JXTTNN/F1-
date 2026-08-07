@@ -275,18 +275,18 @@ def test_unknown_track_falls_back_to_medium() -> None:
 
 # --- 内部表一致性 -------------------------------------------------------------
 def test_sensitivity_table_covers_all_non_fuel_fields() -> None:
-    """_BASE_SENSITIVITY 覆盖 18 项非 fuel 参数 (19 - fuel_load)."""
+    """_BASE_SENSITIVITY 覆盖 20 项非 fuel 参数 (21 - fuel_load)."""
     # fuel_load 不在敏感度表 (燃油通过 current_fuel_kg 直接映射)
     assert "fuel_load" not in _BASE_SENSITIVITY_S_PER_CLICK
-    # 18 项非 fuel 参数全部覆盖
-    assert len(_BASE_SENSITIVITY_S_PER_CLICK) == 18
+    # 20 项非 fuel 参数全部覆盖
+    assert len(_BASE_SENSITIVITY_S_PER_CLICK) == 20
     # 所有值 > 0 (惩罚必须非零)
     for name, s in _BASE_SENSITIVITY_S_PER_CLICK.items():
         assert s > 0.0, f"{name} 敏感度={s} <= 0"
 
 
 def test_track_type_scale_covers_all_types_and_fields() -> None:
-    """_TRACK_TYPE_SCALE 覆盖 5 种赛道类型 × 18 项参数."""
+    """_TRACK_TYPE_SCALE 覆盖 5 种赛道类型 × 20 项参数."""
     assert set(_TRACK_TYPE_SCALE.keys()) == set(_TRACK_TYPE_OPTIMA.keys())
     for tt, scale in _TRACK_TYPE_SCALE.items():
         assert set(scale.keys()) == set(_BASE_SENSITIVITY_S_PER_CLICK.keys()), (

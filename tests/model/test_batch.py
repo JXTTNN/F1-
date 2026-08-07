@@ -127,11 +127,11 @@ def test_predict_lap_time_grid_empty_values_returns_empty() -> None:
 
 
 # --- 敏感度 -----------------------------------------------------------------
-def test_sensitivity_analysis_returns_19_nonnegative_floats() -> None:
-    """sensitivity_analysis 返回 19 键字典, 值均为 >= 0 的 float."""
+def test_sensitivity_analysis_returns_21_nonnegative_floats() -> None:
+    """sensitivity_analysis 返回 21 键字典, 值均为 >= 0 的 float."""
     sens = sensitivity_analysis(DEFAULT_SETUP, TRACK)
     assert set(sens.keys()) == set(SETUP_FIELDS.keys())
-    assert len(sens) == 19
+    assert len(sens) == 21
     assert all(isinstance(v, float) for v in sens.values())
     assert all(v >= 0.0 for v in sens.values())
 
@@ -146,7 +146,7 @@ def test_sensitivity_analysis_delta_steps_2_returns_valid_structure() -> None:
     """delta_steps=2 仍返回 19 键, 值均为 >= 0 的 float (结构不变)."""
     sens = sensitivity_analysis(DEFAULT_SETUP, TRACK, delta_steps=2)
     assert set(sens.keys()) == set(SETUP_FIELDS.keys())
-    assert len(sens) == 19
+    assert len(sens) == 21
     assert all(isinstance(v, float) and v >= 0.0 for v in sens.values())
 
 

@@ -378,6 +378,347 @@ class RaceStrategyPlanner:
             "recommendation_reason": reason,
         }
 
+    # ------------------------------------------------------------------ #
+    # Tire compound degradation crossover analysis (Iter-201)
+    # ------------------------------------------------------------------ #
+    def degradation_crossover(
+        self,
+        compound_a: str = "soft",
+        compound_b: str = "medium",
+    ) -> dict[str, Any]:
+        """Find the lap where compound B becomes faster than compound A (Iter-201).
+
+        In F1 strategy, softer compounds start faster but degrade more quickly.
+        This method computes the crossover lap where the cumulative lap time of
+        compound B exceeds that of compound A, indicating the optimal pit window
+        for switching compounds.
+
+        Args:
+            compound_a: The softer/faster compound (e.g., "soft").
+            compound_b: The harder/durable compound (e.g., "medium").
+
+        Returns:
+            Dict with ``crossover_lap``, ``lap_times`` per lap for both
+            compounds, ``cumulative_times``, and ``recommendation``.
+        """
+        wear_a = _wear_rate(compound_a)
+        wear_b = _wear_rate(compound_b)
+        base = _base_lap_time(self.track_id)
+
+        # Simulate lap-by-lap degradation for both compounds over full race.
+        lap_times_a: list[float] = []
+        lap_times_b: list[float] = []
+        cum_a: list[float] = []
+        cum_b: list[float] = []
+
+        cum_a_total = 0.0
+        cum_b_total = 0.0
+        crossover_lap: int | None = None
+
+        for lap in range(1, self.total_laps + 1):
+            t_a = base + wear_a * lap * _DEGRADATION_PENALTY
+            t_b = base + wear_b * lap * _DEGRADATION_PENALTY
+            lap_times_a.append(round(t_a, 3))
+            lap_times_b.append(round(t_b, 3))
+            cum_a_total += t_a
+            cum_b_total += t_b
+            cum_a.append(round(cum_a_total, 2))
+            cum_b.append(round(cum_b_total, 2))
+
+            if crossover_lap is None and cum_b_total > cum_a_total:
+                crossover_lap = lap
+
+        if crossover_lap is None:
+            crossover_lap = self.total_laps
+
+        # Recommendation based on crossover
+        if crossover_lap <= 0:
+            recommendation = f"{compound_b} 从未优于 {compound_a}，全程使用 {compound_a}"
+        elif crossover_lap >= self.total_laps:
+            recommendation = (
+                f"{compound_a} 全程优于 {compound_b}，"
+                f"建议全程使用 {compound_a} 或考虑 0-stop 策略"
+            )
+        else:
+            recommendation = (
+                f"第 {crossover_lap} 圈后 {compound_b} 累积时间优于 {compound_a}，"
+                f"建议在第 {max(1, crossover_lap - 2)}-{crossover_lap} 圈窗口进站换胎"
+            )
+
+        return {
+            "compound_a": compound_a,
+            "compound_b": compound_b,
+            "crossover_lap": crossover_lap,
+            "lap_times_a": lap_times_a,
+            "lap_times_b": lap_times_b,
+            "cumulative_time_a_s": cum_a,
+            "cumulative_time_b_s": cum_b,
+            "recommendation": recommendation,
+            "total_laps": self.total_laps,
+        }
+
+    # ------------------------------------------------------------------ #
+    # Fuel saving mode analysis (Iter-216)
+    # ------------------------------------------------------------------ #
+    def fuel_saving_analysis(self) -> dict[str, Any]:
+        """Analyze fuel consumption and recommend fuel-saving strategies (Iter-216).
+
+        Estimates whether the current fuel load is sufficient for the race
+        distance and recommends fuel-saving modes (lift-and-coast, short-shift)
+        if needed.
+
+        Returns:
+            Dict with ``fuel_sufficient``, ``fuel_deficit_kg``,
+            ``fuel_saving_laps_needed``, ``recommended_mode``, and
+            ``estimated_time_saved``.
+        """
+        burn = _fuel_burn_rate(self.track_id)
+        total_burn = burn * self.total_laps
+        deficit = total_burn - self.fuel_load_kg
+
+        if deficit <= 0:
+            return {
+                "fuel_sufficient": True,
+                "fuel_deficit_kg": 0.0,
+                "fuel_saving_laps_needed": 0,
+                "recommended_mode": "none",
+                "estimated_time_saved": 0.0,
+                "fuel_burn_per_lap_kg": round(burn, 3),
+                "total_fuel_needed_kg": round(total_burn, 1),
+                "fuel_load_kg": round(self.fuel_load_kg, 1),
+            }
+
+        # Fuel saving modes and their impact
+        # Lift-and-coast: ~0.3s loss per lap, saves ~0.3 kg/lap
+        # Short-shift: ~0.15s loss per lap, saves ~0.15 kg/lap
+        modes = [
+            {
+                "mode": "lift_and_coast",
+                "description": "Lift and coast before braking zones",
+                "time_loss_per_lap_s": 0.3,
+                "fuel_saved_per_lap_kg": 0.3,
+                "max_laps": self.total_laps,
+            },
+            {
+                "mode": "short_shift",
+                "description": "Short-shift (early upshift) to reduce fuel flow",
+                "time_loss_per_lap_s": 0.15,
+                "fuel_saved_per_lap_kg": 0.15,
+                "max_laps": self.total_laps,
+            },
+            {
+                "mode": "combined",
+                "description": "Lift-and-coast + short-shift combined",
+                "time_loss_per_lap_s": 0.4,
+                "fuel_saved_per_lap_kg": 0.4,
+                "max_laps": self.total_laps,
+            },
+        ]
+
+        best_mode = None
+        best_laps = 0
+        best_time_loss = float("inf")
+
+        for mode in modes:
+            save_per_lap = mode["fuel_saved_per_lap_kg"]
+            laps_needed = int(min(deficit / save_per_lap, self.total_laps) + 0.99)
+            time_loss = laps_needed * mode["time_loss_per_lap_s"]
+            if time_loss < best_time_loss and laps_needed <= mode["max_laps"]:
+                best_time_loss = time_loss
+                best_laps = laps_needed
+                best_mode = mode
+
+        if best_mode is None:
+            return {
+                "fuel_sufficient": False,
+                "fuel_deficit_kg": round(deficit, 1),
+                "fuel_saving_laps_needed": self.total_laps,
+                "recommended_mode": "insufficient",
+                "estimated_time_saved": 0.0,
+                "fuel_burn_per_lap_kg": round(burn, 3),
+                "total_fuel_needed_kg": round(total_burn, 1),
+                "fuel_load_kg": round(self.fuel_load_kg, 1),
+            }
+
+        return {
+            "fuel_sufficient": False,
+            "fuel_deficit_kg": round(deficit, 1),
+            "fuel_saving_laps_needed": best_laps,
+            "recommended_mode": best_mode["mode"],
+            "recommended_description": best_mode["description"],
+            "estimated_time_loss_s": round(best_time_loss, 1),
+            "fuel_burn_per_lap_kg": round(burn, 3),
+            "total_fuel_needed_kg": round(total_burn, 1),
+            "fuel_load_kg": round(self.fuel_load_kg, 1),
+        }
+
+    # ------------------------------------------------------------------ #
+    # Undercut/overcut analysis (Iter-216)
+    # ------------------------------------------------------------------ #
+    def undercut_overcut_analysis(
+        self,
+        compound: str = "soft",
+        opponent_lap: int | None = None,
+    ) -> dict[str, Any]:
+        """Analyze undercut and overcut potential (Iter-216).
+
+        In F1, the undercut (pitting earlier than opponent) can gain positions
+        if the fresh tyre advantage outweighs the dirty-air loss. The overcut
+        (pitting later) works when the opponent struggles on worn tyres.
+
+        Args:
+            compound: The fresh compound to compare against worn tyres.
+            opponent_lap: The lap the opponent is expected to pit. If
+                ``None``, defaults to half race distance.
+
+        Returns:
+            Dict with ``undercut_gain_s``, ``overcut_gain_s``,
+            ``recommended_strategy``, and ``analysis``.
+        """
+        base = _base_lap_time(self.track_id)
+        wear_rate = _wear_rate(compound)
+        pit_loss = self.pit_loss_time(self.track_id)
+
+        if opponent_lap is None:
+            opponent_lap = max(1, self.total_laps // 2)
+
+        # Fresh tyre lap time advantage
+        fresh_lap = base  # fresh compound, no wear
+
+        # Worn tyre lap time (at opponent's pit lap)
+        worn_wear = wear_rate * opponent_lap
+        worn_lap = base + worn_wear * _DEGRADATION_PENALTY
+
+        # Per-lap delta on fresh vs worn tyres
+        fresh_advantage_per_lap = worn_lap - fresh_lap
+
+        # Undercut: pit 1 lap earlier, gain fresh-tyre advantage for 1 out-lap
+        # Out-lap after pit stop is typically ~1.5s slower than a normal lap
+        out_lap_penalty = 1.5
+        undercut_gain = fresh_advantage_per_lap * 2 - out_lap_penalty  # 2 laps of advantage
+
+        # Overcut: stay out longer, opponent comes out behind on fresh tyres
+        # but you have clean air. The worn tyre penalty increases each lap.
+        overcut_gain = fresh_advantage_per_lap * 1.5  # clean air advantage
+
+        # Recommendation
+        if undercut_gain > overcut_gain and undercut_gain > 0.5:
+            recommended = "undercut"
+            rationale = (
+                f"推荐 Undercut：提前 1-2 圈进站，利用新胎优势在出站后超越对手。"
+                f"预估净收益 {undercut_gain:.1f}s。"
+            )
+        elif overcut_gain > undercut_gain and overcut_gain > 0.5:
+            recommended = "overcut"
+            rationale = (
+                f"推荐 Overcut：保持赛道位置，对手进站后利用干净空气刷快圈速。"
+                f"预估净收益 {overcut_gain:.1f}s。"
+            )
+        else:
+            recommended = "neutral"
+            rationale = (
+                f"Undercut 和 Overcut 收益相近（{undercut_gain:.1f}s vs {overcut_gain:.1f}s），"
+                f"建议根据赛道实时情况决定。"
+            )
+
+        return {
+            "undercut_gain_s": round(undercut_gain, 1),
+            "overcut_gain_s": round(overcut_gain, 1),
+            "fresh_advantage_per_lap_s": round(fresh_advantage_per_lap, 2),
+            "worn_lap_time_at_opponent_pit_s": round(worn_lap, 2),
+            "fresh_lap_time_s": round(fresh_lap, 2),
+            "pit_loss_s": round(pit_loss, 1),
+            "recommended_strategy": recommended,
+            "rationale": rationale,
+            "opponent_pit_lap": opponent_lap,
+            "compound": compound,
+        }
+
+    # ------------------------------------------------------------------ #
+    # Weather-aware strategy adjustments (Iter-202)
+    # ------------------------------------------------------------------ #
+    def weather_impact_on_strategy(
+        self,
+        track_wetness: float = 0.0,
+        rain_intensity: float = 0.0,
+        track_temp_c: float = 35.0,
+        wind_speed_ms: float = 0.0,
+    ) -> dict[str, Any]:
+        """Adjust race strategy based on weather conditions (Iter-202).
+
+        Weather dramatically changes optimal strategy: wet conditions favor
+        fewer stops (inter/wet tyres last longer), rain increases pit loss
+        time, and extreme temperatures shift compound preferences.
+
+        Args:
+            track_wetness: 0.0 (dry) to 1.0 (fully wet).
+            rain_intensity: Rain in mm/h.
+            track_temp_c: Track temperature in Celsius.
+            wind_speed_ms: Wind speed in m/s.
+
+        Returns:
+            Dict with ``adjusted_compounds``, ``recommended_stops``,
+            ``pit_loss_modifier``, ``compound_shift``, and ``rationale``.
+        """
+        is_wet = track_wetness > 0.2
+        is_heavy_rain = rain_intensity > 10.0
+        is_cold = track_temp_c < 25.0
+        is_hot = track_temp_c > 45.0
+        is_windy = wind_speed_ms > 10.0
+
+        adjustments: list[str] = []
+        compound_shift: dict[str, str] = {}
+        pit_loss_modifier = 1.0
+
+        # Wet conditions → wet compounds, fewer stops, higher pit loss
+        if is_wet:
+            adjustments.append("湿地条件：推荐半雨胎或全雨胎，减少进站次数")
+            compound_shift = {"soft": "intermediate", "medium": "intermediate",
+                              "hard": "intermediate"}
+            pit_loss_modifier = 1.3 if track_wetness > 0.5 else 1.15
+            if is_heavy_rain:
+                compound_shift = {"soft": "wet", "medium": "wet", "hard": "wet"}
+                pit_loss_modifier = 1.5
+                adjustments.append("大雨条件：全雨胎推荐，进站时间损失显著增加")
+
+        # Temperature effects
+        if is_hot:
+            adjustments.append("高温条件：硬胎耐久性优势放大，软胎退化加速")
+            if not is_wet:
+                compound_shift["soft"] = "medium"
+        elif is_cold:
+            adjustments.append("低温条件：软胎升温更快，适合短 stints")
+            if not is_wet:
+                compound_shift["hard"] = "medium"
+
+        # Wind effects
+        if is_windy:
+            adjustments.append("强风条件：下压力重要性增加，策略保守化")
+            pit_loss_modifier = max(pit_loss_modifier, 1.05)
+
+        # Determine recommended stops
+        if is_heavy_rain:
+            recommended_stops = 0  # Safety car likely, fewer stops
+        elif is_wet and track_wetness > 0.4:
+            recommended_stops = 1
+        elif is_hot:
+            recommended_stops = 2  # More stops to manage degradation
+        else:
+            recommended_stops = 1  # Default
+
+        return {
+            "is_wet": is_wet,
+            "is_heavy_rain": is_heavy_rain,
+            "is_cold": is_cold,
+            "is_hot": is_hot,
+            "is_windy": is_windy,
+            "compound_shift": compound_shift,
+            "recommended_stops": recommended_stops,
+            "pit_loss_modifier": round(pit_loss_modifier, 2),
+            "adjustments": adjustments,
+            "rationale": "；".join(adjustments) if adjustments else "正常天气，标准策略适用",
+        }
+
 
 # --------------------------------------------------------------------------- #
 # StrategyComparator

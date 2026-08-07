@@ -151,20 +151,27 @@ def _dim_by_name(out: dict, name: str) -> dict:
 # --------------------------------------------------------------------------- #
 # FEEDBACK_DIMENSIONS constant
 # --------------------------------------------------------------------------- #
-def test_feedback_dimensions_constant_has_10_entries() -> None:
-    assert len(FEEDBACK_DIMENSIONS) == 11  # Iter-164.14: +corner_analysis
+def test_feedback_dimensions_constant_has_16_entries() -> None:
+    assert len(FEEDBACK_DIMENSIONS) == 18  # Iter-241: +grip_consistency
     assert FEEDBACK_DIMENSIONS == [
         "balance",
         "grip",
         "tyres",
         "braking",
-        "ers_drs",
+        "ers_deployment",
+        "drs_usage",
         "throttle_brake_smoothness",
         "confidence",
         "lap_time_potential",
         "sector_compare",
         "setup_advice",
         "corner_analysis",  # Iter-164.14
+        "fuel_consumption",  # Iter-203
+        "throttle_brake_overlap",  # Iter-210
+        "aero_balance",  # Iter-214
+        "brake_temp",  # Iter-222
+        "tyre_temp_gradient",  # Iter-227
+        "grip_consistency",  # Iter-241
     ]
 
 
@@ -184,7 +191,7 @@ def test_dimensions_all_10_names_in_order() -> None:
     out = generate_feedback(_scripted_frames(), DEFAULT_SETUP.model_dump(), "melbourne")
     names = [d["name"] for d in out["dimensions"]]
     assert names == FEEDBACK_DIMENSIONS
-    assert len(names) == 11  # Iter-164.14: +corner_analysis
+    assert len(names) == 18  # Iter-241: +grip_consistency
     # Each dimension has the required keys.
     for d in out["dimensions"]:
         assert set(d.keys()) == {"name", "value", "evidence", "advice"}
@@ -1004,6 +1011,7 @@ class TestIter134Streaming:
         capture: dict = {}
         self._install_sync_mock(monkeypatch, self._sse_lines(["LLM ", "summary"]), capture)
         engine = FeedbackEngine(config=self._settings(backend="openai", key="sk-fake"))
+        engine.preload_llm()
         events = list(
             engine.run_stream(self._frames(), DEFAULT_SETUP.model_dump(), "melbourne")
         )

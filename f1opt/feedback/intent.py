@@ -38,8 +38,10 @@ import re
 __all__ = [
     "IntentResult",
     "GranularityResult",
+    "SubIntentResult",
     "classify_intent",
     "classify_granularity",
+    "classify_sub_intent",
     "GRANULARITIES",
 ]
 
@@ -230,16 +232,34 @@ def classify_intent(message: str) -> IntentResult:
     if not message or not message.strip():
         return IntentResult("other", 0.0)
 
+    # Iter-183: Try all patterns, collect confidence scores.
+    # First match wins (highest priority), but we also look for secondary
+    # matches to calibrate confidence when multiple intents overlap.
+    matches: list[tuple[str, float, str]] = []
     for intent, pattern in _INTENT_PATTERNS:
         match = pattern.search(message)
         if match:
-            return IntentResult(
-                intent=intent,
-                confidence=1.0,
-                matched_pattern=match.group(),
-            )
+            matches.append((intent, 1.0, match.group()))
 
-    return IntentResult("other", 0.0)
+    if not matches:
+        return IntentResult("other", 0.0)
+
+    if len(matches) == 1:
+        return IntentResult(
+            intent=matches[0][0],
+            confidence=matches[0][1],
+            matched_pattern=matches[0][2],
+        )
+
+    # Multiple intents matched: primary = first (highest priority),
+    # confidence reduced by number of competing matches.
+    primary = matches[0]
+    confidence = max(0.5, 1.0 - 0.1 * (len(matches) - 1))
+    return IntentResult(
+        intent=primary[0],
+        confidence=confidence,
+        matched_pattern=primary[2],
+    )
 
 
 # ============================================================================
@@ -383,3 +403,255 @@ def classify_granularity(message: str) -> GranularityResult:
             )
 
     return GranularityResult("overall", 0.3)
+
+
+# ============================================================================
+# Sub-intent classification (Iter-197)
+# ============================================================================
+
+# Sub-intents for setup_advice: maps sub-intent to regex patterns
+_SETUP_SUB_INTENT_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
+    (
+        "aero",
+        re.compile(
+            r"(?:前翼|后翼|尾翼|下压力|扰流|扩散器|"
+            r"front.?wing|rear.?wing|downforce|diffuser|spoiler|"
+            r"drag|风阻|空力|aero|wing.*angle|"
+            r"beam.?wing|地板|floor|底盘|floor.*edge|underbody)",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "mechanical",
+        re.compile(
+            r"(?:悬挂|弹簧|避震|阻尼|anti.?roll.?bar|防倾杆|arb|"
+            r"suspension|spring|damper|shock|ride.?height|车高|"
+            r"toe|camber|外倾|束角|wheel.*rate|"
+            r"roll.?bar|bump.*stop|行程|travel|"
+            r"push.?rod|pull.?rod|rocker)",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "differential",
+        re.compile(
+            r"(?:差速|diff.*(?:lock|coast|power|preload|entry|mid|exit)|"
+            r"lsd|limited.?slip|open.*diff|"
+            r"on.?throttle|off.?throttle|驱动分配|"
+            r"torque.*vectoring|扭矩.*分配)",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "brakes",
+        re.compile(
+            r"(?:刹车|制动|brake|bias|压力|disc|pad|"
+            r"brake.*pressure|brake.*balance|brake.*duct|"
+            r"brake.*migration|brake.*magic|"
+            r"engine.?braking|engine.*brake|再生.*制动|"
+            r"brake.*temp|制动.*温度)",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "tyre",
+        re.compile(
+            r"(?:轮胎|胎压|胎温|胎|tyre|tire|compound|"
+            r"pressure|psi|温度.*胎|胎.*压|"
+            r"camber.*tire|tire.*camber|toe.*tire|"
+            r"soft|medium|hard|inter|wet|"
+            r"wear|磨损|degradation)",
+            re.IGNORECASE,
+        ),
+    ),
+]
+
+# Sub-intents for problem_report: what specific problem
+_PROBLEM_SUB_INTENT_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
+    (
+        "understeer",
+        re.compile(
+            r"(?:推头|转向不足|understeer|won.*turn|tight.*corner|"
+            r"not.*turning|missing.*apex|wide.*exit|"
+            r"push.*on|doesn.*rotate|won.*rotate|"
+            r"numb|vague|front.*wash|wash.*out)",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "oversteer",
+        re.compile(
+            r"(?:甩尾|转向过度|oversteer|snap|loose|tail.*happy|"
+            r"rear.*slide|rear.*loose|rear.*moving|stepping.*out|"
+            r"step.*out|unstable|nervous|twitchy|"
+            r"rotate.*too.*much|too.*pointy|snap.*oversteer|"
+            r"lift.?off.*oversteer|power.*oversteer)",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "tyre_wear",
+        re.compile(
+            r"(?:磨损|掉粒|graining|blistering|起泡|flat.?spot|平斑|"
+            r"wear.*fast|going.*off|dropped.*off|fell.*off|"
+            r"worn|gone|dead|finished|"
+            r"rear.*tyre.*wear|front.*tyre.*wear|"
+            r"deg|degradation)",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "brake",
+        re.compile(
+            r"(?:刹车|锁死|lockup|locking|brake.*fade|brake.*fail|"
+            r"brake.*long|brake.*soft|brake.*spongy|"
+            r"brake.*temp|brake.*hot|brake.*smoke|"
+            r"brake.*bias.*wrong|brake.*balance.*off|"
+            r"rear.*locking|front.*locking)",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "ers",
+        re.compile(
+            r"(?:ERS|电池|能量|deploy|harvest|boost|"
+            r"out.*of.*battery|no.*deploy|deploy.*late|deploy.*early|"
+            r"energy.*store|ES|MGU.?K|MGU.?H|"
+            r"battery.*empty|no.*boost|no.*ERS|"
+            r"ERS.*weak|ERS.*slow|power.*delivery)",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "traction",
+        re.compile(
+            r"(?:牵引|traction|wheelspin|wheel.*spin|spinning.*up|"
+            r"no.*grip|can.*put.*power|can.*get.*power|"
+            r"sliding|slipping|spin|"
+            r"low.*speed.*grip|exit.*grip|corner.*exit.*grip|"
+            r"poor.*traction|bad.*traction|"
+            r"no.*bite|浮|漂浮)",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "balance",
+        re.compile(
+            r"(?:平衡|balance.*off|not.*balanced|不平衡|"
+            r"too.*much.*understeer.*then.*oversteer|"
+            r"push.*then.*loose|inconsistent.*balance|"
+            r"entry.*push.*exit.*loose|entry.*loose.*exit.*push)",
+            re.IGNORECASE,
+        ),
+    ),
+]
+
+_SUB_INTENT_ALL: set[str] = {
+    sub for sub, _ in _SETUP_SUB_INTENT_PATTERNS
+} | {
+    sub for sub, _ in _PROBLEM_SUB_INTENT_PATTERNS
+}
+
+
+class SubIntentResult:
+    """Result of sub-intent classification (Iter-197).
+
+    Attributes:
+        sub_intent: The classified sub-intent label (e.g. ``"aero"``, ``"understeer"``).
+        confidence: Confidence score in [0, 1].
+        category: The parent intent category (``"setup"`` or ``"problem"``).
+        matched_pattern: The regex pattern that matched (for debugging).
+    """
+
+    __slots__ = ("sub_intent", "confidence", "category", "matched_pattern")
+
+    def __init__(
+        self,
+        sub_intent: str,
+        confidence: float,
+        category: str = "",
+        matched_pattern: str = "",
+    ) -> None:
+        self.sub_intent = sub_intent
+        self.confidence = confidence
+        self.category = category
+        self.matched_pattern = matched_pattern
+
+    def __repr__(self) -> str:
+        return (
+            f"SubIntentResult(sub_intent={self.sub_intent!r}, "
+            f"confidence={self.confidence:.2f}, category={self.category!r})"
+        )
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, SubIntentResult):
+            return NotImplemented
+        return (
+            self.sub_intent == other.sub_intent
+            and abs(self.confidence - other.confidence) < 1e-6
+        )
+
+
+def classify_sub_intent(message: str, intent: str) -> SubIntentResult:
+    """Classify the sub-intent for a given parent intent (Iter-197).
+
+    For ``"setup_advice"``, returns the specific setup area
+    (aero/mechanical/differential/brakes/tyre). For ``"problem_report"``,
+    returns the specific problem type (understeer/oversteer/tyre_wear/brake/ers/traction/balance).
+
+    Args:
+        message: The driver's natural language input.
+        intent: The parent intent from :func:`classify_intent`.
+
+    Returns:
+        :class:`SubIntentResult` with the classified sub-intent.
+        Returns ``SubIntentResult("general", 0.3)`` if no specific sub-intent
+        matches.
+
+    Examples::
+
+        >>> classify_sub_intent("怎么调整前翼来减少推头？", "setup_advice")
+        SubIntentResult(sub_intent='aero', confidence=1.0, category='setup')
+        >>> classify_sub_intent("车尾太松了, 出弯总是甩", "problem_report")
+        SubIntentResult(sub_intent='oversteer', confidence=1.0, category='problem')
+        >>> classify_sub_intent("hello", "greeting")
+        SubIntentResult(sub_intent='general', confidence=0.3, category='')
+    """
+    if not message or not message.strip():
+        return SubIntentResult("general", 0.0)
+
+    if intent == "setup_advice":
+        patterns = _SETUP_SUB_INTENT_PATTERNS
+        category = "setup"
+    elif intent == "problem_report":
+        patterns = _PROBLEM_SUB_INTENT_PATTERNS
+        category = "problem"
+    else:
+        return SubIntentResult("general", 0.3)
+
+    matches: list[tuple[str, float, str]] = []
+    for sub_intent, pattern in patterns:
+        match = pattern.search(message)
+        if match:
+            matches.append((sub_intent, 1.0, match.group()))
+
+    if not matches:
+        return SubIntentResult("general", 0.3, category)
+
+    if len(matches) == 1:
+        return SubIntentResult(
+            sub_intent=matches[0][0],
+            confidence=matches[0][1],
+            category=category,
+            matched_pattern=matches[0][2],
+        )
+
+    # Multiple sub-intents: primary = first, confidence reduced
+    primary = matches[0]
+    confidence = max(0.4, 1.0 - 0.15 * (len(matches) - 1))
+    return SubIntentResult(
+        sub_intent=primary[0],
+        confidence=confidence,
+        category=category,
+        matched_pattern=primary[2],
+    )

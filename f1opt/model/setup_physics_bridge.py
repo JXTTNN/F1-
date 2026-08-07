@@ -66,6 +66,7 @@ _TRACK_TYPE_OPTIMA: dict[TrackType, dict[str, float]] = {
     "high_speed_low_downforce": {
         # Monza / Baku / Jeddah / Montreal / Las Vegas — 长直道为主, 低下压力
         "front_wing": 8.0, "rear_wing": 6.0,
+        "active_aero_mode": 2.0, "x_mode_activations": 3.0,
         "on_throttle_diff": 92.0, "off_throttle_diff": 18.0,
         "front_camber": -3.0, "rear_camber": -1.5,
         "front_toe": 0.05, "rear_toe": 0.15,
@@ -79,6 +80,7 @@ _TRACK_TYPE_OPTIMA: dict[TrackType, dict[str, float]] = {
     "street": {
         # Monaco / Singapore / Madrid / Miami — 街道赛, 最大化下压力 + 慢弯抓地
         "front_wing": 40.0, "rear_wing": 42.0,
+        "active_aero_mode": 0.0, "x_mode_activations": 0.0,
         "on_throttle_diff": 80.0, "off_throttle_diff": 50.0,
         "front_camber": -3.4, "rear_camber": -1.9,
         "front_toe": 0.08, "rear_toe": 0.20,
@@ -92,6 +94,7 @@ _TRACK_TYPE_OPTIMA: dict[TrackType, dict[str, float]] = {
     "high_downforce": {
         # Hungaroring / Zandvoort — 高下压力技术赛道
         "front_wing": 32.0, "rear_wing": 34.0,
+        "active_aero_mode": 0.0, "x_mode_activations": 1.0,
         "on_throttle_diff": 85.0, "off_throttle_diff": 35.0,
         "front_camber": -3.3, "rear_camber": -1.8,
         "front_toe": 0.06, "rear_toe": 0.18,
@@ -106,6 +109,7 @@ _TRACK_TYPE_OPTIMA: dict[TrackType, dict[str, float]] = {
         # Melbourne / Bahrain / Barcelona / Spielberg / Austin / Brazil / etc.
         # 攻守均衡, 中等下压力 (与 DEFAULT_SETUP 完全一致, 作为校准锚点)
         "front_wing": 25.0, "rear_wing": 27.0,
+        "active_aero_mode": 1.0, "x_mode_activations": 2.0,
         "on_throttle_diff": 80.0, "off_throttle_diff": 55.0,
         "front_camber": -3.5, "rear_camber": -2.0,
         "front_toe": 0.05, "rear_toe": 0.20,
@@ -119,6 +123,7 @@ _TRACK_TYPE_OPTIMA: dict[TrackType, dict[str, float]] = {
     "mixed": {
         # Suzuka / Silverstone / Spa / COTA / Losail / Yas Marina — 三段差异大
         "front_wing": 18.0, "rear_wing": 20.0,
+        "active_aero_mode": 1.0, "x_mode_activations": 2.0,
         "on_throttle_diff": 88.0, "off_throttle_diff": 30.0,
         "front_camber": -3.2, "rear_camber": -1.7,
         "front_toe": 0.05, "rear_toe": 0.18,
@@ -168,6 +173,8 @@ def optimal_setup_for_track(track_id: str) -> CarSetup:
 _BASE_SENSITIVITY_S_PER_CLICK: dict[str, float] = {
     "front_wing": 0.040,          # 高下压力翼面, 每档显著影响直道/弯角平衡
     "rear_wing": 0.045,           # 尾翼阻力主导, 略高于前翼
+    "active_aero_mode": 0.025,    # 主动空动模式, 影响直道/弯角下压力分配
+    "x_mode_activations": 0.015,  # X-Mode 激活次数, 影响直道速度
     "on_throttle_diff": 0.018,    # 差速锁止影响牵引出弯, 每档中等
     "off_throttle_diff": 0.012,   # 收油差速影响进弯旋转, 每档较低
     "front_camber": 0.020,        # 外倾角 (0.01° 步长, 总范围 1°) 每步长代价
@@ -194,6 +201,7 @@ _BASE_SENSITIVITY_S_PER_CLICK: dict[str, float] = {
 _TRACK_TYPE_SCALE: dict[TrackType, dict[str, float]] = {
     "high_speed_low_downforce": {
         "front_wing": 1.6, "rear_wing": 1.7,        # 直道阻力主导
+        "active_aero_mode": 1.8, "x_mode_activations": 1.6,  # X-Mode 在高速赛道最敏感
         "on_throttle_diff": 1.2, "off_throttle_diff": 0.8,
         "front_camber": 0.8, "rear_camber": 0.8,
         "front_toe": 0.7, "rear_toe": 0.7,
@@ -205,6 +213,7 @@ _TRACK_TYPE_SCALE: dict[TrackType, dict[str, float]] = {
     },
     "street": {
         "front_wing": 1.3, "rear_wing": 1.3,        # 慢弯抓地主导, 仍要下压力
+        "active_aero_mode": 0.5, "x_mode_activations": 0.3,  # 街道赛无直道, X-Mode 无用
         "on_throttle_diff": 1.4, "off_throttle_diff": 1.5,  # 牵引/进弯主导
         "front_camber": 1.5, "rear_camber": 1.4,    # 慢弯外倾敏感
         "front_toe": 1.3, "rear_toe": 1.2,
@@ -216,6 +225,7 @@ _TRACK_TYPE_SCALE: dict[TrackType, dict[str, float]] = {
     },
     "high_downforce": {
         "front_wing": 1.4, "rear_wing": 1.4,        # 弯角主导, 翼面平衡关键
+        "active_aero_mode": 0.8, "x_mode_activations": 0.6,  # 高下压赛道以 Z-Mode 为主
         "on_throttle_diff": 1.3, "off_throttle_diff": 1.2,
         "front_camber": 1.4, "rear_camber": 1.3,
         "front_toe": 1.0, "rear_toe": 1.0,
@@ -227,6 +237,7 @@ _TRACK_TYPE_SCALE: dict[TrackType, dict[str, float]] = {
     },
     "medium": {  # 校准锚点: 全 1.0
         "front_wing": 1.0, "rear_wing": 1.0,
+        "active_aero_mode": 1.0, "x_mode_activations": 1.0,
         "on_throttle_diff": 1.0, "off_throttle_diff": 1.0,
         "front_camber": 1.0, "rear_camber": 1.0,
         "front_toe": 1.0, "rear_toe": 1.0,
@@ -238,6 +249,7 @@ _TRACK_TYPE_SCALE: dict[TrackType, dict[str, float]] = {
     },
     "mixed": {
         "front_wing": 1.2, "rear_wing": 1.2,        # 直道+弯角都需要妥协
+        "active_aero_mode": 1.2, "x_mode_activations": 1.1,
         "on_throttle_diff": 1.1, "off_throttle_diff": 1.1,
         "front_camber": 1.2, "rear_camber": 1.2,
         "front_toe": 0.9, "rear_toe": 0.9,

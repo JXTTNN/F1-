@@ -177,6 +177,55 @@ _MANUAL_CORNERS["monza"] = _monza_corners()
 _MANUAL_CORNERS["silverstone"] = _silverstone_corners()
 
 
+def _melbourne_corners() -> list[Corner]:
+    """Iter-193: Albert Park Grand Prix Circuit (5.278 km, 14 弯, medium)."""
+    return [
+        Corner(1, "Turn 1", "slow", 95, 50, 85, 0, True, True, ("braking", "traction")),
+        Corner(2, "Turn 2", "medium", 130, 90, 100, 0, False, False, ("high_downforce", "stability")),
+        Corner(3, "Turn 3", "fast", 230, 500, 200, 0, False, False, ("high_downforce", "stability")),
+        Corner(4, "Turn 4", "slow", 85, 40, 80, 0, False, False, ("braking", "traction")),
+        Corner(5, "Turn 5", "medium", 160, 130, 120, 0, False, False, ("high_downforce", "stability")),
+        Corner(6, "Turn 6", "fast", 210, 380, 180, 0, False, False, ("high_downforce", "stability")),
+        Corner(7, "Turn 7", "slow", 80, 35, 75, 0, False, False, ("braking", "kerb")),
+        Corner(8, "Turn 8", "medium", 150, 110, 110, 0, False, False, ("high_downforce",)),
+        Corner(9, "Turn 9", "fast", 220, 420, 190, 0, True, False, ("high_downforce", "stability")),
+        Corner(10, "Turn 10", "slow", 90, 45, 80, 0, False, True, ("braking", "traction")),
+        Corner(11, "Turn 11", "fast", 240, 550, 200, 0, False, False, ("high_downforce", "stability")),
+        Corner(12, "Turn 12", "medium", 155, 120, 110, 0, False, False, ("high_downforce", "stability")),
+        Corner(13, "Turn 13", "slow", 85, 40, 80, 0, False, False, ("braking", "traction")),
+        Corner(14, "Turn 14", "medium", 140, 100, 100, 0, True, False, ("high_downforce", "stability")),
+    ]
+
+
+def _spa_corners() -> list[Corner]:
+    """Iter-193: Circuit de Spa-Francorchamps (7.004 km, 19 弯, mixed)."""
+    return [
+        Corner(1, "La Source", "slow", 85, 40, 80, 0, True, True, ("braking", "traction")),
+        Corner(2, "Eau Rouge", "fast", 260, 700, 220, 0, False, False, ("high_downforce", "stability")),
+        Corner(3, "Raidillon", "fast", 270, 750, 230, 0, False, False, ("high_downforce", "stability")),
+        Corner(4, "Kemmel Straight", "fast", 280, 850, 260, 0, True, False, ("low_downforce",)),
+        Corner(5, "Les Combes", "slow", 95, 50, 85, 0, False, True, ("braking", "traction")),
+        Corner(6, "Malmedy", "medium", 145, 105, 110, 0, False, False, ("high_downforce", "stability")),
+        Corner(7, "Rivage", "slow", 90, 45, 80, 0, False, False, ("braking", "traction")),
+        Corner(8, "Pouhon", "fast", 225, 450, 200, 0, False, False, ("high_downforce", "stability")),
+        Corner(9, "Fagnes", "medium", 155, 120, 120, 0, False, False, ("high_downforce", "stability")),
+        Corner(10, "Campus", "slow", 88, 42, 78, 0, False, False, ("braking", "kerb")),
+        Corner(11, "Stavelot", "fast", 235, 500, 200, 0, False, False, ("high_downforce", "stability")),
+        Corner(12, "Blanchimont 1", "fast", 275, 780, 240, 0, False, False, ("high_downforce", "stability")),
+        Corner(13, "Blanchimont 2", "fast", 280, 820, 250, 0, True, False, ("high_downforce", "low_downforce")),
+        Corner(14, "Bus Stop entry", "slow", 82, 38, 78, 0, False, True, ("braking", "traction")),
+        Corner(15, "Bus Stop", "slow", 78, 35, 75, 0, False, False, ("braking", "kerb")),
+        Corner(16, "Bus Stop exit", "slow", 85, 40, 80, 0, False, False, ("traction",)),
+        Corner(17, "La Source approach", "medium", 160, 130, 110, 0, False, False, ("high_downforce", "stability")),
+        Corner(18, "Eau Rouge approach", "fast", 255, 650, 220, 0, False, False, ("high_downforce", "stability")),
+        Corner(19, "Kemmel approach", "fast", 265, 720, 230, 0, True, False, ("high_downforce", "low_downforce")),
+    ]
+
+
+_MANUAL_CORNERS["melbourne"] = _melbourne_corners()
+_MANUAL_CORNERS["spa"] = _spa_corners()
+
+
 # --------------------------------------------------------------------------- #
 # 合成逐弯分布 (未手工录入的赛道)
 # --------------------------------------------------------------------------- #

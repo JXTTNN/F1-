@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from typing import Any
 
@@ -161,6 +162,34 @@ def build_parser() -> argparse.ArgumentParser:
     p_feedback.add_argument("--json", action="store_true")
     p_feedback.set_defaults(func=cmd_feedback)
 
+    # --- template (Iter-183: 车手反馈模板) ---------------------------------
+    p_template = subparsers.add_parser(
+        "template",
+        help="generate driver feedback template",
+        description=(
+            "Generate structured feedback templates for drivers to fill in "
+            "after a session. Templates are grouped by granularity:\n"
+            "  corner  — corner-specific feedback (understeer, oversteer, braking, traction)\n"
+            "  sector  — sector-level feedback (balance, tyres)\n"
+            "  overall — overall lap feedback (general, setup, ERS, comparison)\n"
+            "  all     — all 10 templates\n"
+            "\n"
+            "Examples:\n"
+            "  f1opt template --group overall --lang zh\n"
+            "  f1opt template --id corner_understeer --lang en\n"
+            "  f1opt template --group all --json"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    p_template.add_argument("--group", choices=["corner", "sector", "overall", "all"],
+                            default="all", help="template group")
+    p_template.add_argument("--id", default=None,
+                            help="specific template id (overrides --group)")
+    p_template.add_argument("--lang", choices=["zh", "en"], default="zh",
+                            help="language (default: zh)")
+    p_template.add_argument("--json", action="store_true")
+    p_template.set_defaults(func=cmd_template)
+
     return parser
 
 
@@ -208,7 +237,14 @@ def _print(data: Any, json_mode: bool) -> None:
 
 def _err(msg: str) -> None:
     """Print an error message to stderr."""
-    print(f"error: {msg}", file=sys.stderr)
+    # Windows: 确保控制台能正确输出中文错误信息
+    if sys.platform == "win32":
+        try:
+            print(f"错误: {msg}", file=sys.stderr, flush=True)
+        except UnicodeEncodeError:
+            print(f"error: {msg}", file=sys.stderr)
+    else:
+        print(f"error: {msg}", file=sys.stderr)
 
 
 def _parse_setup_json(setup_json: str) -> CarSetup:
@@ -420,7 +456,11 @@ def cmd_serve(args: argparse.Namespace) -> int:
             from f1opt.api.app import create_app
 
             app = create_app(start_listener=False)
-        uvicorn.run(app, host=args.host, port=args.port)
+        # Windows: 使用 windows_events 兼容的事件循环
+        if sys.platform == "win32":
+            uvicorn.run(app, host=args.host, port=args.port, loop="asyncio")
+        else:
+            uvicorn.run(app, host=args.host, port=args.port)
         return 0
     except Exception as exc:
         _err(str(exc))
@@ -575,8 +615,96 @@ def cmd_feedback(args: argparse.Namespace) -> int:
         return 1
 
 
+def cmd_template(args: argparse.Namespace) -> int:
+    """Generate driver feedback template (Iter-183)."""
+    from f1opt.feedback.prompts import (
+        DRIVER_FEEDBACK_TEMPLATES,
+        FEEDBACK_TEMPLATE_GROUPS,
+        render_feedback_template,
+    )
+
+    try:
+        if args.id:
+            # 单个模板
+            template_ids = [args.id]
+        else:
+            template_ids = FEEDBACK_TEMPLATE_GROUPS.get(args.group, FEEDBACK_TEMPLATE_GROUPS["all"])
+
+        if args.json:
+            # JSON 格式输出所有模板
+            templates = {}
+            for tid in template_ids:
+                t = DRIVER_FEEDBACK_TEMPLATES.get(tid)
+                if t is None:
+                    _err(f"unknown template: {tid}")
+                    return 1
+                templates[tid] = {
+                    "id": t["id"],
+                    "granularity": t["granularity"],
+                    "category": t["category"],
+                    "text": render_feedback_template(tid, args.lang),
+                }
+            _print(templates, True)
+        else:
+            # 文本格式输出
+            for tid in template_ids:
+                t = DRIVER_FEEDBACK_TEMPLATES.get(tid)
+                if t is None:
+                    _err(f"unknown template: {tid}")
+                    return 1
+                print(f"--- {t['id']} [{t['granularity']}/{t['category']}] ---")
+                print(render_feedback_template(tid, args.lang))
+                print()
+        return 0
+    except Exception as exc:
+        _err(str(exc))
+        return 1
+
+
 def main(argv: list[str] | None = None) -> int:
     """Entry point: parse args, dispatch to handler, print result."""
+    # Windows: multiprocessing freeze_support 必须在任何 multiprocessing 使用前调用
+    if sys.platform == "win32":
+        import multiprocessing
+        multiprocessing.freeze_support()
+        # Windows: 设置 ProactorEventLoop 以支持子进程和命名管道
+        import asyncio as _asyncio
+        _asyncio.set_event_loop_policy(_asyncio.WindowsProactorEventLoopPolicy())
+        # Windows: 注册信号处理 (SIGINT=SIGBREAK, SIGTERM 不可用)
+        import signal as _signal
+        def _win_signal_handler(signum, frame):
+            print("\n收到中断信号，正在退出...", file=sys.stderr)
+            sys.exit(0)
+        _signal.signal(_signal.SIGINT, _win_signal_handler)
+        if hasattr(_signal, "SIGBREAK"):
+            _signal.signal(_signal.SIGBREAK, _win_signal_handler)
+        # Windows: 启用控制台 ANSI 转义序列支持 (颜色输出)
+        try:
+            import ctypes as _ctypes
+            _kernel32 = _ctypes.windll.kernel32
+            _kernel32.SetConsoleMode(_kernel32.GetStdHandle(-11), 7)
+        except Exception:
+            pass
+        # Windows: 启用长路径支持 (需要 Windows 10 1607+)
+        try:
+            import ctypes as _ctypes
+            _ctypes.windll.kernel32.SetFileInformationByHandle
+        except Exception:
+            pass
+        # Windows: 强制 UTF-8 编码 (Python 3.7+ PEP 540)
+        if hasattr(sys.stdout, "reconfigure"):
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        if hasattr(sys.stderr, "reconfigure"):
+            sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    # PyInstaller: 将 _MEIPASS 临时目录加入 PATH 以便找到 DLL
+    if getattr(sys, "frozen", False):
+        _meipass = getattr(sys, "_MEIPASS", None)
+        if _meipass:
+            if _meipass not in os.environ.get("PATH", ""):
+                os.environ["PATH"] = _meipass + os.pathsep + os.environ.get("PATH", "")
+            # Windows: os.add_dll_directory 确保 PyInstaller 打包的 DLL 可被加载
+            if sys.platform == "win32" and hasattr(os, "add_dll_directory"):
+                os.add_dll_directory(_meipass)
     parser = build_parser()
     args = parser.parse_args(argv)
     if not hasattr(args, "func"):

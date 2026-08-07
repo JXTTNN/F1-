@@ -217,11 +217,14 @@ def _corner_balance_pref(frames: list[dict[str, Any]]) -> tuple[float, float]:
 def _aggression_score(
     frames: list[dict[str, Any]], throttle_smoothness: float
 ) -> tuple[float, float]:
-    """aggression = clamp((brake_aggr + thr_comp + glat_comp) / 3, 0, 1)。
+    """aggression = clamp((brake_aggr + thr_comp + glat_comp + ers_comp) / 4, 0, 1).
+
+    Iter-196: 加入 ERS 部署激进程度作为第四维度.
 
     - brake_aggr = clamp(max(brake 正向梯度), 0, 1) — 制动猛踩程度；
     - thr_comp = 1 - throttle_smoothness — 油门不平顺贡献；
-    - glat_comp = clamp(max|g_lat| / 6, 0, 1) — 横向 g 力极限。
+    - glat_comp = clamp(max|g_lat| / 6, 0, 1) — 横向 g 力极限；
+    - ers_comp = clamp(mean(ers_deploy_mode > 0), 0, 1) — ERS 部署激进程度.
     """
     t0 = _first_t(frames, "brake")
     brake = _arr(frames, "brake")
@@ -231,7 +234,10 @@ def _aggression_score(
         _clamp01(float(np.max(np.abs(glat))) / _G_LAT_REF) if glat.size else 0.0
     )
     thr_comp = 1.0 - _clamp01(throttle_smoothness)
-    return _clamp01((brake_aggr + thr_comp + glat_comp) / 3.0), t0
+    # Iter-196: ERS 部署激进程度
+    ers_mode = _arr(frames, "ers_deploy_mode")
+    ers_comp = float(np.mean(ers_mode > 0.0)) if ers_mode.size else 0.0
+    return _clamp01((brake_aggr + thr_comp + glat_comp + ers_comp) / 4.0), t0
 
 
 def _consistency_score(frames: list[dict[str, Any]]) -> tuple[float, float]:

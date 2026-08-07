@@ -36,6 +36,7 @@ __all__ = [
     "SectorAnalyzer",
     "SetupChangeImpact",
     "TeammateComparison",
+    "CornerComparator",
 ]
 
 _N_SECTORS = 3
@@ -308,6 +309,79 @@ class SectorAnalyzer:
         span = max_tpc - min_tpc
         return {i + 1: float(1.0 - (tpc[i] - min_tpc) / span) for i in range(_N_SECTORS)}
 
+    def sector_distribution(self, sector_times: list[list[float]]) -> dict[str, Any]:
+        """Iter-183: Compute sector time distribution (min, max, p25, p50, p75).
+
+        Returns per-sector statistics for detailed lap analysis.
+        """
+        if not sector_times:
+            return {"sectors": [], "total_laps": 0}
+        per_sector: list[list[float]] = [[] for _ in range(_N_SECTORS)]
+        for row in sector_times:
+            row_list = list(row) if row is not None else []
+            for i in range(_N_SECTORS):
+                v = _as_float(row_list[i]) if i < len(row_list) else 0.0
+                per_sector[i].append(v)
+        result: list[dict[str, Any]] = []
+        for i in range(_N_SECTORS):
+            if not per_sector[i]:
+                result.append({"sector": i + 1, "min": 0, "max": 0, "p25": 0, "p50": 0, "p75": 0, "avg": 0})
+                continue
+            arr = np.asarray(sorted(per_sector[i]), dtype=np.float64)
+            result.append({
+                "sector": i + 1,
+                "min": float(arr[0]),
+                "max": float(arr[-1]),
+                "p25": float(np.percentile(arr, 25)),
+                "p50": float(np.percentile(arr, 50)),
+                "p75": float(np.percentile(arr, 75)),
+                "avg": float(np.mean(arr)),
+            })
+        return {"sectors": result, "total_laps": len(sector_times)}
+
+    def sector_progression(self, sector_times: list[list[float]]) -> dict[str, Any]:
+        """Iter-183: Analyze sector time progression across laps.
+
+        Returns lap-by-lap sector times and trend (improving/stable/slowing) per sector.
+        """
+        if not sector_times:
+            return {"progression": [], "trends": []}
+        n_laps = len(sector_times)
+        per_sector: list[list[float]] = [[] for _ in range(_N_SECTORS)]
+        for row in sector_times:
+            row_list = list(row) if row is not None else []
+            for i in range(_N_SECTORS):
+                v = _as_float(row_list[i]) if i < len(row_list) else 0.0
+                per_sector[i].append(v)
+        # Lap-by-lap progression
+        progression: list[dict[str, Any]] = []
+        for lap_idx in range(n_laps):
+            entry: dict[str, Any] = {"lap": lap_idx + 1}
+            for s in range(_N_SECTORS):
+                entry[f"s{s+1}"] = per_sector[s][lap_idx] if lap_idx < len(per_sector[s]) else 0.0
+            progression.append(entry)
+        # Per-sector trend
+        trends: list[dict[str, Any]] = []
+        for s in range(_N_SECTORS):
+            vals = per_sector[s]
+            if len(vals) < 3:
+                trends.append({"sector": s + 1, "trend": "neutral", "first": vals[0] if vals else 0, "last": vals[-1] if vals else 0})
+                continue
+            x_mean = (len(vals) - 1) / 2.0
+            y_mean = sum(vals) / len(vals)
+            num = sum((i - x_mean) * (vals[i] - y_mean) for i in range(len(vals)))
+            den = sum((i - x_mean) ** 2 for i in range(len(vals)))
+            slope = num / den if den != 0 else 0.0
+            trend = "improving" if slope < -0.05 else "slowing" if slope > 0.05 else "stable"
+            trends.append({
+                "sector": s + 1,
+                "trend": trend,
+                "slope": round(slope, 4),
+                "first": round(float(vals[0]), 3),
+                "last": round(float(vals[-1]), 3),
+            })
+        return {"progression": progression, "trends": trends}
+
 
 class TeammateComparison:
     """Driver vs teammate head-to-head comparison."""
@@ -511,4 +585,91 @@ class SetupChangeImpact:
             "after_cv": after_cv,
             "significant": significant,
             "verdict": _verdict_setup(delta_avg),
+        }
+
+
+# --------------------------------------------------------------------------- #
+# Iter-183: Corner-by-corner comparison
+# --------------------------------------------------------------------------- #
+class CornerComparator:
+    """Compare corner-by-corner performance between two laps (Iter-183).
+
+    Given a list of corner entries (each with ``corner_id``, ``min_speed``,
+    ``entry_speed``, ``exit_speed``), compare two laps corner-by-corner
+    and identify the best/worst corner deltas.
+
+    This is useful for answering "where did I lose time?" questions
+    at the individual corner level.
+    """
+
+    def __init__(self) -> None:
+        pass
+
+    @staticmethod
+    def compare(
+        driver_corners: list[dict[str, Any]],
+        reference_corners: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        """Compare corner speeds between driver and reference lap.
+
+        Args:
+            driver_corners: List of corner dicts with ``corner_id``,
+                ``min_speed``, ``entry_speed``, ``exit_speed``.
+            reference_corners: Same shape for reference lap.
+
+        Returns:
+            ``{"corner_deltas": [...], "best_corner": int, "worst_corner": int,
+            "total_speed_delta": float, "verdict": str}``
+        """
+        if not driver_corners or not reference_corners:
+            return {
+                "corner_deltas": [],
+                "best_corner": 0,
+                "worst_corner": 0,
+                "total_speed_delta": 0.0,
+                "verdict": "数据不足",
+            }
+
+        n = min(len(driver_corners), len(reference_corners))
+        deltas: list[dict[str, Any]] = []
+        total_delta = 0.0
+
+        for i in range(n):
+            d = driver_corners[i]
+            r = reference_corners[i]
+            entry_delta = _as_float(d.get("entry_speed", 0)) - _as_float(r.get("entry_speed", 0))
+            exit_delta = _as_float(d.get("exit_speed", 0)) - _as_float(r.get("exit_speed", 0))
+            min_delta = _as_float(d.get("min_speed", 0)) - _as_float(r.get("min_speed", 0))
+            corner_id = d.get("corner_id", r.get("corner_id", i + 1))
+            deltas.append({
+                "corner_id": corner_id,
+                "entry_speed_delta": round(entry_delta, 1),
+                "exit_speed_delta": round(exit_delta, 1),
+                "min_speed_delta": round(min_delta, 1),
+                "net_delta": round(exit_delta - entry_delta, 1),
+            })
+            total_delta += entry_delta + exit_delta + min_delta
+
+        # Best corner = most positive total delta (driver faster)
+        best_idx = max(range(n), key=lambda i: (
+            deltas[i]["entry_speed_delta"] + deltas[i]["exit_speed_delta"] + deltas[i]["min_speed_delta"]
+        ))
+        worst_idx = min(range(n), key=lambda i: (
+            deltas[i]["entry_speed_delta"] + deltas[i]["exit_speed_delta"] + deltas[i]["min_speed_delta"]
+        ))
+
+        total = deltas[best_idx]["entry_speed_delta"] + deltas[best_idx]["exit_speed_delta"] + deltas[best_idx]["min_speed_delta"]
+        if total > 5:
+            verdict = "车手在多个弯道更快"
+        elif total < -5:
+            verdict = "车手在多个弯道较慢"
+        else:
+            verdict = "车手弯道表现与参考相近"
+
+        return {
+            "corner_deltas": deltas,
+            "best_corner": deltas[best_idx]["corner_id"],
+            "worst_corner": deltas[worst_idx]["corner_id"],
+            "total_speed_delta": round(total_delta, 1),
+            "verdict": verdict,
         }
