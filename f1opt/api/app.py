@@ -89,9 +89,9 @@ _TRACK_FIELDS: tuple[str, ...] = (
 #: Max items buffered per WS client before drop-oldest kicks in.
 _CLIENT_QUEUE_MAX = 64
 
-# Iteration-history records live at <project-root>/.trae/iterations/iter-NN.md.
+# 迭代历史记录位于 <project-root>/半成品/.trae/iterations/iter-NN.md.
 # app.py is at f1opt/api/app.py → parents[2] = project root (workspace).
-_ITERATIONS_DIR = Path(__file__).resolve().parents[2] / ".trae" / "iterations"
+_ITERATIONS_DIR = Path(__file__).resolve().parents[2] / "半成品" / ".trae" / "iterations"
 # Path-traversal guard for /api/iterations/{iter}: only iter-NN is allowed.
 _ITER_ID_RE = re.compile(r"^iter-\d+$")
 # Listing filter: primary iter-NN.md records (excludes verification/etc. files).
