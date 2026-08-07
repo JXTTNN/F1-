@@ -389,7 +389,7 @@ class TestSetupOptimizationWorkflow:
 
     def test_pareto_tradeoffs(self) -> None:
         opt = MultiObjectiveOptimizer(
-            [[0.0, 1.0]] * 19,
+            [[0.0, 1.0]] * 21,  # Iter-250: 21 dims (CarSetup has 21 fields incl active_aero)
             objectives=["lap_time", "tire_wear"],
             n_iterations=6,
             seed=3,
