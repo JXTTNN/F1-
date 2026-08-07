@@ -15,10 +15,15 @@ __pycache__/
 venv/
 env/
 
-# PyInstaller + EXE 产物 (太大, 不入库; f1opt.spec 除外)
+# PyInstaller 产物
+dist/
+build/
 f1opt-app/
 f1opt-release/
 *.tar.gz
+
+# 环境变量
+.env
 
 # Runtime data
 data_store/

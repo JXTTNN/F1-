@@ -71,6 +71,10 @@ class Settings(BaseModel):
         default_factory=lambda: _env("LLM_API_KEY", ""),
         description="LLM API Key (如启用云后端)",
     )
+    llm_model: str = Field(
+        default_factory=lambda: _env("LLM_MODEL", "gpt-4o-mini"),
+        description="LLM 模型名称",
+    )
 
     # --- 日志 ---
     log_level: str = Field(

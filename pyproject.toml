@@ -7,7 +7,7 @@ name = "f1opt"
 version = "0.1.0"
 description = "F1 2026 Setup Optimizer: telemetry, driver feedback, and setup search"
 requires-python = ">=3.11"
-readme = { text = "F1 2026 Setup Optimization System.", content-type = "text/plain" }
+readme = "README.md"
 license = { text = "Proprietary" }
 authors = [{ name = "F1OPT Team" }]
 dependencies = [
@@ -17,6 +17,7 @@ dependencies = [
     "pyarrow",
     "torch",
     "numpy",
+    "scipy",
     "httpx",
     "websockets",
     "structlog",
@@ -38,7 +39,7 @@ dev = [
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["f1opt*"]
-exclude = ["tests*", "data_store*", ".trae*"]
+exclude = ["tests*", "data_store*", "半成品*", "exe*"]
 
 [tool.ruff]
 line-length = 100

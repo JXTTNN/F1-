@@ -54,6 +54,7 @@ f1opt/         源代码
 ├── model/       优化器 & 轮胎物理
 ├── telemetry/   UDP 监听 & 解析
 └── ui/          仪表盘
+exe/           EXE 打包 (spec + 构建脚本)
 tests/         测试
 docs/          文档
 半成品/         实验性内容
@@ -67,11 +68,12 @@ docs/          文档
 
 | 变量 | 默认值 | 说明 |
 |---|---|---|
-| `F1OPT_UDP_HOST` | `127.0.0.1` | 游戏遥测地址 |
+| `F1OPT_UDP_HOST` | `0.0.0.0` | 游戏遥测地址 |
 | `F1OPT_UDP_PORT` | `20777` | 游戏遥测端口 |
-| `F1OPT_CHAT_BACKEND` | `none` | LLM 后端：`openai` / `local` |
-| `F1OPT_CHAT_API_KEY` | — | API 密钥 |
-| `F1OPT_DATA_DIR` | `./data_store` | 数据目录 |
+| `F1OPT_LLM_BACKEND` | `none` | LLM 后端：`openai` / `local` |
+| `F1OPT_LLM_API_KEY` | — | API 密钥 |
+| `F1OPT_LLM_MODEL` | `gpt-4o-mini` | 模型名称 |
+| `F1OPT_DATA_DIR` | `data_store` | 数据目录 |
 
 ---
 
@@ -81,4 +83,13 @@ docs/          文档
 pip install -e ".[dev]"
 pytest tests/ --cov=f1opt
 ruff check f1opt tests
+```
+
+## 打包 EXE
+
+```bash
+# Windows: 双击 exe/build.bat
+# 或手动:
+pyinstaller exe/f1opt.spec --noconfirm
+# → 产物在 dist/f1opt/f1opt.exe
 ```
