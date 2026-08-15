@@ -5,7 +5,7 @@
 - :func:`batch_predict_lap_times` — N 个 setup 单次 forward 批量圈速.
 - :func:`batch_predict_full` — N 个 setup 批量富预测 (圈速 / 分段 / 响应).
 - :func:`predict_lap_time_grid` — 扫描单个调教字段, 返回各档位圈速.
-- :func:`sensitivity_analysis` — 19 个字段逐维敏感度排序.
+- :func:`sensitivity_analysis` — 21 个字段逐维敏感度排序.
 - :func:`setup_pareto_front` — 非支配 setup 索引 (圈速 vs 胎耗代理).
 
 所有函数确定性, 空列表输入返回 ``[]``. 批量路径经由
@@ -145,10 +145,10 @@ def sensitivity_analysis(
     driver_profile: Any = None,
     delta_steps: int = 1,
 ) -> dict[str, float]:
-    """逐字段敏感度: 对 19 个字段各扰 ±delta_steps 档, 返回 ``{field: max_abs_delta}``.
+    """逐字段敏感度: 对 21 个字段各扰 ±delta_steps 档, 返回 ``{field: max_abs_delta}``.
 
-    全部 38 个扰动 setup (19 字段 × ±) 在单次批量 forward 中评估; 基线圈速
-    单独计算. 返回字典键为 19 个调教字段名, 值为该字段 +/- 扰动下圈速最大
+    全部 42 个扰动 setup (21 字段 × ±) 在单次批量 forward 中评估; 基线圈速
+    单独计算. 返回字典键为 21 个调教字段名, 值为该字段 +/- 扰动下圈速最大
     绝对变化 (>= 0, 用于字段敏感度排序). ``delta_steps`` 必须 >= 1.
     """
     if delta_steps < 1:

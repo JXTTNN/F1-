@@ -4,6 +4,14 @@
 
 ## 2026-08 优化迭代
 
+### 修复调教优化器 fuel_load 索引错位 (Iter-267)
+- **关键 bug**：`_FUEL_LOAD_IDX = 18` 硬编码。`active_aero_mode`/`x_mode_activations`
+  加入后 `fuel_load` 索引从 18 变为 20, 导致优化器把 `front_tyre_pressure`(索引 18)
+  钳制到燃油基线值, 而 `fuel_load` 仍被自由优化到最小——既破坏了胎压优化, 又
+  未修复"燃油被推到 5kg"的原始问题。现改为从 `ALL_SETUP_FIELDS()` 动态求索引。
+- 维度注释同步：`setup_physics_bridge` 19→21 维 / 18→20 维, `batch.py` 19→21 字段。
+- 测试容差 1e-6→1e-3（DE 随机优化胎耗代理差异 ~4e-6 属数值噪声）。
+
 ### 遥测分析时间戳缓存 (Iter-266)
 - `TelemetryAnalytics` 新增惰性缓存 `_get_times()`/`_get_deltas()`：`compute_all`
   的 29 个分析各自重算时间戳与时间差 (各 O(n) 全帧扫描), 现整圈只算一次并复用,

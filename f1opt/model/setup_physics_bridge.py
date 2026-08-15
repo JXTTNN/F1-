@@ -1,6 +1,6 @@
-"""Setup 19 维 -> lap_simulator_2026 物理参数映射层 (Iter-66).
+"""Setup 21 维 -> lap_simulator_2026 物理参数映射层 (Iter-66).
 
-把 :class:`CarSetup` 19 维调教参数映射到 :class:`LapConfig2026` 物理输入,
+把 :class:`CarSetup` 21 维调教参数映射到 :class:`LapConfig2026` 物理输入,
 让 EA F1 2026 lap_simulator 物理引擎 (24 赛道 0.01% 精度) 能评估任意 setup.
 
 **设计动机** (用户 Iter-65 后方向):
@@ -14,7 +14,7 @@
 
 1. **燃油**: ``setup.fuel_load`` -> ``cfg.current_fuel_kg`` (1:1 物理一致)
 2. **化合物**: 默认 ``medium`` (调教 schema 不含化合物选择; 调用方可覆写)
-3. **其余 18 维**: 通过 *物理惩罚函数* -> ``cfg.car_performance_offset_s``
+3. **其余 20 维**: 通过 *物理惩罚函数* -> ``cfg.car_performance_offset_s``
    - 每项 V 形惩罚偏离 *该赛道类型的专业车队最优值*
    - 惩罚强度按赛道类型 (高速/街道/高下压力/中等/混合) 缩放
    - 每项单位: 秒 / 档 (与游戏调教一致)
@@ -267,10 +267,10 @@ _TRACK_TYPE_SCALE: dict[TrackType, dict[str, float]] = {
 # --------------------------------------------------------------------------- #
 # Iter-107: 全局总惩罚 cap. 旧版纯线性 V-shape 让极端 setup (全 max/min) 总惩罚
 # 达 10-13s, 远超 EA F1 2026 权威 3-6s (garage 实测全错调教慢 3-6s). 根因: 线性
-# 叠加 18 维偏差无饱和, 但真实 F1 物理有整车性能下限 (轮胎抓地极限 / 底盘失速 /
+# 叠加 20 维偏差无饱和, 但真实 F1 物理有整车性能下限 (轮胎抓地极限 / 底盘失速 /
 # 翼面 stall). 修复: 对 *总惩罚* 加 cap (=6s, 权威上限), 而非 per-item cap.
 # per-item cap (L=15) 会破坏单维灵敏度 (on_throttle_diff 25 档偏离仍应有差异);
-# 全局 cap 保留所有单维线性灵敏度, 仅在 18 维同时极端偏离时封顶.
+# 全局 cap 保留所有单维线性灵敏度, 仅在 20 维同时极端偏离时封顶.
 _TOTAL_PENALTY_CAP_S = 6.0
 
 
@@ -371,7 +371,7 @@ def setup_penalty_s(setup: CarSetup, track_id: str) -> float:
     Iter-107: 加全局 cap. 旧版纯线性让极端 setup (全 max/min) 总惩罚达 10-13s,
     远超 EA F1 2026 权威 3-6s. 全局 cap (而非 per-item) 保留单维线性灵敏度:
     on_throttle_diff 60 vs 100 (偏离最优 85 的 25 vs 15 档) 仍有线性差异, 仅当
-    18 维同时极端偏离时总惩罚封顶到 6s. 实测全 max 惩罚降到 6s (权威上限),
+    20 维同时极端偏离时总惩罚封顶到 6s. 实测全 max 惩罚降到 6s (权威上限),
     单参数扫描仍单调, 最优附近完全线性.
 
     Args:

@@ -388,11 +388,15 @@ def _search(
 
     # Iter-92: 燃油是策略变量, 不是调教自由度. EA F1 2026 专业车队调教流程中
     # 燃油装载量由策略组决定 (赛道长度 + 油耗), 调教工程师在固定燃油下优化其余
-    # 18 维. 旧版把 fuel_load 作为第 19 维自由优化, 优化器总是推到最小值 (5kg)
+    # 20 维. 旧版把 fuel_load 作为第 19 维自由优化, 优化器总是推到最小值 (5kg)
     # 因为物理模型中燃油越轻圈速越快 — 这在物理上正确但在调教语义上错误 (车队
-    # 不能用调教器决定跑多少燃油). 修复: 钳制 fuel_load 维度 (索引 18) 到
-    # baseline 值, DE 搜索该维度完全无效, 推荐的 fuel_load 永远 = baseline.
-    _FUEL_LOAD_IDX = 18
+    # 不能用调教器决定跑多少燃油). 修复: 钳制 fuel_load 维度到 baseline 值,
+    # DE 搜索该维度完全无效, 推荐的 fuel_load 永远 = baseline.
+    # Iter-267: 不再硬编码索引 18 (active_aero_mode/x_mode_activations 加入后
+    # fuel_load 索引从 18 变为 20, 硬编码 18 会误钳制 front_tyre_pressure)。
+    _FUEL_LOAD_IDX = next(
+        i for i, s in enumerate(ALL_SETUP_FIELDS()) if s.name == "fuel_load"
+    )
     _base_fuel_norm = (float(base_setup.fuel_load) - 5.0) / 105.0
 
     def evaluate(vec: np.ndarray) -> tuple[float, float]:
