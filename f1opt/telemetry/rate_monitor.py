@@ -7,10 +7,10 @@ drops, and exposes a sliding-window history for dashboard integration.
 
 Key features:
 
-- **Per-packet-type rate tracking**: Monitors Hz for each F1 packet type
-  (Motion=0, Session=1, LapData=2, Event=3, Participants=4, CarSetups=5,
-  CarTelemetry=6, CarStatus=7, FinalClassification=8, LobbyInfo=9,
-  CarDamage=10, SessionHistory=11).
+- **Per-packet-type rate tracking**: Monitors Hz for each F1 26 packet type
+  (0-16: Motion/Session/LapData/Event/Participants/CarSetups/CarTelemetry/
+  CarStatus/FinalClassification/LobbyInfo/CarDamage/SessionHistory/TyreSets/
+  MotionEx/TimeTrial/LapPositions/CarTelemetry2).
 - **Sliding window**: Configurable window (default 5s) of rate samples.
 - **Rate drop detection**: Alerts when rate drops below ``min_hz`` threshold.
 - **Subscriber-compatible**: Implements the async subscriber signature
@@ -38,6 +38,8 @@ import time as _time
 from collections import deque as _deque
 from dataclasses import dataclass as _dataclass
 from threading import Lock as _Lock
+
+from .packets import PACKET_NAMES as _PACKET_NAMES
 from typing import Any
 
 
@@ -46,7 +48,7 @@ class RateStatus:
     """Per-packet-type rate status snapshot."""
 
     packet_id: int
-    """F1 25 packet type identifier (0-11)."""
+    """F1 26 packet type identifier (0-16)."""
 
     packet_name: str
     """Human-readable packet type name."""
@@ -67,21 +69,7 @@ class RateStatus:
     """Actual duration of the sliding window (seconds)."""
 
 
-# F1 25 packet type names (indexed by packet_id).
-_PACKET_NAMES: dict[int, str] = {
-    0: "Motion",
-    1: "Session",
-    2: "LapData",
-    3: "Event",
-    4: "Participants",
-    5: "CarSetups",
-    6: "CarTelemetry",
-    7: "CarStatus",
-    8: "FinalClassification",
-    9: "LobbyInfo",
-    10: "CarDamage",
-    11: "SessionHistory",
-}
+# F1 26 packet type names — 复用 packets.PACKET_NAMES (单一事实来源, 含 0-16).
 
 
 class TelemetryRateMonitor:
