@@ -804,6 +804,7 @@ class EnsembleSurrogateModel(nn.Module):
         if not models:
             raise ValueError("EnsembleSurrogateModel requires at least 1 model")
         self.models = nn.ModuleList(models)
+        self._members: list[SurrogateModel] = list(models)  # 类型化并行列表, 供 predict 类调用
         self.n_members = len(models)
 
     # ------------------------------------------------------------------ #
@@ -815,7 +816,7 @@ class EnsembleSurrogateModel(nn.Module):
         """Average (sector_residual, response_residual) across all members."""
         sec_sum: torch.Tensor | None = None
         resp_sum: torch.Tensor | None = None
-        for m in self.models:
+        for m in self._members:
             m.eval()
             sec, resp = m(x)
             sec_sum = sec if sec_sum is None else sec_sum + sec
@@ -837,7 +838,7 @@ class EnsembleSurrogateModel(nn.Module):
         driver_profile: Any = None,
     ) -> dict[str, Any]:
         """Average :meth:`SurrogateModel.predict` across all members."""
-        results = [m.predict(setup, track_id, driver_profile) for m in self.models]
+        results = [m.predict(setup, track_id, driver_profile) for m in self._members]
         avg_lap = float(np.mean([r["lap_time"] for r in results]))
         avg_sectors = [
             float(np.mean([r["sectors"][i] for r in results]))
@@ -908,7 +909,7 @@ class EnsembleSurrogateModel(nn.Module):
 
         # Factor 3 (ensemble-only): member disagreement on lap_time.
         member_laps = [m.predict_lap_time(setup, track_id, driver_profile)
-                       for m in self.models]
+                       for m in self._members]
         lap_std = float(np.std(member_laps)) if len(member_laps) > 1 else 0.0
         # 0.3s std -> max penalty 0.3; scale linearly.
         disagreement_penalty = min(0.3, lap_std / 0.3 * 0.3)
@@ -941,7 +942,7 @@ class EnsembleSurrogateModel(nn.Module):
         """Average :meth:`SurrogateModel.predict_batch` across all members."""
         if not items:
             return []
-        all_results = [m.predict_batch(items) for m in self.models]
+        all_results = [m.predict_batch(items) for m in self._members]
         out: list[dict[str, Any]] = []
         for i in range(len(items)):
             r_list = [all_results[m][i] for m in range(self.n_members)]
@@ -972,7 +973,7 @@ class EnsembleSurrogateModel(nn.Module):
             "model_version": f"{MODEL_VERSION}-ensemble-{self.n_members}",
             "n_members": self.n_members,
             "input_dim": INPUT_DIM,
-            "members": [m.state_dict(*args, **kwargs) for m in self.models],
+            "members": [m.state_dict(*args, **kwargs) for m in self._members],
         }
 
     def load_state_dict(

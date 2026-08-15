@@ -250,6 +250,10 @@
 - `train.py`：`_held_out_mae` 的 `model` 参数标注放宽为 `SurrogateModel |
   EnsembleSurrogateModel` (实际两种模型均接受, 且均有 `predict` 方法)。
   train 26 passed。
+- `surrogate.py`：`EnsembleSurrogateModel` 新增类型化 `_members` 并行列表
+  (`list[SurrogateModel]`), 循环改用 `self._members` 替代 `nn.ModuleList` 迭代
+  (mypy 把 ModuleList 元素推断为 Tensor, 导致 `m.predict()` 报 "Tensor not
+  callable")。surrogate 23 passed。全项目 32 → 29。
 
 ---
 
