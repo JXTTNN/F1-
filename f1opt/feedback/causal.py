@@ -1,9 +1,9 @@
 """Causal-explanation & what-if setup analysis for F1OPT feedback (Iter-26..28).
 
-Adds a *physically-grounded* causal layer on top of the 19-field
+Adds a *physically-grounded* causal layer on top of the 21-field
 :class:`~f1opt.data.setup_schema.CarSetup` schema:
 
-- :data:`CAUSAL_RULES` — a rules table covering ALL 19 setup fields. Each
+- :data:`CAUSAL_RULES` — a rules table covering ALL 21 setup fields. Each
   entry maps an increase / decrease of the field's raw value to a primary
   physical effect, 1-3 cascading secondary effects, and signed per-metric
   delta coefficients (``expected = coefficient * (proposed - current)``).
@@ -54,7 +54,7 @@ RISK_HIGH_STEPS: float = 5.0
 
 
 # --------------------------------------------------------------------------- #
-# CAUSAL_RULES — physically-reasonable rules for all 19 setup fields.
+# CAUSAL_RULES — physically-reasonable rules for all 21 setup fields.
 # Each entry:
 #   primary_effect_inc / _dec : Chinese primary effect (for value inc / dec)
 #   secondary_inc / _dec      : 1-3 cascading secondary effects

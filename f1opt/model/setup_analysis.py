@@ -92,7 +92,7 @@ def analyze_setup_contributions(
         20 个 :class:`ParameterContribution` (fuel_load 除外). 按 sensitivity 降序.
 
     Iter-86: 内部用 :func:`analyze_setup_contributions_batched` (predict_batch
-    一次评估全部 37 个扰动 setup), 比逐条 predict_lap_time 快 ~7x (3.5ms vs 26ms).
+    一次评估全部 41 个扰动 setup), 比逐条 predict_lap_time 快 ~7x (3.5ms vs 26ms).
     """
     return analyze_setup_contributions_batched(setup, track_id, driver_profile)
 
@@ -102,10 +102,10 @@ def analyze_setup_contributions_batched(
     track_id: str,
     driver_profile: object | None = None,
 ) -> list[ParameterContribution]:
-    """Iter-86: 批量化版本 — 用 predict_batch 一次评估全部 37 个扰动 setup.
+    """Iter-86: 批量化版本 — 用 predict_batch 一次评估全部 41 个扰动 setup.
 
-    构造 1 (base) + 18 × 2 (±1 step) = 37 个 setup, 一次性传给
-    :meth:`SurrogateModel.predict_batch`, 避免 37 次顺序 predict_lap_time
+    构造 1 (base) + 20 × 2 (±1 step) = 41 个 setup, 一次性传给
+    :meth:`SurrogateModel.predict_batch`, 避免 41 次顺序 predict_lap_time
     的 Python 循环 + per-call overhead. 实测 ~7x 加速 (26ms → 4ms).
     返回与 :func:`analyze_setup_contributions` 一致.
     """
@@ -114,7 +114,7 @@ def analyze_setup_contributions_batched(
     model = _get_default_model()
     contributions: list[ParameterContribution] = []
 
-    # 构造 37 个 setup: base + 18 个 (plus, minus)
+    # 构造 41 个 setup: base + 20 个 (plus, minus)
     items: list[tuple[CarSetup, str, object]] = [(setup, track_id, driver_profile)]
     field_specs: list[tuple[str, float, CarSetup, CarSetup]] = []  # (name, current, plus, minus)
     for field in ALL_SETUP_FIELDS():

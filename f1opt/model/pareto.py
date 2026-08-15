@@ -460,7 +460,7 @@ def _hv_3d(points: list[list[float]], ref: list[float]) -> float:
 class MultiObjectiveOptimizer:
     """NSGA-II-style multi-objective setup search over a bounded space.
 
-    Operates in the normalized ``CarSetup`` space (e.g. ``[0,1]^19``). The
+    Operates in the normalized ``CarSetup`` space (e.g. ``[0,1]^21``). The
     objective evaluation lazy-imports :func:`predict_full` from the surrogate
     module and returns ``[lap_time, tire_wear_proxy]``.
     """

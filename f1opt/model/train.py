@@ -420,9 +420,9 @@ def _lhs_setup_table(
 
     生成 ``n_uniform + n_tight + n_practice`` 个采样计划, 每个计划是
     ``(stratum, vec)`` 对:
-    - ``stratum="uniform"``: vec 是 ``[0,1]^19`` 的 LHS 样本 (全局覆盖)
-    - ``stratum="tight"``: vec 是 ``[-1,1]^19`` 的 LHS 扰动 (正赛 ±3 档)
-    - ``stratum="practice"``: vec 是 ``[-1,1]^19`` 的 LHS 扰动 (练习赛 ±8 档)
+    - ``stratum="uniform"``: vec 是 ``[0,1]^21`` 的 LHS 样本 (全局覆盖)
+    - ``stratum="tight"``: vec 是 ``[-1,1]^21`` 的 LHS 扰动 (正赛 ±3 档)
+    - ``stratum="practice"``: vec 是 ``[-1,1]^21`` 的 LHS 扰动 (练习赛 ±8 档)
 
     扰动 vec 在 ``_realistic_setup_from_plan`` 中按 sigma 缩放后叠加到 per-track
     baseline 上, 保证 LHS 分层覆盖 perturbation 空间.
@@ -441,7 +441,7 @@ def _lhs_setup_table(
         uniform = _latin_hypercube_sample(rng, n_uniform, SETUP_DIM, 0.0, 1.0)
         for i in range(n_uniform):
             plans.append(("uniform", uniform[i]))
-    # tight / practice 扰动在 [-1, 1]^19 空间 LHS, 后续按 sigma 缩放
+    # tight / practice 扰动在 [-1, 1]^21 空间 LHS, 后续按 sigma 缩放
     if n_tight > 0:
         tight = _latin_hypercube_sample(rng, n_tight, SETUP_DIM, -1.0, 1.0)
         for i in range(n_tight):
@@ -462,8 +462,8 @@ def _realistic_setup_from_plan(
     """Iter-121: 从 LHS 采样计划构造 ``CarSetup`` (替代 ``_realistic_random_setup``).
 
     Args:
-        plan: ``(stratum, vec)`` 对. uniform: vec 直接是 [0,1]^19; tight/practice:
-            vec 是 [-1,1]^19 扰动, 按 sigma 缩放后叠加到 track-type baseline.
+        plan: ``(stratum, vec)`` 对. uniform: vec 直接是 [0,1]^21; tight/practice:
+            vec 是 [-1,1]^21 扰动, 按 sigma 缩放后叠加到 track-type baseline.
         track_id: 赛道 ID.
 
     Returns:
@@ -525,7 +525,7 @@ def _realistic_random_setup(rng: np.random.Generator, track_id: str) -> CarSetup
     if track is None:
         return _random_setup(rng)  # 未知赛道回退均匀
     base = optimal_setup_for_track_type(track.track_type)
-    base_vec = np.array(base.to_vector(), dtype=np.float64)  # 归一化 [0,1]^19
+    base_vec = np.array(base.to_vector(), dtype=np.float64)  # 归一化 [0,1]^21
     # Iter-93: 分层 sigma — 30% tight (正赛 ±3 档), 50% practice (练习赛 ±8 档)
     sigma = 0.03 if r < 0.5 else 0.08
     perturbed = np.clip(
@@ -806,7 +806,7 @@ def _physics_consistency_loss(
     Returns:
         标量 loss 张量 (可反向传播).
     """
-    # 创建 AGGR / CONS 变体: 替换 driver 部分 (indices 29:37)
+    # 创建 AGGR / CONS 变体: 替换 driver 部分 (indices 31:39)
     x_aggr = x.clone()
     x_cons = x.clone()
     x_aggr[:, _DRIVER_VEC_START:_DRIVER_VEC_END] = aggr_vec
@@ -1014,7 +1014,7 @@ def _evaluate_ood(
     """Iter-118: 在 OOD (out-of-distribution) 极端样本上评估 MAE.
 
     OOD 评估集构造: 24 赛道 × 4 极端 setup × 3 exemplar driver = 288 样本.
-    极端 setup 取归一化 [0,1]^19 的角点 (全 0/全 1/全 0.25/全 0.75),
+    极端 setup 取归一化 [0,1]^21 的角点 (全 0/全 1/全 0.25/全 0.75),
     距离训练分布中心 (track-type 最优 ±0.03/0.08) 远, 用于检测模型外推稳定性.
 
     圈速真值: 用 setup_lap_time (EA F1 2026 物理引擎) 与训练集同源.
@@ -1532,7 +1532,7 @@ def train(
     - **AdamW** (weight_decay=1e-5): L2 正则化.
     - **Cosine LR schedule** (1e-3 -> 1e-5): 前期高 lr 探索, 后期低 lr 精细收敛.
     - **Gradient clipping** (max_norm=1.0): BatchNorm + GELU 训练稳定性.
-    - **n_samples=8000** (from 5000): 更好覆盖 37 维输入空间.
+    - **n_samples=8000** (from 5000): 更好覆盖 39 维输入空间.
     - **Mini-batch + early stopping** (batch_size>0, early_stopping_patience>0):
       90/10 train/val split, 每 epoch 评估 val loss, 保存最优模型, patience
       轮无改善则早停. 防止全批量 GD 在高迭代数下过拟合 (3000 iter 比 1500 iter
@@ -1575,7 +1575,7 @@ def train(
       mini-batch 采样 ``lam ~ Beta(alpha, alpha)`` (clamp 到 [0.5, 1.0] 防止
       退化), 用 ``x_mixed = lam*x + (1-lam)*x[perm]`` 与对应 target 同样线性
       插值, 生成虚拟训练样本. 作为正则化手段提升泛化 (鼓励模型在相近 setup
-      之间平滑插值), 在小数据集 + 高维输入 (37 维) 上减少过拟合. ``0.0``
+      之间平滑插值), 在小数据集 + 高维输入 (39 维) 上减少过拟合. ``0.0``
       (默认) = 禁用, 向后兼容. 仅在 mini-batch 路径生效 (batch_size > 0).
 
     - ``save=True`` 时写入 ``{data_dir}/models/segment_surrogate.pt`` 并刷新缓存.

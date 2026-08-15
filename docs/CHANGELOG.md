@@ -4,6 +4,12 @@
 
 ## 2026-08 优化迭代
 
+### 输入向量维度注释全量对齐 (Iter-272)
+- 全仓扫除 "37 维 / [0,1]^19 / [29:37] / 19 setup fields" 等陈旧引用:
+  `causal.py`、`feature_importance.py`、`pareto.py`、`setup_analysis.py`、
+  `surrogate.py`、`train.py` 全部改为 39 维输入 / 21 setup 字段 / [31:39] driver 段 / 41 个扰动。
+- `feature_importance.py` 的 `FEATURE_NAMES` 经防御性断言验证 = 39 (= INPUT_DIM)。
+
 ### 修复训练物理一致性 loss 的 driver 向量错位 (Iter-271)
 - **关键 bug**：`_DRIVER_VEC_START=29` / `_DRIVER_VEC_END=37` 硬编码, 假设
   SETUP_DIM=19。`active_aero_mode`/`x_mode_activations` 加入后 INPUT_DIM 37→39,

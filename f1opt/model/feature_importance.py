@@ -14,16 +14,16 @@ whole input space — not just at a single setup point (that local view is
    target)? Model-agnostic, captures non-linear interactions, but slower
    (one forward per feature).
 
-The 37-dim input vector layout (see :func:`surrogate.build_input_vector`):
+The 39-dim input vector layout (see :func:`surrogate.build_input_vector`):
 
-* ``[0:19]``  — 19 setup fields (front_wing … fuel_load)
-* ``[19:29]`` — 10 track-context dims (length, corners, is_sprint,
+* ``[0:21]``  — 21 setup fields (front_wing … fuel_load)
+* ``[21:31]`` — 10 track-context dims (length, corners, is_sprint,
   5 one-hot track_type, elevation, unknown_flag)
-* ``[29:37]`` — 8 driver-profile dims (brake_point_norm … drs_usage_efficiency)
+* ``[31:39]`` — 8 driver-profile dims (brake_point_norm … drs_usage_efficiency)
 
 Public API:
 
-* :data:`FEATURE_NAMES` — 37-dim ordered feature name list.
+* :data:`FEATURE_NAMES` — 39-dim ordered feature name list.
 * :data:`FEATURE_GROUPS` — per-index group label (``"setup"`` / ``"track"`` /
   ``"driver"``).
 * :func:`gradient_feature_importance` — mean ``|∂lap/∂x_i|`` over samples.
@@ -49,7 +49,7 @@ from f1opt.model.surrogate import (
     SurrogateModel,
 )
 
-# --- 37-dim feature name layout -------------------------------------------- #
+# --- 39-dim feature name layout -------------------------------------------- #
 # Must stay in lock-step with surrogate.build_input_vector / track_context.
 _SETUP_NAMES: list[str] = [f.name for f in ALL_SETUP_FIELDS()]
 _TRACK_NAMES: list[str] = [
@@ -74,7 +74,7 @@ _DRIVER_NAMES: list[str] = [
 FEATURE_NAMES: tuple[str, ...] = tuple(
     _SETUP_NAMES + _TRACK_NAMES + _DRIVER_NAMES
 )
-"""Ordered 37-dim feature names matching :func:`surrogate.build_input_vector`."""
+"""Ordered 39-dim feature names matching :func:`surrogate.build_input_vector`."""
 
 if len(FEATURE_NAMES) != INPUT_DIM:
     raise RuntimeError(  # pragma: no cover - defensive layout invariant
@@ -94,7 +94,7 @@ FEATURE_GROUPS: tuple[str, ...] = tuple(
 class FeatureRanking:
     """One row of a feature-importance ranking.
 
-    - ``index``: position in the 37-dim input vector.
+    - ``index``: position in the 39-dim input vector.
     - ``name``: feature name (see :data:`FEATURE_NAMES`).
     - ``group``: ``"setup"`` / ``"track"`` / ``"driver"``.
     - ``importance``: non-negative importance score (method-dependent units).
