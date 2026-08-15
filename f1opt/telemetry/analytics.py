@@ -1196,9 +1196,26 @@ class TelemetryAnalytics:
         """Analyze F1 2026 active aero (X-Mode / Z-Mode) usage across frames.
 
         X-mode = low-drag (straight-line speed), Z-mode = high-downforce
-        (cornering grip). Reports the fraction of frames where each mode is
-        deployed (aero position > 0.5) plus the mean aero position.
+        (cornering grip). Reads ``active_aero_mode`` (0=Corner/Z, 1=Straight/X,
+        Packet 16) and reports each mode's frame fraction; falls back to the
+        legacy ``active_aero_x``/``active_aero_z`` position fields if present.
         """
+        mode = _field(self.frames, "active_aero_mode")
+        n = int(mode.size)
+        if n:
+            m = np.round(mode).astype(int)
+            x_active = int(np.count_nonzero(m == 1))  # Straight/X
+            z_active = int(np.count_nonzero(m == 0))  # Corner/Z
+            return {
+                "total_frames": n,
+                "x_mode_frames": x_active,
+                "z_mode_frames": z_active,
+                "x_mode_fraction": x_active / n,
+                "z_mode_fraction": z_active / n,
+                "mean_aero_x": x_active / n,
+                "mean_aero_z": z_active / n,
+            }
+        # Legacy fallback: continuous position fields (active_aero_x/z > 0.5)
         x = _field(self.frames, "active_aero_x")
         z = _field(self.frames, "active_aero_z")
         n = int(x.size)

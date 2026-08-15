@@ -210,11 +210,11 @@ def test_active_aero_usage_dimension() -> None:
     """Iter-256: 主动空力使用维度按 X/Z-Mode 帧占比产出量化结论。"""
     frames = []
     for i in range(200):
-        # 前 60 帧 X-Mode 激活 (低阻直道), 后 140 帧 Z-Mode 激活 (高下压弯道)
+        # 前 60 帧 X-Mode (Straight=1), 后 140 帧 Z-Mode (Corner=0)
         if i < 60:
-            frames.append(_frame(i, active_aero_x=1.0, active_aero_z=0.0))
+            frames.append(_frame(i, active_aero_mode=1.0))
         else:
-            frames.append(_frame(i, active_aero_x=0.0, active_aero_z=1.0))
+            frames.append(_frame(i, active_aero_mode=0.0))
     out = generate_feedback(frames, DEFAULT_SETUP.model_dump(), "monza")
     dim = _dim_by_name(out, "active_aero_usage")
     assert dim["name"] == "active_aero_usage"

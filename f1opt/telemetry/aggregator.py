@@ -66,8 +66,9 @@ class _LapState:
     throttle_sum: float = 0.0
     brake_sum: float = 0.0
     ers_deploy_sum: float = 0.0
-    active_aero_x_sum: float = 0.0  # Iter-191: F1 2026 X-Mode 位置累计
-    active_aero_z_sum: float = 0.0  # Iter-191: F1 2026 Z-Mode 位置累计
+    active_aero_x_sum: float = 0.0  # Iter-280: X-Mode (mode==1) 帧累计
+    active_aero_z_sum: float = 0.0  # Iter-280: Z-Mode (mode==0) 帧累计
+    car_telemetry2_count: int = 0  # Iter-280: Packet 16 样本数 (主动空力)
     car_status_count: int = 0  # Iter-255: CarStatus 样本数 (与 num_samples 不同率)
     max_tyre_wear: float = 0.0
     num_samples: int = 0
@@ -205,6 +206,8 @@ class LapAggregator:
             self._on_car_telemetry(header, parsed)
         elif header.packet_id == 7:  # CarStatus
             self._on_car_status(header, parsed)
+        elif header.packet_id == 16:  # CarTelemetryData2 (Iter-280)
+            self._on_car_telemetry_2(header, parsed)
         elif header.packet_id == 10:  # CarDamage
             self._on_car_damage(header, parsed)
 
@@ -278,10 +281,23 @@ class LapAggregator:
                 continue
             # Iter-124: _safe_float handles None (explicit null) defensively.
             state.ers_deploy_sum += _safe_float(c.get("m_ersDeployedThisLap"))
-            # Iter-191: F1 2026 主动空力 (X=低阻/Z=高下压力 位置) 累计
-            state.active_aero_x_sum += _safe_float(c.get("m_activeAeroX"))
-            state.active_aero_z_sum += _safe_float(c.get("m_activeAeroZ"))
             state.car_status_count += 1  # Iter-255: 独立计数, 与 num_samples 不同率
+
+    def _on_car_telemetry_2(
+        self, header: PacketHeader, parsed: dict[str, Any]
+    ) -> None:
+        """Iter-280: Packet 16 (CarTelemetryData2) — F1 2026 主动空力模式累计."""
+        sid = header.session_uid
+        cars = parsed.get("m_carTelemetryData2") or []
+        for car_idx, c in enumerate(cars):
+            state = self._laps.get((sid, car_idx))
+            if state is None:
+                continue
+            # m_activeAeroMode: 0=Corner(Z-Mode) / 1=Straight(X-Mode)
+            mode = int(_safe_float(c.get("m_activeAeroMode")))
+            state.active_aero_x_sum += 1.0 if mode == 1 else 0.0
+            state.active_aero_z_sum += 1.0 if mode == 0 else 0.0
+            state.car_telemetry2_count += 1
 
     def _on_car_damage(
         self, header: PacketHeader, parsed: dict[str, Any]
@@ -337,8 +353,8 @@ class LapAggregator:
             "avg_brake": state.brake_sum / n,
             # Iter-255: ERS/主动空力均来自 CarStatus (20Hz), 用 car_status_count 而非 num_samples
             "avg_ers_deploy": state.ers_deploy_sum / max(state.car_status_count, 1),
-            "avg_active_aero_x": state.active_aero_x_sum / max(state.car_status_count, 1),
-            "avg_active_aero_z": state.active_aero_z_sum / max(state.car_status_count, 1),
+            "avg_active_aero_x": state.active_aero_x_sum / max(state.car_telemetry2_count, 1),  # Iter-280
+            "avg_active_aero_z": state.active_aero_z_sum / max(state.car_telemetry2_count, 1),  # Iter-280
             "max_tyre_wear": state.max_tyre_wear,
             "track_id": int(track_id),
             "weather": int(weather),

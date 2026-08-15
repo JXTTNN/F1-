@@ -725,7 +725,7 @@ def extract_metrics(
     # Iter-259: 修正 ERS 字段命名与 aligner 对齐 (ers_deployed_this_lap /
     # ers_harvested_this_lap)。移除幻影字段 ers_mgu_k_deploy / drs_zone
     # (aligner 从不产出, 导致 ERS/DRS 维度永远数据不足)。
-    cols = col_multi("speed", "throttle", "brake", "steer", "g_lat", "ers_store", "ers_deployed_this_lap", "ers_harvested_this_lap", "ers_deploy_mode", "drs_allowed", "drs_active", "lap_time", "lap_distance", "fuel_in_tank", "brake_temp_fl", "brake_temp_rl", "brake_temp_fr", "brake_temp_rr", "tyre_temp_fl", "tyre_temp_fr", "tyre_temp_rl", "tyre_temp_rr", "tyre_wear_fl", "tyre_wear_fr", "tyre_wear_rl", "tyre_wear_rr", "tyre_inner_temp_fl", "tyre_inner_temp_fr", "tyre_outer_temp_fl", "tyre_outer_temp_fr", "active_aero_x", "active_aero_z")
+    cols = col_multi("speed", "throttle", "brake", "steer", "g_lat", "ers_store", "ers_deployed_this_lap", "ers_harvested_this_lap", "ers_deploy_mode", "drs_allowed", "drs_active", "lap_time", "lap_distance", "fuel_in_tank", "brake_temp_fl", "brake_temp_rl", "brake_temp_fr", "brake_temp_rr", "tyre_temp_fl", "tyre_temp_fr", "tyre_temp_rl", "tyre_temp_rr", "tyre_wear_fl", "tyre_wear_fr", "tyre_wear_rl", "tyre_wear_rr", "tyre_inner_temp_fl", "tyre_inner_temp_fr", "tyre_outer_temp_fl", "tyre_outer_temp_fr", "active_aero_mode")
 
     # --- Speed ---
     speed, speed_t = cols["speed"]
@@ -959,30 +959,21 @@ def extract_metrics(
             add_ref("aero_balance_high_g", float(g_lat_t[min(mid_ab, len(g_lat_t)-1)]), "g_lat", high_g)
             add_ref("aero_balance_low_g", float(g_lat_t[min(mid_ab, len(g_lat_t)-1)]), "g_lat", low_g)
 
-    # --- Active aero usage (F1 2026 X-Mode / Z-Mode) — Iter-256 ---
-    # X-Mode = 低阻直道 (m_activeAeroX), Z-Mode = 高下压弯道 (m_activeAeroZ).
-    # 以 position > 0.5 判定该模式激活, 计算各自占帧比 (duty cycle).
-    aero_x, aero_x_t = cols["active_aero_x"]
-    aero_z, aero_z_t = cols["active_aero_z"]
-    if len(aero_x) or len(aero_z):
-        x_frac = (
-            float(np.count_nonzero(np.asarray(aero_x) > 0.5)) / len(aero_x)
-            if len(aero_x) else 0.0
-        )
-        z_frac = (
-            float(np.count_nonzero(np.asarray(aero_z) > 0.5)) / len(aero_z)
-            if len(aero_z) else 0.0
-        )
+    # --- Active aero usage (F1 2026 X-Mode / Z-Mode) — Iter-256/280 ---
+    # active_aero_mode (Packet 16): 0=Corner(Z-Mode) / 1=Straight(X-Mode).
+    # 按帧占比计算 X/Z duty cycle。
+    aero_mode, aero_mode_t = cols["active_aero_mode"]
+    if len(aero_mode):
+        m = np.round(np.asarray(aero_mode)).astype(int)
+        n_aero = len(m)
+        x_frac = float(np.count_nonzero(m == 1)) / n_aero
+        z_frac = float(np.count_nonzero(m == 0)) / n_aero
         metrics["values"]["active_aero_x_fraction"] = x_frac
         metrics["values"]["active_aero_z_fraction"] = z_frac
-        metrics["values"]["active_aero_mean_x"] = float(np.mean(aero_x)) if len(aero_x) else 0.0
-        metrics["values"]["active_aero_mean_z"] = float(np.mean(aero_z)) if len(aero_z) else 0.0
-        if len(aero_x):
-            xi = int(np.argmax(aero_x))
-            add_ref("active_aero_x", float(aero_x_t[xi]), "active_aero_x", float(aero_x[xi]))
-        if len(aero_z):
-            zi = int(np.argmax(aero_z))
-            add_ref("active_aero_z", float(aero_z_t[zi]), "active_aero_z", float(aero_z[zi]))
+        metrics["values"]["active_aero_mean_x"] = x_frac
+        metrics["values"]["active_aero_mean_z"] = z_frac
+        mi = int(np.argmax(m))
+        add_ref("active_aero_mode", float(aero_mode_t[mi]), "active_aero_mode", float(aero_mode[mi]))
 
     # --- Max g_lat (grip proxy) ---
     if len(g_lat):

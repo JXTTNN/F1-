@@ -89,8 +89,7 @@ UNIFIED_KEYS: tuple[str, ...] = (
     "fuel_in_tank", "fuel_remaining_laps",
     "tyre_compound",                             # Iter-172: m_visualTyreCompound
     "actual_tyre_compound",                      # Iter-172: m_actualTyreCompound
-    "active_aero_x", "active_aero_z",            # Iter-191 (遗留, 现已无源 → 恒 0)
-    # Iter-278: F1 2026 主动空力/超车 来自 Packet 16 CarTelemetryData2
+    # Iter-278/280: F1 2026 主动空力/超车 来自 Packet 16 CarTelemetryData2
     "active_aero_mode", "active_aero_available",  # m_activeAeroMode: 0=Z/1=X
     # LapData (圈速 / 扇区 / 状态 / 罚时)
     "lap_time", "lap_distance",
@@ -114,6 +113,7 @@ _INT_KEYS: frozenset[str] = frozenset(
         "tyre_inner_temp_rl", "tyre_inner_temp_rr",
         "tyre_compound", "actual_tyre_compound",
         "pit_status", "driver_status", "result_status", "penalties",
+        "active_aero_mode", "active_aero_available",  # Iter-280: Packet 16 整数字段
     }
 )
 

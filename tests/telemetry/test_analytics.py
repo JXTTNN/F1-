@@ -150,9 +150,10 @@ class TestTelemetryAnalyticsShape:
         assert isinstance(out["tire_load"], dict)
 
     def test_active_aero_usage_detects_x_z_modes(self) -> None:
-        """active_aero_usage_analysis 应正确检测 F1 2026 X/Z 模式。"""
-        frames = [{"active_aero_x": 0.2, "active_aero_z": 0.9} for _ in range(60)]
-        frames += [{"active_aero_x": 0.9, "active_aero_z": 0.2} for _ in range(40)]
+        """active_aero_usage_analysis 应正确检测 F1 2026 X/Z 模式 (Iter-280)。"""
+        # active_aero_mode: 0=Corner(Z), 1=Straight(X)
+        frames = [{"active_aero_mode": 0} for _ in range(60)]
+        frames += [{"active_aero_mode": 1} for _ in range(40)]
         out = TelemetryAnalytics(frames).active_aero_usage_analysis()
         assert out["total_frames"] == 100
         assert out["x_mode_frames"] == 40

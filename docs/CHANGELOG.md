@@ -4,6 +4,16 @@
 
 ## 2026-08 优化迭代
 
+### 主动空力消费者迁移到 active_aero_mode (Iter-280)
+- 主动空力遥测现来自 Packet 16 的 `m_activeAeroMode` (0=Corner/Z / 1=Straight/X),
+  全链路消费者已从遗留 `active_aero_x/z` (无源) 迁移：
+  - analytics `active_aero_usage_analysis` 按 mode==1 / mode==0 统计 X/Z 占比;
+  - 反馈引擎 `col_multi` + 指标改用 `active_aero_mode`;
+  - `_frame_to_ws` / 实时 UI 指示器改用 `active_aero_mode` (1=X-Mode / 0=Z-Mode);
+  - 聚合器新增 `_on_car_telemetry_2` (Packet 16), `avg_active_aero_x/z` = X/Z 帧占比
+    (分母改用 `car_telemetry2_count`)。
+- 测试同步：analytics/feedback/api/aggregator 测试改用 `active_aero_mode`。
+
 ### CarTelemetry engineTemperature 线格式修正 + 测试同步 (Iter-279)
 - 按权威规范, `m_engineTemperature` 是 uint8 (B), 旧解析器误作 uint16 (H) 导致
   `m_tyresPressure`/`m_surfaceType` 错位 1 字节。修正格式串为 59 字节/车。

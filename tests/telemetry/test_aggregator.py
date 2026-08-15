@@ -101,8 +101,14 @@ def _empty_telem() -> dict:
 
 def car_status(car0: dict) -> dict:
     """Build a CarStatus parsed payload with car 0 set."""
-    empty = {"m_ersDeployedThisLap": 0, "m_activeAeroX": 0.0, "m_activeAeroZ": 0.0}
+    empty = {"m_ersDeployedThisLap": 0}
     return {"m_carStatusData": [car0] + [empty] * 21}
+
+
+def car_telemetry2(car0: dict) -> dict:
+    """Build a Packet 16 (CarTelemetryData2) parsed payload with car 0 set."""
+    empty = {"m_activeAeroMode": 0, "m_activeAeroAvailable": 0}
+    return {"m_carTelemetryData2": [car0] + [empty] * 21}
 
 
 # --------------------------------------------------------------------------- #
@@ -153,7 +159,7 @@ class TestCleanLap:
         assert row["session_uid"] == SESSION_UID
 
     async def test_active_aero_averaged_and_exported(self) -> None:
-        """Iter-254: 主动空力 (X/Z) 按独立 CarStatus 计数求平均, 且进入 parquet。"""
+        """Iter-280: 主动空力 (X/Z) 来自 Packet 16 的 active_aero_mode, 进入 parquet。"""
         agg = LapAggregator("/tmp/test_aero.parquet")
         await agg(make_header(1), {"m_trackId": 7, "m_weather": 2}, b"")
         await agg(
@@ -161,11 +167,18 @@ class TestCleanLap:
             lap_data({"m_currentLapNum": 1, "m_lastLapTimeInMS": 0, "m_currentLapInvalid": 0}),
             b"",
         )
-        # 4 个 CarStatus 帧: 主动空力 X=0.8, Z=0.2; ERS 累计 10.0 (与 CarTelemetry num_samples 不同率)
+        # 4 个 CarStatus 帧: ERS 累计 10.0 (与 CarTelemetry num_samples 不同率)
         for i in range(4):
             await agg(
                 make_header(7, overall_frame=102 + i, session_time=10.1 + i * 0.02),
-                car_status({"m_ersDeployedThisLap": 10.0, "m_activeAeroX": 0.8, "m_activeAeroZ": 0.2}),
+                car_status({"m_ersDeployedThisLap": 10.0}),
+                b"",
+            )
+        # 4 个 Packet 16 帧: 3 个 X-Mode (1), 1 个 Z-Mode (0)
+        for i in range(4):
+            await agg(
+                make_header(16, overall_frame=106 + i, session_time=10.2 + i * 0.02),
+                car_telemetry2({"m_activeAeroMode": 1 if i < 3 else 0}),
                 b"",
             )
         await agg(
@@ -174,16 +187,16 @@ class TestCleanLap:
             b"",
         )
         row = agg.rows[0]
-        # 独立计数: 4 个 CarStatus → 平均 0.8 / 0.2 (而非除以 num_samples)
-        assert row["avg_active_aero_x"] == pytest.approx(0.8)
-        assert row["avg_active_aero_z"] == pytest.approx(0.2)
-        # Iter-255: avg_ers_deploy 也按 CarStatus 计数 (10.0*4/4), 而非除以 num_samples
+        # X-Mode 占比 = 3/4 = 0.75, Z-Mode 占比 = 1/4 = 0.25
+        assert row["avg_active_aero_x"] == pytest.approx(0.75)
+        assert row["avg_active_aero_z"] == pytest.approx(0.25)
+        # avg_ers_deploy 仍按 CarStatus 计数 (10.0*4/4)
         assert row["avg_ers_deploy"] == pytest.approx(10.0)
         # parquet 导出包含主动空力字段
         tbl = pq.read_table(io.BytesIO(agg.to_parquet_bytes()))
         assert "avg_active_aero_x" in tbl.column_names
         assert "avg_active_aero_z" in tbl.column_names
-        assert tbl.column("avg_active_aero_x").to_pylist() == pytest.approx([0.8])
+        assert tbl.column("avg_active_aero_x").to_pylist() == pytest.approx([0.75])
 
 
 # --------------------------------------------------------------------------- #

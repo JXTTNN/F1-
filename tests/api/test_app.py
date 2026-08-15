@@ -46,18 +46,16 @@ def app() -> FastAPI:
 # WS frame projection (_frame_to_ws)
 # --------------------------------------------------------------------------- #
 def test_frame_to_ws_includes_active_aero() -> None:
-    """WS frame message must carry F1 2026 active aero (X/Z) for the UI."""
+    """WS frame message must carry F1 2026 active aero mode (0=Z/1=X) for the UI."""
     from f1opt.api.app import _frame_to_ws
 
     msg = _frame_to_ws({
         "session_time": 1.0,
         "speed": 200.0,
-        "active_aero_x": 0.85,
-        "active_aero_z": 0.05,
+        "active_aero_mode": 1,
     })
     assert msg["type"] == "frame"
-    assert msg["active_aero_x"] == 0.85
-    assert msg["active_aero_z"] == 0.05
+    assert msg["active_aero_mode"] == 1
 
 
 # --------------------------------------------------------------------------- #
