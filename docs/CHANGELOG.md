@@ -4,6 +4,11 @@
 
 ## 2026-08 优化迭代
 
+### fuel_load 钳制回归测试 (Iter-269)
+- 新增 `test_search_clamps_fuel_load_to_baseline`：基线 fuel_load=80kg 时, 优化器
+  推荐值应保持 ~80kg 而非被推到 5kg 最小值。该测试在 Iter-267 修复前会失败
+  (旧索引 18 误钳制 front_tyre_pressure, fuel_load 被自由优化到最小)。
+
 ### 模型层维度注释全面对齐 (Iter-268)
 - `optimizer.py` / `setup_analysis.py` / `setup_physics_bridge.py` / `train.py` 中
   多处 "19 维 / 18 维 / 18 个参数" 注释未随 `active_aero_mode`+`x_mode_activations`

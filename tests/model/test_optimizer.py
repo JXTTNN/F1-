@@ -211,6 +211,14 @@ def test_multi_objective_reduces_tire_wear_vs_single() -> None:
     )
 
 
+def test_search_clamps_fuel_load_to_baseline() -> None:
+    """Iter-267: fuel_load 是策略变量, 优化器应钳制到 baseline 而非推至 5kg。"""
+    baseline = DEFAULT_SETUP.model_copy(update={"fuel_load": 80.0})
+    result = search_setup("monza", baseline=baseline, iterations=40, seed=1)
+    # 推荐 fuel_load 应保持在 baseline 附近 (而非被优化到最小值 5kg).
+    assert result.recommended["fuel_load"] == pytest.approx(80.0, abs=0.5)
+
+
 def test_search_optimizer_tire_wear_weight() -> None:
     """SearchOptimizer 接收 tire_wear_weight, 透传到 _search."""
     opt = SearchOptimizer(iterations=40, seed=3, tire_wear_weight=1.5)
