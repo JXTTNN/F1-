@@ -375,7 +375,7 @@ def setup_penalty_s(setup: CarSetup, track_id: str) -> float:
     单参数扫描仍单调, 最优附近完全线性.
 
     Args:
-        setup: 待评估的 19 维调教.
+        setup: 待评估的 21 维调教.
         track_id: 赛道 ID (用于解析 track_type).
 
     Returns:
@@ -442,7 +442,7 @@ def setup_to_lap_config(
     lap_in_stint: int = _REF_LAP_IN_STINT,
     sc_just_ended_lap: int = 0,
 ) -> LapConfig2026:
-    """把 19 维 CarSetup 映射到 :class:`LapConfig2026` 物理输入.
+    """把 21 维 CarSetup 映射到 :class:`LapConfig2026` 物理输入.
 
     映射规则:
     - ``setup.fuel_load`` -> ``current_fuel_kg`` (1:1 物理一致)
@@ -453,7 +453,7 @@ def setup_to_lap_config(
     本身只决定 *车体性能* (aero/suspension/brake/tire/fuel), 不决定策略状态.
 
     Args:
-        setup: 19 维调教.
+        setup: 21 维调教.
         track_id: 赛道 ID.
         **: 其余 LapConfig2026 字段 (默认 reference state).
 

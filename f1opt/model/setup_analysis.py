@@ -81,15 +81,15 @@ def analyze_setup_contributions(
     """逐参数边际贡献分析 (one-at-a-time ±1 档扰动).
 
     对 setup 的每个参数, 分别 +1 档和 -1 档 (在合法范围内), 测量圈速变化.
-    返回 18 个参数 (fuel_load 除外, 因为它是策略参数不是调教参数) 的贡献列表.
+    返回 20 个参数 (fuel_load 除外, 因为它是策略参数不是调教参数) 的贡献列表.
 
     Args:
-        setup: 待分析的调教 (19 维).
+        setup: 待分析的调教 (21 维).
         track_id: 赛道 ID.
         driver_profile: 车手画像 (任何 surrogate 接受的形态).
 
     Returns:
-        18 个 :class:`ParameterContribution` (fuel_load 除外). 按 sensitivity 降序.
+        20 个 :class:`ParameterContribution` (fuel_load 除外). 按 sensitivity 降序.
 
     Iter-86: 内部用 :func:`analyze_setup_contributions_batched` (predict_batch
     一次评估全部 37 个扰动 setup), 比逐条 predict_lap_time 快 ~7x (3.5ms vs 26ms).

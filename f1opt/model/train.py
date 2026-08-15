@@ -374,7 +374,7 @@ def _latin_hypercube_sample(
 
     在 ``[lower, upper]^dim`` 空间生成 ``n`` 个样本, 保证每一维都被分层覆盖
     (每维分成 ``n`` 个等概率 stratum, 每个 stratum 恰好一个样本点). 相比独立
-    均匀采样, LHS 消除了聚类空洞, 在高维空间 (19 维 setup) 显著改善覆盖率.
+    均匀采样, LHS 消除了聚类空洞, 在高维空间 (21 维 setup) 显著改善覆盖率.
 
     算法:
     1. 每维生成 ``n`` 个 stratum 中心: ``[0.5/n, 1.5/n, ..., (n-0.5)/n]``
@@ -619,7 +619,7 @@ def generate_physics_dataset(
       speed_max/slip_angle/...), 由 setup + track + sectors 推得.
 
     Iter-121 增强: ``use_lhs=True`` (默认) 用 Latin Hypercube Sampling 替代
-    独立均匀/高斯采样, 在 19 维 setup 空间消除聚类空洞, 改善 OOD 泛化. 采样
+    独立均匀/高斯采样, 在 21 维 setup 空间消除聚类空洞, 改善 OOD 泛化. 采样
     分层比例不变 (20% uniform / 30% tight / 50% practice), 但每层内部用 LHS
     分层覆盖. ``use_lhs=False`` 回退到 Iter-67 的逐样本独立采样 (向后兼容).
 

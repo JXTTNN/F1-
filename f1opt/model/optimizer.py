@@ -1,6 +1,6 @@
 """Bayesian-style 调教优化器 (Iter-02 Task 2.3; Iter-04 Task 4.3 scipy 升级).
 
-在 19 维归一化 ``CarSetup`` 空间 [0,1]^19 上最小化代理模型预测圈速, 返回带
+在 21 维归一化 ``CarSetup`` 空间 [0,1]^21 上最小化代理模型预测圈速, 返回带
 量化增益的推荐调教 (经 ``CarSetup.from_vector`` snapped 到游戏合法档位).
 
 Iter-04 Task 4.3: 优先使用 ``scipy.optimize.differential_evolution`` 全局
@@ -43,11 +43,11 @@ _NORM_STEPS = np.array(
     [s.step / (s.max - s.min) for s in ALL_SETUP_FIELDS()], dtype=np.float64
 )
 _DIM = int(_NORM_STEPS.size)
-# DE 搜索区间: 与 CarSetup.to_vector/from_vector 一致的归一化 [0,1]^19.
+# DE 搜索区间: 与 CarSetup.to_vector/from_vector 一致的归一化 [0,1]^21.
 # (SETUP_FIELDS 的 min/max 经 to_vector 线性映射到 [0,1], DE 在归一化空间搜索,
 #  最优 x* 再经 from_vector 反归一化并 snap 到游戏档位.)
 _BOUNDS: list[tuple[float, float]] = [(0.0, 1.0) for _ in range(_DIM)]
-# DE 种群规模 (每维个体数). scipy 默认 15, 但 19 维 × 15 × maxiter=60 评估量
+# DE 种群规模 (每维个体数). scipy 默认 15, 但 21 维 × 15 × maxiter=60 评估量
 # 过大 (~17k forward, ~10s). Iter-84 消融实验测得 popsize=3 在 gain 上与 popsize=5
 # 几乎一致 (5 赛道 avg 2.019s vs 2.095s, 仅 -4%), 但因 forwards 减少 40%
 # (95 → 57 / gen), 单次 search_setup 从 ~2.5s 降到 ~1.5s (1.67x 加速).
@@ -57,7 +57,7 @@ _BOUNDS: list[tuple[float, float]] = [(0.0, 1.0) for _ in range(_DIM)]
 _DE_POPSIZE = 3
 # DE 代数上限 cap. 用户传入的 ``iterations`` 直接作为 numpy 回退路径的评估预算,
 # 但 DE 全局探索 25 代已足够收敛 (实测 melbourne gain 在 maxiter=25 与 60 下
-# 差异 <0.05s); cap 后 25 代 × popsize=3 × 19 维 ≈ 1425 评估 ≈ 1.5s, 兼顾
+# 差异 <0.05s); cap 后 25 代 × popsize=3 × 21 维 ≈ 1425 评估 ≈ 1.5s, 兼顾
 # 全局性与延迟预算 (search_setup ≤2s, generate_feedback setup_advice ≤2s).
 # numpy 回退路径不受 cap 约束 (其 60 iter ≈ 0.05s 本就极快).
 _DE_MAXITER_CAP = 25
@@ -70,7 +70,7 @@ _DE_MAXITER_CAP = 25
 # Iter-104: cap 35→100. 旧版 35 在 holistic 多目标 (weight>0) 下收敛不足, 5/24
 # 赛道 (suzuka/jeddah/monaco/singapore/sao_paulo) holistic 的胎耗代理 > single
 # (违反多目标优化基本定理: 若两者达全局最优, holistic proxy 必 <= single proxy).
-# 根因: deferred updating + cap=35 在 19 维离散景观上偶尔未收敛. 实测:
+# 根因: deferred updating + cap=35 在 21 维离散景观上偶尔未收敛. 实测:
 #   cap=50: 全 PASS 但 jeddah 边缘 (-0.009)
 #   cap=75: 全 PASS 且 tire_saving >= +0.001, 但 austin -0.0134 FAIL
 #   cap=100: 全 PASS, 多数赛道 single=holo 收敛到同一点 (tire_saving≈0)
@@ -240,7 +240,7 @@ def search_setup(
 ) -> SearchResult:
     """搜索最小化预测圈速的调教, 返回 :class:`SearchResult`.
 
-    在归一化 [0,1]^19 空间上优化 ``predict_lap_time(CarSetup.from_vector(vec),
+    在归一化 [0,1]^21 空间上优化 ``predict_lap_time(CarSetup.from_vector(vec),
     track_id, driver_profile)``; 推荐 vec 经 ``from_vector`` snapped 到合法档位.
     优先用 ``scipy.optimize.differential_evolution`` 全局优化; scipy 不可用
     时回退到 numpy 多起点局部搜索 (``SearchResult.algorithm`` 标记路径).
@@ -775,7 +775,7 @@ def _differential_evolution(
 ) -> tuple[np.ndarray, list[float], str, list[int]]:
     """``scipy.optimize.differential_evolution`` 全局优化.
 
-    在归一化 [0,1]^19 空间上最小化 ``objective``; 用 callback 收集每代最优
+    在归一化 [0,1]^21 空间上最小化 ``objective``; 用 callback 收集每代最优
     圈速 (非递增) 作为 ``search_trace``. 返回 ``(best_vec (snapped), trace,
     "scipy-de", elite_survival)``.
 

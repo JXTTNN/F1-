@@ -4,6 +4,12 @@
 
 ## 2026-08 优化迭代
 
+### 模型层维度注释全面对齐 (Iter-268)
+- `optimizer.py` / `setup_analysis.py` / `setup_physics_bridge.py` / `train.py` 中
+  多处 "19 维 / 18 维 / 18 个参数" 注释未随 `active_aero_mode`+`x_mode_activations`
+  加入(19→21 字段)而更新。已改为: 归一化空间 21 维、物理惩罚 20 维(fuel_load 除外)、
+  `analyze_setup_contributions` 返回 20 个参数。
+
 ### 修复调教优化器 fuel_load 索引错位 (Iter-267)
 - **关键 bug**：`_FUEL_LOAD_IDX = 18` 硬编码。`active_aero_mode`/`x_mode_activations`
   加入后 `fuel_load` 索引从 18 变为 20, 导致优化器把 `front_tyre_pressure`(索引 18)
