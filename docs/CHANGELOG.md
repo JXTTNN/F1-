@@ -4,6 +4,10 @@
 
 ## 2026-08 优化迭代
 
+### ERS 模式分析回归测试 (Iter-277)
+- 新增 `test_ers_deploy_mode_classifies_hotlap`：验证 mode 2 归类为 Hotlap、
+  mode 1 归类为 Medium，锁定 Iter-276 的 ERS 模式映射一致性。
+
 ### 修复 ERS 部署模式映射错位 (Iter-276)
 - **`deploy_mode_hotlap_pct` 误判 mode 1 为 hotlap**：F1 UDP `m_ersDeployMode` 为
   0=none/1=medium/2=hotlap/3=overtake，反馈引擎原 `deploy_mode==1.0` 把 medium 当成

@@ -209,6 +209,14 @@ class TestTelemetryAnalyticsShape:
         assert isinstance(e["recover_events"], int)
         assert e["ers_deploy_total"] >= 0.0
 
+    def test_ers_deploy_mode_classifies_hotlap(self) -> None:
+        """Iter-276: mode 2 应归类为 Hotlap (0=none/1=Medium/2=Hotlap/3=Overtake)。"""
+        frames = [make_frame(i * _DT, ers_deploy_mode=2.0) for i in range(120)]
+        a = TelemetryAnalytics(frames).ers_deploy_mode_analysis()
+        assert a["dominant_mode"] == "Hotlap"
+        assert a["mode_fractions"]["Hotlap"] == pytest.approx(1.0)
+        assert a["mode_fractions"]["Medium"] == pytest.approx(0.0)
+
     def test_drs_analysis_activations_count(self) -> None:
         d = TelemetryAnalytics(realistic_lap()).drs_analysis()
         for k in ("drs_activations", "drs_duration_total", "drs_speed_gain_avg"):
