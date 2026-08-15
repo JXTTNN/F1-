@@ -185,6 +185,12 @@
 - `setup_schema.py` / `setup_physics_bridge.py`：`CarSetup(**dict)` 动态拆包
   无法被 mypy 验证字段类型 → 加 `# type: ignore[arg-type]`。全项目 66 → 63。
 
+### UI 设计 (实时遥测状态可见性)
+- **health badge 显示实时遥测统计**：`index.html` 的 health badge 此前只显示
+  "UDP 监听中/未监听", 无法判断游戏是否真的在流式传输。现每 5s 额外拉取
+  `/api/telemetry/stats`, 显示「收包 N · 圈 M」, 用户一眼确认 F1 2026 游戏
+  遥测已接入 (收包递增 = 正常流式, 圈数 = 已完成圈)。
+
 ---
 
 ## 已知限制 (Known Limitations)

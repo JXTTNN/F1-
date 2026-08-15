@@ -1199,7 +1199,15 @@
     try{
       var h=await fetchJSON("/api/health");
       var b=el("health-badge");
-      b.textContent="API "+h.version+" · UDP "+(h.udp_listening?"监听中":"未监听");
+      var txt="API "+h.version+" · UDP "+(h.udp_listening?"监听中":"未监听");
+      // 附加实时遥测统计 (收包数/圈数), 让用户确认 F1 2026 游戏正在流式传输.
+      try{
+        var s=await fetchJSON("/api/telemetry/stats");
+        var recv=(s&&s.listener_received)||0;
+        var laps=(s&&s.aggregator_rows)||0;
+        txt+=" · 收包 "+recv+" · 圈 "+laps;
+      }catch(e2){ /* 统计端点可选, 忽略 */ }
+      b.textContent=txt;
       b.className="badge ok";
     }catch(e){
       var b2=el("health-badge");
