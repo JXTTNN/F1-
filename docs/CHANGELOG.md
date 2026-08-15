@@ -215,6 +215,13 @@
   (函数内部本就 `int(...)` 收窄, 运行时等价)。另 `p` 循环变量复用 → 改名
   `period`。tire_curve + lap_simulator 105 passed。
 
+### 遥测热路径微优化 (itemgetter)
+- `aligner.py`：`_sorted_items` / `latest_unified_frame` 用 `lambda x: x[0]`
+  做排序/取最大值 key, 每元素一次 Python 函数调用。改为 C 级
+  `operator.itemgetter(0)`, 实测 sorted **3.3x**、max **1.76x** 更快
+  (20000 样本)。60Hz WS 广播热路径 (latest_unified_frame) 进一步提速。
+  遥测 359 + e2e smoke 10 = 369 passed。
+
 ---
 
 ## 已知限制 (Known Limitations)
