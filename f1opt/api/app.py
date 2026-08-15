@@ -117,6 +117,9 @@ def _frame_to_ws(frame: dict[str, Any]) -> dict[str, Any]:
         "tyre_wear_rl": frame.get("tyre_wear_rl"),
         "tyre_wear_rr": frame.get("tyre_wear_rr"),
         "fuel_in_tank": frame.get("fuel_in_tank"),
+        # F1 2026 主动空力 (X=低阻 / Z=高下压力) — 供 UI 指示器显示
+        "active_aero_x": frame.get("active_aero_x"),
+        "active_aero_z": frame.get("active_aero_z"),
     }
 
 

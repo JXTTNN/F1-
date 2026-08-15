@@ -127,6 +127,12 @@
   改为直接取每个源的最大时间样本 (O(S·F))，**1.0ms**，输出逐位等价。
   实测 5000 样本: 51.7ms → 1.0ms (51x)。
 
+### 模块衔接 (F1 2026 主动空力 UI 修复)
+- **修复 WS 帧投影缺失主动空力字段**：aligner 已产出 `active_aero_x/z`,
+  UI 指示器也读取 `active_aero_x/z`, 但中间的 `_frame_to_ws` 投影漏掉了这两个
+  字段, 导致 UI 的 X-Mode/Z-Mode 指示器**永远显示 "—"**。补上后 UI 指示器正常。
+  新增 `test_frame_to_ws_includes_active_aero` 回归测试。
+
 ---
 
 ## 已知限制 (Known Limitations)
