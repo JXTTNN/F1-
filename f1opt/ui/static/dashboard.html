@@ -205,6 +205,7 @@
         <div class="result-card"><span class="lbl">推荐策略</span><span id="str-type" class="val">—</span></div>
         <div class="result-card"><span class="lbl">总耗时估计 (s)</span><span id="str-total" class="val">—</span></div>
         <div class="result-card"><span class="lbl">进站次数</span><span id="str-stops-count" class="val">—</span></div>
+        <div class="result-card"><span class="lbl">Pirelli 选胎 (软/中/硬)</span><span id="str-pirelli" class="val mono" style="font-size:12px">—</span></div>
       </div>
       <div class="result-card"><span class="lbl">推荐理由</span><div id="str-reason" class="sub" style="color:var(--txt);font-size:12px">—</div></div>
       <h2 style="margin-top:14px">进站时间线</h2>
@@ -754,6 +755,8 @@
     var plan=r.plan||{};
     var stops=plan.stops||[];
     el("str-stops-count").textContent=String(stops.length);
+    var pc=r.pirelli_compounds||null;
+    el("str-pirelli").textContent = pc ? (pc.soft+" / "+pc.medium+" / "+pc.hard) : "—";
 
     // timeline
     var tl=el("str-timeline"); tl.innerHTML="";

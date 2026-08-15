@@ -4,6 +4,10 @@
 
 ## 2026-08 优化迭代
 
+### 仪表盘策略结果显示 Pirelli 选胎 (Iter-275)
+- 分析中心「赛道策略」结果面板新增「Pirelli 选胎 (软/中/硬)」卡片, 渲染
+  `/api/strategy/plan` 返回的 `pirelli_compounds` (C0-C5), 与 API/CLI 三端一致。
+
 ### CLI 赛道详情附带 Pirelli 选胎 (Iter-274)
 - `f1opt tracks info --track <id>` 现附带 `pirelli_compounds` 字段 (soft/medium/hard
   -> C0-C5), 与 Iter-273 的 `/api/strategy/plan` 保持一致, 补齐 CLI 侧的选胎信息。
