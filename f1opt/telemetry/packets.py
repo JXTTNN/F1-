@@ -1091,7 +1091,7 @@ _EXPECTED_BODY_SIZES: dict[int, int] = {
     0: 1296,   # Motion: 24 × 54B (Iter-285, 权威规范, 无玩家段)
     1: 897,    # Session: 897B (Iter-286, 权威规范: 64 WFS + F1 26 字段)
     2: 1370,   # LapData: 57B × 24 + 2 timeTrial carIdx (Iter-285)
-    3: 4,      # Event (min: 4-byte code)
+    3: 16,     # Event: 4 code + 12 details (SpeedTrap 为最大 union)
     4: 1441,   # Participants: 60B × 24 + 1 (Iter-285)
     5: 1204,   # CarSetups: 50B × 24 + 4 nextFrontWingValue (Iter-285)
     6: 1419,   # CarTelemetry: 59B × 24 + 3 trailer (Iter-285)

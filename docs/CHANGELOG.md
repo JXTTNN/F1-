@@ -4,6 +4,12 @@
 
 ## 2026-08 优化迭代
 
+### 权威包大小综合验证 + Event 身体大小 (Iter-287)
+- 新增 `TestVerifiedSizes` 参数化测试: 锁定 F1 26 权威规范全部 **17 个包的总大小**
+  (Motion 1325 / Session 926 / LapData 1399 / ... / CarTelemetry2 269), 逐一验证
+  `validate_packet_size` ok + 解析器在权威身体大小下不崩溃。
+- Event (id 3) 身体大小 4→16 (4 字节码 + 12 字节 SpeedTrap 最大 union, 总 45B)。
+
 ### 按权威规范重写 Session 数据包 (Iter-286)
 - 按 MacManley/f1-26-udp 权威规范重写 PacketSessionData (id 1):
   - 天气样本 20 → **64** (旧版 20 导致 forecastAccuracy 及之后字段错位数百字节);

@@ -25,6 +25,7 @@ from f1opt.telemetry.packets import (
     packet_name,
     parse_header,
     parse_packet,
+    validate_packet_size,
 )
 
 NUM_PACKETS = 17  # Iter-278: +CarTelemetryData2 (packet 16)
@@ -600,26 +601,41 @@ class TestLapPositions:
 # --------------------------------------------------------------------------- #
 # EA-verified total packet sizes (HIGH confidence)
 # --------------------------------------------------------------------------- #
+# F1 26 权威规范总包大小 (含 29B 头) — MacManley/f1-26-udp README (Iter-286)
+_AUTHORITATIVE_TOTAL_SIZES: dict[int, int] = {
+    0: 1325,   # Motion (24 × 54B)
+    1: 926,    # Session
+    2: 1399,   # LapData (24 × 57 + 2 timeTrial)
+    3: 45,     # Event (4 code + 12 details)
+    4: 1470,   # Participants (1 + 24 × 60)
+    5: 1233,   # CarSetups (24 × 50 + 4 nextFrontWing)
+    6: 1448,   # CarTelemetry (24 × 59 + 3 trailer)
+    7: 1445,   # CarStatus (24 × 59)
+    8: 1134,   # FinalClassification (1 + 24 × 46)
+    9: 1062,   # LobbyInfo (1 + 24 × 43)
+    10: 1133,  # CarDamage (24 × 46)
+    11: 1460,  # SessionHistory (7 + 100×14 + 8×3)
+    12: 231,   # TyreSets (1 + 20×10 + 1)
+    13: 273,   # MotionEx (61 float)
+    14: 104,   # TimeTrial (3 × 25)
+    15: 1231,  # LapPositions (2 + 50 × 24)
+    16: 269,   # CarTelemetry2 (24 × 10)
+}
+
+
 class TestVerifiedSizes:
-    """Verify the EA-PDF-documented total packet sizes round-trip."""
+    """Verify F1 26 authoritative total packet sizes (MacManley/f1-26-udp)."""
 
-    def test_lap_positions_size(self) -> None:
-        # EA PDF: 1131 = 29 header + 2 + 50*22
-        body = b"\x00" * (1131 - HEADER_SIZE)
-        h, p = parse_packet(make_packet(15, body))
-        assert h.packet_id == 15
-        assert len(p["m_positionForVehicleIdx"]) == 50
+    @pytest.mark.parametrize("pid", sorted(_AUTHORITATIVE_TOTAL_SIZES))
+    def test_authoritative_size_round_trips(self, pid: int) -> None:
+        total = _AUTHORITATIVE_TOTAL_SIZES[pid]
+        body_size = total - HEADER_SIZE
+        check = validate_packet_size(pid, body_size)
+        assert check["ok"] is True, f"packet {pid}: {check}"
+        data = make_packet(pid, b"\x00" * body_size)
+        h, parsed = parse_packet(data)
+        assert h.packet_id == pid
+        assert isinstance(parsed, dict)
 
-    def test_final_classification_size(self) -> None:
-        # EA PDF: 1042 = 29 header + 1 + 22*46
-        body = b"\x00" * (1042 - HEADER_SIZE)
-        h, p = parse_packet(make_packet(8, body))
-        assert h.packet_id == 8
-        assert len(p["m_classificationData"]) == NUM_CARS
-
-    def test_motion_ex_size(self) -> None:
-        # EA PDF: 273 total
-        body = b"\x00" * (273 - HEADER_SIZE)
-        h, p = parse_packet(make_packet(13, body))
-        assert h.packet_id == 13
-        assert "m_chassisPitch" in p
+    def test_all_packet_ids_have_sizes(self) -> None:
+        assert set(_AUTHORITATIVE_TOTAL_SIZES) == set(range(NUM_PACKETS))
