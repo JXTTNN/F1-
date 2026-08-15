@@ -821,7 +821,9 @@ def _differential_evolution(
     population: np.ndarray | None = None
 
     for gen in range(maxiter):
-        gen_seed = seed if (gen == 0 and seed is not None) else None
+        # 每代用确定性派生 seed (seed+gen)，避免 gen>0 时 seed=None 导致
+        # 变异/交叉非确定 (同 seed 下 search_setup 结果漂移 ~0.6%)。
+        gen_seed = (seed + gen) if seed is not None else None
 
         kwargs: dict[str, Any] = {
             "maxiter": 1,
@@ -941,7 +943,9 @@ def _vectorized_differential_evolution(
     population: np.ndarray | None = None
 
     for gen in range(maxiter):
-        gen_seed = seed if (gen == 0 and seed is not None) else None
+        # 每代用确定性派生 seed (seed+gen)，避免 gen>0 时 seed=None 导致
+        # 变异/交叉非确定 (同 seed 下 search_setup 结果漂移 ~0.6%)。
+        gen_seed = (seed + gen) if seed is not None else None
 
         kwargs: dict[str, Any] = {
             "maxiter": 1,

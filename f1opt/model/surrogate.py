@@ -39,6 +39,11 @@ import numpy as np
 import torch
 from torch import nn
 
+# 固定 torch 单线程：本工作负载的 forward 极小，多线程 intra-op 池会引入
+# 批量预测 (向量化 DE 的目标函数) 的非确定性 (BLAS 归约顺序)，导致
+# ``search_setup`` 同 seed 结果小幅漂移。单线程更快且稳定 (见 test_stress.py)。
+torch.set_num_threads(1)
+
 from f1opt.config import get_settings
 from f1opt.data.ea_f1_2026_benchmark import EA_F1_2026_LAP_TIME_BENCHMARK
 from f1opt.data.sector_times import sector_times_for
