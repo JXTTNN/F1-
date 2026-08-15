@@ -516,20 +516,22 @@ CONFIDENCE_CARSTATUS = (
 # per car: tractionControl, antiLockBrakes, fuelMix, frontBrakeBias, pitLimiterStatus,
 # fuelInTank(f), fuelCapacity(f), fuelRemainingLaps(f), maxRPM(H), idleRPM(H),
 # maxGears, drsAllowed, drsActivationDistance(H), actualTyreCompound, visualTyreCompound,
-# tyresAgeLaps(b), vehicleFiaFlags(b), ersStoreEnergy(f), ersDeployMode,
-# ersHarvestedThisLapMGUK(f), ersHarvestedThisLapMGUH(f), ersDeployedThisLap(f),
+# tyresAgeLaps(B), vehicleFiaFlags(b), enginePowerICE(f), enginePowerMGUK(f),
+# ersStoreEnergy(f), ersDeployMode, ersHarvestedThisLapMGUK(f),
+# ersHarvestedThisLapMGUH(f), ersHarvestLimitPerLap(f), ersDeployedThisLap(f),
 # networkPaused
-# Iter-191: + m_activeAeroX(f) + m_activeAeroZ(f) = 2026 Season Pack active aero
-_STATUS_PER = "BBBBB fff HH BB H BB bb f B fff B ff".replace(" ", "")
+# Iter-278: 按 MacManley/f1-26-udp 权威规范修正 — 补齐 enginePowerICE/enginePowerMGUK/
+# ersHarvestLimitPerLap 三个 float (旧版缺失导致 ersStoreEnergy 起全部错位 8 字节),
+# 并删除不存在的 m_activeAeroX/Z (主动空力在 Packet 16 CarTelemetryData2, 不在 CarStatus)。
+_STATUS_PER = "BBBBB fff HH BB H BB Bb fff B ffff B".replace(" ", "")
 _STATUS_NAMES = (
     "m_tractionControl", "m_antiLockBrakes", "m_fuelMix", "m_frontBrakeBias",
     "m_pitLimiterStatus", "m_fuelInTank", "m_fuelCapacity", "m_fuelRemainingLaps",
     "m_maxRPM", "m_idleRPM", "m_maxGears", "m_drsAllowed", "m_drsActivationDistance",
     "m_actualTyreCompound", "m_visualTyreCompound", "m_tyresAgeLaps",
-    "m_vehicleFiaFlags", "m_ersStoreEnergy", "m_ersDeployMode",
-    "m_ersHarvestedThisLapMGUK", "m_ersHarvestedThisLapMGUH", "m_ersDeployedThisLap",
-    "m_networkPaused",
-    "m_activeAeroX", "m_activeAeroZ",  # Iter-191: F1 2026 active aero
+    "m_vehicleFiaFlags", "m_enginePowerICE", "m_enginePowerMGUK", "m_ersStoreEnergy",
+    "m_ersDeployMode", "m_ersHarvestedThisLapMGUK", "m_ersHarvestedThisLapMGUH",
+    "m_ersHarvestLimitPerLap", "m_ersDeployedThisLap", "m_networkPaused",
 )
 _STATUS_BODY = struct.Struct("<" + _STATUS_PER * NUM_CARS)
 
@@ -538,6 +540,32 @@ def parse_car_status(data: bytes) -> dict[str, Any]:
     """Parse PacketCarStatusData (packet id 7)."""
     vals = _unpack_body(data, _STATUS_BODY)
     return {"m_carStatusData": _cars(vals, len(_STATUS_NAMES), _STATUS_NAMES)}
+
+
+# --------------------------------------------------------------------------- #
+# Packet 16 — Car Telemetry 2  (Iter-278: 权威规范新增, 主动空力 + 超车)
+# --------------------------------------------------------------------------- #
+# per car: activeAeroMode(B, 0=Corner/Z / 1=Straight/X), activeAeroAvailable(B),
+# activeAeroActivationDistance(H), overtakeAvailable(B), overtakeActive(B),
+# overtakeActivationDistance(H), 2026Regulations(B), drivingWrongWay(B)
+_CT2_PER = "BBHBBHBB"
+_CT2_NAMES = (
+    "m_activeAeroMode",
+    "m_activeAeroAvailable",
+    "m_activeAeroActivationDistance",
+    "m_overtakeAvailable",
+    "m_overtakeActive",
+    "m_overtakeActivationDistance",
+    "m_2026Regulations",
+    "m_drivingWrongWay",
+)
+_CT2_BODY = struct.Struct("<" + _CT2_PER * NUM_CARS)
+
+
+def parse_car_telemetry_2(data: bytes) -> dict[str, Any]:
+    """Parse PacketCarTelemetryData2 (packet id 16) — F1 2026 主动空力 + 超车."""
+    vals = _unpack_body(data, _CT2_BODY)
+    return {"m_carTelemetryData2": _cars(vals, len(_CT2_NAMES), _CT2_NAMES)}
 
 
 # --------------------------------------------------------------------------- #
@@ -862,6 +890,7 @@ PACKET_PARSERS: dict[int, Callable[[bytes], dict[str, Any]]] = {
     13: parse_motion_ex,
     14: parse_time_trial,
     15: parse_lap_positions,
+    16: parse_car_telemetry_2,
 }
 
 # Confidence notes keyed by packet id (for introspection / reporting).
@@ -910,7 +939,7 @@ _EXPECTED_BODY_SIZES: dict[int, int] = {
     4: 1122,   # Participants
     5: 1078,   # CarSetups
     6: 1307,   # CarTelemetry
-    7: 1022,   # CarStatus (approximate)
+    7: 1298,   # CarStatus: 59 bytes/car × 22 (Iter-278, 权威规范)
     8: 1013,   # FinalClassification: 1042 - 29
     9: 925,    # LobbyInfo: 954 - 29
     10: 1012,  # CarDamage: 1041 - 29
@@ -919,6 +948,7 @@ _EXPECTED_BODY_SIZES: dict[int, int] = {
     13: 244,   # MotionEx: 273 - 29
     14: 72,    # TimeTrial: 101 - 29
     15: 1102,  # LapPositions: 1131 - 29
+    16: 220,   # CarTelemetry2: 10 bytes/car × 22 (Iter-278)
 }
 
 

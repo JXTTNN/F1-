@@ -312,7 +312,8 @@ class TestCarTelemetry:
 # --------------------------------------------------------------------------- #
 # CarStatus (id 7)
 # --------------------------------------------------------------------------- #
-_STATUS_PER_FMT = "<BBBBBfffHHBBHBBbbfBfffB"
+# Iter-278: 权威规范 26 字段 (含 enginePowerICE/MGUK + ersHarvestLimitPerLap)
+_STATUS_PER_FMT = "<BBBBBfffHHBBHBBBbfffBffffB"
 _STATUS_PER_SIZE = struct.calcsize(_STATUS_PER_FMT)
 
 
@@ -333,10 +334,11 @@ class TestCarStatus:
             8, 1,                  # BB: maxGears, drsAllowed
             500,                   # H: drsActivationDistance
             22, 22,                # BB: actualTyreCompound (C6=22), visualTyreCompound
-            3, 0,                  # bb: tyresAgeLaps, vehicleFiaFlags
-            50.0,                  # f: ersStoreEnergy
+            3, 0,                  # Bb: tyresAgeLaps, vehicleFiaFlags
+            400000.0, 350000.0,    # ff: enginePowerICE (W), enginePowerMGUK (W)
+            50.0,                  # f: ersStoreEnergy (J)
             2,                     # B: ersDeployMode (hotlap)
-            10.0, 20.0, 30.0,      # fff: ersHarvestedMGUK, MGUH, deployed
+            10.0, 20.0, 8.5, 30.0,  # ffff: ersHarvestedMGUK, MGUH, harvestLimit, deployed
             0,                     # B: networkPaused
         )
         car0_bytes = struct.pack(_STATUS_PER_FMT, *car0_vals)

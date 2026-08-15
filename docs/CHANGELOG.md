@@ -4,6 +4,16 @@
 
 ## 2026-08 优化迭代
 
+### 修复 CarStatus 线格式错位 (Iter-278) — 关键 bug
+- **按 MacManley/f1-26-udp 权威规范**核对 CarStatus 结构, 发现严重错位：
+  旧解析器缺失 `m_enginePowerICE` / `m_enginePowerMGUK` / `m_ersHarvestLimitPerLap`
+  三个 float, 且虚构了不存在的 `m_activeAeroX` / `m_activeAeroZ` (主动空力实际在
+  Packet 16 CarTelemetryData2)。导致 `m_ersStoreEnergy` 起的全部 ERS 字段**错位 8 字节**。
+- 修正为 26 字段 / 59 字节每车；新增 `parse_car_telemetry_2` (Packet 16, 主动空力
+  `m_activeAeroMode` 0=Corner/Z / 1=Straight/X + 超车可用性)；aligner 改用
+  `active_aero_mode` / `active_aero_available`。
+- 测试：test_packets CarStatus round-trip 更新为权威 26 字段。
+
 ### ERS 模式分析回归测试 (Iter-277)
 - 新增 `test_ers_deploy_mode_classifies_hotlap`：验证 mode 2 归类为 Hotlap、
   mode 1 归类为 Medium，锁定 Iter-276 的 ERS 模式映射一致性。
