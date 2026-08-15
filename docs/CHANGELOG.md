@@ -145,6 +145,13 @@
 - `index.html` 头部新增「智能分析中心」链接, 与 `dashboard.html` 的「返回实时面板」
   形成双向导航。
 
+### 调教搜索 (Pareto 单目标崩溃修复)
+- **修复 `/api/pareto-search` 单目标崩溃**：`MultiObjectiveOptimizer.evaluate()`
+  始终返回 `[lap_time, tire_wear_proxy]` (2 值), 但 `search()` 用用户传入的
+  `objectives` 构造 ParetoFront; 当 `objectives=['lap_time']` (1 目标) 时崩溃
+  `ValueError: values length 2 != objectives 1`。现归一化为规范双目标, 单目标
+  请求返回 200。新增 `test_search_single_objective_does_not_crash` 回归测试。
+
 ---
 
 ## 已知限制 (Known Limitations)

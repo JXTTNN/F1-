@@ -196,6 +196,20 @@ class TestMultiObjectiveOptimizer:
         assert all(isinstance(v, float) for v in vals)
         assert all(bool(np.isfinite(v)) for v in vals)
 
+    def test_search_single_objective_does_not_crash(self) -> None:
+        """Regression: objectives=['lap_time'] must not crash (Iter-253).
+
+        evaluate() always returns [lap_time, tire_wear_proxy]; the optimizer
+        normalizes the user list to the canonical 2-objective pair so the
+        ParetoFront length always matches.
+        """
+        opt = MultiObjectiveOptimizer(
+            _bounds(), ["lap_time"], n_iterations=2, seed=42
+        )
+        res = opt.search("melbourne")
+        assert "pareto_front" in res
+        assert res["iterations"] == 2
+
     def test_crossover_returns_child_within_bounds(self) -> None:
         opt = MultiObjectiveOptimizer(_bounds(3), ["a", "b"], seed=1)
         p1 = np.array([0.2, 0.5, 0.8])

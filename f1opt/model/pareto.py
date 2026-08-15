@@ -475,7 +475,12 @@ class MultiObjectiveOptimizer:
         self.bounds = np.asarray(bounds, dtype=np.float64)
         if self.bounds.ndim != 2 or self.bounds.shape[1] != 2:
             raise ValueError("bounds must be shape (n_dim, 2)")
-        self.objectives = list(objectives)
+        # Iter-253: evaluate() always returns [lap_time, tire_wear_proxy], so
+        # this optimizer is fixed at 2 objectives. Normalize the user-provided
+        # list to the canonical pair so ParetoFront length always matches
+        # evaluate()'s output (previously objectives=['lap_time'] crashed with
+        # "values length 2 != objectives 1").
+        self.objectives = ["lap_time", "tire_wear"]
         self.n_iterations = int(n_iterations)
         self.seed = int(seed)
         self._rng = np.random.default_rng(self.seed)
