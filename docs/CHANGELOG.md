@@ -136,6 +136,15 @@
   `track_id=None`, 现按 aggregator row 的 int8 track_id 解析, 未知时回退
   `state.current_track_id`, 与 `_feed_observation_buffer` 的解析逻辑一致。
 
+### UI 点开即用 (智能分析中心打通)
+- **默认 `f1opt serve` 挂载完整 App (核心 + 扩展路由)**：智能分析中心
+  (`/dashboard.html`) 调用的 `/api/bayesian-search` / `/api/pareto-search` /
+  `/api/compare/*` / `/api/weather/impact` / `/api/health/extended` 均在扩展
+  路由内, 此前仅 `--extended` 才挂载, 导致默认 serve 下这些 tab **全部 404**。
+  现在默认即完整 App, 实测默认 serve 下以上端点全部 200。
+- `index.html` 头部新增「智能分析中心」链接, 与 `dashboard.html` 的「返回实时面板」
+  形成双向导航。
+
 ---
 
 ## 已知限制 (Known Limitations)

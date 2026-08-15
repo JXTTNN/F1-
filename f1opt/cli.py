@@ -494,18 +494,21 @@ def cmd_validate(args: argparse.Namespace) -> int:
 
 
 def cmd_serve(args: argparse.Namespace) -> int:
-    """Start the API server (uvicorn)."""
+    """Start the API server (uvicorn).
+
+    Iter-252: 默认即完整 App (核心 + 扩展路由), 保证两个 UI 视图 (实时面板
+    ``/`` 与智能分析中心 ``/dashboard.html``) 点开即用 —— 智能分析中心调用的
+    ``/api/bayesian-search`` / ``/api/pareto-search`` / ``/api/compare/*`` /
+    ``/api/weather/impact`` / ``/api/health/extended`` 均在扩展路由内, 仅
+    ``--extended`` 才挂载导致默认 serve 下这些 tab 全部 404。
+    ``--extended`` 保留为兼容别名 (行为一致)。
+    """
     try:
         import uvicorn
 
-        if args.extended:
-            from f1opt.api.extended_app import create_extended_app
+        from f1opt.api.extended_app import create_extended_app
 
-            app = create_extended_app(start_listener=True)
-        else:
-            from f1opt.api.app import create_app
-
-            app = create_app(start_listener=True)
+        app = create_extended_app(start_listener=True)
         # Windows: 使用 windows_events 兼容的事件循环
         if sys.platform == "win32":
             uvicorn.run(app, host=args.host, port=args.port, loop="asyncio")
