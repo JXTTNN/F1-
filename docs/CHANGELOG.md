@@ -4,6 +4,13 @@
 
 ## 2026-08 优化迭代
 
+### UI 与文档一致性: 版本徽章 + 调教参数计数 (Iter-263)
+- **仪表盘头部版本徽章**硬编码 `v0.1.0` → 改为 `v1.2.0`, 且健康检查时从
+  API `version` 动态刷新, 避免后续版本升级再度陈旧。
+- **调教参数计数 19→21 修正**：`active_aero_mode` + `x_mode_activations` 加入后
+  实际 21 个字段, 但 `to_vector` docstring、dashboard "19 项"、`使用方法.md`
+  "19 个参数" 均未同步。已全部修正并补充主动空动/X-Mode 说明。
+
 ### 文档一致性: 移除硬编码维度计数 (Iter-262)
 - 反馈引擎/quality/__init__ 多处注释仍写死 "18/12/10 个维度", 与实际
   `FEEDBACK_DIMENSIONS` (现 20 维) 脱节。改为引用 `FEEDBACK_DIMENSIONS` 常量,

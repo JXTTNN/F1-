@@ -155,7 +155,7 @@
 <header>
   <div class="title">F1 2026 <span class="accent">智能分析中心</span></div>
   <div class="head-right">
-    <span id="version-badge" class="version-badge">v0.1.0</span>
+    <span id="version-badge" class="version-badge">v1.2.0</span>
     <a href="/" style="font-size:12px">← 返回实时面板</a>
   </div>
 </header>
@@ -285,7 +285,7 @@
         <div class="result-card"><span class="lbl">推荐圈速 (s)</span><span id="bayes-rec-lap" class="val">—</span></div>
         <div class="result-card"><span class="lbl">GP 不确定度 σ</span><span id="bayes-gp-std" class="val amber">—</span></div>
       </div>
-      <h2 style="margin-top:10px">推荐调教 (19 项)</h2>
+      <h2 style="margin-top:10px">推荐调教 (21 项)</h2>
       <table class="data" id="bayes-setup-table">
         <thead><tr><th>参数</th><th>推荐值</th><th>单位</th></tr></thead>
         <tbody></tbody>
@@ -1095,6 +1095,7 @@
     el("h-status-val").textContent=r.status||"—";
     el("h-status-val").className="badge "+(r.status==="ok"?"ok":"bad");
     el("h-version").textContent=r.version||"—";
+    el("version-badge").textContent="v"+(r.version||"1.2.0");
     var me=el("h-model");
     me.textContent = r.model_available? "可用":"不可用";
     me.className="badge "+(r.model_available?"ok":"bad");

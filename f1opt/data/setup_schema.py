@@ -179,7 +179,7 @@ class CarSetup(BaseModel):
         return {spec.name: float(getattr(self, spec.name)) for spec in ALL_SETUP_FIELDS()}
 
     def to_vector(self) -> list[float]:
-        """返回长度 19 的向量，按 :func:`ALL_SETUP_FIELDS` 顺序归一化到 [0,1]。"""
+        """返回长度 = len(ALL_SETUP_FIELDS) 的向量, 归一化到 [0,1]。"""
         return [
             (float(getattr(self, spec.name)) - spec.min) / (spec.max - spec.min)
             for spec in ALL_SETUP_FIELDS()
