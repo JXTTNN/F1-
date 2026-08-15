@@ -385,17 +385,46 @@ class TestEvent:
 # --------------------------------------------------------------------------- #
 # Participants (id 4)
 # --------------------------------------------------------------------------- #
+_PART_PER_FMT = "<BHHHBBB32sBBHBB" + "BBB" * 4
+_PART_PER_SIZE = struct.calcsize(_PART_PER_FMT)
+
+
 class TestParticipants:
     def test_structure(self) -> None:
-        _, p = parse_packet(make_packet(4, b"\x00" * 1100))
+        _, p = parse_packet(make_packet(4, b"\x00" * 1400))
         assert "m_numActiveCars" in p
         assert len(p["m_participants"]) == NUM_CARS
-        assert "m_name" in p["m_participants"][0]
+        car0 = p["m_participants"][0]
+        assert "m_name" in car0
+        assert "m_platform" in car0
+
+    def test_car0_field_round_trip(self) -> None:
+        car0_vals = (
+            0, 255, 100, 5, 0, 44, 1, b"LEWIS", 1, 1, 150, 3, 2,
+            255, 0, 0, 255, 255, 0, 0, 0, 0, 0, 0, 0,
+        )
+        car0_bytes = struct.pack(_PART_PER_FMT, *car0_vals)
+        body = b"\x01" + car0_bytes + b"\x00" * (_PART_PER_SIZE * (NUM_CARS - 1))
+        _, p = parse_packet(make_packet(4, body))
+        assert p["m_numActiveCars"] == 1
+        car0 = p["m_participants"][0]
+        assert car0["m_driverId"] == 255
+        assert car0["m_networkId"] == 100
+        assert car0["m_teamId"] == 5
+        assert car0["m_name"] == "LEWIS"
+        assert car0["m_techLevel"] == 150
+        assert car0["m_platform"] == 3
+        assert car0["m_numColours"] == 2
+        assert car0["m_liveryColours0_r"] == 255
+        assert car0["m_liveryColours1_g"] == 255
 
 
 # --------------------------------------------------------------------------- #
 # FinalClassification (id 8) — HIGH confidence, size verified
 # --------------------------------------------------------------------------- #
+_FC_PER_FMT = "<BBBBBBBIdBBB" + "B" * 24
+
+
 class TestFinalClassification:
     def test_structure(self) -> None:
         _, p = parse_packet(make_packet(8, b"\x00" * 1100))
@@ -403,17 +432,55 @@ class TestFinalClassification:
         assert len(p["m_classificationData"]) == NUM_CARS
         car0 = p["m_classificationData"][0]
         assert "m_position" in car0
-        assert "m_resultReason" in car0  # F1 25 field
+        assert "m_resultReason" in car0
+        assert "m_penaltiesTime" in car0
+
+    def test_car0_field_round_trip(self) -> None:
+        car0_vals = (
+            1, 53, 2, 25, 2, 3, 7,
+            95500,
+            5413.25,
+            5, 2, 3,
+            *([9] * 8), *([10] * 8), *([11] * 8),
+        )
+        car0_bytes = struct.pack(_FC_PER_FMT, *car0_vals)
+        body = b"\x01" + car0_bytes + b"\x00" * (struct.calcsize(_FC_PER_FMT) * (NUM_CARS - 1))
+        _, p = parse_packet(make_packet(8, body))
+        car0 = p["m_classificationData"][0]
+        assert car0["m_position"] == 1
+        assert car0["m_resultReason"] == 7
+        assert car0["m_bestLapTimeInMS"] == 95500
+        assert car0["m_totalRaceTime"] == pytest.approx(5413.25)
+        assert car0["m_penaltiesTime"] == 5
+        assert car0["m_tyreStintsActual"] == [9] * 8
 
 
 # --------------------------------------------------------------------------- #
 # LobbyInfo (id 9)
 # --------------------------------------------------------------------------- #
+_LOBBY_PER_FMT = "<BHBB32sBBBHB"
+
+
 class TestLobbyInfo:
     def test_structure(self) -> None:
         _, p = parse_packet(make_packet(9, b"\x00" * 1000))
         assert "m_numPlayers" in p
         assert len(p["m_lobbyPlayers"]) == NUM_CARS
+        p0 = p["m_lobbyPlayers"][0]
+        assert "m_platform" in p0
+        assert "m_readyStatus" in p0
+
+    def test_player0_field_round_trip(self) -> None:
+        p0_vals = (0, 300, 1, 3, b"NICK", 5, 1, 1, 99, 1)
+        p0_bytes = struct.pack(_LOBBY_PER_FMT, *p0_vals)
+        body = b"\x01" + p0_bytes + b"\x00" * (struct.calcsize(_LOBBY_PER_FMT) * (NUM_CARS - 1))
+        _, p = parse_packet(make_packet(9, body))
+        p0 = p["m_lobbyPlayers"][0]
+        assert p0["m_teamId"] == 300
+        assert p0["m_platform"] == 3
+        assert p0["m_name"] == "NICK"
+        assert p0["m_techLevel"] == 99
+        assert p0["m_readyStatus"] == 1
 
 
 # --------------------------------------------------------------------------- #
@@ -435,11 +502,18 @@ class TestCarDamage:
 # --------------------------------------------------------------------------- #
 class TestSessionHistory:
     def test_structure(self) -> None:
-        _, p = parse_packet(make_packet(11, b"\x00" * 1200))
+        _, p = parse_packet(make_packet(11, b"\x00" * 1500))
         assert "m_carIdx" in p
         assert "m_numLaps" in p
+        assert "m_numTyreStints" in p
+        assert "m_bestLapTimeLapNum" in p
         assert len(p["m_lapHistoryData"]) == 100
         assert len(p["m_tyreStintsHistoryData"]) == 8
+        lap0 = p["m_lapHistoryData"][0]
+        assert "m_sector1TimeMinutes" in lap0
+        assert "m_lapValidBitFlags" in lap0
+        stint0 = p["m_tyreStintsHistoryData"][0]
+        assert "m_endLap" in stint0
 
 
 # --------------------------------------------------------------------------- #

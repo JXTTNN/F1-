@@ -402,16 +402,17 @@ def parse_event(data: bytes) -> dict[str, Any]:
 # Packet 4 — Participants  (MEDIUM-LOW confidence; F1 25 livery fields)
 # --------------------------------------------------------------------------- #
 CONFIDENCE_PARTICIPANTS = (
-    "MEDIUM — name length 32 (F1 25 reduction from 48); includes F1 25 LiveryColour "
-    "(numColours + 4 RGB triplets). Exact trailing assist bytes are best-effort."
+    "HIGH — PacketParticipantData per MacManley/f1-26-udp 权威规范 (Iter-284). "
+    "m_driverId/m_networkId/m_teamId/m_techLevel 均为 uint16 (旧版误作 uint8), "
+    "补齐 m_platform; 60B/participant."
 )
-# per participant: aiControlled, driverId, networkId, teamId, myTeam, raceNumber,
-# nationality, name[32], yourTelemetry, showOnlineNames, numColours, 4*LiveryColour(3B)
-_PART_FMT = "BBBBBBB32sBBB" + "BBB" * 4
+# Iter-284: 按权威规范修正 Participants — driverId/networkId/teamId/techLevel 为
+# uint16 (旧版误作 uint8 导致 name 起错位), 补 m_platform; 60B/participant.
+_PART_FMT = "BHHHBBB32sBBHBB" + "BBB" * 4
 _PART_NAMES = (
     "m_aiControlled", "m_driverId", "m_networkId", "m_teamId", "m_myTeam",
     "m_raceNumber", "m_nationality", "m_name", "m_yourTelemetry", "m_showOnlineNames",
-    "m_numColours",
+    "m_techLevel", "m_platform", "m_numColours",
     "m_liveryColours0_r", "m_liveryColours0_g", "m_liveryColours0_b",
     "m_liveryColours1_r", "m_liveryColours1_g", "m_liveryColours1_b",
     "m_liveryColours2_r", "m_liveryColours2_g", "m_liveryColours2_b",
@@ -717,41 +718,53 @@ def parse_car_damage(data: bytes) -> dict[str, Any]:
 # Packet 11 — Session History  (MEDIUM confidence)
 # --------------------------------------------------------------------------- #
 CONFIDENCE_SESSIONHIST = (
-    "MEDIUM — carIdx, numLaps, 100 LapHistoryData (11B each), 8 TyreStintHistoryData."
+    "HIGH — PacketSessionHistoryData per MacManley/f1-26-udp 权威规范 (Iter-284). "
+    "7 字节头 (carIdx/numLaps/numTyreStints/4×bestLapNum) + 100 LapHistoryData(14B, "
+    "扇区拆 MSPart+MinutesPart) + 8 TyreStintHistoryData(3B, endLap 在前)。"
 )
-# LapHistoryData: lapTimeInMS(I) sector1(H) sector2(H) sector3(H) lapValidBitFlags(B) = 11B
-# TyreStintHistoryData: tyreActualCompound(B) tyreVisualCompound(B) endLap(B) = 3B
-_SH_LAP = "IHHHB"
+# Iter-284: 按权威规范修正 SessionHistory — 头为 7 字节 (旧版缺 5 字节);
+# LapHistoryData 为 14B (扇区拆 uint16 MSPart + uint8 MinutesPart, 旧版误作 11B 且
+# 扇区未拆); TyreStintHistoryData 顺序为 endLap→actual→visual (旧版误为
+# actual→visual→endLap)。
+_SH_LAP = "IHBHBHBB"
 _SH_STINT = "BBB"
 _SH_BODY = struct.Struct(
-    "<" + "BB" + _SH_LAP * 100 + _SH_STINT * 8
+    "<" + "B" * 7 + _SH_LAP * 100 + _SH_STINT * 8
 )
 
 
 def parse_session_history(data: bytes) -> dict[str, Any]:
     """Parse PacketSessionHistoryData (packet id 11)."""
     v = _unpack_body(data, _SH_BODY)
-    car_idx, num_laps = v[0], v[1]
-    i = 2
+    (car_idx, num_laps, num_stints, best_lap_lap, best_s1_lap,
+     best_s2_lap, best_s3_lap) = v[0:7]
+    i = 7
     laps = []
     for _ in range(100):
         laps.append({
-            "m_lapTimeInMS": v[i], "m_sector1TimeInMS": v[i + 1],
-            "m_sector2TimeInMS": v[i + 2], "m_sector3TimeInMS": v[i + 3],
-            "m_lapValidBitFlags": v[i + 4],
+            "m_lapTimeInMS": v[i],
+            "m_sector1TimeInMS": v[i + 1], "m_sector1TimeMinutes": v[i + 2],
+            "m_sector2TimeInMS": v[i + 3], "m_sector2TimeMinutes": v[i + 4],
+            "m_sector3TimeInMS": v[i + 5], "m_sector3TimeMinutes": v[i + 6],
+            "m_lapValidBitFlags": v[i + 7],
         })
-        i += 5
+        i += 8
     stints = []
     for _ in range(8):
         stints.append({
-            "m_tyreActualCompound": v[i],
-            "m_tyreVisualCompound": v[i + 1],
-            "m_endLap": v[i + 2],
+            "m_endLap": v[i],
+            "m_tyreActualCompound": v[i + 1],
+            "m_tyreVisualCompound": v[i + 2],
         })
         i += 3
     return {
         "m_carIdx": car_idx,
         "m_numLaps": num_laps,
+        "m_numTyreStints": num_stints,
+        "m_bestLapTimeLapNum": best_lap_lap,
+        "m_bestSector1LapNum": best_s1_lap,
+        "m_bestSector2LapNum": best_s2_lap,
+        "m_bestSector3LapNum": best_s3_lap,
         "m_lapHistoryData": laps,
         "m_tyreStintsHistoryData": stints,
     }
@@ -981,14 +994,14 @@ _EXPECTED_BODY_SIZES: dict[int, int] = {
     1: 614,    # Session (approx)
     2: 1254,   # LapData: 57 bytes/car × 22 (Iter-281, 权威规范)
     3: 4,      # Event (min: 4-byte code)
-    4: 1122,   # Participants
+    4: 1321,   # Participants: 60B * 22 + 1 (Iter-284, 权威规范)
     5: 1078,   # CarSetups
     6: 1301,   # CarTelemetry: 59 bytes/car × 22 + 3 trailer (Iter-278)
     7: 1298,   # CarStatus: 59 bytes/car × 22 (Iter-278, 权威规范)
     8: 1013,   # FinalClassification: 46B/car * 22 + 1 (Iter-283, 权威规范)
     9: 947,    # LobbyInfo: 43B/player * 22 + 1 (Iter-283, teamId/techLevel uint16)
     10: 1012,  # CarDamage: 1041 - 29
-    11: 526,   # SessionHistory
+    11: 1431,  # SessionHistory: 7 + 100*14 + 8*3 (Iter-284, 权威规范)
     12: 202,   # TyreSets: 1 + 20*10 + 1 (Iter-283, 20 套, 每套 10B)
     13: 244,   # MotionEx: 273 - 29 (Iter-283, 61 float)
     14: 75,    # TimeTrial: 3 * 25B (Iter-283, 权威规范)

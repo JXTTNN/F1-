@@ -4,6 +4,18 @@
 
 ## 2026-08 优化迭代
 
+### 按权威规范修正 Participants + SessionHistory 线格式 (Iter-284)
+- 继续用 MacManley/f1-26-udp 权威规范审计, 再修 2 处错位:
+  - **Participants (id 4)**：`m_driverId`/`m_networkId`/`m_teamId`/`m_techLevel` 均为
+    uint16 (旧版误作 uint8, 导致 `m_name` 起错位), 补 `m_platform`; 60B/participant。
+  - **SessionHistory (id 11)**：头为 7 字节 (旧版缺 numTyreStints + 4×bestLapNum 共
+    5 字节); LapHistoryData 为 14B (扇区拆 uint16 MSPart + uint8 MinutesPart, 旧版
+    误作 11B 且扇区未拆); TyreStintHistoryData 顺序为 endLap→actual→visual (旧版误为
+    actual→visual→endLap)。
+- 同步 `_EXPECTED_BODY_SIZES` (Participants 1122→1321, SessionHistory 526→1431) 与
+  置信度注释 (均升为 HIGH)。新增 Participants/LobbyInfo/FinalClassification 往返测试
+  锁定 uint16 字段与字段序 (test_packets)。
+
 ### 按权威规范修正 5 个剩余数据包线格式 (Iter-283)
 - 继续用 MacManley/f1-26-udp 权威规范审计剩余数据包, 修正 5 处错位/缺失:
   - **FinalClassification (id 8)**：`m_resultReason` 应紧随 `m_resultStatus` (旧版误置于
