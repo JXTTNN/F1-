@@ -4,6 +4,11 @@
 
 ## 2026-08 优化迭代
 
+### 策略端点暴露 Pirelli 2026 选胎方案 (Iter-273)
+- `/api/strategy/plan` 响应新增 `pirelli_compounds` 字段: 按赛道返回该场
+  soft/medium/hard 对应的 C0-C5 具体配方 (来自此前未接入的 `pirelli_2026.py`)。
+  例: monza → C2/C1/C0 (最硬), monaco → C5/C4/C3 (最软), 严格按 EA F1 2026 各场选胎。
+
 ### 输入向量维度注释全量对齐 (Iter-272)
 - 全仓扫除 "37 维 / [0,1]^19 / [29:37] / 19 setup fields" 等陈旧引用:
   `causal.py`、`feature_importance.py`、`pareto.py`、`setup_analysis.py`、

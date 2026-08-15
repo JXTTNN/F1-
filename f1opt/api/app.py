@@ -1225,10 +1225,25 @@ def create_app(start_listener: bool = True) -> FastAPI:
                 compound_b=compounds[1] if len(compounds) > 1 else "medium",
             )
 
+            # Iter-273: 暴露该场 Pirelli 2026 选胎方案 (soft/medium/hard 对应的
+            # C0-C5 code), 严格按 EA F1 2026 各场选胎 (pirelli_2026.py)。
+            try:
+                from f1opt.model.pirelli_2026 import tire_compound_for_track
+
+                pirelli = tire_compound_for_track(track_id)
+                pirelli_info = {
+                    "soft": pirelli.soft_code,
+                    "medium": pirelli.medium_code,
+                    "hard": pirelli.hard_code,
+                }
+            except Exception:
+                pirelli_info = None
+
             return {
                 "track_id": track_id,
                 "total_laps": total_laps,
                 "fuel_load_kg": fuel_load_kg,
+                "pirelli_compounds": pirelli_info,
                 "optimal_strategy": optimal,
                 "fuel_analysis": fuel,
                 "degradation_crossover": {
