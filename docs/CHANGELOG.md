@@ -4,6 +4,11 @@
 
 ## 2026-08 优化迭代
 
+### 车手画像 DRS 使用效率修正 (Iter-261)
+- **`_drs_usage_efficiency` 改用 `drs_active` (实际 DRS 激活, m_drs)**：原用
+  `drs_allowed` (仅"此区段允许 DRS") 作代理, 会把"允许但未使用"也计为使用,
+  高估 DRS 效率。现优先用激活状态, 无数据时回退 `drs_allowed`。
+
 ### analytics ERS 累计语义修正 (Iter-260b)
 - **修复 `ers_sector_analysis`**：`ers_deployed_this_lap` 是累计能量(单调递增),
   原 `np.sum(dep_s[mask])` 会把扇区内所有累计值相加(数量级错误)。改为 `末-首`。

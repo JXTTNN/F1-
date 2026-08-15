@@ -275,13 +275,17 @@ def _ers_usage_intensity(frames: list[dict[str, Any]]) -> tuple[float, float]:
 
 
 def _drs_usage_efficiency(frames: list[dict[str, Any]]) -> tuple[float, float]:
-    """drs_usage_efficiency = clamp(count(drs_allowed > 0) / total, 0, 1)。
+    """drs_usage_efficiency = clamp(count(drs_active > 0) / total, 0, 1)。
 
-    统一帧只暴露 ``drs_allowed`` (是否允许), 无独立激活标志, 故以允许帧占比
-    作为 DRS 使用效率代理。
+    Iter-261: 优先用 ``drs_active`` (实际 DRS 激活状态, m_drs), 它比
+    ``drs_allowed`` (仅表示"此区段允许 DRS") 更准确地衡量车手的 DRS 使用
+    效率; 无 ``drs_active`` 数据时回退到 ``drs_allowed`` 作代理。
     """
-    t0 = _first_t(frames, "drs_allowed")
-    drs = _arr(frames, "drs_allowed")
+    t0 = _first_t(frames, "drs_active")
+    drs = _arr(frames, "drs_active")
+    if drs.size == 0:
+        t0 = _first_t(frames, "drs_allowed")
+        drs = _arr(frames, "drs_allowed")
     if drs.size == 0:
         return 0.0, t0
     return _clamp01(float(np.mean(drs > 0.0))), t0
