@@ -1213,9 +1213,6 @@ class TelemetryAnalytics:
         Returns a dict with ``front_avg``, ``rear_avg``, ``f_r_ratio``,
         ``diagnosis``, and ``front_peak`` / ``rear_peak``.
         """
-        fields = (
-            ("brake_temp_fl", "brake_temp_fr", "brake_temp_rl", "brake_temp_rr"),
-        )
         f_temp_fl = _field(self.frames, "brake_temp_fl")
         f_temp_fr = _field(self.frames, "brake_temp_fr")
         f_temp_rl = _field(self.frames, "brake_temp_rl")
@@ -1459,8 +1456,6 @@ class TelemetryAnalytics:
         """
         brake = _field(self.frames, "brake")
         deploy = _field_multi(self.frames, ("ers_deploy", "ers_deployed"))
-        times = _times(self.frames)
-        dt = _deltas(times)
         if brake.size < 2:
             return {
                 "recovery_events": [],

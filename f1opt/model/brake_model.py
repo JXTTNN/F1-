@@ -388,7 +388,6 @@ class BrakeModel:
 
         模拟逐年 (每圈) 偏置微调的效果, 返回最优偏置路径.
         """
-        track_load = get_brake_track_load(self.track_id)
         best_penalty = float("inf")
         best_path: list[float] = []
         # 搜索从 0.52 到 0.60 的偏置路径

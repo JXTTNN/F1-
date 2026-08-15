@@ -20,8 +20,9 @@ if errorlevel 1 (
 )
 
 REM --- 安装依赖 ---
+REM 只装运行时依赖 (含 torch)，不装 dev 依赖 (pytest/ruff/mypy 与 EXE 无关)
 echo [1/3] 安装依赖...
-pip install -e ".[dev]" -q
+pip install -e . -q
 pip install pyinstaller -q
 
 REM --- 清理旧产物 ---

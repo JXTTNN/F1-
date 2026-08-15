@@ -287,7 +287,7 @@ def generate_corner_profile(track_id: str) -> list[Corner]:
         slow_frac, med_frac, fast_frac = 0.35, 0.40, 0.25
         speed_range = (70, 270)
     else:  # medium
-        slow_frac, med_frac, fast_frac = 0.33, 0.45, 0.22
+        slow_frac, _, fast_frac = 0.33, 0.45, 0.22
         speed_range = (75, 250)
 
     n_slow = max(1, int(round(n * slow_frac)))
