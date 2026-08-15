@@ -49,6 +49,10 @@ def build_parser() -> argparse.ArgumentParser:
     # --- train -------------------------------------------------------------
     p_train = subparsers.add_parser("train", help="train the surrogate model")
     p_train.add_argument("--iterations", type=int, default=500)
+    p_train.add_argument("--save", dest="save", action="store_true", default=True,
+                         help="保存模型权重并刷新缓存 (默认)")
+    p_train.add_argument("--no-save", dest="save", action="store_false",
+                         help="不保存 (测试隔离)")
     p_train.add_argument("--log", action="store_true")
     p_train.add_argument("--json", action="store_true")
     p_train.set_defaults(func=cmd_train)
@@ -322,11 +326,12 @@ def cmd_train(args: argparse.Namespace) -> int:
     from f1opt.model.train import train
 
     try:
-        model = train(iterations=args.iterations, log=args.log, save=False)
+        model = train(iterations=args.iterations, log=args.log, save=args.save)
         summary = {
             "status": "trained",
             "iterations": args.iterations,
             "model_version": model.model_version,
+            "saved": args.save,
         }
         _print(summary, args.json)
         return 0
