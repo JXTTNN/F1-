@@ -454,6 +454,21 @@ def test_llm_enhance_falls_back_on_missing_key() -> None:
     assert out["summary"] == "rule-based summary"  # unchanged
 
 
+def test_preload_llm_local_backend_no_key_required() -> None:
+    """local 后端 (Ollama) 无需 API key，preload_llm 应返回 loaded=True。"""
+    engine = FeedbackEngine(Settings(llm_backend="local", llm_api_key=""))
+    result = engine.preload_llm()
+    assert result["loaded"] is True
+    assert result["backend"] == "local"
+
+
+def test_preload_llm_openai_backend_requires_key() -> None:
+    """openai 云端后端无 key 时 preload_llm 应返回 loaded=False。"""
+    engine = FeedbackEngine(Settings(llm_backend="openai", llm_api_key=""))
+    result = engine.preload_llm()
+    assert result["loaded"] is False
+
+
 def test_llm_enhance_falls_back_on_unknown_backend() -> None:
     settings = Settings(llm_backend="bogus", llm_api_key="sk-fake")
     feedback = {
