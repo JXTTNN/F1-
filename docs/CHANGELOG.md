@@ -182,6 +182,8 @@
 - `pareto.py`：`MultiObjectiveOptimizer.bounds` 标注放宽为 array-like。
 - `aligner.py`：`latest_unified_frame` 复用 `it` 变量 (tuple vs Optional) → 改
   独立变量 `entry`。
+- `setup_schema.py` / `setup_physics_bridge.py`：`CarSetup(**dict)` 动态拆包
+  无法被 mypy 验证字段类型 → 加 `# type: ignore[arg-type]`。全项目 66 → 63。
 
 ---
 

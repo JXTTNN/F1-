@@ -197,7 +197,7 @@ class CarSetup(BaseModel):
             denorm = spec.min + float(v) * (spec.max - spec.min)
             snapped = _snap_to_step(denorm, spec)
             kwargs[spec.name] = int(snapped) if spec.kind == "int" else snapped
-        return cls(**kwargs)
+        return cls(**kwargs)  # type: ignore[arg-type]
 
     def to_game_format(self) -> dict:
         """导出游戏可读的分组结构，含 ``format`` 标签与各组的参数/单位。"""

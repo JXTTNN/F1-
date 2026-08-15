@@ -144,7 +144,7 @@ def optimal_setup_for_track_type(track_type: TrackType) -> CarSetup:
     桥接层把 *偏离此最优* 的程度转成秒级惩罚.
     """
     opt = _TRACK_TYPE_OPTIMA[track_type]
-    return CarSetup(**opt)
+    return CarSetup(**opt)  # type: ignore[arg-type]
 
 
 def optimal_setup_for_track(track_id: str) -> CarSetup:
@@ -161,7 +161,7 @@ def optimal_setup_for_track(track_id: str) -> CarSetup:
     opt = _track_engineering_adjusted_optima(canonical_track_id(track_id), track.track_type)
     # 确保 fuel_load = 50 (reference, 与 benchmark 校准一致)
     opt = {**opt, "fuel_load": 50.0}
-    return CarSetup(**opt)
+    return CarSetup(**opt)  # type: ignore[arg-type]
 
 
 # --------------------------------------------------------------------------- #
