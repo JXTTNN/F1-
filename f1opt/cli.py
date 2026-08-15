@@ -268,6 +268,7 @@ def _err(msg: str) -> None:
 def _parse_setup_json(setup_json: str) -> CarSetup:
     """Parse a setup JSON string into a :class:`CarSetup`.
 
+    Missing fields fall back to :data:`DEFAULT_SETUP` (partial setups allowed).
     Raises :class:`ValueError` on invalid JSON or schema validation failure.
     """
     try:
@@ -276,7 +277,9 @@ def _parse_setup_json(setup_json: str) -> CarSetup:
         raise ValueError(f"invalid setup JSON: {exc}") from exc
     if not isinstance(setup_dict, dict):
         raise ValueError("setup JSON must be a JSON object")
-    return CarSetup(**setup_dict)
+    # 部分 setup 允许：缺失字段回退 DEFAULT_SETUP (否则 21 字段全必填)。
+    merged = {**DEFAULT_SETUP.model_dump(), **setup_dict}
+    return CarSetup(**merged)
 
 
 def _resolve_style_profile(style: str) -> DriverProfile:

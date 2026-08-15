@@ -267,10 +267,10 @@ def test_format_output_list_of_dicts_table_has_headers() -> None:
 def test_main_setup_validate_invalid_setup_returns_1(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """main(['setup', 'validate', '--setup-json', '{"front_wing":25}']) returns 1.
+    """main(['setup', 'validate', '--setup-json', '{"front_wing":999}']) returns 1.
 
-    A partial setup missing the other 18 required fields fails CarSetup
+    An out-of-range value (front_wing=999, valid range 0-50) fails CarSetup
     validation, so the handler prints to stderr and exits 1.
     """
-    rc = main(["setup", "validate", "--setup-json", '{"front_wing": 25}'])
+    rc = main(["setup", "validate", "--setup-json", '{"front_wing": 999}'])
     assert rc == 1
