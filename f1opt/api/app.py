@@ -24,7 +24,7 @@ import time
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, AsyncIterator, Literal
 
 # Windows: 兼容性处理。
 # ProactorEventLoop 自 Python 3.8 起即为 Windows 默认事件循环，无需显式设置
@@ -546,7 +546,7 @@ def create_app(start_listener: bool = True) -> FastAPI:
     audit = get_audit_logger()
 
     @asynccontextmanager
-    async def lifespan(app: FastAPI) -> None:
+    async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         state.loop = asyncio.get_running_loop()
         if start_listener:
             listener = TelemetryListener(
@@ -574,7 +574,7 @@ def create_app(start_listener: bool = True) -> FastAPI:
     app = FastAPI(title="F1OPT API", version=__version__, lifespan=lifespan)
     # Wire slowapi rate limiter into the app.
     app.state.limiter = limiter
-    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
     app.add_middleware(GZipMiddleware, minimum_size=500)
 
     # Iter-204: Enhanced CORS with granular trusted origins, method restrictions,

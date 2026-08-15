@@ -269,6 +269,9 @@
   (消除变长元组长度不一致错误)。pareto+strategy_optimizer 50 passed。全项目 18 → 12。
 - `surrogate.py`：`state_dict`/`load_state_dict` 覆写签名加 `# type: ignore[override]`
   (有意覆写: 返回含版本号的富字典, 与 torch `Module` 签名不同)。全项目 12 → 8。
+- `app.py`：`lifespan` 返回类型 `None` → `AsyncIterator[None]` (修复
+  asynccontextmanager 类型)；`add_exception_handler` 加 `# type: ignore[arg-type]`。
+  api 25 passed。全项目 8 → 5。
 
 ---
 
