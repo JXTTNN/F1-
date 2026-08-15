@@ -21,17 +21,32 @@ import asyncio
 import socket
 import time
 from collections.abc import Awaitable, Callable
-from typing import Any
+from typing import Any, NamedTuple
 
 from f1opt.observability.logging import get_logger
 
-from .packets import PacketHeader, parse_packet
+from .packets import PACKET_PARSERS, PacketHeader, parse_header
 from .validation import FrameTracker, SampleFlag, flag_sample, validate_sample
 
 log = get_logger(__name__)
 
 #: Subscriber coroutine signature: ``(header, parsed, raw_bytes) -> None``.
 Subscriber = Callable[[PacketHeader, dict[str, Any], bytes], Awaitable[None]]
+
+
+class _QueuedPacket(NamedTuple):
+    """Internal queue item: header + raw datagram + frame info.
+
+    Body parsing happens lazily in the dispatch loop (not the synchronous
+    recv callback) so the recv path stays fast under UDP flood.
+    """
+
+    header: PacketHeader
+    raw: bytes
+    recv_time: float
+    regressed: bool
+    gap: bool
+    delta: int
 
 #: 默认内核 UDP 缓冲区大小 (4 MB).
 _DEFAULT_KERNEL_BUF = 4 * 1024 * 1024
@@ -92,9 +107,9 @@ class TelemetryListener:
         self.host = host
         self.port = port
         self._queue_size = max(_MIN_QUEUE_SIZE, min(queue_size, _MAX_QUEUE_SIZE))
-        self._queue: asyncio.Queue[
-            tuple[PacketHeader, dict[str, Any], bytes] | None
-        ] = asyncio.Queue(self._queue_size)
+        self._queue: asyncio.Queue[_QueuedPacket | None] = asyncio.Queue(
+            self._queue_size
+        )
         self._subscribers: list[Subscriber] = []
         self._transport: asyncio.DatagramTransport | None = None
         self._dispatch_task: asyncio.Task[None] | None = None
@@ -217,15 +232,15 @@ class TelemetryListener:
             self._transport = None
 
     # ------------------------------------------------------------------ #
-    # Internal: recv path (synchronous)
+    # Internal: recv path (header-only, non-blocking)
     #
-    # NOTE: parse_packet() runs synchronously here (Motion ≈ 75µs/packet,
-    # dominated by 22-car dict construction). This briefly blocks the event
-    # loop and caps sustained throughput at ~13k pps — far above the real
-    # 60 Hz F1 rate, but below the 25k pps artificial stress flood (~63%
-    # delivered on Windows). Future optimization: move body parsing into the
-    # dispatch loop (async) or vectorize with numpy so this callback only
-    # enqueues raw bytes.
+    # Only the 29-byte header is parsed here (~1µs); the body parse (Motion
+    # ≈ 75µs) runs in the async dispatch loop instead, keeping this callback
+    # fast. NOTE: body parsing still runs on the event loop, so sustained
+    # throughput stays capped at ~13k pps — far above the real 60 Hz F1 rate
+    # but below the 25k pps artificial stress flood (~60% delivered on
+    # Windows). Future optimization: offload body parsing to a worker thread
+    # or vectorize with numpy.
     # ------------------------------------------------------------------ #
     def _on_datagram(self, data: bytes, addr: tuple[str, int]) -> None:
         self.received += 1
@@ -233,8 +248,10 @@ class TelemetryListener:
         self._last_packet_time = time.monotonic()
         self._connection_healthy = True
         recv_time = self._last_packet_time
+        # 只解析 header（≈1µs）；body 解析移入 dispatch 循环 (async)，避免
+        # 同步 body 解析 (Motion ≈ 75µs) 阻塞事件循环、限制 UDP 洪泛吞吐。
         try:
-            header, parsed = parse_packet(data)
+            header = parse_header(data)
         except Exception:
             self.parse_errors += 1
             return
@@ -249,31 +266,7 @@ class TelemetryListener:
                 self.regressions += 1
             if gap:
                 self.gaps += 1
-        if self._validate:
-            ok, reason = validate_sample(header.packet_id, parsed)
-            parsed["__validation__"] = {"ok": ok, "reason": reason}
-            if not ok:
-                self.validation_failures += 1
-                log.debug(
-                    "validation failed: %s (packet=%s)", reason, header.name
-                )
-        # Classify the sample into a quality flag (considers validation +
-        # frame regression). Counted for every frame; non-OK frames are
-        # tagged with ``_flag`` so the aggregator can track per-lap worst flag
-        # instead of silently writing anomalous samples.
-        vinfo = parsed.get("__validation__", {"ok": True, "reason": None})
-        flag = flag_sample(parsed, vinfo, (regressed, gap, delta))
-        self._flag_counts[flag] = self._flag_counts.get(flag, 0) + 1
-        if flag != SampleFlag.OK:
-            parsed["_flag"] = flag
-            self.flagged_samples += 1
-        # Iter-182: 记录接收时间戳用于延迟统计.
-        parsed["__recv_time__"] = recv_time
-        item: tuple[PacketHeader, dict[str, Any], bytes] | None = (
-            header,
-            parsed,
-            data,
-        )
+        item = _QueuedPacket(header, data, recv_time, regressed, gap, delta)
         try:
             self._queue.put_nowait(item)
         except asyncio.QueueFull:
@@ -444,15 +437,40 @@ class TelemetryListener:
         }
 
     async def _dispatch_loop(self) -> None:
-        """Pull parsed packets from the queue and fan them out to subscribers.
+        """Pull queued packets, parse bodies, and fan out to subscribers.
 
         Iter-182: 添加订阅者超时保护, 延迟统计.
+        body 解析 + 校验 + 质量标记移入此处 (async)，recv callback 只解析 header.
         """
         while True:
             item = await self._queue.get()
             if item is None:
                 return  # sentinel — stop() was called
-            header, parsed, raw = item
+            header, raw, recv_time, regressed, gap, delta = item
+            # Parse the body here (async context), not in the recv callback.
+            try:
+                parser = PACKET_PARSERS.get(header.packet_id)
+                parsed = parser(raw) if parser is not None else {}
+            except Exception:
+                self.parse_errors += 1
+                continue
+            # Validation (moved from the synchronous recv callback).
+            if self._validate:
+                ok, reason = validate_sample(header.packet_id, parsed)
+                parsed["__validation__"] = {"ok": ok, "reason": reason}
+                if not ok:
+                    self.validation_failures += 1
+                    log.debug(
+                        "validation failed: %s (packet=%s)", reason, header.name
+                    )
+            # Quality flag classification (moved from the synchronous recv callback).
+            vinfo = parsed.get("__validation__", {"ok": True, "reason": None})
+            flag = flag_sample(parsed, vinfo, (regressed, gap, delta))
+            self._flag_counts[flag] = self._flag_counts.get(flag, 0) + 1
+            if flag != SampleFlag.OK:
+                parsed["_flag"] = flag
+                self.flagged_samples += 1
+            parsed["__recv_time__"] = recv_time
             dispatch_start = time.monotonic()
             for sub in list(self._subscribers):
                 sub_name = getattr(sub, "__name__", str(sub))
@@ -545,9 +563,7 @@ class TelemetryListener:
         由于 asyncio.Queue 不支持动态调整 maxsize, 需要创建新队列并迁移元素.
         这是一个谨慎操作: 迁移期间不接收新元素 (通过 put_nowait 可能失败).
         """
-        new_queue: asyncio.Queue[
-            tuple[PacketHeader, dict[str, Any], bytes] | None
-        ] = asyncio.Queue(new_size)
+        new_queue: asyncio.Queue[_QueuedPacket | None] = asyncio.Queue(new_size)
         # 迁移现有元素 (从旧队列中取出并放入新队列).
         while not self._queue.empty():
             try:
