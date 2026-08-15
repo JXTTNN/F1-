@@ -107,6 +107,18 @@
   (113 passed / 6 预存失败, 与本次改动无关)。
 - `_unpack_body` 避免精确长度时的冗余字节拷贝 (工厂级微优化)。
 
+### 输入校验 + 压力测试修复 (工厂级)
+- **修复未知赛道被静默接受**：`f1opt predict/search/bayesian/validate` 与
+  `POST /api/predict` 此前对未知 track_id 静默回退到默认圈速 (71.37s)，
+  CLI 返回 0 / API 返回 200。现在 CLI 返回 1、API 返回 400。
+- **修复 6 个预存压力测试失败**：
+  - `test_concurrent_session_read_write` 使用已重命名的旧 API (add_message → add)。
+  - `test_asyncio_with_subprocess` 用 `echo`(Windows 非可执行文件) → 改用 `sys.executable`。
+  - `test_concurrent_search/feedback` 未考虑 20/min 限流 → 断言改为
+    "全部响应 (200/429) 且至少 1 个成功"。
+  - `test_cli_invalid_args_graceful_exit` / `test_api_404_on_unknown_track` 由输入校验修复。
+  修复后 `test_stress_comprehensive.py` 125 项全绿 (无失败)。
+
 ---
 
 ## 已知限制 (Known Limitations)

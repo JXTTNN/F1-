@@ -807,6 +807,12 @@ def create_app(start_listener: bool = True) -> FastAPI:
                               user_agent=request.headers.get("user-agent"),
                               metadata={"error": "invalid_setup"})
                     raise HTTPException(status_code=400, detail=str(exc)) from exc
+                # Validate track_id (400 on unknown, aliases resolved).
+                from f1opt.data.ea_f1_2026_benchmark import canonical_track_id
+                if TRACKS_BY_ID.get(canonical_track_id(body.track_id)) is None:
+                    raise HTTPException(
+                        status_code=400, detail=f"unknown track_id: {body.track_id}"
+                    )
                 # Lazy-import the surrogate model (503 if absent/broken).
                 try:
                     from f1opt.model.surrogate import predict_lap_time

@@ -325,6 +325,19 @@ def _resolve_style_profile(style: str) -> DriverProfile:
     return AGGRESSIVE_PROFILE
 
 
+def _known_track_id(track_id: str) -> bool:
+    """Return True if ``track_id`` resolves to a known F1 2026 track.
+
+    Aliases are resolved via :func:`canonical_track_id` (e.g. ``bahrain`` →
+    ``sakhir``) so both the circuit name and the city-name key are accepted.
+    Unknown ids return False so CLI/API callers can reject them gracefully
+    instead of silently falling back to a generic prior lap time.
+    """
+    from f1opt.data.ea_f1_2026_benchmark import canonical_track_id
+
+    return TRACKS_BY_ID.get(canonical_track_id(track_id)) is not None
+
+
 # --------------------------------------------------------------------------- #
 # Subcommand handlers
 # --------------------------------------------------------------------------- #
@@ -349,6 +362,9 @@ def cmd_train(args: argparse.Namespace) -> int:
 
 def cmd_predict(args: argparse.Namespace) -> int:
     """Predict lap time for a setup."""
+    if not _known_track_id(args.track):
+        _err(f"unknown track: {args.track}")
+        return 1
     try:
         setup = _parse_setup_json(args.setup_json)
     except ValueError as exc:
@@ -372,6 +388,9 @@ def cmd_predict(args: argparse.Namespace) -> int:
 
 def cmd_search(args: argparse.Namespace) -> int:
     """Search for optimal setup (differential or bayesian method)."""
+    if not _known_track_id(args.track):
+        _err(f"unknown track: {args.track}")
+        return 1
     try:
         if args.method == "bayesian":
             from f1opt.model.bayesian import bayesian_search_setup
@@ -421,6 +440,9 @@ def cmd_search(args: argparse.Namespace) -> int:
 
 def cmd_bayesian(args: argparse.Namespace) -> int:
     """Bayesian search."""
+    if not _known_track_id(args.track):
+        _err(f"unknown track: {args.track}")
+        return 1
     try:
         from f1opt.model.bayesian import bayesian_search_setup
 
@@ -450,6 +472,9 @@ def cmd_bayesian(args: argparse.Namespace) -> int:
 
 def cmd_validate(args: argparse.Namespace) -> int:
     """Run model validation."""
+    if not _known_track_id(args.track):
+        _err(f"unknown track: {args.track}")
+        return 1
     try:
         from f1opt.model.validation import SurrogateValidator
 

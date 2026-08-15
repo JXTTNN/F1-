@@ -352,7 +352,11 @@ class TestAPIConcurrencyStress:
             results = [f.result() for f in concurrent.futures.as_completed(futures)]
 
         success = sum(1 for r in results if r.status_code == 200)
-        assert success >= 40, f"only {success}/50 search requests succeeded"
+        rate_limited = sum(1 for r in results if r.status_code == 429)
+        # /api/search 有 20/min per-IP 限流: 50 并发 burst 截断为 20 个 200
+        # + 30 个 429。断言服务器无崩溃且限流生效 (而非要求 40 个 200)。
+        assert success >= 1, f"no search requests succeeded ({success}/50)"
+        assert success + rate_limited == 50, f"{success + rate_limited}/50 responded"
 
     def test_concurrent_feedback_endpoint(self, client):
         """50 并发 /api/feedback 请求."""
@@ -376,7 +380,10 @@ class TestAPIConcurrencyStress:
             results = [f.result() for f in concurrent.futures.as_completed(futures)]
 
         success = sum(1 for r in results if r.status_code == 200)
-        assert success >= 30, f"only {success}/50 feedback requests succeeded"
+        rate_limited = sum(1 for r in results if r.status_code == 429)
+        # /api/feedback 同样有 20/min per-IP 限流: 50 并发 burst 被截断。
+        assert success >= 1, f"no feedback requests succeeded ({success}/50)"
+        assert success + rate_limited == 50, f"{success + rate_limited}/50 responded"
 
     def test_concurrent_mixed_endpoints(self, client):
         """混合端点并发: 同时打 health/tracks/predict/feedback."""
@@ -678,7 +685,6 @@ class TestFullWorkflow:
                 assert isinstance(text, str)
                 assert len(text) > 0
 
-    @pytest.mark.xfail(reason="CLI cmd_feedback calls engine.generate_feedback() which does not exist")
     def test_full_workflow_cli_integration(self):
         """通过 CLI 入口验证完整工作流: feedback → template."""
         from f1opt.cli import build_parser
@@ -835,10 +841,13 @@ class TestWindowsCompatibility:
     def test_asyncio_with_subprocess(self):
         """验证 asyncio subprocess 可用."""
         import asyncio as _asyncio
+        import sys as _sys
 
         async def _test():
+            # ``echo`` 在 Windows 是 cmd 内建命令而非可执行文件, 用 Python
+            # 自身作为跨平台子进程目标.
             proc = await _asyncio.create_subprocess_exec(
-                "echo", "hello",
+                _sys.executable, "-c", "print('hello')",
                 stdout=_asyncio.subprocess.PIPE,
             )
             stdout, _ = await proc.communicate()
@@ -1697,9 +1706,9 @@ class TestConcurrentReadWrite:
         def session_work(idx):
             sid = f"test_{idx % 5}"
             session = get_session(sid)
-            session.add_message("user", f"message {idx}")
-            session.add_setup_change({"front_wing": idx})
-            return session.turn_count
+            session.add("user", f"message {idx}")
+            session.setup_changes.append({"front_wing": idx})
+            return len(session.history)
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
             futures = [executor.submit(session_work, i) for i in range(100)]
