@@ -236,11 +236,12 @@ class TelemetryListener:
     #
     # Only the 29-byte header is parsed here (~1µs); the body parse (Motion
     # ≈ 75µs) runs in the async dispatch loop instead, keeping this callback
-    # fast. NOTE: body parsing still runs on the event loop, so sustained
-    # throughput stays capped at ~13k pps — far above the real 60 Hz F1 rate
-    # but below the 25k pps artificial stress flood (~60% delivered on
-    # Windows). Future optimization: offload body parsing to a worker thread
-    # or vectorize with numpy.
+    # fast. NOTE: body parsing (Motion ≈ 75µs, 22-car dict construction) is
+    # CPU-bound Python that holds the GIL, so sustained throughput stays capped
+    # at ~13k pps — far above the real 60 Hz F1 rate but below the 25k pps
+    # artificial stress flood (~60% delivered on Windows). A worker thread does
+    # NOT help (GIL-bound, verified); the real fix is numpy vectorization
+    # (C-level, releases the GIL).
     # ------------------------------------------------------------------ #
     def _on_datagram(self, data: bytes, addr: tuple[str, int]) -> None:
         self.received += 1
