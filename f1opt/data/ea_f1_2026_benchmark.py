@@ -150,12 +150,12 @@ def all_benchmark_tracks() -> list[str]:
 
 def fastest_track() -> str:
     """圈速最短的赛道 (Monaco)."""
-    return min(EA_F1_2026_LAP_TIME_BENCHMARK, key=EA_F1_2026_LAP_TIME_BENCHMARK.get)
+    return min(EA_F1_2026_LAP_TIME_BENCHMARK, key=lambda k: EA_F1_2026_LAP_TIME_BENCHMARK[k])
 
 
 def longest_track() -> str:
     """圈速最长的赛道 (Spa)."""
-    return max(EA_F1_2026_LAP_TIME_BENCHMARK, key=EA_F1_2026_LAP_TIME_BENCHMARK.get)
+    return max(EA_F1_2026_LAP_TIME_BENCHMARK, key=lambda k: EA_F1_2026_LAP_TIME_BENCHMARK[k])
 
 
 # --------------------------------------------------------------------------- #

@@ -186,7 +186,7 @@ def _compute_range_compliance_score(
             except (TypeError, ValueError):
                 pass
     if out_of_range_fields:
-        worst = max(out_of_range_fields, key=out_of_range_fields.get)
+        worst = max(out_of_range_fields, key=lambda k: out_of_range_fields[k])
         issues.append(f"Out-of-range values in: {worst}")
     return in_range / total if total > 0 else 1.0
 

@@ -191,6 +191,11 @@
   `/api/telemetry/stats`, 显示「收包 N · 圈 M」, 用户一眼确认 F1 2026 游戏
   遥测已接入 (收包递增 = 正常流式, 圈数 = 已完成圈)。
 
+### 类型安全 (mypy 继续收敛 63 → 60)
+- `ea_f1_2026_benchmark.py` / `quality_score.py`：`min/max(..., key=dict.get)`
+  的 `.get` 返回 `T | None` 触发 overloaded 类型错误 → 改用 `lambda k: d[k]`
+  (直接索引, 返回 `T`)。
+
 ---
 
 ## 已知限制 (Known Limitations)
