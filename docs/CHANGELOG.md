@@ -164,6 +164,10 @@
   `outer_temps` 列表此前混入 `None` (`list[float | None]`), 触发 ~12 处
   `float | None` 类型错误。改为「仅追加 float + 用 `len(list)==N` 判断」的
   类型收窄写法, 移除全部 `# type: ignore` 注释。feedback 315 passed。
+- **cli.py mypy 错误 10 → 0**：`cmd_search` 复用了 `result` 变量承载两种返回
+  类型 (bayesian dict vs SearchResult), 改为独立变量 `bayesian_result`/
+  `search_result`; `grouped` 字典补上 `dict[str, list[dict[str, Any]]]` 注解。
+  全项目 mypy 80 → 70 错误。test_cli 25 passed。
 
 ---
 

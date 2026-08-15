@@ -395,7 +395,7 @@ def cmd_search(args: argparse.Namespace) -> int:
         if args.method == "bayesian":
             from f1opt.model.bayesian import bayesian_search_setup
 
-            result = bayesian_search_setup(
+            bayesian_result = bayesian_search_setup(
                 args.track,
                 DEFAULT_SETUP,
                 n_iterations=args.iterations,
@@ -405,16 +405,16 @@ def cmd_search(args: argparse.Namespace) -> int:
             output = {
                 "method": "bayesian",
                 "track": args.track,
-                "recommended_setup": result["recommended_setup"].model_dump(),
-                "recommended_lap_time": result["recommended_lap_time"],
-                "baseline_lap_time": result["baseline_lap_time"],
-                "predicted_gain_s": result["predicted_gain_s"],
-                "iterations": result["iterations"],
+                "recommended_setup": bayesian_result["recommended_setup"].model_dump(),
+                "recommended_lap_time": bayesian_result["recommended_lap_time"],
+                "baseline_lap_time": bayesian_result["baseline_lap_time"],
+                "predicted_gain_s": bayesian_result["predicted_gain_s"],
+                "iterations": bayesian_result["iterations"],
             }
         else:
             from f1opt.model.optimizer import search_setup
 
-            result = search_setup(
+            search_result = search_setup(
                 args.track,
                 iterations=args.iterations,
                 tire_wear_weight=args.tire_wear_weight,
@@ -423,13 +423,13 @@ def cmd_search(args: argparse.Namespace) -> int:
             output = {
                 "method": "differential",
                 "track": args.track,
-                "recommended": result.recommended,
-                "baseline": result.baseline,
-                "predicted_gain_s": result.predicted_gain_s,
-                "baseline_lap_time": result.baseline_lap_time,
-                "recommended_lap_time": result.recommended_lap_time,
-                "algorithm": result.algorithm,
-                "iterations": result.iterations,
+                "recommended": search_result.recommended,
+                "baseline": search_result.baseline,
+                "predicted_gain_s": search_result.predicted_gain_s,
+                "baseline_lap_time": search_result.baseline_lap_time,
+                "recommended_lap_time": search_result.recommended_lap_time,
+                "algorithm": search_result.algorithm,
+                "iterations": search_result.iterations,
             }
         _print(output, args.json)
         return 0
@@ -622,7 +622,7 @@ def _feedback_examples_text() -> str:
     """Render feedback examples for CLI display."""
     from f1opt.feedback.prompts import FEEDBACK_EXAMPLES
     lines = [f"Driver feedback examples ({len(FEEDBACK_EXAMPLES)} total):", ""]
-    grouped = {"corner": [], "sector": [], "overall": []}
+    grouped: dict[str, list[dict[str, Any]]] = {"corner": [], "sector": [], "overall": []}
     for ex in FEEDBACK_EXAMPLES:
         g = ex.get("granularity", "overall")
         grouped.setdefault(g, []).append(ex)
@@ -657,7 +657,7 @@ def cmd_feedback(args: argparse.Namespace) -> int:
 
     # --json mode list-examples
     if args.list_examples and args.json:
-        grouped = {"corner": [], "sector": [], "overall": []}
+        grouped: dict[str, list[dict[str, Any]]] = {"corner": [], "sector": [], "overall": []}
         for ex in FEEDBACK_EXAMPLES:
             g = ex.get("granularity", "overall")
             grouped.setdefault(g, []).append(ex)
