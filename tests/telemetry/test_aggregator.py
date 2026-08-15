@@ -10,6 +10,8 @@ Calls the :class:`LapAggregator` subscriber directly with crafted
 
 from __future__ import annotations
 
+import io
+
 import pyarrow.parquet as pq
 import pytest
 
@@ -97,6 +99,12 @@ def _empty_telem() -> dict:
     }
 
 
+def car_status(car0: dict) -> dict:
+    """Build a CarStatus parsed payload with car 0 set."""
+    empty = {"m_ersDeployedThisLap": 0, "m_activeAeroX": 0.0, "m_activeAeroZ": 0.0}
+    return {"m_carStatusData": [car0] + [empty] * 21}
+
+
 # --------------------------------------------------------------------------- #
 # Clean lap
 # --------------------------------------------------------------------------- #
@@ -143,6 +151,37 @@ class TestCleanLap:
         assert row["track_id"] == 7
         assert row["weather"] == 2
         assert row["session_uid"] == SESSION_UID
+
+    async def test_active_aero_averaged_and_exported(self) -> None:
+        """Iter-254: 主动空力 (X/Z) 按独立 CarStatus 计数求平均, 且进入 parquet。"""
+        agg = LapAggregator("/tmp/test_aero.parquet")
+        await agg(make_header(1), {"m_trackId": 7, "m_weather": 2}, b"")
+        await agg(
+            make_header(2),
+            lap_data({"m_currentLapNum": 1, "m_lastLapTimeInMS": 0, "m_currentLapInvalid": 0}),
+            b"",
+        )
+        # 4 个 CarStatus 帧: 主动空力 X=0.8, Z=0.2 (与 CarTelemetry num_samples 不同率)
+        for i in range(4):
+            await agg(
+                make_header(7, overall_frame=102 + i, session_time=10.1 + i * 0.02),
+                car_status({"m_activeAeroX": 0.8, "m_activeAeroZ": 0.2}),
+                b"",
+            )
+        await agg(
+            make_header(2, overall_frame=110, session_time=11.0),
+            lap_data({"m_currentLapNum": 2, "m_lastLapTimeInMS": 95000, "m_currentLapInvalid": 0}),
+            b"",
+        )
+        row = agg.rows[0]
+        # 独立计数: 4 个 CarStatus → 平均 0.8 / 0.2 (而非除以 num_samples)
+        assert row["avg_active_aero_x"] == pytest.approx(0.8)
+        assert row["avg_active_aero_z"] == pytest.approx(0.2)
+        # parquet 导出包含主动空力字段
+        tbl = pq.read_table(io.BytesIO(agg.to_parquet_bytes()))
+        assert "avg_active_aero_x" in tbl.column_names
+        assert "avg_active_aero_z" in tbl.column_names
+        assert tbl.column("avg_active_aero_x").to_pylist() == pytest.approx([0.8])
 
 
 # --------------------------------------------------------------------------- #

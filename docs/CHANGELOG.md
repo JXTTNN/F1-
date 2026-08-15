@@ -278,6 +278,15 @@
   **`mypy f1opt/` → Success: no issues found in 117 source files**。
   season+strategy_optimizer 33 passed。全项目 5 → 0。
 
+### 采集数据正确性 (模块衔接 bug 修复)
+- **修复主动空力数据在 parquet 导出时丢失**：`_SCHEMA` 缺少
+  `avg_active_aero_x/z` 字段, `pa.Table.from_pylist(rows, schema=_SCHEMA)` 会
+  静默丢弃这两列。补上 schema 字段。
+- **修复主动空力平均值分母错误**：`avg_active_aero_x` 原用 `num_samples`
+  (CarTelemetry 60Hz 计数) 作分母, 但主动空力来自 CarStatus (20Hz), 平均
+  值被错误稀释 3x。新增独立 `active_aero_count` (CarStatus 计数)。
+  新增回归测试。telemetry 360 passed。
+
 ---
 
 ## 已知限制 (Known Limitations)

@@ -43,6 +43,8 @@ _SCHEMA = pa.schema([
     pa.field("avg_throttle", pa.float32()),
     pa.field("avg_brake", pa.float32()),
     pa.field("avg_ers_deploy", pa.float32()),
+    pa.field("avg_active_aero_x", pa.float32()),  # Iter-191: F1 2026 X-Mode
+    pa.field("avg_active_aero_z", pa.float32()),  # Iter-191: F1 2026 Z-Mode
     pa.field("max_tyre_wear", pa.float32()),
     pa.field("track_id", pa.int8()),
     pa.field("weather", pa.uint8()),
@@ -66,6 +68,7 @@ class _LapState:
     ers_deploy_sum: float = 0.0
     active_aero_x_sum: float = 0.0  # Iter-191: F1 2026 X-Mode 位置累计
     active_aero_z_sum: float = 0.0  # Iter-191: F1 2026 Z-Mode 位置累计
+    active_aero_count: int = 0  # Iter-254: CarStatus 样本数 (与 num_samples 不同率)
     max_tyre_wear: float = 0.0
     num_samples: int = 0
     dirty: bool = False  # set True if flashback detected mid-lap
@@ -278,6 +281,7 @@ class LapAggregator:
             # Iter-191: F1 2026 主动空力 (X=低阻/Z=高下压力 位置) 累计
             state.active_aero_x_sum += _safe_float(c.get("m_activeAeroX"))
             state.active_aero_z_sum += _safe_float(c.get("m_activeAeroZ"))
+            state.active_aero_count += 1  # Iter-254: 独立计数, 与 num_samples 不同率
 
     def _on_car_damage(
         self, header: PacketHeader, parsed: dict[str, Any]
@@ -332,8 +336,8 @@ class LapAggregator:
             "avg_throttle": state.throttle_sum / n,
             "avg_brake": state.brake_sum / n,
             "avg_ers_deploy": state.ers_deploy_sum / n,
-            "avg_active_aero_x": state.active_aero_x_sum / n,  # Iter-191
-            "avg_active_aero_z": state.active_aero_z_sum / n,  # Iter-191
+            "avg_active_aero_x": state.active_aero_x_sum / max(state.active_aero_count, 1),  # Iter-191/254
+            "avg_active_aero_z": state.active_aero_z_sum / max(state.active_aero_count, 1),  # Iter-191/254
             "max_tyre_wear": state.max_tyre_wear,
             "track_id": int(track_id),
             "weather": int(weather),
