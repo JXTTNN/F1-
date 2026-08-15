@@ -643,7 +643,7 @@ class TestFeedbackEdgeCases:
         out = generate_feedback([], DEFAULT_SETUP.model_dump(), "melbourne")
         assert isinstance(out, dict)
         assert "dimensions" in out
-        assert len(out["dimensions"]) == 12  # Iter-164.14: +corner_analysis → 12 dims
+        assert len(out["dimensions"]) == 18  # 12 基础维 + 6 个后续迭代新增维
         # Data-dependent dimensions report 数据不足.
         data_dep_dims = {
             "balance",
@@ -671,7 +671,7 @@ class TestFeedbackEdgeCases:
         }
         out = generate_feedback([frame], DEFAULT_SETUP.model_dump(), "melbourne")
         assert isinstance(out, dict)
-        assert len(out["dimensions"]) == 12  # Iter-164.14: +corner_analysis → 12 dims
+        assert len(out["dimensions"]) == 18  # 12 基础维 + 6 个后续迭代新增维
 
     def test_rule_based_feedback_all_zero_frames_does_not_crash(self) -> None:
         frames = [
@@ -693,7 +693,7 @@ class TestFeedbackEdgeCases:
         metrics = extract_metrics(frames, DEFAULT_SETUP.model_dump(), "melbourne")
         out = rule_based_feedback(metrics, DEFAULT_SETUP.model_dump(), "melbourne")
         assert isinstance(out, dict)
-        assert len(out["dimensions"]) == 12  # Iter-164.14: +corner_analysis → 12 dims
+        assert len(out["dimensions"]) == 18  # 12 基础维 + 6 个后续迭代新增维
 
     def test_extract_metrics_empty_list_returns_n_frames_zero(self) -> None:
         metrics = extract_metrics([], {}, "melbourne")

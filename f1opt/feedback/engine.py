@@ -1,12 +1,12 @@
 """LLM driver-feedback engine.
 
-Iter-03 Task 3.1: produces evidence-grounded feedback covering ALL 12 spec
+Iter-03 Task 3.1: produces evidence-grounded feedback covering ALL 18 spec
 dimensions (balance / grip / tyres / braking / ers_deployment / drs_usage /
 throttle_brake_smoothness / confidence / lap_time_potential / sector_compare /
 setup_advice). Works without an LLM API key via a comprehensive rule-based
 fallback, and supports a pluggable LLM backend (``config.llm_backend``) for
 richer natural language — the LLM-enhance path stays gated (default off) but
-its prompt already lists all 12 dimensions.
+its prompt already lists all 18 dimensions.
 
 Pipeline:
 
@@ -15,7 +15,7 @@ Pipeline:
    Iter-03 adds braking (lockup_proxy, brake_bias_assessment), confidence
    (steering_correction_freq, g_lat_stability) and sector_compare
    (sector_times derived from lap_distance crossings, else nominal split).
-2. :func:`rule_based_feedback` — emit ALL 12 dimension entries + setup
+2. :func:`rule_based_feedback` — emit ALL 18 dimension entries + setup
    suggestions via F1 setup knowledge encoded as rules; the ``setup_advice``
    dimension consumes :func:`f1opt.model.optimizer.search_setup` to present the
    model-driven recommended setup diff.
@@ -2385,7 +2385,7 @@ def rule_based_feedback(
     track_id: str,
     driver_profile: DriverProfile | dict[str, Any] | list[float] | None = None,
 ) -> dict[str, Any]:
-    """Produce ALL 12 dimension entries + setup suggestions from F1 setup rules.
+    """Produce ALL 18 dimension entries + setup suggestions from F1 setup rules.
 
     Each dimension is ``{"name", "value", "evidence", "advice"}`` and every
     numeric claim in ``value`` / ``advice`` traces to an entry in
@@ -2410,7 +2410,7 @@ def rule_based_feedback(
     track = _resolve_track(track_id)
     ref_lap = _ref_lap_for(track)
 
-    # Build the 12 dimensions in FEEDBACK_DIMENSIONS order. Rule-based
+    # Build the 18 dimensions in FEEDBACK_DIMENSIONS order. Rule-based
     # suggestions accumulate from balance / grip / tyres / braking dims.
     dim_balance, sug = _dim_balance(values, refs, setup)
     dim_balance = _apply_personal_advice(dim_balance, profile, _balance_personal)

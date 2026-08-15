@@ -18,7 +18,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from f1opt.driver.profile import DriverProfile
-#: ALL feedback dimensions the spec requires (Iter-03 = 10, Iter-164.14 = 11).
+#: ALL feedback dimensions the spec requires (Iter-03 = 10, 现为 18).
 #: This is the single source of truth --- ``f1opt.feedback.engine`` imports and
 #: re-exports it so the rule-based path and the LLM prompt never drift apart.
 #: Kept as a ``list`` so ``engine.FEEDBACK_DIMENSIONS`` matches the spec's
