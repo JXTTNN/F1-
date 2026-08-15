@@ -42,6 +42,32 @@
 
 ---
 
+## 2026-08 第二轮优化 (整体性 + 工厂级 + 内置 LLM + UI)
+
+### 内置轻量 LLM
+- 修复 local 后端 (Ollama) 错误要求 API key 的门控 bug (内置 LLM 永远无法启用)。
+- 添加 LLM 门控回归测试 (local 无需 key / openai 需 key)。
+
+### F1 2026 严格对齐
+- 新增主动空力 (X/Z-Mode) 分析：aligner 接入 m_activeAeroX/Z，analytics 新增
+  active_aero_usage_analysis，compute_all 补齐为 29 项。
+- 实时遥测 UI 新增主动空力指示器 (X-Mode 青 / Z-Mode 紫)。
+
+### 调教优化
+- 修复 search_setup 同 seed 非确定性：精英保留路径逐代跑 DE 但仅首代传 seed，
+  改为每代派生 seed+gen，8 轮结果完全一致。
+
+### 模块衔接
+- 修复 f1opt train 硬编码 save=False (训练结果丢弃)，改为 --save/--no-save (默认保存)。
+- 新增 f1opt teams list 命令 (暴露 11 车队 / 22 车手)。
+
+### 工厂级质量
+- mypy 配置 python_version 3.11 -> 3.12 (numpy 2.x 存根用 3.12 type 语法)。
+- 全量回归：核心套件 3172 通过 / 0 失败。
+- 安全扫描：无硬编码密钥/密码/令牌。
+
+---
+
 ## 已知限制 (Known Limitations)
 
 - **UDP 洪泛吞吐**：body 解析（Motion ≈ 75µs，22 车字典构造）仍在事件循环上，
