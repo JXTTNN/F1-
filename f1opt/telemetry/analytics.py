@@ -232,6 +232,22 @@ class TelemetryAnalytics:
     ) -> None:
         self.frames: list[dict] = list(frames)
         self.track_length_m: float = float(track_length_m)
+        # Iter-266: 缓存 times/deltas, 避免 compute_all 的 29 个分析各自重算
+        # 时间戳与时间差 (各为 O(n) 全帧扫描)。
+        self._times_arr: np.ndarray | None = None
+        self._deltas_arr: np.ndarray | None = None
+
+    def _get_times(self) -> np.ndarray:
+        """Iter-266: 惰性计算并缓存每帧时间戳 (compute_all 多次复用)。"""
+        if self._times_arr is None:
+            self._times_arr = _times(self.frames)
+        return self._times_arr
+
+    def _get_deltas(self) -> np.ndarray:
+        """Iter-266: 惰性计算并缓存前向时间差 (复用 _get_times 结果)。"""
+        if self._deltas_arr is None:
+            self._deltas_arr = _deltas(self._get_times())
+        return self._deltas_arr
 
     # ------------------------------------------------------------------ #
     # Aggregate
@@ -318,8 +334,8 @@ class TelemetryAnalytics:
     # ------------------------------------------------------------------ #
     def throttle_trace_analysis(self) -> dict[str, Any]:
         thr = _field(self.frames, "throttle")
-        times = _times(self.frames)
-        dt = _deltas(times)
+        times = self._get_times()
+        dt = self._get_deltas()
         if thr.size == 0:
             return {
                 "full_throttle_pct": 0.0,
@@ -413,8 +429,8 @@ class TelemetryAnalytics:
     # ------------------------------------------------------------------ #
     def steering_trace_analysis(self) -> dict[str, Any]:
         steer = _field(self.frames, "steer")
-        times = _times(self.frames)
-        dt = _deltas(times)
+        times = self._get_times()
+        dt = self._get_deltas()
         if steer.size == 0:
             return {
                 "steer_reversals": 0,
@@ -514,8 +530,8 @@ class TelemetryAnalytics:
     def ers_analysis(self) -> dict[str, Any]:
         deploy = _field_multi(self.frames, ("ers_deployed_this_lap", "ers_deploy", "ers_deployed"))
         brake = _field(self.frames, "brake")
-        times = _times(self.frames)
-        dt = _deltas(times)
+        times = self._get_times()
+        dt = self._get_deltas()
         if deploy.size == 0:
             return {
                 "ers_deploy_total": 0.0,
@@ -563,8 +579,8 @@ class TelemetryAnalytics:
         # 否则会把"允许但未使用"的整个 DRS 区段都计为激活, 高估激活次数/时长。
         drs = _field_multi(self.frames, ("drs_active", "drs", "drs_allowed"))
         speed = _field(self.frames, "speed")
-        times = _times(self.frames)
-        dt = _deltas(times)
+        times = self._get_times()
+        dt = self._get_deltas()
         if drs.size == 0:
             return {
                 "drs_activations": 0,
@@ -658,7 +674,7 @@ class TelemetryAnalytics:
         thr = _field(self.frames, "throttle")
         brake = _field(self.frames, "brake")
         steer = _field(self.frames, "steer")
-        times = _times(self.frames)
+        times = self._get_times()
         thr_s = self._smoothness(thr, times, scale=2.0)
         brk_s = self._smoothness(brake, times, scale=2.0)
         str_s = self._smoothness(steer, times, scale=3.0)
@@ -763,7 +779,7 @@ class TelemetryAnalytics:
         """
         track_len = track_length_m if track_length_m is not None else self.track_length_m
         lap_dist = _field(self.frames, "lap_distance")
-        times = _times(self.frames)
+        times = self._get_times()
         speed = _field(self.frames, "speed")
         steer = _field(self.frames, "steer")
         brake = _field(self.frames, "brake")
@@ -917,7 +933,7 @@ class TelemetryAnalytics:
         n = min(len(throttle), len(brake))
         overlap_mask = (throttle[:n] > 0.3) & (brake[:n] > 0.3)
         overlap_count = int(np.sum(overlap_mask))
-        dt = _deltas(_times(self.frames))
+        dt = _deltas(self._get_times())
         overlap_duration = float(dt[:n][overlap_mask].sum()) if overlap_count > 0 else 0.0
         overlap_frames = [int(i) for i in np.where(overlap_mask)[0][:10]]
         return {
@@ -1070,7 +1086,7 @@ class TelemetryAnalytics:
         throttle = _field(self.frames, "throttle")
         brake = _field(self.frames, "brake")
         speed = _field(self.frames, "speed")
-        times = _times(self.frames)
+        times = self._get_times()
         if throttle.size < 3 or speed.size < 3:
             return {"avg_lift_off_decel_kmh_s": 0.0, "lift_off_count": 0, "max_decel_kmh_s": 0.0}
         decel_rates: list[float] = []

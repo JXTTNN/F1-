@@ -4,6 +4,11 @@
 
 ## 2026-08 优化迭代
 
+### 遥测分析时间戳缓存 (Iter-266)
+- `TelemetryAnalytics` 新增惰性缓存 `_get_times()`/`_get_deltas()`：`compute_all`
+  的 29 个分析各自重算时间戳与时间差 (各 O(n) 全帧扫描), 现整圈只算一次并复用,
+  减少 ~8 次冗余 O(n) 扫描 (600 帧单圈 `compute_all` ~26.8ms)。
+
 ### 遥测分析 DRS 语义修正 (Iter-265)
 - **`drs_analysis` 改用 `drs_active` (实际激活, m_drs)**：原 `_field_multi` 元组
   把幻影字段 `drs` 放首位, 实际落到 `drs_allowed` (仅"此区段允许"), 会把整个
