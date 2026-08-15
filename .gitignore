@@ -46,3 +46,7 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Temp helper scripts
+_tmp_*.ps1
+_tmp_*.py
