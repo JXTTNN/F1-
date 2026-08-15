@@ -217,7 +217,15 @@ class TelemetryListener:
             self._transport = None
 
     # ------------------------------------------------------------------ #
-    # Internal: recv path (synchronous — never blocks the event loop)
+    # Internal: recv path (synchronous)
+    #
+    # NOTE: parse_packet() runs synchronously here (Motion ≈ 75µs/packet,
+    # dominated by 22-car dict construction). This briefly blocks the event
+    # loop and caps sustained throughput at ~13k pps — far above the real
+    # 60 Hz F1 rate, but below the 25k pps artificial stress flood (~63%
+    # delivered on Windows). Future optimization: move body parsing into the
+    # dispatch loop (async) or vectorize with numpy so this callback only
+    # enqueues raw bytes.
     # ------------------------------------------------------------------ #
     def _on_datagram(self, data: bytes, addr: tuple[str, int]) -> None:
         self.received += 1
