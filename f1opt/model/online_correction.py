@@ -54,7 +54,7 @@ class _Observation:
     推进圈), 0.3=低 (练习赛安装圈). 影响核加权修正的权重 (quality * distance_weight).
     """
 
-    setup_vec: np.ndarray  # 归一化 [0,1]^19
+    setup_vec: np.ndarray  # 归一化 [0,1]^21
     track_id: str
     driver_vec: np.ndarray  # 8 维
     observed_lap: float  # 实测圈速 (秒)
@@ -177,8 +177,8 @@ def corrected_lap_time(
     inv_2sig_driver_sq = 0.5 / (sigma_driver * sigma_driver)
 
     for obs in obs_list:
-        # Iter-80: 异常观测过滤 — 残差绝对值 > 3.0s 的观测视为 outlier (交通/
-        # 黄旗/失误污染), 不参与修正. 防止一个污染圈把修正拉偏.
+        # Iter-80/164.21: 异常观测过滤 — 残差绝对值 > 5.0s 的观测视为 outlier
+        # (交通/黄旗/失误污染), 不参与修正. 防止一个污染圈把修正拉偏.
         if abs(obs.residual) > _OUTLIER_RESIDUAL_THRESHOLD_S:
             continue
         d_setup_sq = float(np.sum((obs.setup_vec - setup_vec) ** 2))

@@ -4,6 +4,15 @@
 
 ## 2026-08 优化迭代
 
+### 修复训练物理一致性 loss 的 driver 向量错位 (Iter-271)
+- **关键 bug**：`_DRIVER_VEC_START=29` / `_DRIVER_VEC_END=37` 硬编码, 假设
+  SETUP_DIM=19。`active_aero_mode`/`x_mode_activations` 加入后 INPUT_DIM 37→39,
+  driver 段实际在 [31:39]。旧值 [29:37] 会**覆盖末尾 2 维 track-context 且漏掉
+  末尾 2 维 driver**, 使"AGGR 应快于 CONS"的物理一致性 loss 计算错误。
+- 改为 `SETUP_DIM + TRACK_CONTEXT_DIM` / `INPUT_DIM` 动态派生；同步修正
+  `online_correction.py` 的 `[0,1]^19` 与 outlier 阈值注释 (3.0s→5.0s)。
+- 测试：`tests/model/test_train.py` 26 passed (训练循环验证)。
+
 ### 车手反馈中文叙事补全 (Iter-270)
 - `brake_temp` / `tyre_temp_gradient` / `grip_consistency` 三个维度此前有中文
   标签但无中文叙事器, 落回通用 "方面：value。" 模板。现补全专属叙事函数并注册,

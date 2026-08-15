@@ -43,9 +43,11 @@ from f1opt.data.setup_schema import DEFAULT_SETUP, SETUP_FIELDS, CarSetup
 from f1opt.data.tracks import ALL_TRACKS, Track
 from f1opt.model.surrogate import (
     AVG_SPEED,
+    INPUT_DIM,
     MODEL_VERSION,
     RESPONSE_SCALES,
     SETUP_DIM,
+    TRACK_CONTEXT_DIM,
     EnsembleSurrogateModel,
     SurrogateModel,
     build_input_vector,
@@ -724,9 +726,11 @@ def generate_dataset(
 
 # --- 训练 -------------------------------------------------------------------
 
-# Iter-123: 物理一致性 loss 的 driver 向量索引 (在 37 维输入中, driver 在最后 8 维).
-_DRIVER_VEC_START = 29  # SETUP_DIM(19) + TRACK_CONTEXT_DIM(10) = 29
-_DRIVER_VEC_END = 37    # + DRIVER_DIM(8) = 37
+# Iter-123: 物理一致性 loss 的 driver 向量索引 (driver 在输入向量的最后 8 维).
+# Iter-271: 不再硬编码 29/37 (SETUP_DIM 19->21 后 driver 段实际在 [31:39]);
+# 硬编码 29 会覆盖末尾 2 维 track-context 且漏掉末尾 2 维 driver。
+_DRIVER_VEC_START = SETUP_DIM + TRACK_CONTEXT_DIM  # 21 + 10 = 31
+_DRIVER_VEC_END = INPUT_DIM  # 39
 
 
 def _add_gradient_noise(model: SurrogateModel, std: float) -> None:
@@ -794,7 +798,7 @@ def _physics_consistency_loss(
 
     Args:
         model: SurrogateModel (用于前向计算).
-        x: 输入张量 ``(N, 37)``.
+        x: 输入张量 ``(N, INPUT_DIM)``.
         aggr_vec: 激进车手 driver 向量 ``(8,)``.
         cons_vec: 保守车手 driver 向量 ``(8,)``.
         margin: hinge 容差 (秒, 残差空间).
