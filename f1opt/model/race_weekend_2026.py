@@ -128,7 +128,13 @@ class RaceWeekend2026:
     track_temp_c: float = 30.0  # EA F1 2026 赛道温度 (°C)
     ambient_temp_c: float = 25.0  # 环境温度 (°C)
 
-    _report: WeekendReport2026 | None = None
+    _report: WeekendReport2026 = field(init=False, repr=False)
+
+    def __post_init__(self) -> None:
+        # 初始化非 None 报告容器 (消除 transient None 状态, 便于类型收窄).
+        self._report = WeekendReport2026(
+            track_id=self.track_id, team_id=self.team_id
+        )
 
     # ------------------------------------------------------------------ #
     def run(self) -> WeekendReport2026:

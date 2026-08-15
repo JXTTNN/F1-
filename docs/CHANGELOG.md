@@ -202,6 +202,12 @@
   新增 `.badge.warn` 样式。新用户开箱即可知道如何让游戏遥测接入, 而非面对
   「收包 0」无从下手。
 
+### 类型安全 (mypy 继续收敛 60 → 52)
+- `race_weekend_2026.py`：`_report` 字段标注 `WeekendReport2026 | None` 导致
+  6 处 `union-attr` 错误。改为 `field(init=False)` + `__post_init__` 初始化非
+  None 报告容器, 消除 transient None 状态 (正确性改进, 非仅标注)。
+  race_weekend 29 passed。
+
 ---
 
 ## 已知限制 (Known Limitations)
