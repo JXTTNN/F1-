@@ -476,11 +476,11 @@ def cmd_serve(args: argparse.Namespace) -> int:
         if args.extended:
             from f1opt.api.extended_app import create_extended_app
 
-            app = create_extended_app(start_listener=False)
+            app = create_extended_app(start_listener=True)
         else:
             from f1opt.api.app import create_app
 
-            app = create_app(start_listener=False)
+            app = create_app(start_listener=True)
         # Windows: 使用 windows_events 兼容的事件循环
         if sys.platform == "win32":
             uvicorn.run(app, host=args.host, port=args.port, loop="asyncio")

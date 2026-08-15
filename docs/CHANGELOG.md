@@ -68,6 +68,17 @@
 
 ---
 
+## 2026-08 第三轮优化 (点开就能用)
+
+### 模块衔接 (关键修复)
+- **修复 `f1opt serve` 遥测监听器未启动**：`cmd_serve` 此前硬编码
+  `start_listener=False`，导致启动 API 后 UDP 遥测端口 (20777) 从未绑定、
+  `/api/health` 恒报 `udp_listening:false`，F1 2026 游戏遥测无法接入。
+  改为 `start_listener=True`，监听失败仍优雅降级 (API 保持可用)。
+  实测 `f1opt serve` + `GET /api/health` 返回 `udp_listening:true`。
+
+---
+
 ## 已知限制 (Known Limitations)
 
 - **UDP 洪泛吞吐**：body 解析（Motion ≈ 75µs，22 车字典构造）仍在事件循环上，
