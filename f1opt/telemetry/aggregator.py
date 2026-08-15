@@ -68,7 +68,7 @@ class _LapState:
     ers_deploy_sum: float = 0.0
     active_aero_x_sum: float = 0.0  # Iter-191: F1 2026 X-Mode 位置累计
     active_aero_z_sum: float = 0.0  # Iter-191: F1 2026 Z-Mode 位置累计
-    active_aero_count: int = 0  # Iter-254: CarStatus 样本数 (与 num_samples 不同率)
+    car_status_count: int = 0  # Iter-255: CarStatus 样本数 (与 num_samples 不同率)
     max_tyre_wear: float = 0.0
     num_samples: int = 0
     dirty: bool = False  # set True if flashback detected mid-lap
@@ -281,7 +281,7 @@ class LapAggregator:
             # Iter-191: F1 2026 主动空力 (X=低阻/Z=高下压力 位置) 累计
             state.active_aero_x_sum += _safe_float(c.get("m_activeAeroX"))
             state.active_aero_z_sum += _safe_float(c.get("m_activeAeroZ"))
-            state.active_aero_count += 1  # Iter-254: 独立计数, 与 num_samples 不同率
+            state.car_status_count += 1  # Iter-255: 独立计数, 与 num_samples 不同率
 
     def _on_car_damage(
         self, header: PacketHeader, parsed: dict[str, Any]
@@ -335,9 +335,10 @@ class LapAggregator:
             "avg_speed": state.speed_sum / n,
             "avg_throttle": state.throttle_sum / n,
             "avg_brake": state.brake_sum / n,
-            "avg_ers_deploy": state.ers_deploy_sum / n,
-            "avg_active_aero_x": state.active_aero_x_sum / max(state.active_aero_count, 1),  # Iter-191/254
-            "avg_active_aero_z": state.active_aero_z_sum / max(state.active_aero_count, 1),  # Iter-191/254
+            # Iter-255: ERS/主动空力均来自 CarStatus (20Hz), 用 car_status_count 而非 num_samples
+            "avg_ers_deploy": state.ers_deploy_sum / max(state.car_status_count, 1),
+            "avg_active_aero_x": state.active_aero_x_sum / max(state.car_status_count, 1),
+            "avg_active_aero_z": state.active_aero_z_sum / max(state.car_status_count, 1),
             "max_tyre_wear": state.max_tyre_wear,
             "track_id": int(track_id),
             "weather": int(weather),

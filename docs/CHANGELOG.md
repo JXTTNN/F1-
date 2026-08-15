@@ -4,6 +4,14 @@
 
 ## 2026-08 优化迭代
 
+### 遥测聚合分母修正 (Iter-255)
+- **修复 `avg_ers_deploy` 分母错误**：ERS 累计值来自 CarStatus (20Hz)，却按
+  CarTelemetry 的 `num_samples` (60Hz) 求平均，导致被稀释约 3×（与 Iter-254
+  主动空力同源 bug）。现与 `avg_active_aero_x/z` 统一用独立的 `car_status_count`。
+- `_LapState.active_aero_count` 更名 `car_status_count`（语义更清晰：CarStatus 样本数，
+  同时服务于 ERS 与主动空力三字段）。
+- 测试 `test_active_aero_averaged_and_exported` 扩展覆盖 `avg_ers_deploy`。
+
 ### Windows 兼容性
 - **修复 CLI 入口点缺失**：添加 `[project.scripts]` 与 `cli.py` 的 `__main__` 块，
   修复 `f1opt` 命令不存在、以及 **EXE 打包后启动即退出** 的严重 bug。
