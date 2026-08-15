@@ -227,12 +227,18 @@ def _emit_lap(state: _TelemetryState, row: dict[str, Any]) -> None:
     s1 = state.last_sector1_ms
     s2 = state.last_sector2_ms
     s3 = max(0, lap_ms - s1 - s2)
+    # track_id: aggregator row 的 track_id 是 int8 (-1=未知). 若未知, 用 state.current_track_id.
+    track_id_int = int(row.get("track_id", -1))
+    if 0 <= track_id_int < len(ALL_TRACKS):
+        track_id = ALL_TRACKS[track_id_int].track_id
+    else:
+        track_id = state.current_track_id
     msg: dict[str, Any] = {
         "type": "lap",
         "lap_time": lap_ms / 1000.0,
         "clean": bool(row.get("clean", True)),
         "sector_times": [s1 / 1000.0, s2 / 1000.0, s3 / 1000.0],
-        "track_id": None,
+        "track_id": track_id,
     }
     state.manager.broadcast(msg)
 

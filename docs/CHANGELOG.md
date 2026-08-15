@@ -132,6 +132,9 @@
   UI 指示器也读取 `active_aero_x/z`, 但中间的 `_frame_to_ws` 投影漏掉了这两个
   字段, 导致 UI 的 X-Mode/Z-Mode 指示器**永远显示 "—"**。补上后 UI 指示器正常。
   新增 `test_frame_to_ws_includes_active_aero` 回归测试。
+- **修复 lap 广播消息 `track_id` 硬编码 None**：`_emit_lap` 此前固定
+  `track_id=None`, 现按 aggregator row 的 int8 track_id 解析, 未知时回退
+  `state.current_track_id`, 与 `_feed_observation_buffer` 的解析逻辑一致。
 
 ---
 
