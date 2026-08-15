@@ -152,7 +152,7 @@ def _dim_by_name(out: dict, name: str) -> dict:
 # FEEDBACK_DIMENSIONS constant
 # --------------------------------------------------------------------------- #
 def test_feedback_dimensions_constant_has_16_entries() -> None:
-    assert len(FEEDBACK_DIMENSIONS) == 19  # Iter-256: +active_aero_usage
+    assert len(FEEDBACK_DIMENSIONS) == 20  # Iter-260: +ers_sector_efficiency
     assert FEEDBACK_DIMENSIONS == [
         "balance",
         "grip",
@@ -173,6 +173,7 @@ def test_feedback_dimensions_constant_has_16_entries() -> None:
         "tyre_temp_gradient",  # Iter-227
         "grip_consistency",  # Iter-241
         "active_aero_usage",  # Iter-256
+        "ers_sector_efficiency",  # Iter-260
     ]
 
 
@@ -192,7 +193,7 @@ def test_dimensions_all_10_names_in_order() -> None:
     out = generate_feedback(_scripted_frames(), DEFAULT_SETUP.model_dump(), "melbourne")
     names = [d["name"] for d in out["dimensions"]]
     assert names == FEEDBACK_DIMENSIONS
-    assert len(names) == 19  # Iter-256: +active_aero_usage
+    assert len(names) == 20  # Iter-260: +ers_sector_efficiency
     # Each dimension has the required keys.
     for d in out["dimensions"]:
         assert set(d.keys()) == {"name", "value", "evidence", "advice"}
@@ -245,6 +246,24 @@ def test_ers_deployment_dimension_reads_aligned_field() -> None:
     # 累计部署 = (199-0)*0.05 ≈ 9.95, 回收 ≈ 7.96 → 应出现 deploy 与 harvest 对比.
     assert "deploy" in dim["value"]
     assert "harvest" in dim["value"]
+
+
+def test_ers_sector_efficiency_dimension_wired() -> None:
+    """Iter-260: ERS 扇区效率维度应接入反馈输出 (不再死代码)。"""
+    frames = []
+    for i in range(300):
+        frames.append(
+            _frame(i, ers_deployed_this_lap=float(i) * 0.05,
+                   ers_harvested_this_lap=float(i) * 0.04,
+                   brake=0.5, lap_distance=float(i))
+        )
+    out = generate_feedback(frames, DEFAULT_SETUP.model_dump(), "monza")
+    dim = _dim_by_name(out, "ers_sector_efficiency")
+    assert dim["name"] == "ers_sector_efficiency"
+    # 3 扇区各有一条 S{1,2,3}_eff=... 条目.
+    assert "S1_eff=" in dim["value"]
+    assert "S2_eff=" in dim["value"]
+    assert "S3_eff=" in dim["value"]
 
 
 def test_at_least_one_setup_suggestion_with_valid_after() -> None:

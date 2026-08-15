@@ -1015,6 +1015,39 @@ def extract_metrics(
         harvested_total = float(ers_harv[-1] - ers_harv[0])
         metrics["values"]["ers_harvested_total"] = harvested_total
         add_ref("ers_harvested_total", float(harv_t[-1]), "ers_harvested_this_lap", float(ers_harv[-1]))
+
+    # --- ERS per-sector efficiency (Iter-260) ---
+    # 将圈拆成 3 扇区 (按 lap_distance), 每扇区算部署增量 (累计能量差) /
+    # 回收 (brake>0.3 代理) 的比值, 供 _dim_ers_sector_efficiency 使用。
+    sec_dep = np.asarray(ers_deploy, dtype=np.float64)
+    sec_brk, _ = cols["brake"]
+    sec_dist, _ = cols["lap_distance"]
+    if len(sec_dep) >= 2 and len(sec_brk) >= 2 and len(sec_dist) >= 2:
+        n_sec = min(len(sec_dep), len(sec_brk), len(sec_dist))
+        dep_s = sec_dep[:n_sec]
+        brk_s = np.asarray(sec_brk[:n_sec], dtype=np.float64)
+        dist_s = np.asarray(sec_dist[:n_sec], dtype=np.float64)
+        order = np.argsort(dist_s)
+        dep_s = dep_s[order]
+        brk_s = brk_s[order]
+        dist_s = dist_s[order]
+        total_len = float(dist_s[-1] - dist_s[0])
+        sectors: list[dict[str, float]] = []
+        if total_len > 1e-3:
+            bounds = [dist_s[0] + total_len / 3.0, dist_s[0] + 2.0 * total_len / 3.0, dist_s[-1]]
+            prev = dist_s[0]
+            for bound in bounds:
+                mask = (dist_s >= prev) & (dist_s < bound + 1e-6)
+                prev = bound
+                if mask.any() and int(mask.sum()) >= 2:
+                    dep_delta = float(dep_s[mask][-1] - dep_s[mask][0])
+                    rec = float(np.sum(np.clip(brk_s[mask] - 0.3, 0.0, 1.0)))
+                    sectors.append({"efficiency": dep_delta / rec if rec > 0 else 0.0})
+                else:
+                    sectors.append({"efficiency": 0.0})
+        if len(sectors) == 3:
+            metrics["values"]["ers_sector_efficiency"] = sectors
+
     deploy_mode, mode_t = cols["ers_deploy_mode"]
     if len(deploy_mode) >= 2:
         hotlap_mask = deploy_mode == 1.0
@@ -2467,6 +2500,7 @@ def rule_based_feedback(
     suggestions.extend(sug)
     dim_ers_deployment = _dim_ers_deployment(values, refs)
     dim_drs_usage = _dim_drs_usage(values, refs)
+    dim_ers_sector = _dim_ers_sector_efficiency(values)
     dim_smoothness = _dim_smoothness(values, refs)
     dim_smoothness = _apply_personal_advice(
         dim_smoothness, profile, _smoothness_personal
@@ -2560,6 +2594,7 @@ def rule_based_feedback(
         dim_tyre_temp_grad,  # Iter-227: 轮胎温度梯度 (第 17 维)
         dim_grip_consistency,  # Iter-241: 抓地力一致性 (第 18 维)
         dim_active_aero,  # Iter-256: 主动空力使用 (第 19 维)
+        dim_ers_sector,  # Iter-260: ERS 扇区效率 (第 20 维)
     ]
 
     summary = _general_summary(metrics, dimensions, track, ref_lap)

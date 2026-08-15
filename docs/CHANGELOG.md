@@ -4,6 +4,14 @@
 
 ## 2026-08 优化迭代
 
+### 接入 ERS 扇区效率维度 (Iter-260)
+- **修复 `_dim_ers_sector_efficiency` 死代码**：该维度 (函数 + NLG + 标签) 早已实现
+  但从未接入 `rule_based_feedback` 构建器、也不在 `FEEDBACK_DIMENSIONS` 中, 且其
+  依赖的 `values["ers_sector_efficiency"]` 从未被计算 → 永远无法出现。
+- `extract_metrics` 现按 `lap_distance` 拆 3 扇区, 用 `ers_deployed_this_lap` 累计
+  差 (部署) ÷ brake 代理 (回收) 计算各扇区效率, 供维度输出 `S1/S2/S3_eff`。
+- 维度计数 19→20；测试 `test_ers_sector_efficiency_dimension_wired`。
+
 ### 模块衔接修复: ERS/DRS 字段对齐 + OpenAPI + EXE 静态资源 (Iter-259)
 - **修复 ERS/DRS 字段命名错位**：aligner 产出 `ers_deployed_this_lap` /
   `ers_harvested_this_lap`, 但反馈引擎与 analytics 读的是幻影字段
