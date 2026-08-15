@@ -27,7 +27,7 @@ from f1opt.telemetry.packets import (
     parse_packet,
 )
 
-NUM_PACKETS = 16
+NUM_PACKETS = 17  # Iter-278: +CarTelemetryData2 (packet 16)
 
 
 # --------------------------------------------------------------------------- #
@@ -261,7 +261,7 @@ class TestLapData:
 # --------------------------------------------------------------------------- #
 # CarTelemetry (id 6)
 # --------------------------------------------------------------------------- #
-_TELEM_PER_FMT = "<HfffBbHBBH4H4B4BH4f4B"
+_TELEM_PER_FMT = "<HfffBbHBBH4H4B4BB4f4B"  # Iter-278: engineTemperature 为 uint8
 _TELEM_PER_SIZE = struct.calcsize(_TELEM_PER_FMT)
 
 

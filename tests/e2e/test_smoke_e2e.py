@@ -44,8 +44,8 @@ SESSION_UID = 0x0123456789ABCDEF
 # --------------------------------------------------------------------------- #
 # Per-car struct formats — identical to the layouts in packets.py.
 _MOTION_PER = struct.Struct("<" + "fff" + "h" * 9 + "f" * 6)  # 18 fields/car
-_TELEM_PER = struct.Struct("<HfffBbHBBH4H4B4BH4f4B")          # 31 fields/car
-_STATUS_PER = struct.Struct("<BBBBBfffHHBBHBBbbfBfffB")       # 23 fields/car
+_TELEM_PER = struct.Struct("<HfffBbHBBH4H4B4BB4f4B")          # 31 fields/car (Iter-278)
+_STATUS_PER = struct.Struct("<BBBBBfffHHBBHBBBbfffBffffB")    # 26 fields/car (Iter-278)
 _MOTION_TRAILER = struct.Struct("<30f")                        # player-only section
 _TELEM_TRAILER = struct.Struct("<BBB")                         # mfdPanel + suggestedGear
 
@@ -117,8 +117,9 @@ def _status_packet(
         12000, 4000,                                # maxRPM, idleRPM
         8, int(drs_allowed), 0,                     # maxGears, drsAllowed, drsActivationDistance
         16, 16, 0, 0,                               # tyre compounds, ageLaps, fiaFlags
+        0.0, 0.0,                                   # enginePowerICE, enginePowerMGUK (Iter-278)
         float(ers_store), 0,                        # ersStoreEnergy, ersDeployMode
-        0.0, 0.0, 0.0, 0,                           # ers harvest/deploy, networkPaused
+        0.0, 0.0, 0.0, 0.0, 0,                      # harvest MGUK/MGUH/limit, deployed, networkPaused
     )
     body = _STATUS_PER.pack(*car0)
     full = NUM_CARS * _STATUS_PER.size

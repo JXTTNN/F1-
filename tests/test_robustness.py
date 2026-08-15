@@ -408,7 +408,7 @@ class TestPacketParserEdgeCases:
 
     def test_parse_car_status_invalid_ers_deploy_mode_handled(self) -> None:
         """ersDeployMode=255 (invalid semantically) is parsed without crashing."""
-        status_per_fmt = "<BBBBBfffHHBBHBBbbfBfffB"
+        status_per_fmt = "<BBBBBfffHHBBHBBBbfffBffffB"  # Iter-278
         per_size = struct.calcsize(status_per_fmt)
         car0_vals = (
             1, 1, 2, 50, 0,        # BBBBB: traction, abs, fuelMix, frontBrakeBias, pitLimiter
@@ -417,10 +417,11 @@ class TestPacketParserEdgeCases:
             8, 1,                  # BB: maxGears, drsAllowed
             500,                   # H: drsActivationDistance
             22, 22,                # BB: actualTyreCompound, visualTyreCompound
-            3, 0,                  # bb: tyresAgeLaps, vehicleFiaFlags
+            3, 0,                  # Bb: tyresAgeLaps, vehicleFiaFlags
+            400000.0, 350000.0,    # ff: enginePowerICE, enginePowerMGUK (Iter-278)
             50.0,                  # f: ersStoreEnergy
             255,                   # B: ersDeployMode = 255 (out-of-range semantically)
-            10.0, 20.0, 30.0,      # fff: ersHarvestedMGUK, MGUH, deployed
+            10.0, 20.0, 8.5, 30.0,  # ffff: ersHarvestedMGUK, MGUH, harvestLimit, deployed
             0,                     # B: networkPaused
         )
         car0_bytes = struct.pack(status_per_fmt, *car0_vals)
@@ -643,7 +644,7 @@ class TestFeedbackEdgeCases:
         out = generate_feedback([], DEFAULT_SETUP.model_dump(), "melbourne")
         assert isinstance(out, dict)
         assert "dimensions" in out
-        assert len(out["dimensions"]) == 18  # 12 基础维 + 6 个后续迭代新增维
+        assert len(out["dimensions"]) == 20  # Iter-278: 现为 20 维
         # Data-dependent dimensions report 数据不足.
         data_dep_dims = {
             "balance",
@@ -671,7 +672,7 @@ class TestFeedbackEdgeCases:
         }
         out = generate_feedback([frame], DEFAULT_SETUP.model_dump(), "melbourne")
         assert isinstance(out, dict)
-        assert len(out["dimensions"]) == 18  # 12 基础维 + 6 个后续迭代新增维
+        assert len(out["dimensions"]) == 20  # Iter-278: 现为 20 维
 
     def test_rule_based_feedback_all_zero_frames_does_not_crash(self) -> None:
         frames = [
@@ -693,7 +694,7 @@ class TestFeedbackEdgeCases:
         metrics = extract_metrics(frames, DEFAULT_SETUP.model_dump(), "melbourne")
         out = rule_based_feedback(metrics, DEFAULT_SETUP.model_dump(), "melbourne")
         assert isinstance(out, dict)
-        assert len(out["dimensions"]) == 18  # 12 基础维 + 6 个后续迭代新增维
+        assert len(out["dimensions"]) == 20  # Iter-278: 现为 20 维
 
     def test_extract_metrics_empty_list_returns_n_frames_zero(self) -> None:
         metrics = extract_metrics([], {}, "melbourne")

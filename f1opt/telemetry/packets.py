@@ -78,6 +78,7 @@ PACKET_NAMES: dict[int, str] = {
     13: "MotionEx",
     14: "TimeTrial",
     15: "LapPositions",
+    16: "CarTelemetryData2",  # Iter-278: F1 2026 主动空力/超车
 }
 
 
@@ -462,9 +463,11 @@ CONFIDENCE_CARTELEMETRY = (
 )
 # per car: speed(H) throttle(f) steer(f) brake(f) clutch(B) gear(b) engineRPM(H)
 # drs(B) revLightsPercent(B) revLightsBitValue(H) brakesTemperature[4](H) 
-# tyresSurfaceTemperature[4](B) tyresInnerTemperature[4](B) engineTemperature(H)
+# tyresSurfaceTemperature[4](B) tyresInnerTemperature[4](B) engineTemperature(B)
 # tyresPressure[4](f) surfaceType[4](B)
-_TELEM_PER = "HfffBbHBBH4H4B4BH4f4B"
+# Iter-278: engineTemperature 权威规范为 uint8 (B), 旧版误作 uint16 (H) 导致
+# tyresPressure/surfaceType 错位 1 字节。
+_TELEM_PER = "HfffBbHBBH4H4B4BB4f4B"
 _TELEM_BODY = struct.Struct("<" + _TELEM_PER * NUM_CARS + "BBB")
 
 
@@ -566,6 +569,14 @@ def parse_car_telemetry_2(data: bytes) -> dict[str, Any]:
     """Parse PacketCarTelemetryData2 (packet id 16) — F1 2026 主动空力 + 超车."""
     vals = _unpack_body(data, _CT2_BODY)
     return {"m_carTelemetryData2": _cars(vals, len(_CT2_NAMES), _CT2_NAMES)}
+
+
+CONFIDENCE_CARTELEMETRY2 = (
+    "HIGH — PacketCarTelemetryData2 (packet id 16) per MacManley/f1-26-udp 权威规范. "
+    "含 m_activeAeroMode (0=Corner/Z / 1=Straight/X), m_activeAeroAvailable, "
+    "m_activeAeroActivationDistance, m_overtakeAvailable/Active, "
+    "m_overtakeActivationDistance, m_2026Regulations, m_drivingWrongWay."
+)
 
 
 # --------------------------------------------------------------------------- #
@@ -911,6 +922,7 @@ CONFIDENCE: dict[int, str] = {
     13: CONFIDENCE_MOTIONEX,
     14: CONFIDENCE_TIMETRIAL,
     15: CONFIDENCE_LAPPOSITIONS,
+    16: CONFIDENCE_CARTELEMETRY2,
 }
 
 
@@ -938,7 +950,7 @@ _EXPECTED_BODY_SIZES: dict[int, int] = {
     3: 4,      # Event (min: 4-byte code)
     4: 1122,   # Participants
     5: 1078,   # CarSetups
-    6: 1307,   # CarTelemetry
+    6: 1301,   # CarTelemetry: 59 bytes/car × 22 + 3 trailer (Iter-278)
     7: 1298,   # CarStatus: 59 bytes/car × 22 (Iter-278, 权威规范)
     8: 1013,   # FinalClassification: 1042 - 29
     9: 925,    # LobbyInfo: 954 - 29

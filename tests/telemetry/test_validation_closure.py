@@ -46,7 +46,7 @@ from f1opt.telemetry.validation import (
 SESSION_UID = 0x123456789ABCDEF0
 
 # CarTelemetry per-car struct format (must match f1opt/telemetry/packets.py).
-_TELEM_PER_FMT = "<HfffBbHBBH4H4B4BH4f4B"
+_TELEM_PER_FMT = "<HfffBbHBBH4H4B4BB4f4B"  # Iter-278
 _TELEM_PER_SIZE = struct.calcsize(_TELEM_PER_FMT)
 
 

@@ -4,6 +4,14 @@
 
 ## 2026-08 优化迭代
 
+### CarTelemetry engineTemperature 线格式修正 + 测试同步 (Iter-279)
+- 按权威规范, `m_engineTemperature` 是 uint8 (B), 旧解析器误作 uint16 (H) 导致
+  `m_tyresPressure`/`m_surfaceType` 错位 1 字节。修正格式串为 59 字节/车。
+- Packet 16 补充 `CONFIDENCE_CARTELEMETRY2` 置信度注释; `PACKET_NAMES` 加入
+  CarTelemetryData2。
+- 同步更新 6 个测试文件的旧线格式/维度计数/版本号断言 (test_packets/test_smoke/
+  test_robustness/test_e2e_scenarios/test_validation_closure/test_smoke_e2e)。
+
 ### 修复 CarStatus 线格式错位 (Iter-278) — 关键 bug
 - **按 MacManley/f1-26-udp 权威规范**核对 CarStatus 结构, 发现严重错位：
   旧解析器缺失 `m_enginePowerICE` / `m_enginePowerMGUK` / `m_ersHarvestLimitPerLap`
