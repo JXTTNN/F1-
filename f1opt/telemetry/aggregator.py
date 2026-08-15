@@ -64,6 +64,8 @@ class _LapState:
     throttle_sum: float = 0.0
     brake_sum: float = 0.0
     ers_deploy_sum: float = 0.0
+    active_aero_x_sum: float = 0.0  # Iter-191: F1 2026 X-Mode 位置累计
+    active_aero_z_sum: float = 0.0  # Iter-191: F1 2026 Z-Mode 位置累计
     max_tyre_wear: float = 0.0
     num_samples: int = 0
     dirty: bool = False  # set True if flashback detected mid-lap
@@ -273,6 +275,9 @@ class LapAggregator:
                 continue
             # Iter-124: _safe_float handles None (explicit null) defensively.
             state.ers_deploy_sum += _safe_float(c.get("m_ersDeployedThisLap"))
+            # Iter-191: F1 2026 主动空力 (X=低阻/Z=高下压力 位置) 累计
+            state.active_aero_x_sum += _safe_float(c.get("m_activeAeroX"))
+            state.active_aero_z_sum += _safe_float(c.get("m_activeAeroZ"))
 
     def _on_car_damage(
         self, header: PacketHeader, parsed: dict[str, Any]
@@ -327,6 +332,8 @@ class LapAggregator:
             "avg_throttle": state.throttle_sum / n,
             "avg_brake": state.brake_sum / n,
             "avg_ers_deploy": state.ers_deploy_sum / n,
+            "avg_active_aero_x": state.active_aero_x_sum / n,  # Iter-191
+            "avg_active_aero_z": state.active_aero_z_sum / n,  # Iter-191
             "max_tyre_wear": state.max_tyre_wear,
             "track_id": int(track_id),
             "weather": int(weather),
