@@ -252,7 +252,7 @@ CONFIDENCE_SESSION = (
     "MEDIUM — follows F1 24 layout (WeatherForecastSample = 7B with rainPercentage "
     "+ weatherDelta). F1 25 delta did not list Session changes."
 )
-_WFS_FMT = "BBBbbBb"  # sessionType, timeOffset, weather, trackTemp, airTemp, rain%, weatherDelta
+_WFS_FMT = "BBBbbbbB"  # Iter-281: sessionType, timeOffset, weather, trackTemp, trackTempChange, airTemp, airTempChange, rain% (权威 8 字段)
 _SESSION_BODY = struct.Struct(
     "<"
     + "BbbBHBbBHHBBBBBBB"  # weather..numMarshalZones (16 fields, includes m_formula)
@@ -281,10 +281,11 @@ def parse_session(data: bytes) -> dict[str, Any]:
     for _ in range(20):
         wfs.append({
             "m_sessionType": v[i], "m_timeOffset": v[i + 1], "m_weather": v[i + 2],
-            "m_trackTemperature": v[i + 3], "m_airTemperature": v[i + 4],
-            "m_rainPercentage": v[i + 5], "m_weatherDelta": v[i + 6],
+            "m_trackTemperature": v[i + 3], "m_trackTemperatureChange": v[i + 4],
+            "m_airTemperature": v[i + 5], "m_airTemperatureChange": v[i + 6],
+            "m_rainPercentage": v[i + 7],
         })
-        i += 7
+        i += 8
     (forecast_acc, ai_diff, season_link, weekend_link) = v[i], v[i + 1], v[i + 2], v[i + 3]
     i += 4
     assists = v[i:i + 12]

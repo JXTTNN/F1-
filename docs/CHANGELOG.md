@@ -4,6 +4,12 @@
 
 ## 2026-08 优化迭代
 
+### 修复 Session 天气预报样本线格式 (Iter-281b)
+- WeatherForecastSample 权威规范为 8 字段 (trackTemp + trackTempChange + airTemp +
+  airTempChange + rain%), 旧版 `_WFS_FMT` 仅 7 字段 (把两个 change 合并为
+  weatherDelta), 导致每个样本错位 1 字节, 20 个样本累计 20 字节错位 →
+  forecastAccuracy 及之后字段全部错位。已改为 8 字段。
+
 ### 修复 LapData 线格式错位 (Iter-281) — 关键 bug
 - 按权威规范核对 LapData: 扇区时间/与前车差距/与领跑差距均拆分为 MSPart(uint16)+
   MinutesPart(uint8), 且位于 lapDistance/totalDistance/safetyCarDelta 之前; 另有
