@@ -4,6 +4,14 @@
 
 ## 2026-08 优化迭代
 
+### 修复 LapData 线格式错位 (Iter-281) — 关键 bug
+- 按权威规范核对 LapData: 扇区时间/与前车差距/与领跑差距均拆分为 MSPart(uint16)+
+  MinutesPart(uint8), 且位于 lapDistance/totalDistance/safetyCarDelta 之前; 另有
+  speedTrapFastestSpeed(f) + speedTrapFastestLap(B)。旧版误作 HH + fff 紧跟扇区后,
+  导致 **lapDistance 起全部字段错位 8 字节**, 且缺失 delta 与 speedTrap 字段。
+- 修正为 33 字段 / 57 字节每车; `parse_lap_data` 组合 MSPart+MinutesPart 为完整
+  `m_sector1/2TimeInMS` + `m_deltaToCarInFront/RaceLeaderInMS` (供 aligner/aggregator)。
+
 ### 主动空力消费者迁移到 active_aero_mode (Iter-280)
 - 主动空力遥测现来自 Packet 16 的 `m_activeAeroMode` (0=Corner/Z / 1=Straight/X),
   全链路消费者已从遗留 `active_aero_x/z` (无源) 迁移：

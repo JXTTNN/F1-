@@ -217,7 +217,7 @@ class TestSession:
 # --------------------------------------------------------------------------- #
 # LapData (id 2)
 # --------------------------------------------------------------------------- #
-_LAP_PER_FMT = "<IIHHfff" + "B" * 15 + "HHB"
+_LAP_PER_FMT = "<IIHBHBHBHBfff" + "B" * 15 + "HHBfB"  # Iter-281
 _LAP_PER_SIZE = struct.calcsize(_LAP_PER_FMT)
 
 
@@ -234,8 +234,10 @@ class TestLapData:
         car0_vals = (
             95000,   # lastLapTimeInMS (I)
             30000,   # currentLapTimeInMS (I)
-            30000,   # sector1TimeInMS (H)
-            30000,   # sector2TimeInMS (H)
+            30000, 0,  # sector1TimeInMSPart (H) + MinutesPart (B)
+            30000, 0,  # sector2TimeInMSPart (H) + MinutesPart (B)
+            0, 0,      # deltaToCarInFrontInMSPart + MinutesPart
+            0, 0,      # deltaToRaceLeaderInMSPart + MinutesPart
             1500.0,  # lapDistance (f)
             1500.0,  # totalDistance (f)
             0.0,     # safetyCarDelta (f)
@@ -245,8 +247,10 @@ class TestLapData:
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  # 13 remaining B fields
             # HHB: pitLaneTimeInLaneInMS, pitStopTimerInMS, pitStopShouldServePen
             0, 0, 0,
+            # fB: speedTrapFastestSpeed, speedTrapFastestLap
+            0.0, 0,
         )
-        assert len(car0_vals) == 25
+        assert len(car0_vals) == 33
         car0_bytes = struct.pack(_LAP_PER_FMT, *car0_vals)
         body = car0_bytes + b"\x00" * (_LAP_PER_SIZE * (NUM_CARS - 1))
         _, p = parse_packet(make_packet(2, body))

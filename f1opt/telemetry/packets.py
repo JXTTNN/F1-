@@ -336,21 +336,25 @@ CONFIDENCE_LAPDATA = (
     "MEDIUM — per-car LapData follows F1 23/24 layout. Exposes lap times, sector "
     "times, lap distance, current lap num, position, lap-invalid flag."
 )
-# per car: lastLap(I) currentLap(I) sector1(H) sector2(H) lapDistance(f) totalDistance(f)
-# safetyCarDelta(f) carPosition(B) currentLapNum(B) pitStatus(B) numPitStops(B) sector(B)
-# currentLapInvalid(B) penalties(B) totalWarnings(B) cornerCuttingWarnings(B)
-# numUnservedDriveThroughPens(B) numUnservedStopGoPens(B) gridPosition(B) driverStatus(B)
-# resultStatus(B) pitLaneTimerActive(B) pitLaneTimeInLaneInMS(H) pitStopTimerInMS(H)
-# pitStopShouldServePen(B)
-_LAP_PER = "IIHHfff" + "B" * 15 + "HHB"
+# Iter-281: 按 MacManley/f1-26-udp 权威规范修正 LapData 线格式。
+# 扇区时间/与前车差距/与领跑差距均拆分为 MSPart(uint16) + MinutesPart(uint8),
+# 且位于 lapDistance/totalDistance/safetyCarDelta 之前; 旧版误作 HH(无分钟) +
+# fff 直接跟在扇区后, 导致 lapDistance 起全部错位 8 字节, 且缺失 delta 与
+# speedTrapFastest 字段。
+_LAP_PER = "IIHBHBHBHBfff" + "B" * 15 + "HHBfB"
 _LAP_NAMES = (
-    "m_lastLapTimeInMS", "m_currentLapTimeInMS", "m_sector1TimeInMS", "m_sector2TimeInMS",
+    "m_lastLapTimeInMS", "m_currentLapTimeInMS",
+    "m_sector1TimeInMSPart", "m_sector1TimeMinutesPart",
+    "m_sector2TimeInMSPart", "m_sector2TimeMinutesPart",
+    "m_deltaToCarInFrontInMSPart", "m_deltaToCarInFrontInMinutesPart",
+    "m_deltaToRaceLeaderInMSPart", "m_deltaToRaceLeaderInMinutesPart",
     "m_lapDistance", "m_totalDistance", "m_safetyCarDelta", "m_carPosition",
     "m_currentLapNum", "m_pitStatus", "m_numPitStops", "m_sector",
     "m_currentLapInvalid", "m_penalties", "m_totalWarnings", "m_cornerCuttingWarnings",
     "m_numUnservedDriveThroughPens", "m_numUnservedStopGoPens", "m_gridPosition",
     "m_driverStatus", "m_resultStatus", "m_pitLaneTimerActive",
     "m_pitLaneTimeInLaneInMS", "m_pitStopTimerInMS", "m_pitStopShouldServePen",
+    "m_speedTrapFastestSpeed", "m_speedTrapFastestLap",
 )
 _LAPDATA_BODY = struct.Struct("<" + _LAP_PER * NUM_CARS)
 
@@ -358,7 +362,14 @@ _LAPDATA_BODY = struct.Struct("<" + _LAP_PER * NUM_CARS)
 def parse_lap_data(data: bytes) -> dict[str, Any]:
     """Parse PacketLapData (packet id 2)."""
     vals = _unpack_body(data, _LAPDATA_BODY)
-    return {"m_lapData": _cars(vals, len(_LAP_NAMES), _LAP_NAMES)}
+    cars = _cars(vals, len(_LAP_NAMES), _LAP_NAMES)
+    # Iter-281: 组合 MSPart + MinutesPart 为完整 ms 值 (供 aligner/aggregator 使用)。
+    for c in cars:
+        c["m_sector1TimeInMS"] = int(c["m_sector1TimeMinutesPart"]) * 60000 + int(c["m_sector1TimeInMSPart"])
+        c["m_sector2TimeInMS"] = int(c["m_sector2TimeMinutesPart"]) * 60000 + int(c["m_sector2TimeInMSPart"])
+        c["m_deltaToCarInFrontInMS"] = int(c["m_deltaToCarInFrontInMinutesPart"]) * 60000 + int(c["m_deltaToCarInFrontInMSPart"])
+        c["m_deltaToRaceLeaderInMS"] = int(c["m_deltaToRaceLeaderInMinutesPart"]) * 60000 + int(c["m_deltaToRaceLeaderInMSPart"])
+    return {"m_lapData": cars}
 
 
 # --------------------------------------------------------------------------- #
@@ -946,7 +957,7 @@ def parse_packet(data: bytes) -> tuple[PacketHeader, dict[str, Any]]:
 _EXPECTED_BODY_SIZES: dict[int, int] = {
     0: 1320,   # Motion: 1349 - 29
     1: 614,    # Session (approx)
-    2: 1078,   # LapData
+    2: 1254,   # LapData: 57 bytes/car × 22 (Iter-281, 权威规范)
     3: 4,      # Event (min: 4-byte code)
     4: 1122,   # Participants
     5: 1078,   # CarSetups
