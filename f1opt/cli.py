@@ -601,14 +601,16 @@ def cmd_feedback(args: argparse.Namespace) -> int:
             frames = _json.load(f)
 
     try:
-        from f1opt.feedback.engine import FeedbackEngine
-        engine = FeedbackEngine()
-        result = engine.generate_feedback(
+        from f1opt.data.setup_schema import DEFAULT_SETUP
+        from f1opt.feedback.engine import generate_feedback
+
+        result = generate_feedback(
+            frames=frames if frames else [],
+            setup=DEFAULT_SETUP.model_dump(),
             track_id=args.track or "",
-            frames=frames if frames else None,
-            driver_question=args.question or "",
-            session_id=args.session_id or "default",
+            question=args.question,
             driver_profile=dp,
+            session_id=args.session_id,
         )
         _print(result, args.json)
         return 0

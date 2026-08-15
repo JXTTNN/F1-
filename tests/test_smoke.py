@@ -182,7 +182,6 @@ class TestCLIEntryPoint:
         ret = args.func(args)
         assert ret == 0
 
-    @pytest.mark.xfail(reason="CLI cmd_feedback calls engine.generate_feedback() which does not exist")
     def test_cli_feedback(self):
         """验证 feedback 子命令 (规则引擎)."""
         from f1opt.cli import build_parser
