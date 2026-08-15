@@ -185,6 +185,8 @@ class GapFiller:
                 filled[key] = None
                 continue
 
+            # 走到这里 prev_val / curr_val 必非 None (4 种组合已全部 continue).
+            assert prev_val is not None and curr_val is not None
             # Linear interpolation for float fields
             if key in self._float_fields:
                 try:

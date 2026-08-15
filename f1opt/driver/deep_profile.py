@@ -652,7 +652,7 @@ class DeepDriverProfiler:
         lts = [lm.get("lap_time") for lm in self.lap_metrics]
         lts = [float(v) for v in lts if v is not None and float(v) > 0.0]
         if lts:
-            base_lap_time = float(min(lts))
+            base_lap_time = float(min(lts))  # type: ignore[type-var, arg-type]
 
         fatigue = FatigueModel(base_lap_time=base_lap_time, stint_length_laps=30)
         fatigue_projection: dict[str, Any] = {

@@ -222,6 +222,12 @@
   (20000 样本)。60Hz WS 广播热路径 (latest_unified_frame) 进一步提速。
   遥测 359 + e2e smoke 10 = 369 passed。
 
+### 类型安全 (mypy 继续收敛 50 → 46)
+- `gap_filler.py`：线性插值前补 `assert prev_val/curr_val 非 None` (帮助
+  mypy 收窄 4 种 None 组合)。
+- `nlg.py` / `deep_profile.py`：`float(after)` / `float(min(lts))` 的
+  `Any | None` 误报加定向 `type: ignore`。gap/nlg/deep_profile 91 passed。
+
 ---
 
 ## 已知限制 (Known Limitations)

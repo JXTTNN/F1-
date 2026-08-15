@@ -404,7 +404,7 @@ class FeedbackNarrator:
 
         delta_str = ""
         try:
-            delta = float(after) - float(before)
+            delta = float(after) - float(before)  # type: ignore[arg-type]
             if delta != 0:
                 delta_str = f"(变化{delta:+g}档)"
         except (TypeError, ValueError):
