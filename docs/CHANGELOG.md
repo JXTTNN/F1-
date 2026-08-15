@@ -258,6 +258,12 @@
   的 `neg_lml` 闭包改用局部 `X`/`y`/`L`/`alpha`/`V`/`w` 变量 (替代可选属性),
   彻底消除 `ndarray | None` 收窄问题。bayesian 24 passed。全项目 29 → 22。
 
+### 类型正确性 (mypy 继续收敛 22 → 18)
+- `app.py`：`_emit_lap` 的 `track_id` 注解 `str | None` (current_track_id 可为 None)。
+- `race_simulator.py`：`_compute_lap_time` 捕获局部 `sim` + None 兜底。
+- `season_simulator.py`：`position`/`driver_id` 显式 `int()`/`str()` 转换。
+  race+season+api 65 passed。
+
 ---
 
 ## 已知限制 (Known Limitations)

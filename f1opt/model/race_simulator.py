@@ -344,9 +344,12 @@ class RaceSimulation:
         """用 LapTimeSimulator 计算车手当前圈圈速."""
         if car._sim is None:
             self._init_car_sim(car)
+        sim = car._sim
+        if sim is None:
+            return 90.0  # 兜底 (初始化失败时)
         # 一致性噪声
         noise = self.rng.gauss(0.0, (1.0 - car.driver_consistency) * 0.4)
-        lap_r = car._sim.simulate_lap(lap_idx=car._stint_lap_idx)
+        lap_r = sim.simulate_lap(lap_idx=car._stint_lap_idx)
         return lap_r["lap_time"] + noise
 
     # ------------------------------------------------------------------ #

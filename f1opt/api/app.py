@@ -229,6 +229,7 @@ def _emit_lap(state: _TelemetryState, row: dict[str, Any]) -> None:
     s3 = max(0, lap_ms - s1 - s2)
     # track_id: aggregator row 的 track_id 是 int8 (-1=未知). 若未知, 用 state.current_track_id.
     track_id_int = int(row.get("track_id", -1))
+    track_id: str | None
     if 0 <= track_id_int < len(ALL_TRACKS):
         track_id = ALL_TRACKS[track_id_int].track_id
     else:
