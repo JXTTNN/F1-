@@ -4,6 +4,22 @@
 
 ## 2026-08 优化迭代
 
+### 模块衔接修复: ERS/DRS 字段对齐 + OpenAPI + EXE 静态资源 (Iter-259)
+- **修复 ERS/DRS 字段命名错位**：aligner 产出 `ers_deployed_this_lap` /
+  `ers_harvested_this_lap`, 但反馈引擎与 analytics 读的是幻影字段
+  `ers_deployed` / `ers_harvested` / `ers_mgu_k_deploy` / `drs_zone`(从不产出),
+  导致 ERS 部署/回收、DRS 区段分析**永远"数据不足"**。现已对齐并移除幻影字段。
+- `ers_analysis` 修正累计语义: `m_ersDeployedThisLap` 是累计能量(单调递增),
+  deploy_total 改为 `末值-首值`, 事件数用差分上升沿(原误作速率积分)。
+- **修复 `/openapi.json` 500 (Swagger 不可用)**：`BatchFeedbackRequest` 原为
+  `create_app` 内局部类, 在 `from __future__ import annotations` 下成为无法
+  解析的 ForwardRef。提升到模块级。
+- **移除 `/api/feedback/batch` 重复路由**：extended.py (Iter-183) 与 app.py
+  (Iter-206) 各定义一次, 触发 Duplicate Operation ID 且旧版被遮蔽。保留新版权重。
+- **修复 EXE 静态资源 404**：冻结环境下 UI 打包到 `sys._MEIPASS/static`,
+  代码却按 `f1opt/ui/static` 定位 → EXE 中 dashboard/index 404。已按 frozen 分支定位。
+- 测试：`test_ers_deployment_dimension_reads_aligned_field`。
+
 ### 内置 LLM 多反思自评 (Iter-258)
 - **新增反射式 (reflective) 第二轮自评修正**：`llm_enhance` / `llm_enhance_async`
   在首轮回答后, 若 `F1OPT_LLM_REFLECTION=true` (新增 `Settings.llm_reflection`,

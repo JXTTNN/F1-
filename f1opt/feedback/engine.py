@@ -722,7 +722,10 @@ def extract_metrics(
             for f, (vals, ts) in result.items()
         }
 
-    cols = col_multi("speed", "throttle", "brake", "steer", "g_lat", "ers_store", "ers_deployed", "ers_harvested", "ers_deploy_mode", "ers_mgu_k_deploy", "drs_allowed", "drs_active", "drs_zone", "lap_time", "lap_distance", "fuel_in_tank", "brake_temp_fl", "brake_temp_rl", "brake_temp_fr", "brake_temp_rr", "tyre_temp_fl", "tyre_temp_fr", "tyre_temp_rl", "tyre_temp_rr", "tyre_wear_fl", "tyre_wear_fr", "tyre_wear_rl", "tyre_wear_rr", "tyre_inner_temp_fl", "tyre_inner_temp_fr", "tyre_outer_temp_fl", "tyre_outer_temp_fr", "active_aero_x", "active_aero_z")
+    # Iter-259: 修正 ERS 字段命名与 aligner 对齐 (ers_deployed_this_lap /
+    # ers_harvested_this_lap)。移除幻影字段 ers_mgu_k_deploy / drs_zone
+    # (aligner 从不产出, 导致 ERS/DRS 维度永远数据不足)。
+    cols = col_multi("speed", "throttle", "brake", "steer", "g_lat", "ers_store", "ers_deployed_this_lap", "ers_harvested_this_lap", "ers_deploy_mode", "drs_allowed", "drs_active", "lap_time", "lap_distance", "fuel_in_tank", "brake_temp_fl", "brake_temp_rl", "brake_temp_fr", "brake_temp_rr", "tyre_temp_fl", "tyre_temp_fr", "tyre_temp_rl", "tyre_temp_rr", "tyre_wear_fl", "tyre_wear_fr", "tyre_wear_rl", "tyre_wear_rr", "tyre_inner_temp_fl", "tyre_inner_temp_fr", "tyre_outer_temp_fl", "tyre_outer_temp_fr", "active_aero_x", "active_aero_z")
 
     # --- Speed ---
     speed, speed_t = cols["speed"]
@@ -1001,29 +1004,26 @@ def extract_metrics(
         metrics["values"]["ers_slope_per_s"] = slope
         add_ref("ers_start", float(ers_t[0]), "ers_store", float(ers[0]))
         add_ref("ers_end", float(ers_t[-1]), "ers_store", float(ers[-1]))
-    ers_deploy, deploy_t = cols["ers_deployed"]
+    ers_deploy, deploy_t = cols["ers_deployed_this_lap"]
     deployed_total = None
     if len(ers_deploy) >= 2:
         deployed_total = float(ers_deploy[-1] - ers_deploy[0])
         metrics["values"]["ers_deployed_total"] = deployed_total
-        add_ref("ers_deployed_total", float(deploy_t[-1]), "ers_deployed", float(ers_deploy[-1]))
-    ers_harv, harv_t = cols["ers_harvested"]
+        add_ref("ers_deployed_total", float(deploy_t[-1]), "ers_deployed_this_lap", float(ers_deploy[-1]))
+    ers_harv, harv_t = cols["ers_harvested_this_lap"]
     if len(ers_harv) >= 2:
         harvested_total = float(ers_harv[-1] - ers_harv[0])
         metrics["values"]["ers_harvested_total"] = harvested_total
-        add_ref("ers_harvested_total", float(harv_t[-1]), "ers_harvested", float(ers_harv[-1]))
+        add_ref("ers_harvested_total", float(harv_t[-1]), "ers_harvested_this_lap", float(ers_harv[-1]))
     deploy_mode, mode_t = cols["ers_deploy_mode"]
     if len(deploy_mode) >= 2:
         hotlap_mask = deploy_mode == 1.0
         hotlap_pct = float(np.mean(hotlap_mask)) * 100.0
         metrics["values"]["deploy_mode_hotlap_pct"] = hotlap_pct
         add_ref("deploy_mode_hotlap_pct", float(mode_t[0]), "ers_deploy_mode", float(hotlap_pct))
-    if deployed_total is not None:
-        ers_consum, consum_t = cols["ers_mgu_k_deploy"]
-        if len(ers_consum) >= 2:
-            total_consumed = float(ers_consum[-1] - ers_consum[0])
-            if total_consumed > 0:
-                metrics["values"]["ers_efficiency"] = deployed_total / total_consumed
+    # Iter-259: 移除幻影 ers_mgu_k_deploy 效率计算 (aligner 从不产出该字段,
+    # 且 2026 移除 MGU-H 后 deploy/consum 为同一量, 该比值无意义)。
+    # ERS 回收效率由 _dim_ers_deployment 的 deploy-vs-harvest balance 表达。
 
     # --- drs_usage: DRS activation timing, zone utilisation ---
     drs, drs_t = cols["drs_allowed"]
@@ -1041,12 +1041,8 @@ def extract_metrics(
         active_pct = float(np.mean(active_mask)) * 100.0
         metrics["values"]["drs_active_pct"] = active_pct
         add_ref("drs_active_pct", float(drs_at[0]), "drs_active", active_pct)
-    drs_zone, zone_t = cols["drs_zone"]
-    if len(drs_zone) >= 1:
-        zone_ids = np.unique(np.round(drs_zone).astype(int))
-        zone_ids = zone_ids[zone_ids > 0]
-        metrics["values"]["drs_zone_count"] = len(zone_ids)
-        add_ref("drs_zone_count", float(zone_t[0]), "drs_zone", float(len(zone_ids)))
+    # Iter-259: 移除幻影 drs_zone 计数 (aligner 不产出 zone id; DRS 使用
+    # 由 drs_allowed 激活次数 + drs_active 激活占比表达)。
     if len(drs) >= 2 and len(drs_active) >= 2:
         d_changes = np.diff(np.round(drs).astype(int))
         d_up = np.where(d_changes > 0)[0] + 1
@@ -1895,7 +1891,6 @@ def _dim_drs_usage(values: dict[str, Any], refs: dict[str, Any]) -> dict[str, An
     drs_count = values.get("drs_activation_count")
     active_pct = values.get("drs_active_pct")
     delay_mean = values.get("drs_activation_delay_mean")
-    zone_count = values.get("drs_zone_count")
     if drs_count is None and active_pct is None:
         return _data_insufficient("drs_usage")
     parts: list[str] = []
@@ -1908,11 +1903,6 @@ def _dim_drs_usage(values: dict[str, Any], refs: dict[str, Any]) -> dict[str, An
     if active_pct is not None:
         parts.append(f"DRS active {active_pct:.1f}%")
         r = refs.get("drs_active_pct")
-        if r:
-            ev_parts.append(_format_ref(r))
-    if zone_count is not None:
-        parts.append(f"DRS zones: {zone_count}")
-        r = refs.get("drs_zone_count")
         if r:
             ev_parts.append(_format_ref(r))
     if delay_mean is not None:

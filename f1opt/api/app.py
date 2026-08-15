@@ -421,6 +421,18 @@ class FeedbackRequest(BaseModel):
     session_id: str | None = None
 
 
+class BatchFeedbackRequest(BaseModel):
+    """Request body for batch feedback processing (Iter-206).
+
+    Iter-259: 从 ``create_app`` 函数内局部定义提升到模块级 —— 局部类在
+    ``from __future__ import annotations`` 下会成为无法解析的 ForwardRef,
+    导致 ``/openapi.json`` (Swagger UI) 生成 500。
+    """
+
+    sessions: list[FeedbackRequest]
+    max_concurrency: int = 4
+
+
 class SearchRequest(BaseModel):
     """``POST /api/search`` body: 调教搜索入口.
 
@@ -987,11 +999,6 @@ def create_app(start_listener: bool = True) -> FastAPI:
             state.metrics.feedback.record(time.perf_counter() - start)
 
     # Iter-206: Batch feedback endpoint with concurrency handling.
-    class BatchFeedbackRequest(BaseModel):
-        """Request body for batch feedback processing (Iter-206)."""
-        sessions: list[FeedbackRequest]
-        max_concurrency: int = 4
-
     @app.post("/api/feedback/batch")
     @limiter.limit("10/minute")
     async def feedback_batch(
@@ -1967,7 +1974,13 @@ def create_app(start_listener: bool = True) -> FastAPI:
     # ----------------------- Static UI (optional) ------------------------ #
     # Mount LAST so it never shadows /api or /ws. Skipped if the dir is absent
     # so the API still boots before the UI task ships its bundle.
-    static_dir = Path(__file__).resolve().parent.parent / "ui" / "static"
+    # Iter-259: PyInstaller 冻结环境下静态资源被 spec 打包到
+    # sys._MEIPASS/static (而非 f1opt/ui/static), 需据此定位, 否则
+    # EXE 中 /dashboard.html、/index.html 全部 404。
+    if getattr(sys, "frozen", False):
+        static_dir = Path(getattr(sys, "_MEIPASS", "")) / "static"
+    else:
+        static_dir = Path(__file__).resolve().parent.parent / "ui" / "static"
     if static_dir.is_dir():
         try:
             app.mount(

@@ -229,6 +229,24 @@ def test_active_aero_usage_insufficient_when_absent() -> None:
     assert dim["value"] == "数据不足"
 
 
+def test_ers_deployment_dimension_reads_aligned_field() -> None:
+    """Iter-259: ERS 维度应读取 aligner 产出的 ers_deployed_this_lap 字段。"""
+    frames = []
+    for i in range(200):
+        # 累计部署/回收能量 (单调递增), 模拟 m_ersDeployedThisLap.
+        frames.append(
+            _frame(i, ers_deployed_this_lap=float(i) * 0.05,
+                   ers_harvested_this_lap=float(i) * 0.04,
+                   ers_deploy_mode=1.0)
+        )
+    out = generate_feedback(frames, DEFAULT_SETUP.model_dump(), "monza")
+    dim = _dim_by_name(out, "ers_deployment")
+    assert dim["value"] != "数据不足"
+    # 累计部署 = (199-0)*0.05 ≈ 9.95, 回收 ≈ 7.96 → 应出现 deploy 与 harvest 对比.
+    assert "deploy" in dim["value"]
+    assert "harvest" in dim["value"]
+
+
 def test_at_least_one_setup_suggestion_with_valid_after() -> None:
     setup = DEFAULT_SETUP.model_dump()
     out = generate_feedback(_scripted_frames(), setup, "melbourne")

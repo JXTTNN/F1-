@@ -512,7 +512,7 @@ class TelemetryAnalytics:
     # ERS
     # ------------------------------------------------------------------ #
     def ers_analysis(self) -> dict[str, Any]:
-        deploy = _field_multi(self.frames, ("ers_deploy", "ers_deployed"))
+        deploy = _field_multi(self.frames, ("ers_deployed_this_lap", "ers_deploy", "ers_deployed"))
         brake = _field(self.frames, "brake")
         times = _times(self.frames)
         dt = _deltas(times)
@@ -524,17 +524,17 @@ class TelemetryAnalytics:
                 "recover_events": 0,
                 "ers_efficiency": 0.0,
             }
-        # Deploy total: integral of deploy rate over time.
-        deploy_total = float((deploy * dt).sum())
+        # Iter-259: ers_deployed_this_lap 是累计能量 (单调递增), 而非速率。
+        # Deploy total = 末值 - 首值 (本圈累计部署 MJ); 事件数用差分上升沿。
+        deploy_total = float(deploy[-1] - deploy[0]) if deploy.size >= 2 else 0.0
         # Recovery: derive from braking (brake > 0.3 → MGU-K harvest).
         recover_signal = np.clip(brake - 0.3, 0.0, 1.0)
         recover_total = float((recover_signal * dt).sum())
 
-        # Deploy events: rising edges crossing 0.5.
-        deploy_events = 0
-        if deploy.size >= 2:
-            high = deploy > 0.5
-            deploy_events = _count_runs(high)
+        # Deploy events: rising edges of cumulative deploy (> 0.01 MJ).
+        deploy_events = (
+            int(np.sum(np.diff(deploy) > 0.01)) if deploy.size >= 2 else 0
+        )
         # Recover events: rising edges of braking above 0.3.
         recover_events = 0
         if brake.size >= 2:
@@ -1407,7 +1407,7 @@ class TelemetryAnalytics:
         deployed relative to recovery opportunities.
         """
         track_len = track_length_m if track_length_m is not None else self.track_length_m
-        deploy = _field_multi(self.frames, ("ers_deploy", "ers_deployed"))
+        deploy = _field_multi(self.frames, ("ers_deployed_this_lap", "ers_deploy", "ers_deployed"))
         brake = _field(self.frames, "brake")
         lap_dist = _field(self.frames, "lap_distance")
         if deploy.size < 2 or brake.size < 2 or lap_dist.size < 2:
@@ -1498,7 +1498,7 @@ class TelemetryAnalytics:
         ``braking_zone_count``.
         """
         brake = _field(self.frames, "brake")
-        deploy = _field_multi(self.frames, ("ers_deploy", "ers_deployed"))
+        deploy = _field_multi(self.frames, ("ers_deployed_this_lap", "ers_deploy", "ers_deployed"))
         if brake.size < 2:
             return {
                 "recovery_events": [],
@@ -1743,7 +1743,7 @@ class AnomalyDetector:
         throttle = _field(frames, "throttle")
         brake = _field(frames, "brake")
         steer = _field(frames, "steer")
-        ers = _field_multi(frames, ("ers_deploy", "ers_deployed"))
+        ers = _field_multi(frames, ("ers_deployed_this_lap", "ers_deploy", "ers_deployed"))
 
         n = len(frames)
 

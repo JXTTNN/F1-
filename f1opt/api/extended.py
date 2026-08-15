@@ -8,7 +8,6 @@ comparison, NLG narration, and weather-impact endpoints on top of the core
 
 from __future__ import annotations
 
-import time
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
@@ -90,17 +89,6 @@ class NarrateRequest(BaseModel):
     dimensions: list[dict[str, Any]] = Field(default_factory=list)
     language: str = "zh"
     archetype: str | None = None
-
-
-class BatchFeedbackRequest(BaseModel):
-    """``POST /api/feedback/batch`` body: 批量反馈处理 (Iter-183)."""
-
-    sessions: list[dict[str, Any]] = Field(
-        default_factory=list,
-        description="List of feedback sessions, each with frames, setup, track_id, question",
-    )
-    track_id: str = "monza"
-    question: str | None = None
 
 
 router = APIRouter()
@@ -224,65 +212,6 @@ async def narrate(body: NarrateRequest) -> dict[str, str]:
         {"dimensions": body.dimensions, "setup_suggestions": []}
     )
     return {"narration": narration, "summary": summary}
-
-
-# --------------------------------------------------------------------------- #
-# 9. Batch feedback processing (Iter-183)
-# --------------------------------------------------------------------------- #
-@router.post("/api/feedback/batch")
-async def feedback_batch(body: BatchFeedbackRequest) -> dict[str, Any]:
-    """Iter-183: Process multiple feedback sessions in a single request.
-
-    Accepts a list of session dicts, each with optional ``frames``, ``setup``,
-    ``track_id``, and ``question``. Returns a list of feedback results with
-    per-session timing. This is useful for batch processing lap data after a
-    session.
-    """
-    from f1opt.feedback.engine import FeedbackEngine
-
-    engine = FeedbackEngine()
-    results: list[dict[str, Any]] = []
-    total_time = 0.0
-    start_all = time.time()
-
-    for i, session in enumerate(body.sessions):
-        frames = session.get("frames", [])
-        setup = session.get("setup", DEFAULT_SETUP.model_dump())
-        tid = session.get("track_id", body.track_id)
-        q = session.get("question", body.question)
-
-        t0 = time.perf_counter()
-        try:
-            result = engine.run(
-                frames=frames,
-                setup=setup,
-                track_id=tid,
-                question=q,
-            )
-            elapsed = time.perf_counter() - t0
-            results.append({
-                "index": i,
-                "status": "success",
-                "elapsed_s": round(elapsed, 3),
-                "feedback": result,
-            })
-        except Exception as exc:
-            elapsed = time.perf_counter() - t0
-            results.append({
-                "index": i,
-                "status": "error",
-                "elapsed_s": round(elapsed, 3),
-                "error": str(exc),
-            })
-        total_time += elapsed
-
-    return {
-        "total_sessions": len(body.sessions),
-        "results": results,
-        "total_elapsed_s": round(time.perf_counter() - start_all, 3),
-        "success_count": sum(1 for r in results if r["status"] == "success"),
-        "error_count": sum(1 for r in results if r["status"] == "error"),
-    }
 
 
 # --------------------------------------------------------------------------- #
