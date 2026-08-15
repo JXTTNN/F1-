@@ -4,6 +4,12 @@
 
 ## 2026-08 优化迭代
 
+### 遥测分析 DRS 语义修正 (Iter-265)
+- **`drs_analysis` 改用 `drs_active` (实际激活, m_drs)**：原 `_field_multi` 元组
+  把幻影字段 `drs` 放首位, 实际落到 `drs_allowed` (仅"此区段允许"), 会把整个
+  DRS 区段都计为"激活", 高估激活次数/时长/速度增益。改为优先 `drs_active`,
+  与车手画像 `_drs_usage_efficiency` (Iter-261) 保持一致。
+
 ### 质量评分与 gap_filler 字段对齐 (Iter-264)
 - **quality_score 幻影字段修复**：`_EXPECTED_RANGES` 用 `fuel_remaining`(对齐帧从不
   产出), 燃油范围校验永不触发。改为真实字段 `fuel_in_tank`, 并补 `fuel_remaining_laps` /

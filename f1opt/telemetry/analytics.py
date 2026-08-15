@@ -559,7 +559,9 @@ class TelemetryAnalytics:
     # DRS
     # ------------------------------------------------------------------ #
     def drs_analysis(self) -> dict[str, Any]:
-        drs = _field_multi(self.frames, ("drs", "drs_allowed", "drs_active"))
+        # Iter-265: 优先用 drs_active (实际激活, m_drs) 而非 drs_allowed (仅允许),
+        # 否则会把"允许但未使用"的整个 DRS 区段都计为激活, 高估激活次数/时长。
+        drs = _field_multi(self.frames, ("drs_active", "drs", "drs_allowed"))
         speed = _field(self.frames, "speed")
         times = _times(self.frames)
         dt = _deltas(times)
