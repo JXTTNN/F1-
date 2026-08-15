@@ -568,7 +568,7 @@ class MultiObjectiveOptimizer:
         n = vec.shape[0]
         if n == 0:
             return vec
-        mask: np.ndarray = self._rng.random(n) < prob  # 显式 ndarray 注解, 避免 mypy 误判为 bool
+        mask = np.asarray(self._rng.random(n) < prob, dtype=bool)  # np.asarray 显式产出 ndarray, 规避 mypy 误判为 bool
         if prob > 0.0:
             if not mask.any():
                 mask[int(self._rng.integers(0, n))] = True

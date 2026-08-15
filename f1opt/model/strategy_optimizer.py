@@ -279,7 +279,7 @@ class StrategyOptimizer:
         # 单次进站: 全程 / 2 ± window
         if n_stops == 1:
             mid = self.total_laps // 2
-            candidates = []
+            candidates: list[tuple[int, ...]] = []
             for pl in range(max(3, mid - 8), min(self.total_laps - 3, mid + 9),
                             self.pit_window_step):
                 candidates.append((pl,))
@@ -288,7 +288,7 @@ class StrategyOptimizer:
         if n_stops == 2:
             third = self.total_laps // 3
             two_thirds = 2 * self.total_laps // 3
-            candidates = []
+            candidates: list[tuple[int, ...]] = []
             for p1 in range(max(3, third - 6), min(self.total_laps - 6, third + 7),
                              self.pit_window_step):
                 for p2 in range(max(p1 + 5, two_thirds - 6),
@@ -298,7 +298,7 @@ class StrategyOptimizer:
             return candidates
         # 3 次: 均分 4 段
         quarter = self.total_laps // 4
-        candidates = []
+        candidates: list[tuple[int, ...]] = []
         for p1 in range(max(3, quarter - 4), quarter + 5, self.pit_window_step):
             for p2 in range(max(p1 + 4, 2 * quarter - 4), 2 * quarter + 5,
                             self.pit_window_step):
@@ -318,14 +318,14 @@ class StrategyOptimizer:
         if n_stints == 1:
             return [(c,) for c in pool]
         if n_stints == 2:
-            out = []
+            out: list[tuple[str, ...]] = []
             for c1 in pool:
                 for c2 in pool:
                     if c1 != c2 or pool == _WET_COMPOUNDS:
                         out.append((c1, c2))
             return out
         # n_stints >= 3: 第一/中段/最后; 中段用最耐用 compound 简化
-        out = []
+        out: list[tuple[str, ...]] = []
         # 中段只取 medium/hard (干地) 或 wet (湿地) 以减少组合爆炸
         mid_pool = ("medium", "hard") if pool == _DRY_COMPOUNDS else pool
         for c_start in pool:

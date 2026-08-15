@@ -263,6 +263,10 @@
 - `race_simulator.py`：`_compute_lap_time` 捕获局部 `sim` + None 兜底。
 - `season_simulator.py`：`position`/`driver_id` 显式 `int()`/`str()` 转换。
   race+season+api 65 passed。
+- `pareto.py`：`_mutate` 的 `mask` 改用 `np.asarray(..., dtype=bool)`
+  (显式产出 ndarray, 规避 mypy 把 `Generator.random(n) < prob` 误判为 bool)。
+- `strategy_optimizer.py`：`candidates`/`out` 组合列表注解 `list[tuple[int/str, ...]]`
+  (消除变长元组长度不一致错误)。pareto+strategy_optimizer 50 passed。全项目 18 → 12。
 
 ---
 
