@@ -427,11 +427,11 @@ class TestPacketParserEdgeCases:
             0,                     # B: networkPaused
         )
         car0_bytes = struct.pack(status_per_fmt, *car0_vals)
-        body = car0_bytes + b"\x00" * (per_size * 21)
+        body = car0_bytes + b"\x00" * (per_size * 23)
         data = _make_header_bytes(7) + body
         result = parse_car_status(data)
         assert isinstance(result, dict)
-        assert len(result["m_carStatusData"]) == 22
+        assert len(result["m_carStatusData"]) == 24
         # The parser returns the raw uint8 value (255); it does not crash.
         assert result["m_carStatusData"][0]["m_ersDeployMode"] == 255
 

@@ -1,9 +1,11 @@
-"""F1 25 / 2026 Season Pack UDP packet parsers (packetFormat=2025).
+"""F1 26 (2026 Season Pack) UDP packet parsers (packetFormat=2026).
 
-All 16 official packet types are parsed per the EA F1 25 UDP specification.
-Data is Little Endian, packed (no padding). Grid = 22 cars
-(``cs_maxNumCarsInUDPData``); 2026 Season Pack keeps 22 cars (11 teams x 2,
-including Cadillac).
+All 17 official packet types are parsed per the F1 26 UDP specification
+(MacManley/f1-26-udp, the authoritative F1 26 wire spec).
+Data is Little Endian, packed (no padding). Grid = 24 car slots
+(``cs_maxNumCarsInUDPData``); F1 26 fixed per-car arrays are 24 wide. The
+standard 2026 grid is 22 drivers across 11 teams (incl. Cadillac), but the
+wire arrays reserve 24 slots.
 
 Sources used for the field layouts (cross-referenced):
 - **EA SPORTS F1 25 "Data Output from F1 25 v3.pdf"** (official, packetFormat=2025),
@@ -59,7 +61,7 @@ HEADER_FORMAT = "<HBBBBBQfIIBB"
 HEADER_SIZE = struct.calcsize(HEADER_FORMAT)  # 29
 assert HEADER_SIZE == 29, f"header size mismatch: {HEADER_SIZE}"
 
-NUM_CARS = 22  # cs_maxNumCarsInUDPData (2026 grid: 11 teams x 2)
+NUM_CARS = 24  # cs_maxNumCarsInUDPData (F1 26 权威规范: 24 车位固定数组)
 
 PACKET_NAMES: dict[int, str] = {
     0: "Motion",
@@ -200,12 +202,13 @@ def _cars(vals: tuple, per: int, names: tuple[str, ...]) -> _LazyCarList:
 # Packet 0 — Motion  (size 1349 per EA PDF; body layout MEDIUM confidence)
 # --------------------------------------------------------------------------- #
 CONFIDENCE_MOTION = (
-    "MEDIUM — CarMotionData (54B/car) and player-car extra section follow the "
-    "F1 23/24 layout; F1 25 PDF reports total 1349B (12B more than the sum of "
-    "the documented fields). Trailing bytes are ignored, fields are correct."
+    "HIGH — PacketMotionData per MacManley/f1-26-udp 权威规范 (Iter-285). "
+    "24×CarMotionData (54B: 速度 float + 方向/g-force int16), 无玩家额外段, 1325B."
 )
-# CarMotionData: 3 pos float, 9 int16 (vel + 2 dirs), 6 floats (g-force, yaw/pitch/roll)
-_CAR_MOTION_FMT = "fff" + "h" * 9 + "f" * 6
+# Iter-285: F1 26 CarMotionData — 速度由 int16 改为 float (3f), g-force 仍为 int16
+# (量化为 1/1000, 见 README)。6 个方向 int16 + 3 g-force int16 + 3 yaw/pitch/roll float。
+# 54B/car; F1 26 Motion 无玩家额外段 (仅 24 × CarMotionData = 1325B)。
+_CAR_MOTION_FMT = "f" * 6 + "h" * 9 + "f" * 3
 _CAR_MOTION_NAMES = (
     "m_worldPositionX", "m_worldPositionY", "m_worldPositionZ",
     "m_worldVelocityX", "m_worldVelocityY", "m_worldVelocityZ",
@@ -214,9 +217,7 @@ _CAR_MOTION_NAMES = (
     "m_gForceLateral", "m_gForceLongitudinal", "m_gForceVertical",
     "m_yaw", "m_pitch", "m_roll",
 )
-# Player-car-only: 5 arrays of 4 floats + 10 individual floats = 30 floats
-_MOTION_PLAYER_FMT = "f" * 30
-_MOTION_BODY = struct.Struct("<" + _CAR_MOTION_FMT * NUM_CARS + _MOTION_PLAYER_FMT)
+_MOTION_BODY = struct.Struct("<" + _CAR_MOTION_FMT * NUM_CARS)
 
 
 def parse_motion(data: bytes) -> dict[str, Any]:
@@ -224,25 +225,7 @@ def parse_motion(data: bytes) -> dict[str, Any]:
     vals = _unpack_body(data, _MOTION_BODY)
     per = len(_CAR_MOTION_NAMES)
     cars = _cars(vals, per, _CAR_MOTION_NAMES)
-    p = vals[NUM_CARS * per :]
-    return {
-        "m_carMotionData": cars,
-        "m_suspensionPosition": list(p[0:4]),
-        "m_suspensionVelocity": list(p[4:8]),
-        "m_suspensionAcceleration": list(p[8:12]),
-        "m_wheelSpeed": list(p[12:16]),
-        "m_wheelSlip": list(p[16:20]),
-        "m_localVelocityX": p[20],
-        "m_localVelocityY": p[21],
-        "m_localVelocityZ": p[22],
-        "m_angularVelocityX": p[23],
-        "m_angularVelocityY": p[24],
-        "m_angularVelocityZ": p[25],
-        "m_angularAccelerationX": p[26],
-        "m_angularAccelerationY": p[27],
-        "m_angularAccelerationZ": p[28],
-        "m_frontWheelsAngle": p[29],
-    }
+    return {"m_carMotionData": cars}
 
 
 # --------------------------------------------------------------------------- #
@@ -357,20 +340,26 @@ _LAP_NAMES = (
     "m_pitLaneTimeInLaneInMS", "m_pitStopTimerInMS", "m_pitStopShouldServePen",
     "m_speedTrapFastestSpeed", "m_speedTrapFastestLap",
 )
-_LAPDATA_BODY = struct.Struct("<" + _LAP_PER * NUM_CARS)
+# Iter-285: F1 26 LapData 尾部追加 timeTrialPBCarIdx + timeTrialRivalCarIdx (各 uint8)
+_LAPDATA_BODY = struct.Struct("<" + _LAP_PER * NUM_CARS + "BB")
 
 
 def parse_lap_data(data: bytes) -> dict[str, Any]:
     """Parse PacketLapData (packet id 2)."""
     vals = _unpack_body(data, _LAPDATA_BODY)
-    cars = _cars(vals, len(_LAP_NAMES), _LAP_NAMES)
+    n = len(_LAP_NAMES) * NUM_CARS
+    cars = _cars(vals[:n], len(_LAP_NAMES), _LAP_NAMES)
     # Iter-281: 组合 MSPart + MinutesPart 为完整 ms 值 (供 aligner/aggregator 使用)。
     for c in cars:
         c["m_sector1TimeInMS"] = int(c["m_sector1TimeMinutesPart"]) * 60000 + int(c["m_sector1TimeInMSPart"])
         c["m_sector2TimeInMS"] = int(c["m_sector2TimeMinutesPart"]) * 60000 + int(c["m_sector2TimeInMSPart"])
         c["m_deltaToCarInFrontInMS"] = int(c["m_deltaToCarInFrontInMinutesPart"]) * 60000 + int(c["m_deltaToCarInFrontInMSPart"])
         c["m_deltaToRaceLeaderInMS"] = int(c["m_deltaToRaceLeaderInMinutesPart"]) * 60000 + int(c["m_deltaToRaceLeaderInMSPart"])
-    return {"m_lapData": cars}
+    return {
+        "m_lapData": cars,
+        "m_timeTrialPBCarIdx": vals[n],
+        "m_timeTrialRivalCarIdx": vals[n + 1],
+    }
 
 
 # --------------------------------------------------------------------------- #
@@ -452,13 +441,18 @@ _SETUP_NAMES = (
     "m_rearLeftTyrePressure", "m_rearRightTyrePressure",
     "m_frontLeftTyrePressure", "m_frontRightTyrePressure", "m_ballast", "m_fuelLoad",
 )
-_CARSETUPS_BODY = struct.Struct("<" + _SETUP_PER * NUM_CARS)
+# Iter-285: F1 26 CarSetups 尾部追加 m_nextFrontWingValue (float, 玩家下一次进站前翼值)
+_CARSETUPS_BODY = struct.Struct("<" + _SETUP_PER * NUM_CARS + "f")
 
 
 def parse_car_setups(data: bytes) -> dict[str, Any]:
     """Parse PacketCarSetupData (packet id 5)."""
     vals = _unpack_body(data, _CARSETUPS_BODY)
-    return {"m_carSetups": _cars(vals, len(_SETUP_NAMES), _SETUP_NAMES)}
+    n = len(_SETUP_NAMES) * NUM_CARS
+    return {
+        "m_carSetups": _cars(vals[:n], len(_SETUP_NAMES), _SETUP_NAMES),
+        "m_nextFrontWingValue": vals[n],
+    }
 
 
 # --------------------------------------------------------------------------- #
@@ -990,23 +984,23 @@ def parse_packet(data: bytes) -> tuple[PacketHeader, dict[str, Any]]:
 # These are derived from the EA F1 25 PDF reported sizes (total - 29B header).
 # Used for informational logging; parsing is still tolerant of truncation.
 _EXPECTED_BODY_SIZES: dict[int, int] = {
-    0: 1320,   # Motion: 1349 - 29
-    1: 614,    # Session (approx)
-    2: 1254,   # LapData: 57 bytes/car × 22 (Iter-281, 权威规范)
+    0: 1296,   # Motion: 24 × 54B (Iter-285, 权威规范, 无玩家段)
+    1: 614,    # Session (approx — 待权威规范重写)
+    2: 1370,   # LapData: 57B × 24 + 2 timeTrial carIdx (Iter-285)
     3: 4,      # Event (min: 4-byte code)
-    4: 1321,   # Participants: 60B * 22 + 1 (Iter-284, 权威规范)
-    5: 1078,   # CarSetups
-    6: 1301,   # CarTelemetry: 59 bytes/car × 22 + 3 trailer (Iter-278)
-    7: 1298,   # CarStatus: 59 bytes/car × 22 (Iter-278, 权威规范)
-    8: 1013,   # FinalClassification: 46B/car * 22 + 1 (Iter-283, 权威规范)
-    9: 947,    # LobbyInfo: 43B/player * 22 + 1 (Iter-283, teamId/techLevel uint16)
-    10: 1012,  # CarDamage: 1041 - 29
-    11: 1431,  # SessionHistory: 7 + 100*14 + 8*3 (Iter-284, 权威规范)
-    12: 202,   # TyreSets: 1 + 20*10 + 1 (Iter-283, 20 套, 每套 10B)
-    13: 244,   # MotionEx: 273 - 29 (Iter-283, 61 float)
-    14: 75,    # TimeTrial: 3 * 25B (Iter-283, 权威规范)
-    15: 1102,  # LapPositions: 1131 - 29
-    16: 220,   # CarTelemetry2: 10 bytes/car × 22 (Iter-278)
+    4: 1441,   # Participants: 60B × 24 + 1 (Iter-285)
+    5: 1204,   # CarSetups: 50B × 24 + 4 nextFrontWingValue (Iter-285)
+    6: 1419,   # CarTelemetry: 59B × 24 + 3 trailer (Iter-285)
+    7: 1416,   # CarStatus: 59B × 24 (Iter-285)
+    8: 1105,   # FinalClassification: 46B × 24 + 1 (Iter-285)
+    9: 1033,   # LobbyInfo: 43B × 24 + 1 (Iter-285)
+    10: 1104,  # CarDamage: 46B × 24 (Iter-285)
+    11: 1431,  # SessionHistory: 7 + 100×14 + 8×3 (Iter-284)
+    12: 202,   # TyreSets: 1 + 20×10 + 1 (Iter-283)
+    13: 244,   # MotionEx: 61 float (Iter-283)
+    14: 75,    # TimeTrial: 3 × 25B (Iter-283)
+    15: 1202,  # LapPositions: 2 + 50 × 24 (Iter-285)
+    16: 240,   # CarTelemetry2: 10B × 24 (Iter-285)
 }
 
 

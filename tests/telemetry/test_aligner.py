@@ -217,14 +217,16 @@ class TestGridAndInterpolation:
         assert f["tyre_temp_rr"] == pytest.approx(93.0, abs=1e-3)
 
     def test_motion_fields_interpolated(self) -> None:
+        # Iter-285: F1 26 g-force 为 int16 量化 → 最近邻 (整型); world 坐标仍 float 线性插值。
         aligner = TelemetryAligner()
-        aligner.on_packet(*motion_packet(1.0, g_lat=1.0, world=(10, 20, 30)))
-        aligner.on_packet(*motion_packet(2.0, g_lat=3.0, world=(20, 40, 60)))
-        f = aligner.sample_60hz(1.5, 1.5 + 1 / 60, 1 / 60)[0]
-        assert f["g_lat"] == pytest.approx(2.0, abs=1e-3)
-        assert f["world_x"] == pytest.approx(15.0, abs=1e-3)
-        assert f["world_y"] == pytest.approx(30.0, abs=1e-3)
-        assert f["world_z"] == pytest.approx(45.0, abs=1e-3)
+        aligner.on_packet(*motion_packet(1.0, g_lat=1000, world=(10, 20, 30)))
+        aligner.on_packet(*motion_packet(2.0, g_lat=3000, world=(20, 40, 60)))
+        f = aligner.sample_60hz(1.6, 1.6 + 1 / 60, 1 / 60)[0]
+        assert f["g_lat"] == 3000  # 最近邻整型 (更靠近 t=2.0)
+        assert isinstance(f["g_lat"], int)
+        assert f["world_x"] == pytest.approx(16.0, abs=1e-2)
+        assert f["world_y"] == pytest.approx(32.0, abs=1e-2)
+        assert f["world_z"] == pytest.approx(48.0, abs=1e-2)
 
 
 # --------------------------------------------------------------------------- #

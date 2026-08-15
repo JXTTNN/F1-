@@ -4,6 +4,20 @@
 
 ## 2026-08 优化迭代
 
+### F1 26 权威规范: 24 车位 + Motion 速度/g-force + 尾部字段 (Iter-285)
+- **关键发现**: MacManley/f1-26-udp 权威规范 (README) 全包数组为 **24 车位** (非 22)。
+  所有缓冲区大小 (Motion 1325/LapData 1399/CarStatus 1445/CarTelemetry 1448/
+  CarDamage 1133/CarSetups 1233/Participants 1470/FinalClassification 1134/
+  LobbyInfo 1062/LapPositions 1231/CarTelemetry2 269) 均与 24 车精确一致。
+  标准 2026 赛季为 22 车 (11 队), 但线数组预留 24 车位。
+- **NUM_CARS 22 → 24**: 所有 per-car 解析器改读 24 车; `_EXPECTED_BODY_SIZES` 同步。
+- **Motion (id 0) 线格式修正**: F1 26 速度由 int16 改为 **float**, g-force 仍为 int16
+  (量化 ÷1000); 且 **无玩家额外段** (仅 24 × CarMotionData = 1325B)。
+  aligner 将 g_lat/g_long/g_vert 标记为 int16 (最近邻插值 + `_INT_KEYS`)。
+- **尾部字段补全**: CarSetups 追加 `m_nextFrontWingValue` (float); LapData 追加
+  `m_timeTrialPBCarIdx` + `m_timeTrialRivalCarIdx` (各 uint8)。
+- 测试同步 (test_packets/test_robustness/test_aligner 的 22→24 与 g-force int16)。
+
 ### 按权威规范修正 Participants + SessionHistory 线格式 (Iter-284)
 - 继续用 MacManley/f1-26-udp 权威规范审计, 再修 2 处错位:
   - **Participants (id 4)**：`m_driverId`/`m_networkId`/`m_teamId`/`m_techLevel` 均为

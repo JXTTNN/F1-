@@ -106,8 +106,8 @@ class TestHeader:
         with pytest.raises(ValueError):
             parse_header(b"\x00" * 10)
 
-    def test_num_cars_is_22(self) -> None:
-        assert NUM_CARS == 22
+    def test_num_cars_is_24(self) -> None:
+        assert NUM_CARS == 24  # F1 26 权威规范: 24 车位
 
 
 # --------------------------------------------------------------------------- #
@@ -162,10 +162,8 @@ class TestMotion:
         assert len(p["m_carMotionData"]) == NUM_CARS
         car0 = p["m_carMotionData"][0]
         assert "m_worldPositionX" in car0
+        assert "m_gForceLateral" in car0
         assert "m_yaw" in car0
-        assert "m_frontWheelsAngle" in p
-        assert len(p["m_suspensionPosition"]) == 4
-        assert len(p["m_wheelSpeed"]) == 4
 
 
 # --------------------------------------------------------------------------- #
