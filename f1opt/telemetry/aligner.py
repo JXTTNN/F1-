@@ -84,6 +84,7 @@ UNIFIED_KEYS: tuple[str, ...] = (
     "fuel_in_tank", "fuel_remaining_laps",
     "tyre_compound",                             # Iter-172: m_visualTyreCompound
     "actual_tyre_compound",                      # Iter-172: m_actualTyreCompound
+    "active_aero_x", "active_aero_z",            # Iter-191: F1 2026 主动空力 (X/Z)
     # LapData (圈速 / 扇区 / 状态 / 罚时)
     "lap_time", "lap_distance",
     "sector1_time", "sector2_time", "sector3_time",  # Iter-172: m_sector[123]TimeInMS
@@ -185,6 +186,9 @@ _SOURCE_SPECS: dict[int, tuple[_FieldSpec, ...]] = {
         ("ers_deployed_this_lap", "m_ersDeployedThisLap", False),
         ("tyre_compound", "m_visualTyreCompound", True),
         ("actual_tyre_compound", "m_actualTyreCompound", True),
+        # Iter-191: F1 2026 主动空力 (X=低阻/Z=高下压力 位置, 连续浮点)
+        ("active_aero_x", "m_activeAeroX", False),
+        ("active_aero_z", "m_activeAeroZ", False),
     ),
     _CARDAMAGE: (
         ("tyre_wear_fl", ("m_tyresWear", 0), False),

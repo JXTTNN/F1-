@@ -260,6 +260,7 @@ class TelemetryAnalytics:
             "engine_braking": self.engine_braking_analysis(),
             "grip_utilization": self.grip_utilization_analysis(),
             "downforce_balance": self.downforce_balance_analysis(),
+            "active_aero": self.active_aero_usage_analysis(),
             "mechanical_grip_trend": self.mechanical_grip_trend_analysis(),
             "brake_temp_balance": self.brake_temp_balance_analysis(),
             "tyre_temp_gradient": self.tyre_temp_gradient_analysis(),
@@ -1168,6 +1169,31 @@ class TelemetryAnalytics:
             "low_speed_g_lat_avg": low_g,
             "aero_balance_ratio": ratio,
             "diagnosis": diag,
+        }
+
+    # ------------------------------------------------------------------ #
+    # Active aero usage (F1 2026 X-Mode / Z-Mode)
+    # ------------------------------------------------------------------ #
+    def active_aero_usage_analysis(self) -> dict[str, Any]:
+        """Analyze F1 2026 active aero (X-Mode / Z-Mode) usage across frames.
+
+        X-mode = low-drag (straight-line speed), Z-mode = high-downforce
+        (cornering grip). Reports the fraction of frames where each mode is
+        deployed (aero position > 0.5) plus the mean aero position.
+        """
+        x = _field(self.frames, "active_aero_x")
+        z = _field(self.frames, "active_aero_z")
+        n = int(x.size)
+        x_active = int(np.count_nonzero(x > 0.5)) if n else 0
+        z_active = int(np.count_nonzero(z > 0.5)) if n else 0
+        return {
+            "total_frames": n,
+            "x_mode_frames": x_active,
+            "z_mode_frames": z_active,
+            "x_mode_fraction": x_active / n if n else 0.0,
+            "z_mode_fraction": z_active / n if n else 0.0,
+            "mean_aero_x": float(np.mean(x)) if n else 0.0,
+            "mean_aero_z": float(np.mean(z)) if n else 0.0,
         }
 
     # ------------------------------------------------------------------ #
