@@ -98,6 +98,15 @@
   (SHA256: 4A284EFDC0F9385FF2BAC9A51CD82EE0239A6D46E41EB05062E1D1476B627884)。
 - README 补全 Windows/Linux 双平台下载入口。
 
+### 遥测监听器稳健性 (工厂级, 修复测试套件挂起)
+- **修复 `TelemetryListener.stop()` 挂起 bug**：stop 原用 sentinel 排在队列尾部
+  等待 drain；当存在慢订阅者 (如 10s sleeper) 时，每个排队包都要等
+  `_SUBSCRIBER_TIMEOUT`(5s)，导致 `test_stress_comprehensive.py` 整体挂起
+  (~95s+)。改为直接 `cancel()` dispatch 任务即时退出。
+  修复后 `test_stress_comprehensive.py` 从**挂起**变为 **187s 完成**
+  (113 passed / 6 预存失败, 与本次改动无关)。
+- `_unpack_body` 避免精确长度时的冗余字节拷贝 (工厂级微优化)。
+
 ---
 
 ## 已知限制 (Known Limitations)

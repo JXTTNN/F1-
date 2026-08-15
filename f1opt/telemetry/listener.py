@@ -211,9 +211,13 @@ class TelemetryListener:
         self._last_pps_check_time = self._last_packet_time
 
     async def stop(self) -> None:
-        """Stop the listener and wait for the dispatch loop to drain.
+        """Stop the listener promptly.
 
         Iter-182: 同时停止自适应队列调整任务.
+        Iter-250: cancel the dispatch task instead of draining the queue — a
+        slow subscriber (e.g. a 10s sleeper behind ``_SUBSCRIBER_TIMEOUT``)
+        previously blocked shutdown for ``queued_packets * timeout`` seconds
+        because the sentinel sat at the back of a full queue.
         """
         # 先停止自适应任务
         if self._adaptive_task is not None:
@@ -224,8 +228,11 @@ class TelemetryListener:
                 pass
             self._adaptive_task = None
         if self._dispatch_task is not None:
-            await self._queue.put(None)  # sentinel
-            await self._dispatch_task
+            self._dispatch_task.cancel()
+            try:
+                await self._dispatch_task
+            except asyncio.CancelledError:
+                pass
             self._dispatch_task = None
         if self._transport is not None:
             self._transport.close()

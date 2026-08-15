@@ -135,7 +135,9 @@ def _unpack_body(data: bytes, body_struct: struct.Struct) -> tuple:
     expected = body_struct.size
     if len(body) < expected:
         body = body + b"\x00" * (expected - len(body))
-    return body_struct.unpack(body[:expected])
+    elif len(body) > expected:
+        body = body[:expected]  # only truncate on overflow (avoid a copy when exact)
+    return body_struct.unpack(body)
 
 
 class _LazyCarList:
