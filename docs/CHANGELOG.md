@@ -119,6 +119,14 @@
   - `test_cli_invalid_args_graceful_exit` / `test_api_404_on_unknown_track` 由输入校验修复。
   修复后 `test_stress_comprehensive.py` 125 项全绿 (无失败)。
 
+### 实时遥测热路径性能 (关键)
+- **`latest_unified_frame` 51x 提速**：该函数在 60Hz WS 广播路径上每包调用，
+  原实现每次对 5 个源的 buffer 排序 (O(N log N)) 并为每字段构建全量样本列表
+  (O(N·F))，随会话进行 buffer 增长到 ~5000 样本时单次耗时 **51.7ms**
+  (已超 60Hz 16.7ms 预算，导致 UI 实时性随圈数恶化)。
+  改为直接取每个源的最大时间样本 (O(S·F))，**1.0ms**，输出逐位等价。
+  实测 5000 样本: 51.7ms → 1.0ms (51x)。
+
 ---
 
 ## 已知限制 (Known Limitations)

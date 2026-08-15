@@ -505,19 +505,38 @@ class TelemetryAligner:
 
         Iter-131: ``car_index`` selects which car; ``None`` defaults to the
         player car.
+
+        Iter-251: fast path — at the global max time the bisect interpolation
+        clamps to each source's LAST sample, so we take each source's
+        max-time sample directly instead of sorting every buffer and building
+        per-field sample lists (``_frame_at``). This is O(S·F) instead of
+        O(S·N·F) and keeps the 60Hz WS broadcast cheap as buffers grow.
         """
         target = self._player_car_index if car_index is None else car_index
         max_t: float | None = None
-        for inner in self._buffers.values():
+        latest: dict[int, tuple[float, dict[str, float]]] = {}
+        for pid, inner in self._buffers.items():
             buf = inner.get(target)
             if not buf:
                 continue
-            for t, _ in buf:
-                if max_t is None or t > max_t:
-                    max_t = t
+            it = max(buf, key=lambda x: x[0])  # O(N), once per source
+            latest[pid] = it
+            if max_t is None or it[0] > max_t:
+                max_t = it[0]
         if max_t is None:
             return None
-        return self._frame_at(max_t, car_index=car_index)
+        frame: dict[str, Any] = {"session_time": float(max_t)}
+        for key in UNIFIED_KEYS[1:]:
+            frame[key] = None
+        for pid, spec in _SOURCE_SPECS.items():
+            it = latest.get(pid)
+            if it is None:
+                continue
+            fields = it[1]
+            for unified_key, _src, is_int in spec:
+                v = fields.get(unified_key, 0.0)
+                frame[unified_key] = int(v) if is_int else float(v)
+        return frame
 
     def _frame_at(
         self, t: float, *, car_index: int | None = None
