@@ -552,6 +552,48 @@ def test_llm_enhance_falls_back_on_network_error(monkeypatch: pytest.MonkeyPatch
     assert out["summary"] == "rule-based summary"  # network failed -> fallback
 
 
+def test_llm_enhance_honors_config_llm_model(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Iter-257: llm_enhance 应使用 config.llm_model (而非硬编码默认模型)。"""
+    import httpx
+
+    captured: dict[str, object] = {}
+
+    class _Resp:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict:
+            return {"choices": [{"message": {"content": "LLM rewrite"}}]}
+
+    class _Client:
+        def __init__(self, *a: object, **k: object) -> None:
+            pass
+
+        def __enter__(self) -> _Client:
+            return self
+
+        def __exit__(self, *a: object) -> bool:
+            return False
+
+        def post(self, url: str, **k: object) -> _Resp:
+            captured["json"] = k.get("json")
+            return _Resp()
+
+    monkeypatch.setattr(httpx, "Client", _Client)
+    settings = Settings(llm_backend="openai", llm_api_key="sk-fake", llm_model="my-custom-model")
+    feedback = {
+        "summary": "rule-based",
+        "dimensions": [],
+        "setup_suggestions": [],
+        "sources": [],
+    }
+    out = llm_enhance(feedback, "why?", settings)
+    assert out["summary"] == "LLM rewrite"
+    payload = captured.get("json")
+    assert isinstance(payload, dict)
+    assert payload["model"] == "my-custom-model"
+
+
 # --------------------------------------------------------------------------- #
 # Re-exports
 # --------------------------------------------------------------------------- #

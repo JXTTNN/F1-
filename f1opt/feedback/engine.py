@@ -2642,7 +2642,7 @@ def llm_enhance(
     endpoint = _LLM_ENDPOINTS.get(backend)
     if endpoint is None:
         return feedback
-    model_name = _LLM_DEFAULT_MODEL.get(backend, "gpt-4o-mini")
+    model_name = config.llm_model or _LLM_DEFAULT_MODEL.get(backend, "gpt-4o-mini")
     tk = tracker if tracker is not None else get_default_token_tracker()
     try:
         import httpx
@@ -2750,7 +2750,7 @@ async def llm_enhance_async(
     endpoint = _LLM_ENDPOINTS.get(backend)
     if endpoint is None:
         return feedback
-    model_name = _LLM_DEFAULT_MODEL.get(backend, "gpt-4o-mini")
+    model_name = config.llm_model or _LLM_DEFAULT_MODEL.get(backend, "gpt-4o-mini")
     tk = tracker if tracker is not None else get_default_token_tracker()
     try:
         import httpx
@@ -2970,7 +2970,7 @@ def llm_enhance_stream(
     endpoint = _LLM_ENDPOINTS.get(backend)
     if endpoint is None:
         return
-    model_name = _LLM_DEFAULT_MODEL.get(backend, "gpt-4o-mini")
+    model_name = config.llm_model or _LLM_DEFAULT_MODEL.get(backend, "gpt-4o-mini")
     tk = tracker if tracker is not None else get_default_token_tracker()
     _, payload = _build_llm_messages(
         feedback, question, config, driver_profile, conversation_history
@@ -3052,7 +3052,7 @@ async def llm_enhance_stream_async(
     endpoint = _LLM_ENDPOINTS.get(backend)
     if endpoint is None:
         return
-    model_name = _LLM_DEFAULT_MODEL.get(backend, "gpt-4o-mini")
+    model_name = config.llm_model or _LLM_DEFAULT_MODEL.get(backend, "gpt-4o-mini")
     tk = tracker if tracker is not None else get_default_token_tracker()
     _, payload = _build_llm_messages(
         feedback, question, config, driver_profile, conversation_history
@@ -3233,7 +3233,7 @@ class FeedbackEngine:
             }
 
         endpoint = _LLM_ENDPOINTS.get(backend)
-        model_name = _LLM_DEFAULT_MODEL.get(backend)
+        model_name = self.config.llm_model or _LLM_DEFAULT_MODEL.get(backend)
         if endpoint is None:
             _logger.warning(
                 "preload_llm: unknown backend=%s, skipping load", backend,

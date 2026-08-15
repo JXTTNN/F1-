@@ -4,6 +4,13 @@
 
 ## 2026-08 优化迭代
 
+### 内置 LLM 尊重用户自定义模型 (Iter-257)
+- **修复 `llm_model` 配置被静默忽略**：4 个 `llm_enhance*` 入口 + `preload_llm`
+  一律硬编码 `_LLM_DEFAULT_MODEL`，用户通过 `LLM_MODEL` 环境变量或
+  `Settings.llm_model` 指定的模型名从未生效。现改为 `config.llm_model or 默认`,
+  云后端 (openai) 可切换到任意兼容模型 (如 gpt-4.1-mini / 本地代理模型)。
+- 测试：`test_llm_enhance_honors_config_llm_model` (捕获 POST payload 断言 model)。
+
 ### 车手反馈接入 F1 2026 主动空力 (Iter-256)
 - **新增 `active_aero_usage` 反馈维度 (第 19 维)**：反馈引擎此前对 2026 赛季
   招牌玩法主动空力 (X-Mode 低阻直道 / Z-Mode 高下压弯道) 完全无感——
