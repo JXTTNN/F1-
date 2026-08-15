@@ -242,6 +242,10 @@
 - `bayesian.py`：`_compute_factor` 用局部 `X`/`y`/`L` 变量替代 `self._X`/`_y`/`_L`
   (帮助 mypy 收窄 None), 语义等价。bayesian 24 passed。全项目 35 → 33。
 
+### 打包/插件 (安装技能)
+- `pyproject.toml` 补全可选依赖：dev 加 `pytest-timeout` (支持测试超时保护,
+  防止未来压测挂起), 新增 `build` extra (含 `pyinstaller`, 一键 EXE 构建)。
+
 ---
 
 ## 已知限制 (Known Limitations)

@@ -32,8 +32,12 @@ dev = [
     "pytest",
     "pytest-asyncio",
     "pytest-cov",
+    "pytest-timeout",
     "ruff",
     "mypy",
+]
+build = [
+    "pyinstaller",
 ]
 
 [project.scripts]
