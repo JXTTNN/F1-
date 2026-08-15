@@ -1114,7 +1114,7 @@ class TelemetryAnalytics:
         # Front/rear g_lat balance proxy: compare high-g (>3G) vs low-g (<2G) frequency.
         high_g = np.sum(np.abs(g_lat) > 3.0)
         low_g = np.sum(np.abs(g_lat) < 2.0)
-        front_rear_ratio = float(high_g / max(low_g, 1))
+        front_rear_ratio = float(high_g) / max(float(low_g), 1.0)
         # Aero vs mechanical: max g_lat at high speed / max g_lat at low speed.
         high_spd_mask = speed > 250.0
         low_spd_mask = speed < 150.0

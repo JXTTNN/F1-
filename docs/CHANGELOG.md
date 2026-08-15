@@ -229,6 +229,9 @@
   `Any | None` 误报加定向 `type: ignore`。gap/nlg/deep_profile 91 passed。
 - `strategy.py`：燃油节约策略循环 `mode[...]` 返回 `object` → 显式 `float()/int()`
   转换 + 定向 `type: ignore`。strategy 21 passed。全项目 46 → 43。
+- `analytics.py`：`high_g / max(low_g, 1)` 中 `np.int64` 与 int 混合类型触发
+  overloaded 错误 → 显式 `float(high_g) / max(float(low_g), 1.0)`。
+  analytics 31 passed。全项目 43 → 41。
 
 ---
 
