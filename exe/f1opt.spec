@@ -12,8 +12,8 @@ import sys
 
 IS_WINDOWS = sys.platform == 'win32'
 
-# 项目根目录 (spec 文件在 exe/ 下, 所以往上一级)
-_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__spec_file__)))
+# 项目根目录 (SPECPATH = spec 文件所在目录 exe/, 往上一级即项目根)
+_ROOT = os.path.dirname(os.path.abspath(SPECPATH))
 
 # --- 静态资源 (UI 仪表盘) ---
 _ui_static = os.path.join(_ROOT, 'f1opt', 'ui', 'static')
