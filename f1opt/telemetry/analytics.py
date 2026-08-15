@@ -250,6 +250,23 @@ class TelemetryAnalytics:
             "lap_smoothing_score": self.lap_smoothing_score(),
             "racing_line_deviation": self.racing_line_deviation(),
             "corner_exit_speed": self.corner_exit_speed_analysis(),
+            "sector_timing": self.sector_timing_analysis(),
+            "ers_deploy_mode": self.ers_deploy_mode_analysis(),
+            "tyre_degradation": self.tyre_degradation_analysis(),
+            "throttle_brake_overlap": self.throttle_brake_overlap_analysis(),
+            "corner_entry_exit_ratio": self.corner_entry_exit_ratio_analysis(),
+            "gear_usage": self.gear_usage_analysis(),
+            "sector_throttle_smoothness": self.sector_throttle_smoothness(),
+            "engine_braking": self.engine_braking_analysis(),
+            "grip_utilization": self.grip_utilization_analysis(),
+            "downforce_balance": self.downforce_balance_analysis(),
+            "mechanical_grip_trend": self.mechanical_grip_trend_analysis(),
+            "brake_temp_balance": self.brake_temp_balance_analysis(),
+            "tyre_temp_gradient": self.tyre_temp_gradient_analysis(),
+            "fuel_per_sector": self.fuel_per_sector_analysis(),
+            "ers_sector": self.ers_sector_analysis(),
+            "grip_consistency": self.grip_consistency_analysis(),
+            "ers_recovery_efficiency": self.ers_recovery_efficiency_analysis(),
         }
 
     # ------------------------------------------------------------------ #
