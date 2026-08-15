@@ -447,10 +447,13 @@ class TestSessionHistory:
 # --------------------------------------------------------------------------- #
 class TestTyreSets:
     def test_structure(self) -> None:
-        _, p = parse_packet(make_packet(12, b"\x00" * 200))
+        _, p = parse_packet(make_packet(12, b"\x00" * 250))
         assert "m_carIdx" in p
         assert "m_fittedIdx" in p
-        assert len(p["m_tyreSetData"]) == 13
+        assert len(p["m_tyreSetData"]) == 20  # 13 dry + 7 wet (Iter-283)
+        s0 = p["m_tyreSetData"][0]
+        assert "m_fitted" in s0
+        assert "m_lapDeltaTime" in s0
 
 
 # --------------------------------------------------------------------------- #
@@ -472,25 +475,30 @@ class TestMotionEx:
 class TestTimeTrial:
     def test_structure(self) -> None:
         _, p = parse_packet(make_packet(14, b"\x00" * 100))
-        assert "m_timeTrialDataSet" in p
-        assert "m_carIdx" in p["m_timeTrialDataSet"]
+        assert "m_playerSessionBestDataSet" in p
+        assert "m_personalBestDataSet" in p
+        assert "m_rivalDataSet" in p
+        assert "m_carIdx" in p["m_playerSessionBestDataSet"]
 
-    def test_full_101b_body_padded(self) -> None:
-        # EA PDF total = 101B (29 header + 72 body). Feed exactly 72B body.
-        body = bytes(range(72))
+    def test_three_datasets_round_trip(self) -> None:
+        # 权威规范: 3 × 25B = 75B body (Iter-283)
+        body = bytes(range(75))
         _, p = parse_packet(make_packet(14, body))
-        assert p["_expected_body_size"] == 72
-        assert p["_body_size"] == 72
-        # First TimeTrialDataSet (BB + IIII = 2B + 16B = 18B) parsed from body head.
-        assert p["m_timeTrialDataSet"]["m_carIdx"] == body[0]
-        assert p["m_timeTrialDataSet"]["m_teamId"] == body[1]
-        assert len(p["_remaining"]) == 72 - 18
+        player = p["m_playerSessionBestDataSet"]
+        assert player["m_carIdx"] == 0
+        assert player["m_teamId"] == 1 | (2 << 8)  # uint16 LE
+        assert player["m_lapTimeInMS"] == int.from_bytes(body[3:7], "little")
+        assert player["m_sector3TimeInMS"] == int.from_bytes(body[15:19], "little")
+        assert player["m_tractionControl"] == body[19]
+        assert player["m_valid"] == body[24]
+        assert p["m_personalBestDataSet"]["m_carIdx"] == body[25]
+        assert p["m_rivalDataSet"]["m_carIdx"] == body[50]
 
     def test_truncated_body_padded(self) -> None:
         # Truncated body (only 5B) is zero-padded so parsing does not crash.
         _, p = parse_packet(make_packet(14, b"\x01\x02\x03\x04\x05"))
-        assert p["m_timeTrialDataSet"]["m_carIdx"] == 1
-        assert p["m_timeTrialDataSet"]["m_teamId"] == 2
+        assert p["m_playerSessionBestDataSet"]["m_carIdx"] == 1
+        assert p["m_playerSessionBestDataSet"]["m_teamId"] == 2 | (3 << 8)
 
     def test_confidence_notes_2026_season_pack(self) -> None:
         from f1opt.telemetry.packets import (
@@ -502,7 +510,7 @@ class TestTimeTrial:
         assert "2026 Season Pack" in CONFIDENCE_CARSTATUS
         assert "m_ersDeployMode" in CONFIDENCE_CARSTATUS
         assert "2026 Season Pack" in CONFIDENCE_CARTELEMETRY
-        assert "MEDIUM-LOW" in CONFIDENCE_TIMETRIAL
+        assert "HIGH" in CONFIDENCE_TIMETRIAL
 
 
 # --------------------------------------------------------------------------- #

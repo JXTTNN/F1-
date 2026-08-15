@@ -596,11 +596,13 @@ CONFIDENCE_FINALCLASS = (
     "HIGH — total size 1042B verified against EA PDF (29 header + 1 numCars + "
     "22 cars * 46B). Includes F1 25 m_resultReason."
 )
-# per car: position, numLaps, gridPosition, points, pitStops, resultStatus,
-# bestLapTimeInMS(I), totalRaceTime(d), totalRaceTimeWarnings, numPenalties,
-# numTyreStints, tyreStintsActual[8], tyreStintsVisual[8], tyreStintsEndLaps[8],
-# resultReason
-_FC_PER = "BBBBBB I d B BB 8B8B8B B".replace(" ", "")
+# Iter-283: 按权威规范修正 FinalClassification — m_resultReason 紧随 m_resultStatus
+# (旧版误置于 tyreStintsEndLaps 末尾, 导致 bestLapTimeInMS/totalRaceTime 起错位 1 字节);
+# 且 m_penaltiesTime 被误名为 totalRaceTimeWarnings。
+# per car: position, numLaps, gridPosition, points, numPitStops, resultStatus,
+# resultReason, bestLapTimeInMS(I), totalRaceTime(d), penaltiesTime, numPenalties,
+# numTyreStints, tyreStintsActual[8], tyreStintsVisual[8], tyreStintsEndLaps[8]
+_FC_PER = "BBBBBBB I d BBB 8B8B8B".replace(" ", "")
 _FC_BODY = struct.Struct("<B" + _FC_PER * NUM_CARS)
 
 
@@ -616,14 +618,14 @@ def parse_final_classification(data: bytes) -> dict[str, Any]:
         c = rest[base:base + fields_per_car]
         cars.append({
             "m_position": c[0], "m_numLaps": c[1], "m_gridPosition": c[2],
-            "m_points": c[3], "m_pitStops": c[4], "m_resultStatus": c[5],
-            "m_bestLapTimeInMS": c[6], "m_totalRaceTime": c[7],
-            "m_totalRaceTimeWarnings": c[8], "m_numPenalties": c[9],
-            "m_numTyreStints": c[10],
-            "m_tyreStintsActual": list(c[11:19]),
-            "m_tyreStintsVisual": list(c[19:27]),
-            "m_tyreStintsEndLaps": list(c[27:35]),
-            "m_resultReason": c[35],
+            "m_points": c[3], "m_numPitStops": c[4], "m_resultStatus": c[5],
+            "m_resultReason": c[6],
+            "m_bestLapTimeInMS": c[7], "m_totalRaceTime": c[8],
+            "m_penaltiesTime": c[9], "m_numPenalties": c[10],
+            "m_numTyreStints": c[11],
+            "m_tyreStintsActual": list(c[12:20]),
+            "m_tyreStintsVisual": list(c[20:28]),
+            "m_tyreStintsEndLaps": list(c[28:36]),
         })
         base += fields_per_car
     return {"m_numCars": num_cars, "m_classificationData": cars}
@@ -633,14 +635,18 @@ def parse_final_classification(data: bytes) -> dict[str, Any]:
 # Packet 9 — Lobby Info  (MEDIUM-LOW — name 32, trailing bytes uncertain)
 # --------------------------------------------------------------------------- #
 CONFIDENCE_LOBBYINFO = (
-    "MEDIUM-LOW — F1 25 name length 32 (size 954 verified). Per-player trailing "
-    "assist bytes are best-effort; trailing bytes ignored."
+    "HIGH — PacketLobbyInfo per MacManley/f1-26-udp 权威规范 (Iter-283). "
+    "m_teamId/m_techLevel uint16, 补齐 m_platform/m_carNumber/m_yourTelemetry/"
+    "m_showOnlineNames/m_readyStatus; 43B/player."
 )
-# per player: aiControlled, networkId, teamId, nationality, name[32], carTelemetrySetup
-_LOBBY_PER = "BBBB32sB"
+# Iter-283: 按权威规范修正 LobbyInfo — m_teamId/m_techLevel 为 uint16 (旧版误作
+# uint8 且虚构 m_networkId/m_carTelemetrySetup), 补齐 m_platform/m_carNumber/
+# m_yourTelemetry/m_showOnlineNames/m_readyStatus。
+_LOBBY_PER = "BHBB32sBBBHB"
 _LOBBY_NAMES = (
-    "m_aiControlled", "m_networkId", "m_teamId", "m_nationality", "m_name",
-    "m_carTelemetrySetup",
+    "m_aiControlled", "m_teamId", "m_nationality", "m_platform", "m_name",
+    "m_carNumber", "m_yourTelemetry", "m_showOnlineNames", "m_techLevel",
+    "m_readyStatus",
 )
 _LOBBY_BODY = struct.Struct("<B" + _LOBBY_PER * NUM_CARS)
 
@@ -755,12 +761,14 @@ def parse_session_history(data: bytes) -> dict[str, Any]:
 # Packet 12 — Tyre Sets  (MEDIUM confidence)
 # --------------------------------------------------------------------------- #
 CONFIDENCE_TYRESETS = (
-    "MEDIUM — carIdx, 13 TyreSetData, fittedIdx. Per-set layout follows F1 24."
+    "HIGH — PacketTyreSetData per MacManley/f1-26-udp 权威规范 (Iter-283). "
+    "20 套 (13 干 + 7 湿), 每套 10B (7×uint8 + int16 lapDeltaTime + uint8 fitted)."
 )
-# TyreSetData: actualTyreCompound, visualTyreCompound, wear, available,
-# recommendedSession, lifeSpan, usableLife, lapDeltaTime(b), fitted
-_TS_SET = "BBBBBbbB"
-_TS_BODY = struct.Struct("<" + "BB" + _TS_SET * 13 + "B")
+# Iter-283: 按权威规范修正 TyreSets — 20 套 (13 干 + 7 湿, 旧版误作 13 套),
+# 每套 10 字节: 7×uint8 + lapDeltaTime(int16) + fitted(uint8); 旧版缺 m_fitted 且
+# 把 lapDeltaTime 误作 1 字节。
+_TS_SET = "BBBBBBB" + "h" + "B"
+_TS_BODY = struct.Struct("<" + "B" + _TS_SET * 20 + "B")
 
 
 def parse_tyre_sets(data: bytes) -> dict[str, Any]:
@@ -769,14 +777,15 @@ def parse_tyre_sets(data: bytes) -> dict[str, Any]:
     car_idx = v[0]
     i = 1
     sets = []
-    for _ in range(13):
-        s = v[i:i + 8]
+    for _ in range(20):
+        s = v[i:i + 9]
         sets.append({
             "m_actualTyreCompound": s[0], "m_visualTyreCompound": s[1],
             "m_wear": s[2], "m_available": s[3], "m_recommendedSession": s[4],
             "m_lifeSpan": s[5], "m_usableLife": s[6], "m_lapDeltaTime": s[7],
+            "m_fitted": s[8],
         })
-        i += 8
+        i += 9
     fitted_idx = v[i]
     return {
         "m_carIdx": car_idx,
@@ -789,14 +798,15 @@ def parse_tyre_sets(data: bytes) -> dict[str, Any]:
 # Packet 13 — Motion Ex  (LOW-MEDIUM; F1 25 additions included)
 # --------------------------------------------------------------------------- #
 CONFIDENCE_MOTIONEX = (
-    "LOW-MEDIUM — base follows F1 24 MotionEx; F1 25 adds m_chassisPitch, "
-    "m_wheelCamber[4], m_wheelCamberGain[4] (EA PDF total 273B). Exact field set is "
-    "under-documented; trailing bytes ignored."
+    "HIGH — PacketMotionEX per MacManley/f1-26-udp 权威规范 (Iter-283). "
+    "8×float[4] 数组 + 17 标量 = 61 float = 244B (含 wheelSlipAngle/frontAeroHeight/"
+    "rearAeroHeight/frontRollAngle/rearRollAngle/chassisYaw)."
 )
-# 7 float[4] arrays + 10 individual floats + 2 float[4] arrays (F1 24) +
-# chassisPitch(f) + wheelCamber[4] + wheelCamberGain[4] (F1 25)
+# Iter-283: 按权威规范修正 MotionEx 完整字段序 — 8 个 float[4] 数组 (含 wheelSlipAngle
+# 紧随 wheelSlipRatio, 旧版误置于 wheelVertForce 之后) + 17 标量 (补 frontAeroHeight/
+# rearAeroHeight/frontRollAngle/rearRollAngle/chassisYaw) = 61 float = 244B。
 _MOTIONEX_BODY = struct.Struct(
-    "<" + "4f" * 7 + "f" * 10 + "4f" * 2 + "f" + "4f" * 2
+    "<" + "4f" * 8 + "f" * 11 + "4f" + "f" * 6 + "4f" * 2
 )
 
 
@@ -807,7 +817,8 @@ def parse_motion_ex(data: bytes) -> dict[str, Any]:
     out: dict[str, Any] = {}
     for name in (
         "m_suspensionPosition", "m_suspensionVelocity", "m_suspensionAcceleration",
-        "m_wheelSpeed", "m_wheelSlipRatio", "m_wheelLatForce", "m_wheelLongForce",
+        "m_wheelSpeed", "m_wheelSlipRatio", "m_wheelSlipAngle",
+        "m_wheelLatForce", "m_wheelLongForce",
     ):
         out[name] = list(v[i:i + 4])
         i += 4
@@ -815,18 +826,19 @@ def parse_motion_ex(data: bytes) -> dict[str, Any]:
         "m_heightOfCOGAboveGround", "m_localVelocityX", "m_localVelocityY",
         "m_localVelocityZ", "m_angularVelocityX", "m_angularVelocityY",
         "m_angularVelocityZ", "m_angularAccelerationX", "m_angularAccelerationY",
-        "m_angularAccelerationZ",
+        "m_angularAccelerationZ", "m_frontWheelsAngle",
     )
     for name in scalars:
         out[name] = v[i]
         i += 1
-    for name in ("m_wheelVerticalForce", "m_wheelSlipAngle"):
-        out[name] = list(v[i:i + 4])
-        i += 4
-    out["m_frontWheelsAngle"] = v[i]
-    i += 1
-    out["m_chassisPitch"] = v[i]
-    i += 1
+    out["m_wheelVertForce"] = list(v[i:i + 4])
+    i += 4
+    for name in (
+        "m_frontAeroHeight", "m_rearAeroHeight", "m_frontRollAngle",
+        "m_rearRollAngle", "m_chassisYaw", "m_chassisPitch",
+    ):
+        out[name] = v[i]
+        i += 1
     out["m_wheelCamber"] = list(v[i:i + 4])
     i += 4
     out["m_wheelCamberGain"] = list(v[i:i + 4])
@@ -837,42 +849,45 @@ def parse_motion_ex(data: bytes) -> dict[str, Any]:
 # Packet 14 — Time Trial  (MEDIUM-LOW; EA PDF 101B, first 6 fields documented)
 # --------------------------------------------------------------------------- #
 CONFIDENCE_TIMETRIAL = (
-    "MEDIUM-LOW — EA PDF reports 101B total (Iter-11 cross-checked against EA F1 25 "
-    "v3 PDF + 2026 Season Pack discussion). First TimeTrialDataSet fields (carIdx 1B + "
-    "teamId 1B + lapTimeInMS 4B + sector1/2/3InMS 4B*3 = 18B) are documented; the "
-    "remaining 54B may contain a second TimeTrialDataSet (AI/benchmark) + padding. "
-    "We parse the first set and expose the remainder as raw bytes for forward compat. "
-    "Full layout pending real-game capture."
+    "HIGH — PacketTimeTrialData per MacManley/f1-26-udp 权威规范 (Iter-283). "
+    "3 个 TimeTrialDataSet (playerSessionBest/personalBest/rival), 每个 25B "
+    "(carIdx + teamId(H) + 4×uint32 + 6×uint8)."
 )
-_TT_HEAD = struct.Struct("<BB IIII")
-_TT_TOTAL_BODY = 101 - 29  # 72B body after 29B header (EA PDF total 101B)
+_TT_SET = "B" + "H" + "I" * 4 + "B" * 6
+_TT_BODY = struct.Struct("<" + _TT_SET * 3)
+
+
+def _parse_time_trial_set(v: tuple, i: int) -> tuple[dict[str, Any], int]:
+    """Parse one TimeTrialDataSet from ``v`` starting at index ``i``."""
+    return {
+        "m_carIdx": v[i],
+        "m_teamId": v[i + 1],
+        "m_lapTimeInMS": v[i + 2],
+        "m_sector1TimeInMS": v[i + 3],
+        "m_sector2TimeInMS": v[i + 4],
+        "m_sector3TimeInMS": v[i + 5],
+        "m_tractionControl": v[i + 6],
+        "m_gearboxAssist": v[i + 7],
+        "m_antiLockBrakes": v[i + 8],
+        "m_equalCarPerformance": v[i + 9],
+        "m_customSetup": v[i + 10],
+        "m_valid": v[i + 11],
+    }, i + 12
 
 
 def parse_time_trial(data: bytes) -> dict[str, Any]:
     """Parse PacketTimeTrialData (packet id 14).
 
-    EA PDF total = 101B (29B header + 72B body). The first ``TimeTrialDataSet``
-    (carIdx/teamId/lapTimeInMS/sector1-3InMS) is documented; the remainder is
-    exposed as raw bytes (likely a second dataset + padding) so future EA spec
-    updates don't break parsing. Body is padded to 72B if shorter.
+    3 TimeTrialDataSet (playerSessionBest / personalBest / rival), 25B each.
     """
-    body = data[HEADER_SIZE:]
-    if len(body) < _TT_HEAD.size:
-        body = body + b"\x00" * (_TT_HEAD.size - len(body))
-    car_idx, team_id, lap, s1, s2, s3 = _TT_HEAD.unpack(body[: _TT_HEAD.size])
-    remaining = body[_TT_HEAD.size:]
+    v = _unpack_body(data, _TT_BODY)
+    player, i = _parse_time_trial_set(v, 0)
+    personal, i = _parse_time_trial_set(v, i)
+    rival, _ = _parse_time_trial_set(v, i)
     return {
-        "m_timeTrialDataSet": {
-            "m_carIdx": car_idx,
-            "m_teamId": team_id,
-            "m_lapTimeInMS": lap,
-            "m_sector1TimeInMS": s1,
-            "m_sector2TimeInMS": s2,
-            "m_sector3TimeInMS": s3,
-        },
-        "_remaining": remaining,
-        "_body_size": len(body),
-        "_expected_body_size": _TT_TOTAL_BODY,
+        "m_playerSessionBestDataSet": player,
+        "m_personalBestDataSet": personal,
+        "m_rivalDataSet": rival,
     }
 
 
@@ -970,13 +985,13 @@ _EXPECTED_BODY_SIZES: dict[int, int] = {
     5: 1078,   # CarSetups
     6: 1301,   # CarTelemetry: 59 bytes/car × 22 + 3 trailer (Iter-278)
     7: 1298,   # CarStatus: 59 bytes/car × 22 (Iter-278, 权威规范)
-    8: 1013,   # FinalClassification: 1042 - 29
-    9: 925,    # LobbyInfo: 954 - 29
+    8: 1013,   # FinalClassification: 46B/car * 22 + 1 (Iter-283, 权威规范)
+    9: 947,    # LobbyInfo: 43B/player * 22 + 1 (Iter-283, teamId/techLevel uint16)
     10: 1012,  # CarDamage: 1041 - 29
     11: 526,   # SessionHistory
-    12: 110,   # TyreSets
-    13: 244,   # MotionEx: 273 - 29
-    14: 72,    # TimeTrial: 101 - 29
+    12: 202,   # TyreSets: 1 + 20*10 + 1 (Iter-283, 20 套, 每套 10B)
+    13: 244,   # MotionEx: 273 - 29 (Iter-283, 61 float)
+    14: 75,    # TimeTrial: 3 * 25B (Iter-283, 权威规范)
     15: 1102,  # LapPositions: 1131 - 29
     16: 220,   # CarTelemetry2: 10 bytes/car × 22 (Iter-278)
 }

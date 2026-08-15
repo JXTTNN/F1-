@@ -4,6 +4,26 @@
 
 ## 2026-08 优化迭代
 
+### 按权威规范修正 5 个剩余数据包线格式 (Iter-283)
+- 继续用 MacManley/f1-26-udp 权威规范审计剩余数据包, 修正 5 处错位/缺失:
+  - **FinalClassification (id 8)**：`m_resultReason` 应紧随 `m_resultStatus` (旧版误置于
+    tyreStintsEndLaps 末尾, 导致 bestLapTimeInMS/totalRaceTime 起错位 1 字节);
+    `m_totalRaceTimeWarnings` 误名 → 改为权威 `m_penaltiesTime`。
+  - **LobbyInfo (id 9)**：`m_teamId`/`m_techLevel` 为 uint16 (旧版误作 uint8 且虚构
+    `m_networkId`/`m_carTelemetrySetup`), 补齐 `m_platform`/`m_carNumber`/
+    `m_yourTelemetry`/`m_showOnlineNames`/`m_readyStatus`; 43 字节/玩家。
+  - **TyreSets (id 12)**：20 套 (13 干 + 7 湿, 旧版误作 13 套), 每套 10 字节
+    (7×uint8 + `m_lapDeltaTime` int16 + `m_fitted` uint8); 旧版缺 m_fitted 且把
+    lapDeltaTime 误作 1 字节。
+  - **MotionEx (id 13)**：`m_wheelSlipAngle` 应紧随 `m_wheelSlipRatio` (旧版误置于
+    wheelVertForce 之后), 补 `m_frontAeroHeight`/`m_rearAeroHeight`/`m_frontRollAngle`/
+    `m_rearRollAngle`/`m_chassisYaw`; 61 float = 244B。
+  - **TimeTrial (id 14)**：3 个 TimeTrialDataSet (playerSessionBest/personalBest/rival),
+    每个 25B (carIdx + teamId(H) + 4×uint32 + 6×uint8); 旧版只解析首个 dataset 且
+    teamId 误作 uint8。
+- 同步 `_EXPECTED_BODY_SIZES` (LobbyInfo 925→947, TyreSets 110→202, TimeTrial 72→75)
+  与置信度注释 (均升为 HIGH)。测试同步 (test_packets/test_robustness)。
+
 ### 修复 CarSetups 线格式 (Iter-282b)
 - 按权威规范修正 CarSetups：补 `m_engineBraking`(B)，轮胎压力为 float(4f) 而非
   uint8；旧版把 4 胎压误作 uint8 且缺 engineBraking，导致 ballast/fuelLoad 错位 9 字节。

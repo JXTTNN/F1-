@@ -384,18 +384,20 @@ class TestPacketParserEdgeCases:
         assert "m_suspensionPosition" in result
         assert len(result["m_suspensionPosition"]) == 4
 
-    def test_parse_time_trial_on_101_byte_packet_returns_fields(self) -> None:
-        """EA PDF total = 101B (29 header + 72 body). Feed exactly 72B body."""
-        body = bytes(range(72))
+    def test_parse_time_trial_returns_three_datasets(self) -> None:
+        """权威规范: 3 × 25B = 75B body (Iter-283)."""
+        body = bytes(range(75))
         data = _make_header_bytes(14) + body
         result = parse_time_trial(data)
         assert isinstance(result, dict)
-        assert "m_timeTrialDataSet" in result
-        tts = result["m_timeTrialDataSet"]
+        assert "m_playerSessionBestDataSet" in result
+        assert "m_personalBestDataSet" in result
+        assert "m_rivalDataSet" in result
+        tts = result["m_playerSessionBestDataSet"]
         assert tts["m_carIdx"] == body[0]
-        assert tts["m_teamId"] == body[1]
+        assert tts["m_teamId"] == body[1] | (body[2] << 8)
         assert isinstance(tts["m_lapTimeInMS"], int)
-        assert result["_expected_body_size"] == 72
+        assert result["m_rivalDataSet"]["m_carIdx"] == body[50]
 
     @pytest.mark.parametrize("pid", list(range(16)))
     def test_all_parsers_on_minimal_bytes_return_dict(self, pid: int) -> None:
