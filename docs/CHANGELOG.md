@@ -4,6 +4,10 @@
 
 ## 2026-08 优化迭代
 
+### CLI 赛道详情附带 Pirelli 选胎 (Iter-274)
+- `f1opt tracks info --track <id>` 现附带 `pirelli_compounds` 字段 (soft/medium/hard
+  -> C0-C5), 与 Iter-273 的 `/api/strategy/plan` 保持一致, 补齐 CLI 侧的选胎信息。
+
 ### 策略端点暴露 Pirelli 2026 选胎方案 (Iter-273)
 - `/api/strategy/plan` 响应新增 `pirelli_compounds` 字段: 按赛道返回该场
   soft/medium/hard 对应的 C0-C5 具体配方 (来自此前未接入的 `pirelli_2026.py`)。

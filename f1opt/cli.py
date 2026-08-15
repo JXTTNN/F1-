@@ -592,6 +592,16 @@ def cmd_tracks_info(args: argparse.Namespace) -> int:
         "track_type": track.track_type,
         "notes": track.notes,
     }
+    # Iter-274: 附带该场 Pirelli 2026 选胎方案 (soft/medium/hard -> C0-C5).
+    try:
+        from f1opt.model.pirelli_2026 import tire_compound_for_track
+
+        sel = tire_compound_for_track(track.track_id)
+        info["pirelli_compounds"] = {
+            "soft": sel.soft_code, "medium": sel.medium_code, "hard": sel.hard_code,
+        }
+    except Exception:
+        info["pirelli_compounds"] = None
     _print(info, args.json)
     return 0
 
