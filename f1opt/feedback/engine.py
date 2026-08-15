@@ -1050,7 +1050,9 @@ def extract_metrics(
 
     deploy_mode, mode_t = cols["ers_deploy_mode"]
     if len(deploy_mode) >= 2:
-        hotlap_mask = deploy_mode == 1.0
+        # Iter-276: hotlap 是 mode 2 (0=none/1=medium/2=hotlap/3=overtake),
+        # 旧代码误判 mode 1 (medium) 为 hotlap。
+        hotlap_mask = deploy_mode == 2.0
         hotlap_pct = float(np.mean(hotlap_mask)) * 100.0
         metrics["values"]["deploy_mode_hotlap_pct"] = hotlap_pct
         add_ref("deploy_mode_hotlap_pct", float(mode_t[0]), "ers_deploy_mode", float(hotlap_pct))

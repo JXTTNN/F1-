@@ -4,6 +4,14 @@
 
 ## 2026-08 优化迭代
 
+### 修复 ERS 部署模式映射错位 (Iter-276)
+- **`deploy_mode_hotlap_pct` 误判 mode 1 为 hotlap**：F1 UDP `m_ersDeployMode` 为
+  0=none/1=medium/2=hotlap/3=overtake，反馈引擎原 `deploy_mode==1.0` 把 medium 当成
+  hotlap，导致 hotlap 占比统计错误。改为 `==2.0`。
+- **UI ERS 模式名错位**：实时面板 `modeNames` 原为 5 项 (无/低/中/Hotlap/超车),
+  与 4 种模式不符 (模式整体后移一位)。改为 `["无","中","Hotlap","超车"]`。
+- 测试：`test_hotlap_pct_uses_mode_2` (mode1+mode2 各半 → hotlap 50%)。
+
 ### 仪表盘策略结果显示 Pirelli 选胎 (Iter-275)
 - 分析中心「赛道策略」结果面板新增「Pirelli 选胎 (软/中/硬)」卡片, 渲染
   `/api/strategy/plan` 返回的 `pirelli_compounds` (C0-C5), 与 API/CLI 三端一致。

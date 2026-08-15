@@ -877,7 +877,7 @@
     // ERS 部署模式 (0=None 1=Low 2=Medium 3=Hotlap 4=Overtake)
     var erm=Number(f.ers_deploy_mode);
     if(isFinite(erm)){
-      var modeNames=["无","低","中","Hotlap","超车"];
+      var modeNames=["无","中","Hotlap","超车"];
       var mi=Math.round(erm);
       setText("ers-mode", (mi>=0&&mi<modeNames.length)?modeNames[mi]:"—");
     }

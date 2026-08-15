@@ -248,6 +248,19 @@ def test_ers_deployment_dimension_reads_aligned_field() -> None:
     assert "harvest" in dim["value"]
 
 
+def test_hotlap_pct_uses_mode_2() -> None:
+    """Iter-276: deploy_mode_hotlap_pct 应统计 mode 2 (hotlap), 而非 mode 1。"""
+    frames = []
+    for i in range(200):
+        # 前 100 帧 mode=1 (medium), 后 100 帧 mode=2 (hotlap).
+        m = 1.0 if i < 100 else 2.0
+        frames.append(_frame(i, ers_deploy_mode=m))
+    out = generate_feedback(frames, DEFAULT_SETUP.model_dump(), "monza")
+    dim = _dim_by_name(out, "ers_deployment")
+    # hotlap 占比应 ≈ 50% (仅 mode 2), 而非 100% (若误判 mode 1 为 hotlap).
+    assert "hotlap mode 50%" in dim["value"]
+
+
 def test_ers_sector_efficiency_dimension_wired() -> None:
     """Iter-260: ERS 扇区效率维度应接入反馈输出 (不再死代码)。"""
     frames = []
