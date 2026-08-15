@@ -287,6 +287,11 @@
   值被错误稀释 3x。新增独立 `active_aero_count` (CarStatus 计数)。
   新增回归测试。telemetry 360 passed。
 
+### UI 设计 (ERS/DRS 状态显示)
+- `_frame_to_ws` 补传 `ers_deploy_mode` 与 `drs_active` (aligner 已产出但 UI 未显示)。
+- 实时面板：DRS 显示区分「DRS 开」(绿) / 「DRS 允许」(灰)；新增 ERS 部署模式
+  (无/低/中/Hotlap/超车)。ui+api 54 passed。mypy 仍全绿。
+
 ---
 
 ## 已知限制 (Known Limitations)

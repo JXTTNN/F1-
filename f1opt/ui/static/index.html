@@ -334,7 +334,7 @@
 
     <div class="mini-bars" style="margin-bottom:10px">
       <div class="mini">
-        <div class="head"><span>ERS 储能</span><span id="ers-val" class="mono">0%</span></div>
+        <div class="head"><span>ERS 储能 · 模式</span><span id="ers-val" class="mono">0%</span> <span id="ers-mode" class="mono" style="color:var(--purple)">—</span></div>
         <div class="track"><div id="ers-fill" class="fill" style="background:linear-gradient(90deg,#a78bfa,#00e5ff)"></div></div>
       </div>
       <div class="mini">
@@ -842,7 +842,10 @@
     el("g-dot").setAttribute("cy",gy);
     setText("glat-val", glat.toFixed(2));
     setText("glong-val", glong.toFixed(2));
-    setText("drs-val", f.drs_allowed? "允许":"—");
+    // DRS: active=已开启 (绿), allowed=允许 (未开) (灰), 否则 —
+    if(f.drs_active){ setText("drs-val","DRS 开"); el("drs-val").style.color="var(--green)"; }
+    else if(f.drs_allowed){ setText("drs-val","DRS 允许"); el("drs-val").style.color="var(--muted)"; }
+    else { setText("drs-val","—"); el("drs-val").style.color="var(--amber)"; }
     // F1 2026 主动空力 (X=低阻直道 / Z=高下压力弯道)
     var ax=Number(f.active_aero_x)||0, az=Number(f.active_aero_z)||0;
     if(ax>0.5){ setText("aero-val","X-Mode"); el("aero-val").style.color="var(--cyan)"; }
@@ -870,6 +873,13 @@
       var epct = ers<=1? ers*100 : ers;
       setWidth("ers-fill", epct);
       setText("ers-val", epct.toFixed(1)+"%");
+    }
+    // ERS 部署模式 (0=None 1=Low 2=Medium 3=Hotlap 4=Overtake)
+    var erm=Number(f.ers_deploy_mode);
+    if(isFinite(erm)){
+      var modeNames=["无","低","中","Hotlap","超车"];
+      var mi=Math.round(erm);
+      setText("ers-mode", (mi>=0&&mi<modeNames.length)?modeNames[mi]:"—");
     }
     var fuel=Number(f.fuel_in_tank);
     if(isFinite(fuel)){
