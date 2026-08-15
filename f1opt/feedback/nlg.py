@@ -249,6 +249,24 @@ def _narrate_active_aero_usage(value: str, advice: str, evidence: str) -> str:
     return _append_advice(base, advice)
 
 
+def _narrate_brake_temp(value: str, advice: str, evidence: str) -> str:
+    """Iter-270: brake temperature balance Chinese narration."""
+    base = f"刹车温度方面：{value}。"
+    return _append_advice(base, advice)
+
+
+def _narrate_tyre_temp_gradient(value: str, advice: str, evidence: str) -> str:
+    """Iter-270: tyre temperature gradient Chinese narration."""
+    base = f"轮胎温度梯度方面：{value}。"
+    return _append_advice(base, advice)
+
+
+def _narrate_grip_consistency(value: str, advice: str, evidence: str) -> str:
+    """Iter-270: grip consistency Chinese narration."""
+    base = f"抓地力一致性方面：{value}。"
+    return _append_advice(base, advice)
+
+
 _NARRATORS_ZH: dict[str, Any] = {
     "balance": _narrate_balance,
     "grip": _narrate_grip,
@@ -267,6 +285,9 @@ _NARRATORS_ZH: dict[str, Any] = {
     "aero_balance": _narrate_aero_balance,  # Iter-214
     "ers_sector_efficiency": _narrate_ers_sector_efficiency,  # Iter-242
     "active_aero_usage": _narrate_active_aero_usage,  # Iter-256
+    "brake_temp": _narrate_brake_temp,  # Iter-270
+    "tyre_temp_gradient": _narrate_tyre_temp_gradient,  # Iter-270
+    "grip_consistency": _narrate_grip_consistency,  # Iter-270
 }
 
 

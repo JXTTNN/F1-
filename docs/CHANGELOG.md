@@ -4,6 +4,11 @@
 
 ## 2026-08 优化迭代
 
+### 车手反馈中文叙事补全 (Iter-270)
+- `brake_temp` / `tyre_temp_gradient` / `grip_consistency` 三个维度此前有中文
+  标签但无中文叙事器, 落回通用 "方面：value。" 模板。现补全专属叙事函数并注册,
+  20 个 `FEEDBACK_DIMENSIONS` 全部具备中文叙事。
+
 ### fuel_load 钳制回归测试 (Iter-269)
 - 新增 `test_search_clamps_fuel_load_to_baseline`：基线 fuel_load=80kg 时, 优化器
   推荐值应保持 ~80kg 而非被推到 5kg 最小值。该测试在 Iter-267 修复前会失败
