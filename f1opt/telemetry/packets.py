@@ -91,7 +91,7 @@ def packet_name(packet_id: int) -> str:
 
 @dataclass
 class PacketHeader:
-    """Parsed 29-byte F1 25 packet header."""
+    """Parsed 29-byte F1 26 packet header."""
 
     packet_format: int
     game_year: int
@@ -144,7 +144,7 @@ def _unpack_body(data: bytes, body_struct: struct.Struct) -> tuple:
 
 
 class _LazyCarList:
-    """List-like, lazily materialized per-car dict sequence (22 cars).
+    """List-like, lazily materialized per-car dict sequence (24 cars).
 
     Eagerly parsing every 60Hz Motion packet builds 22 per-car dicts (~58µs,
     GIL-bound) even though the hot ingest path (``TelemetryAligner.on_packet``)
@@ -693,7 +693,7 @@ CONFIDENCE_CARTELEMETRY2 = (
 # --------------------------------------------------------------------------- #
 CONFIDENCE_FINALCLASS = (
     "HIGH — total size 1042B verified against EA PDF (29 header + 1 numCars + "
-    "22 cars * 46B). Includes F1 25 m_resultReason."
+    "24 cars * 46B). Includes m_resultReason."
 )
 # Iter-283: 按权威规范修正 FinalClassification — m_resultReason 紧随 m_resultStatus
 # (旧版误置于 tyreStintsEndLaps 末尾, 导致 bestLapTimeInMS/totalRaceTime 起错位 1 字节);

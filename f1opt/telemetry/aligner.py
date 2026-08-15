@@ -245,7 +245,7 @@ class TelemetryAligner:
     Usage (multi-car — Iter-131)::
 
         aligner = TelemetryAligner()
-        aligner.on_packet_all_cars(header, parsed)   # ingest all 22 cars
+        aligner.on_packet_all_cars(header, parsed)   # ingest all 24 cars
         car5 = aligner.sample_60hz(t0, t1, car_index=5)
         who = aligner.available_car_indices()        # e.g. {0, 1, 5, 7}
     """
@@ -313,7 +313,7 @@ class TelemetryAligner:
         """Iter-131: ingest every car in the per-car list of one packet.
 
         Useful for broadcast / spectator views that need to query any of the
-        22 cars. The player car (``header.player_car_index``) is still
+        24 cars. The player car (``header.player_car_index``) is still
         tracked for default-query behaviour. Returns the number of cars
         actually ingested (0 if the packet is outside the alignment source
         set or the per-car list is empty).
