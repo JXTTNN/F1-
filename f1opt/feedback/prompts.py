@@ -15,7 +15,9 @@ prompt is comprehensive even though Iter-01's rule-based path only emits a
 subset (lap-time potential + whichever rules fire).
 """
 from __future__ import annotations
+
 from typing import TYPE_CHECKING
+
 if TYPE_CHECKING:
     from f1opt.driver.profile import DriverProfile
 #: ALL feedback dimensions the spec requires (Iter-03 = 10, 现为 18).

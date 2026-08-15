@@ -35,7 +35,8 @@ session so the LLM can answer questions like "趋势怎么样?" / "上圈改善�
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import NamedTuple
+from typing import Any, NamedTuple
+
 
 class LapRecord(NamedTuple):
     """A completed lap entry stored in the session's lap history (Iter-175)."""

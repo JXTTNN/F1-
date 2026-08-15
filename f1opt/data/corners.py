@@ -18,13 +18,11 @@ F1 2026 各赛道的逐弯结构化数据: 弯角编号 / 类型 / apex 速度 /
 """
 from __future__ import annotations
 
-import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Literal
 
-from f1opt.data.tracks import get_track
 from f1opt.data.track_engineering import get_track_engineering
-
+from f1opt.data.tracks import get_track
 
 CornerType = Literal["slow", "medium", "fast"]
 CornerDemand = Literal[

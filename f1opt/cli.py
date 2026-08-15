@@ -24,7 +24,10 @@ import argparse
 import json
 import os
 import sys
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from f1opt.driver.profile import DriverProfile
 
 from f1opt.data.setup_schema import DEFAULT_SETUP, SETUP_FIELDS, CarSetup
 from f1opt.data.tracks import ALL_TRACKS, TRACKS_BY_ID
@@ -261,7 +264,7 @@ def _parse_setup_json(setup_json: str) -> CarSetup:
     return CarSetup(**setup_dict)
 
 
-def _resolve_style_profile(style: str) -> "DriverProfile":
+def _resolve_style_profile(style: str) -> DriverProfile:
     """Iter-177: map a --style preset name to a DriverProfile.
 
     Supported presets:
@@ -561,12 +564,11 @@ def cmd_feedback(args: argparse.Namespace) -> int:
 
     Iter-177: --style preset overrides --driver-style.
     """
-    from f1opt.feedback.prompts import FEEDBACK_EXAMPLES
     from f1opt.driver.profile import (
         AGGRESSIVE_PROFILE,
         CONSERVATIVE_PROFILE,
-        DriverProfile,
     )
+    from f1opt.feedback.prompts import FEEDBACK_EXAMPLES
 
     # --list-examples: print grouped examples and exit
     if args.list_examples:
@@ -682,12 +684,6 @@ def main(argv: list[str] | None = None) -> int:
             import ctypes as _ctypes
             _kernel32 = _ctypes.windll.kernel32
             _kernel32.SetConsoleMode(_kernel32.GetStdHandle(-11), 7)
-        except Exception:
-            pass
-        # Windows: 启用长路径支持 (需要 Windows 10 1607+)
-        try:
-            import ctypes as _ctypes
-            _ctypes.windll.kernel32.SetFileInformationByHandle
         except Exception:
             pass
         # Windows: 强制 UTF-8 编码 (Python 3.7+ PEP 540)

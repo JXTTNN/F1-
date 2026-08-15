@@ -15,6 +15,8 @@ DNN surrogate required.
 
 from __future__ import annotations
 
+from typing import Any
+
 from f1opt.data.tracks import TRACKS_BY_ID
 
 __all__ = [

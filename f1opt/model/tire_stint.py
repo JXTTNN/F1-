@@ -161,10 +161,12 @@ def setup_tire_stress_factor(
     float
         应力因子, 范围 [0.7, 1.5]. 1.0 = 中性.
     """
-    from f1opt.model.surrogate import predict_full
     from f1opt.model.optimizer import (
-        _TYRE_TEMP_REF, _TYRE_TEMP_SPAN, _SLIP_REF,
+        _SLIP_REF,
+        _TYRE_TEMP_REF,
+        _TYRE_TEMP_SPAN,
     )
+    from f1opt.model.surrogate import predict_full
     pred = predict_full(setup, track_id, driver_profile)
     resp = pred["responses"]
     raw_proxy = (

@@ -18,8 +18,11 @@ Usage::
     print(report.overall, report.label)
 """
 from __future__ import annotations
+
 import re as _re
 from dataclasses import dataclass
+
+
 @dataclass
 class ResponseQualityReport:
     """Structured quality scores for a feedback response (Iter-146)."""

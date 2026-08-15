@@ -225,9 +225,9 @@ def _narrate_aero_balance(value: str, advice: str, evidence: str) -> str:
     """Iter-214: aero balance Chinese narration."""
     v = value.lower()
     if "aero-dominant" in v:
-        base = f"下压力平衡方面：气动主导, 高速下压力充足但低速机械抓地力不足。"
+        base = "下压力平衡方面：气动主导, 高速下压力充足但低速机械抓地力不足。"
     elif "mechanical-dominant" in v:
-        base = f"下压力平衡方面：机械主导, 低速抓地力好但高速下压力不足。"
+        base = "下压力平衡方面：机械主导, 低速抓地力好但高速下压力不足。"
     else:
         base = f"下压力平衡方面：{value}。"
     return _append_advice(base, advice)

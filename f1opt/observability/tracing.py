@@ -33,7 +33,8 @@ from __future__ import annotations
 
 import contextlib
 import os
-from typing import Any, Iterator
+from collections.abc import Iterator
+from typing import Any
 
 __all__ = ["span", "get_tracer", "is_tracing_enabled", "shutdown_tracing"]
 
@@ -82,7 +83,7 @@ class _NoopSpan:
     def end(self) -> None:
         pass
 
-    def __enter__(self) -> "_NoopSpan":
+    def __enter__(self) -> _NoopSpan:
         return self
 
     def __exit__(self, *exc: Any) -> None:
@@ -139,8 +140,8 @@ def shutdown_tracing() -> None:
     if not is_tracing_enabled() or not _otel_available():
         return
     try:
-        from opentelemetry.sdk.trace import TracerProvider  # type: ignore[import-not-found]
         from opentelemetry import trace  # type: ignore[import-not-found]
+        from opentelemetry.sdk.trace import TracerProvider  # type: ignore[import-not-found]
         provider = trace.get_tracer_provider()
         if isinstance(provider, TracerProvider):
             provider.shutdown()
@@ -152,14 +153,15 @@ def shutdown_tracing() -> None:
 if is_tracing_enabled() and _otel_available():
     try:
         import atexit
+
         from opentelemetry import trace  # type: ignore[import-not-found]
+        from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import (  # type: ignore[import-not-found]
+            OTLPSpanExporter,
+        )
         from opentelemetry.sdk.resources import Resource  # type: ignore[import-not-found]
         from opentelemetry.sdk.trace import TracerProvider  # type: ignore[import-not-found]
         from opentelemetry.sdk.trace.export import (  # type: ignore[import-not-found]
             BatchSpanProcessor,
-        )
-        from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import (  # type: ignore[import-not-found]
-            OTLPSpanExporter,
         )
 
         service_name = os.environ.get("F1OPT_OTEL_SERVICE_NAME", "f1opt")

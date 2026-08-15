@@ -19,8 +19,6 @@ from __future__ import annotations
 import numpy as np
 
 from f1opt.data.setup_schema import CarSetup
-from f1opt.data.ea_f1_2026_benchmark import canonical_track_id
-from f1opt.data.tracks import TRACKS_BY_ID
 from f1opt.model.setup_physics_bridge import setup_penalty_s
 
 

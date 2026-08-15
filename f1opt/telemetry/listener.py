@@ -453,7 +453,7 @@ class TelemetryListener:
                         sub(header, parsed, raw),
                         timeout=_SUBSCRIBER_TIMEOUT,
                     )
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     self._subscriber_timeouts[sub_name] = (
                         self._subscriber_timeouts.get(sub_name, 0) + 1
                     )
