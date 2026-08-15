@@ -90,7 +90,7 @@ class TirePerformanceCurve:
     base_offset_s: float
 
     # ------------------------------------------------------------------ #
-    def lap_time_delta_s(self, tire_age_laps: int) -> float:
+    def lap_time_delta_s(self, tire_age_laps: float) -> float:
         """计算给定轮胎年龄的圈速 delta (s).
 
         delta = 相对 fresh medium baseline 的额外圈速损失.
@@ -199,7 +199,7 @@ def tire_curve_for(compound: str) -> TirePerformanceCurve:
     return curve
 
 
-def lap_time_delta_s(compound: str, tire_age_laps: int) -> float:
+def lap_time_delta_s(compound: str, tire_age_laps: float) -> float:
     """便捷函数: 计算化合物在给定年龄的圈速 delta."""
     return tire_curve_for(compound).lap_time_delta_s(tire_age_laps)
 

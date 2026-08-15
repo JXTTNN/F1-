@@ -201,7 +201,7 @@ class LapConfig2026:
 
     track_id: str
     compound: str = _REF_COMPOUND
-    tire_age_laps: int = _REF_TIRE_AGE
+    tire_age_laps: float = float(_REF_TIRE_AGE)  # SC/VSC 期间可分数磨损, 实为 float
     current_fuel_kg: float = _REF_FUEL_KG
     fuel_mode: FuelMode = FuelMode.NORMAL
     pu_mode: PUDeployMode = _REF_PU_MODE
@@ -549,8 +549,8 @@ class LapSimulator2026:
 
         # 跨圈状态更新 (SC 期间物理调整)
         if sc_active and sc is not None:
-            p = sc.active_period(lap_1b)
-            is_sc = p is not None and p.kind == "sc"
+            period = sc.active_period(lap_1b)
+            is_sc = period is not None and period.kind == "sc"
             wear_f = _SC_TIRE_WEAR_FACTOR if is_sc else _VSC_TIRE_WEAR_FACTOR
             fuel_f = _SC_FUEL_BURN_FACTOR if is_sc else _VSC_FUEL_BURN_FACTOR
             # 轮胎磨损降低 (SC 期间低应力)

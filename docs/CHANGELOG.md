@@ -208,6 +208,13 @@
   None 报告容器, 消除 transient None 状态 (正确性改进, 非仅标注)。
   race_weekend 29 passed。
 
+### 类型正确性 (mypy 继续收敛 52 → 50)
+- `lap_simulator_2026.py` / `tire_curve.py`：`tire_age_laps` 标注为 `int` 但
+  实际为 float (SC/VSC 期间可分数磨损), 导致 `int`/`float` 类型不一致。
+  改为 `float` 贯穿 lap simulator + tire_curve 两个 `lap_time_delta_s` 签名
+  (函数内部本就 `int(...)` 收窄, 运行时等价)。另 `p` 循环变量复用 → 改名
+  `period`。tire_curve + lap_simulator 105 passed。
+
 ---
 
 ## 已知限制 (Known Limitations)
