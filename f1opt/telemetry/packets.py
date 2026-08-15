@@ -1221,6 +1221,22 @@ def active_aero_mode_from_frame(frame: dict) -> str:
         return "unknown"
 
 
+# --------------------------------------------------------------------------- #
+# Tyre compound helpers (Iter-287)
+# --------------------------------------------------------------------------- #
+# m_actualTyreCompound 值映射 (MacManley/f1-26-udp 权威规范 README):
+#   F1 Modern: 16=C5 17=C4 18=C3 19=C2 20=C1 21=C0 22=C6; 7=inter 8=wet
+_TYRE_COMPOUND_NAMES: dict[int, str] = {
+    16: "C5", 17: "C4", 18: "C3", 19: "C2", 20: "C1", 21: "C0", 22: "C6",
+    7: "intermediate", 8: "wet",
+}
+
+
+def tyre_compound_name(compound: int) -> str:
+    """Return a human-readable name for an ``m_actualTyreCompound`` value."""
+    return _TYRE_COMPOUND_NAMES.get(compound, f"Unknown({compound})")
+
+
 __all__ = [
     "HEADER_FORMAT",
     "HEADER_SIZE",
@@ -1234,6 +1250,7 @@ __all__ = [
     "is_low_drag_mode",  # Iter-219
     "is_high_downforce_mode",  # Iter-219
     "active_aero_mode_from_frame",  # Iter-219
+    "tyre_compound_name",  # Iter-287
     "parse_header",
     "parse_packet",
     "validate_packet_size",

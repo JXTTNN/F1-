@@ -639,3 +639,22 @@ class TestVerifiedSizes:
 
     def test_all_packet_ids_have_sizes(self) -> None:
         assert set(_AUTHORITATIVE_TOTAL_SIZES) == set(range(NUM_PACKETS))
+
+
+# --------------------------------------------------------------------------- #
+# Tyre compound helper (Iter-287)
+# --------------------------------------------------------------------------- #
+class TestTyreCompoundName:
+    def test_compound_mapping(self) -> None:
+        from f1opt.telemetry.packets import tyre_compound_name
+
+        assert tyre_compound_name(16) == "C5"
+        assert tyre_compound_name(17) == "C4"
+        assert tyre_compound_name(18) == "C3"
+        assert tyre_compound_name(19) == "C2"
+        assert tyre_compound_name(20) == "C1"
+        assert tyre_compound_name(21) == "C0"  # F1 26 最硬新配方
+        assert tyre_compound_name(22) == "C6"
+        assert tyre_compound_name(7) == "intermediate"
+        assert tyre_compound_name(8) == "wet"
+        assert tyre_compound_name(99) == "Unknown(99)"
