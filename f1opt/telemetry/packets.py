@@ -439,18 +439,16 @@ CONFIDENCE_CARSETUPS = (
     "MEDIUM — discrete setup values as uint8 (game clicks), camber/toe/tyre-pressure/"
     "fuel as float; follows F1 23/24 layout."
 )
-_SETUP_PER = "BBBB ffff BBBB BBBB BBBB BBBB Bf".replace(" ", "")
-# frontWing, rearWing, onThrottleDiff, offThrottleDiff, frontCamber, rearCamber,
-# frontToe, rearToe, frontSuspension, rearSuspension, frontAntiRollBar,
-# rearAntiRollBar, frontSuspensionHeight, rearSuspensionHeight, brakePressure,
-# brakeBias, rearLeftTyrePressure, rearRightTyrePressure, frontLeftTyrePressure,
-# frontRightTyrePressure, ballast, fuelLoad
+# Iter-282: 按权威规范修正 CarSetups — 补 engineBraking(B), 轮胎压力为 float(4f)
+# 而非 uint8; 旧版把 4 胎压误作 uint8 且缺 engineBraking, 导致 ballast/fuelLoad 错位。
+_SETUP_PER = "BBBB ffff BBBBBBBBB ffff Bf".replace(" ", "")
 _SETUP_NAMES = (
     "m_frontWing", "m_rearWing", "m_onThrottleDiff", "m_offThrottleDiff",
     "m_frontCamber", "m_rearCamber", "m_frontToe", "m_rearToe",
     "m_frontSuspension", "m_rearSuspension", "m_frontAntiRollBar", "m_rearAntiRollBar",
     "m_frontSuspensionHeight", "m_rearSuspensionHeight", "m_brakePressure",
-    "m_brakeBias", "m_rearLeftTyrePressure", "m_rearRightTyrePressure",
+    "m_brakeBias", "m_engineBraking",
+    "m_rearLeftTyrePressure", "m_rearRightTyrePressure",
     "m_frontLeftTyrePressure", "m_frontRightTyrePressure", "m_ballast", "m_fuelLoad",
 )
 _CARSETUPS_BODY = struct.Struct("<" + _SETUP_PER * NUM_CARS)

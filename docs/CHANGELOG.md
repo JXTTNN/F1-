@@ -4,6 +4,10 @@
 
 ## 2026-08 优化迭代
 
+### 修复 CarSetups 线格式 (Iter-282b)
+- 按权威规范修正 CarSetups：补 `m_engineBraking`(B)，轮胎压力为 float(4f) 而非
+  uint8；旧版把 4 胎压误作 uint8 且缺 engineBraking，导致 ballast/fuelLoad 错位 9 字节。
+
 ### 修复 CarDamage 线格式 (Iter-282)
 - 按权威规范修正 CarDamage：tyresWear[4](f) + tyresDamage[4](B) + brakesDamage[4](B)
   + tyreBlisters[4](B) + 18 个 uint8 损伤/故障字段 (翼面/地板/扩散器/DRS/ERS/变速箱/
