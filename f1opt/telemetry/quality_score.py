@@ -37,7 +37,10 @@ _EXPECTED_RANGES: dict[str, tuple[float, float]] = {
     "g_long": (-10.0, 10.0),        # g
     "rpm": (0.0, 20000.0),          # rpm
     "gear": (0, 8),                 # F1 gears 1-8 (0=neutral)
-    "fuel_remaining": (0.0, 200.0), # kg
+    "fuel_in_tank": (0.0, 150.0),   # kg (Iter-264: 幻影 fuel_remaining -> 真实字段)
+    "fuel_remaining_laps": (0.0, 80.0),  # laps
+    "ers_store": (0.0, 4_000_000.0),  # J (MGU-K 350kW, ~4MJ 储能量)
+    "ers_deploy_mode": (0.0, 3.0),   # 0=none/1=medium/2=hotlap/3=overtake
     "lap_distance": (0.0, 10000.0), # meters
     "tyre_temp_fl": (0.0, 200.0),   # Celsius
     "tyre_temp_fr": (0.0, 200.0),

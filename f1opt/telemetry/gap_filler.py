@@ -46,22 +46,27 @@ _DEFAULT_FLOAT_FIELDS: tuple[str, ...] = (
     "g_lat",
     "g_long",
     "rpm",
-    "ers_deploy_mode",
+    "ers_store",
     "ers_harvested_this_lap",
     "ers_deployed_this_lap",
     "tyre_temp_fl",
     "tyre_temp_fr",
     "tyre_temp_rl",
     "tyre_temp_rr",
-    "fuel_remaining",
+    "fuel_in_tank",
+    "fuel_remaining_laps",
     "lap_distance",
     "lap_time",
 )
 
 #: Default fields to hold-last (discrete/categorical channels).
+# Iter-264: 对齐 aligner 字段名 (ers_deploy_mode 是离散模式 0-3, 应 hold-last;
+# drs -> drs_allowed/drs_active)。
 _DEFAULT_INT_FIELDS: tuple[str, ...] = (
     "gear",
-    "drs",
+    "ers_deploy_mode",
+    "drs_allowed",
+    "drs_active",
     "pit_status",
     "session_time",
 )

@@ -4,6 +4,14 @@
 
 ## 2026-08 优化迭代
 
+### 质量评分与 gap_filler 字段对齐 (Iter-264)
+- **quality_score 幻影字段修复**：`_EXPECTED_RANGES` 用 `fuel_remaining`(对齐帧从不
+  产出), 燃油范围校验永不触发。改为真实字段 `fuel_in_tank`, 并补 `fuel_remaining_laps` /
+  `ers_store` / `ers_deploy_mode` 范围, 使 range_compliance 真正覆盖 F1 2026 关键通道。
+- **gap_filler 默认字段对齐**：`ers_deploy_mode` 是离散模式(0-3), 误列在浮点插值
+  字段(会被线性插值成小数); `fuel_remaining`→`fuel_remaining_laps`; `drs`→
+  `drs_allowed`/`drs_active`; 新增 `ers_store` 平滑插值。
+
 ### UI 与文档一致性: 版本徽章 + 调教参数计数 (Iter-263)
 - **仪表盘头部版本徽章**硬编码 `v0.1.0` → 改为 `v1.2.0`, 且健康检查时从
   API `version` 动态刷新, 避免后续版本升级再度陈旧。
