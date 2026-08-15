@@ -2580,7 +2580,7 @@ def llm_enhance(
     zero-token failed records for call-count accuracy.
     """
     backend = config.llm_backend
-    if backend == "none" or not config.llm_api_key:
+    if backend == "none" or (backend == "openai" and not config.llm_api_key):
         return feedback
     endpoint = _LLM_ENDPOINTS.get(backend)
     if endpoint is None:
@@ -2688,7 +2688,7 @@ async def llm_enhance_async(
         Feedback dict with ``summary`` possibly rewritten by the LLM.
     """
     backend = config.llm_backend
-    if backend == "none" or not config.llm_api_key:
+    if backend == "none" or (backend == "openai" and not config.llm_api_key):
         return feedback
     endpoint = _LLM_ENDPOINTS.get(backend)
     if endpoint is None:
@@ -2908,7 +2908,7 @@ def llm_enhance_stream(
     import json as _json
 
     backend = config.llm_backend
-    if backend == "none" or not config.llm_api_key:
+    if backend == "none" or (backend == "openai" and not config.llm_api_key):
         return
     endpoint = _LLM_ENDPOINTS.get(backend)
     if endpoint is None:
@@ -2990,7 +2990,7 @@ async def llm_enhance_stream_async(
     import json as _json
 
     backend = config.llm_backend
-    if backend == "none" or not config.llm_api_key:
+    if backend == "none" or (backend == "openai" and not config.llm_api_key):
         return
     endpoint = _LLM_ENDPOINTS.get(backend)
     if endpoint is None:
@@ -3160,7 +3160,7 @@ class FeedbackEngine:
         backend = self.config.llm_backend
         api_key = self.config.llm_api_key
 
-        if backend == "none" or not api_key:
+        if backend == "none" or (backend == "openai" and not api_key):
             _logger.info(
                 "preload_llm: backend=%s, api_key_set=%s — LLM disabled, "
                 "skipping load",
