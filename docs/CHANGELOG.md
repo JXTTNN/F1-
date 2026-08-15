@@ -169,6 +169,13 @@
   `search_result`; `grouped` 字典补上 `dict[str, list[dict[str, Any]]]` 注解。
   全项目 mypy 80 → 70 错误。test_cli 25 passed。
 
+### 内置 LLM 状态准确性
+- **`preload_llm` 对 local (Ollama) 后端做可达性检查**：此前 preload 在未验证
+  Ollama 是否运行的情况下直接返回 `loaded=True`, 用户以为 LLM 已就绪, 实际每次
+  反馈请求都 10s 超时后静默回退。现在对 `http://localhost:11434/api/tags` 做
+  2s 健康探测, 不可达时返回 `loaded=False` + 明确 reason。
+  新增 `test_preload_llm_local_backend_unreachable` 回归测试。
+
 ---
 
 ## 已知限制 (Known Limitations)

@@ -3183,6 +3183,28 @@ class FeedbackEngine:
                 "memory_after_bytes": mem_before,
             }
 
+        # Iter-254: for the local (Ollama) backend, verify reachability before
+        # claiming loaded — otherwise preload reports success while every
+        # feedback call then times out (10s) before silently falling back.
+        if backend == "local":
+            try:
+                import httpx
+                with httpx.Client(timeout=2.0) as client:
+                    r = client.get("http://localhost:11434/api/tags")
+                    r.raise_for_status()
+            except Exception as exc:
+                self._llm_loaded = False
+                return {
+                    "loaded": False,
+                    "backend": backend,
+                    "reason": (
+                        "Ollama not reachable at http://localhost:11434 "
+                        f"({type(exc).__name__})"
+                    ),
+                    "memory_before_bytes": mem_before,
+                    "memory_after_bytes": mem_before,
+                }
+
         self._llm_loaded = True
         mem_after = self._get_memory_usage_bytes()
         _logger.info(

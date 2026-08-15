@@ -454,12 +454,33 @@ def test_llm_enhance_falls_back_on_missing_key() -> None:
     assert out["summary"] == "rule-based summary"  # unchanged
 
 
-def test_preload_llm_local_backend_no_key_required() -> None:
-    """local 后端 (Ollama) 无需 API key，preload_llm 应返回 loaded=True。"""
+def test_preload_llm_local_backend_no_key_required(monkeypatch) -> None:
+    """local 后端 (Ollama) 无需 API key；Ollama 可达时 preload 返回 loaded=True。"""
+    import httpx
+
+    # Mock Ollama 可达性检查 (/api/tags) 为成功。
+    def _fake_get(self, url, **kw):
+        return httpx.Response(200, request=httpx.Request("GET", url))
+
+    monkeypatch.setattr(httpx.Client, "get", _fake_get)
     engine = FeedbackEngine(Settings(llm_backend="local", llm_api_key=""))
     result = engine.preload_llm()
     assert result["loaded"] is True
     assert result["backend"] == "local"
+
+
+def test_preload_llm_local_backend_unreachable(monkeypatch) -> None:
+    """Iter-254: Ollama 不可达时 preload 应返回 loaded=False (而非假成功)。"""
+    import httpx
+
+    def _fake_get_fail(self, url, **kw):
+        raise httpx.ConnectError("connection refused")
+
+    monkeypatch.setattr(httpx.Client, "get", _fake_get_fail)
+    engine = FeedbackEngine(Settings(llm_backend="local", llm_api_key=""))
+    result = engine.preload_llm()
+    assert result["loaded"] is False
+    assert "not reachable" in result["reason"]
 
 
 def test_preload_llm_openai_backend_requires_key() -> None:
