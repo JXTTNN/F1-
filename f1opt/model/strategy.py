@@ -522,10 +522,10 @@ class RaceStrategyPlanner:
         best_time_loss = float("inf")
 
         for mode in modes:
-            save_per_lap = mode["fuel_saved_per_lap_kg"]
+            save_per_lap = float(mode["fuel_saved_per_lap_kg"])  # type: ignore[arg-type]
             laps_needed = int(min(deficit / save_per_lap, self.total_laps) + 0.99)
-            time_loss = laps_needed * mode["time_loss_per_lap_s"]
-            if time_loss < best_time_loss and laps_needed <= mode["max_laps"]:
+            time_loss = laps_needed * float(mode["time_loss_per_lap_s"])  # type: ignore[arg-type]
+            if time_loss < best_time_loss and laps_needed <= int(mode["max_laps"]):  # type: ignore[call-overload]
                 best_time_loss = time_loss
                 best_laps = laps_needed
                 best_mode = mode

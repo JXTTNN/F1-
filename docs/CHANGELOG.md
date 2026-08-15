@@ -227,6 +227,8 @@
   mypy 收窄 4 种 None 组合)。
 - `nlg.py` / `deep_profile.py`：`float(after)` / `float(min(lts))` 的
   `Any | None` 误报加定向 `type: ignore`。gap/nlg/deep_profile 91 passed。
+- `strategy.py`：燃油节约策略循环 `mode[...]` 返回 `object` → 显式 `float()/int()`
+  转换 + 定向 `type: ignore`。strategy 21 passed。全项目 46 → 43。
 
 ---
 
