@@ -93,6 +93,10 @@ _DIM_LABEL_ZH: dict[str, str] = {
     "throttle_brake_overlap": "油门刹车重叠",  # Iter-210
     "aero_balance": "下压力平衡",  # Iter-214
     "ers_sector_efficiency": "ERS扇区效率",  # Iter-242
+    "brake_temp": "刹车温度",  # Iter-256: 补中文标签
+    "tyre_temp_gradient": "轮胎温度梯度",  # Iter-256: 补中文标签
+    "grip_consistency": "抓地力一致性",  # Iter-256: 补中文标签
+    "active_aero_usage": "主动空力使用",  # Iter-256
 }
 
 
@@ -239,6 +243,12 @@ def _narrate_ers_sector_efficiency(value: str, advice: str, evidence: str) -> st
     return _append_advice(base, advice)
 
 
+def _narrate_active_aero_usage(value: str, advice: str, evidence: str) -> str:
+    """Iter-256: F1 2026 active aero (X/Z-Mode) usage Chinese narration."""
+    base = f"主动空力使用方面：{value}。"
+    return _append_advice(base, advice)
+
+
 _NARRATORS_ZH: dict[str, Any] = {
     "balance": _narrate_balance,
     "grip": _narrate_grip,
@@ -256,6 +266,7 @@ _NARRATORS_ZH: dict[str, Any] = {
     "throttle_brake_overlap": _narrate_throttle_brake_overlap,  # Iter-210
     "aero_balance": _narrate_aero_balance,  # Iter-214
     "ers_sector_efficiency": _narrate_ers_sector_efficiency,  # Iter-242
+    "active_aero_usage": _narrate_active_aero_usage,  # Iter-256
 }
 
 

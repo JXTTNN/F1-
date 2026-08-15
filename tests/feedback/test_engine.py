@@ -152,7 +152,7 @@ def _dim_by_name(out: dict, name: str) -> dict:
 # FEEDBACK_DIMENSIONS constant
 # --------------------------------------------------------------------------- #
 def test_feedback_dimensions_constant_has_16_entries() -> None:
-    assert len(FEEDBACK_DIMENSIONS) == 18  # Iter-241: +grip_consistency
+    assert len(FEEDBACK_DIMENSIONS) == 19  # Iter-256: +active_aero_usage
     assert FEEDBACK_DIMENSIONS == [
         "balance",
         "grip",
@@ -172,6 +172,7 @@ def test_feedback_dimensions_constant_has_16_entries() -> None:
         "brake_temp",  # Iter-222
         "tyre_temp_gradient",  # Iter-227
         "grip_consistency",  # Iter-241
+        "active_aero_usage",  # Iter-256
     ]
 
 
@@ -191,7 +192,7 @@ def test_dimensions_all_10_names_in_order() -> None:
     out = generate_feedback(_scripted_frames(), DEFAULT_SETUP.model_dump(), "melbourne")
     names = [d["name"] for d in out["dimensions"]]
     assert names == FEEDBACK_DIMENSIONS
-    assert len(names) == 18  # Iter-241: +grip_consistency
+    assert len(names) == 19  # Iter-256: +active_aero_usage
     # Each dimension has the required keys.
     for d in out["dimensions"]:
         assert set(d.keys()) == {"name", "value", "evidence", "advice"}
@@ -202,6 +203,30 @@ def test_dimensions_include_lap_time_potential() -> None:
     ltp = _dim_by_name(out, "lap_time_potential")
     assert ltp["value"]
     assert ltp["evidence"]
+
+
+def test_active_aero_usage_dimension() -> None:
+    """Iter-256: 主动空力使用维度按 X/Z-Mode 帧占比产出量化结论。"""
+    frames = []
+    for i in range(200):
+        # 前 60 帧 X-Mode 激活 (低阻直道), 后 140 帧 Z-Mode 激活 (高下压弯道)
+        if i < 60:
+            frames.append(_frame(i, active_aero_x=1.0, active_aero_z=0.0))
+        else:
+            frames.append(_frame(i, active_aero_x=0.0, active_aero_z=1.0))
+    out = generate_feedback(frames, DEFAULT_SETUP.model_dump(), "monza")
+    dim = _dim_by_name(out, "active_aero_usage")
+    assert dim["name"] == "active_aero_usage"
+    assert "X-Mode 30%" in dim["value"]
+    assert "Z-Mode 70%" in dim["value"]
+    assert dim["advice"]
+
+
+def test_active_aero_usage_insufficient_when_absent() -> None:
+    """Iter-256: 无主动空力数据时该维度返回 数据不足 而不崩溃。"""
+    out = generate_feedback(_scripted_frames(), DEFAULT_SETUP.model_dump(), "melbourne")
+    dim = _dim_by_name(out, "active_aero_usage")
+    assert dim["value"] == "数据不足"
 
 
 def test_at_least_one_setup_suggestion_with_valid_after() -> None:

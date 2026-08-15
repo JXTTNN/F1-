@@ -721,7 +721,7 @@ def extract_metrics(
             for f, (vals, ts) in result.items()
         }
 
-    cols = col_multi("speed", "throttle", "brake", "steer", "g_lat", "ers_store", "ers_deployed", "ers_harvested", "ers_deploy_mode", "ers_mgu_k_deploy", "drs_allowed", "drs_active", "drs_zone", "lap_time", "lap_distance", "fuel_in_tank", "brake_temp_fl", "brake_temp_rl", "brake_temp_fr", "brake_temp_rr", "tyre_temp_fl", "tyre_temp_fr", "tyre_temp_rl", "tyre_temp_rr", "tyre_wear_fl", "tyre_wear_fr", "tyre_wear_rl", "tyre_wear_rr", "tyre_inner_temp_fl", "tyre_inner_temp_fr", "tyre_outer_temp_fl", "tyre_outer_temp_fr")
+    cols = col_multi("speed", "throttle", "brake", "steer", "g_lat", "ers_store", "ers_deployed", "ers_harvested", "ers_deploy_mode", "ers_mgu_k_deploy", "drs_allowed", "drs_active", "drs_zone", "lap_time", "lap_distance", "fuel_in_tank", "brake_temp_fl", "brake_temp_rl", "brake_temp_fr", "brake_temp_rr", "tyre_temp_fl", "tyre_temp_fr", "tyre_temp_rl", "tyre_temp_rr", "tyre_wear_fl", "tyre_wear_fr", "tyre_wear_rl", "tyre_wear_rr", "tyre_inner_temp_fl", "tyre_inner_temp_fr", "tyre_outer_temp_fl", "tyre_outer_temp_fr", "active_aero_x", "active_aero_z")
 
     # --- Speed ---
     speed, speed_t = cols["speed"]
@@ -954,6 +954,31 @@ def extract_metrics(
             mid_ab = len(g_a) // 2
             add_ref("aero_balance_high_g", float(g_lat_t[min(mid_ab, len(g_lat_t)-1)]), "g_lat", high_g)
             add_ref("aero_balance_low_g", float(g_lat_t[min(mid_ab, len(g_lat_t)-1)]), "g_lat", low_g)
+
+    # --- Active aero usage (F1 2026 X-Mode / Z-Mode) — Iter-256 ---
+    # X-Mode = 低阻直道 (m_activeAeroX), Z-Mode = 高下压弯道 (m_activeAeroZ).
+    # 以 position > 0.5 判定该模式激活, 计算各自占帧比 (duty cycle).
+    aero_x, aero_x_t = cols["active_aero_x"]
+    aero_z, aero_z_t = cols["active_aero_z"]
+    if len(aero_x) or len(aero_z):
+        x_frac = (
+            float(np.count_nonzero(np.asarray(aero_x) > 0.5)) / len(aero_x)
+            if len(aero_x) else 0.0
+        )
+        z_frac = (
+            float(np.count_nonzero(np.asarray(aero_z) > 0.5)) / len(aero_z)
+            if len(aero_z) else 0.0
+        )
+        metrics["values"]["active_aero_x_fraction"] = x_frac
+        metrics["values"]["active_aero_z_fraction"] = z_frac
+        metrics["values"]["active_aero_mean_x"] = float(np.mean(aero_x)) if len(aero_x) else 0.0
+        metrics["values"]["active_aero_mean_z"] = float(np.mean(aero_z)) if len(aero_z) else 0.0
+        if len(aero_x):
+            xi = int(np.argmax(aero_x))
+            add_ref("active_aero_x", float(aero_x_t[xi]), "active_aero_x", float(aero_x[xi]))
+        if len(aero_z):
+            zi = int(np.argmax(aero_z))
+            add_ref("active_aero_z", float(aero_z_t[zi]), "active_aero_z", float(aero_z[zi]))
 
     # --- Max g_lat (grip proxy) ---
     if len(g_lat):
@@ -2371,6 +2396,41 @@ def _dim_aero_balance(values: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _dim_active_aero_usage(values: dict[str, Any]) -> dict[str, Any]:
+    """Iter-256: F1 2026 主动空力 (X-Mode / Z-Mode) 使用维度.
+
+    从 extract_metrics 读取 active_aero_x_fraction / active_aero_z_fraction,
+    判断 X-Mode (低阻直道) 与 Z-Mode (高下压弯道) 的激活占比, 给出切换时机建议.
+    F1 2026 主动空力是核心玩法: Z-Mode 为默认弯道模式, X-Mode 仅在直道可用.
+    """
+    x_frac = values.get("active_aero_x_fraction")
+    z_frac = values.get("active_aero_z_fraction")
+    if x_frac is None and z_frac is None:
+        return _data_insufficient("active_aero_usage")
+    x_frac = float(x_frac or 0.0)
+    z_frac = float(z_frac or 0.0)
+    if x_frac < 0.2 and z_frac > 0.5:
+        advice = (
+            "X-Mode (低阻直道) 使用不足: 直道上翼片未充分放平, 阻力偏高损失尾速. "
+            "建议在长直道 (尤其 DRS 区) 提前切入 X-Mode, 配合 ERS 超车模式."
+        )
+    elif x_frac > 0.7:
+        advice = (
+            "X-Mode 使用过于激进: 若在弯道仍保持低阻, 会损失下压力导致抓地不足. "
+            "确保仅在直道使用 X-Mode, 进弯前切回 Z-Mode."
+        )
+    else:
+        advice = "X/Z-Mode 切换节奏合理, 直道低阻与弯道下压力利用均衡, 继续维持."
+    return {
+        "name": "active_aero_usage",
+        "value": f"X-Mode {x_frac:.0%} / Z-Mode {z_frac:.0%}",
+        "evidence": (
+            f"active_aero_x_fraction={x_frac:.3f}, active_aero_z_fraction={z_frac:.3f}"
+        ),
+        "advice": advice,
+    }
+
+
 def rule_based_feedback(
     metrics: dict[str, Any],
     setup: dict[str, Any],
@@ -2486,6 +2546,9 @@ def rule_based_feedback(
     # Iter-241: grip consistency dimension
     dim_grip_consistency = _dim_grip_consistency(values)
 
+    # Iter-256: F1 2026 active aero (X-Mode / Z-Mode) usage dimension
+    dim_active_aero = _dim_active_aero_usage(values)
+
     dimensions = [
         dim_balance,
         dim_grip,
@@ -2505,6 +2568,7 @@ def rule_based_feedback(
         dim_brake_temp,  # Iter-222: 刹车温度平衡 (第 16 维)
         dim_tyre_temp_grad,  # Iter-227: 轮胎温度梯度 (第 17 维)
         dim_grip_consistency,  # Iter-241: 抓地力一致性 (第 18 维)
+        dim_active_aero,  # Iter-256: 主动空力使用 (第 19 维)
     ]
 
     summary = _general_summary(metrics, dimensions, track, ref_lap)

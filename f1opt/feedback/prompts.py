@@ -45,6 +45,7 @@ FEEDBACK_DIMENSIONS: list[str] = [
     "brake_temp",  # Iter-222: 刹车温度平衡
     "tyre_temp_gradient",  # Iter-227: 轮胎温度梯度
     "grip_consistency",  # Iter-241: 抓地力一致性
+    "active_aero_usage",  # Iter-256: F1 2026 主动空力 (X/Z-Mode) 使用
 ]
 #: 车手反馈输入示例 (Iter-170 + Iter-171 granularity, Iter-176 expand 14->20).
 #: 每条含 question (车手原话) / expected_intent (意图) / granularity (精确度) /

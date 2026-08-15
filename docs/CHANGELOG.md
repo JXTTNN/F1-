@@ -4,6 +4,18 @@
 
 ## 2026-08 优化迭代
 
+### 车手反馈接入 F1 2026 主动空力 (Iter-256)
+- **新增 `active_aero_usage` 反馈维度 (第 19 维)**：反馈引擎此前对 2026 赛季
+  招牌玩法主动空力 (X-Mode 低阻直道 / Z-Mode 高下压弯道) 完全无感——
+  `col_multi` 未抽取 `active_aero_x/z`, 无任何维度反映切换节奏。现抽取并计算
+  `active_aero_x/z_fraction` (激活帧占比), 按 F1 2026 规则 (Z 默认弯道 / X 仅直道)
+  给出切换时机建议。
+- `extract_metrics` 新增 `active_aero_mean_x/z` 与证据引用 (`sources`)。
+- NLG 新增 `_narrate_active_aero_usage` 中文叙事 + `_DIM_LABEL_ZH` 标签；
+  同时补上 `brake_temp` / `tyre_temp_gradient` / `grip_consistency` 三个此前缺失的中文标签。
+- 测试：`test_active_aero_usage_dimension` (30%/70% 占比) + 无数据回退用例；
+  维度计数 18→19。
+
 ### 遥测聚合分母修正 (Iter-255)
 - **修复 `avg_ers_deploy` 分母错误**：ERS 累计值来自 CarStatus (20Hz)，却按
   CarTelemetry 的 `num_samples` (60Hz) 求平均，导致被稀释约 3×（与 Iter-254
