@@ -48,6 +48,7 @@ def make_frame(
     rpm: float = 8000.0,
     drs: int = 0,
     ers_deploy: float = 0.3,
+    ers_deploy_mode: float = 0.0,
 ) -> dict:
     """Build a synthetic frame dict with realistic F1 defaults."""
     return {
@@ -61,6 +62,7 @@ def make_frame(
         "rpm": float(rpm),
         "drs": int(drs),
         "ers_deploy": float(ers_deploy),
+        "ers_deploy_mode": float(ers_deploy_mode),
     }
 
 
@@ -420,9 +422,10 @@ class TestAnomalyDetectorTypes:
         assert sr[0]["severity"] == "medium"
 
     def test_detects_ers_overdeploy(self) -> None:
-        # 130 frames (>2 s at 60 Hz) at ers_deploy = 0.95 (> 0.9).
+        # Iter-260: 过部署用 ERS 模式 (hotlap=2/overtake=3) 判定.
+        # 130 frames (>2 s at 60 Hz) at ers_deploy_mode=2 (hotlap).
         frames = [
-            make_frame(i * _DT, ers_deploy=0.95) for i in range(130)
+            make_frame(i * _DT, ers_deploy_mode=2.0) for i in range(130)
         ]
         det = AnomalyDetector()
         out = det.detect(frames)

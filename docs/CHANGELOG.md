@@ -4,6 +4,16 @@
 
 ## 2026-08 优化迭代
 
+### analytics ERS 累计语义修正 (Iter-260b)
+- **修复 `ers_sector_analysis`**：`ers_deployed_this_lap` 是累计能量(单调递增),
+  原 `np.sum(dep_s[mask])` 会把扇区内所有累计值相加(数量级错误)。改为 `末-首`。
+- **修复 `ers_recovery_efficiency_analysis`**：制动区部署量原 `np.sum(deploy)` 同样
+  误作速率求和, 改为 `deploy[end-1]-deploy[start]`。
+- **修复 `ers_overdeploy` 异常检测**：原读累计能量字段并与阈值 0.9 比较,
+  会在几帧后恒为真(累计值>0.9 MJ)。改为读 `ers_deploy_mode` (0=none/1=medium/
+  2=hotlap/3=overtake) 并判定 `>=2` (hotlap/overtake 持续窗口)。
+- 测试：`test_detects_ers_overdeploy` 改用 `ers_deploy_mode=2`。
+
 ### 接入 ERS 扇区效率维度 (Iter-260)
 - **修复 `_dim_ers_sector_efficiency` 死代码**：该维度 (函数 + NLG + 标签) 早已实现
   但从未接入 `rule_based_feedback` 构建器、也不在 `FEEDBACK_DIMENSIONS` 中, 且其

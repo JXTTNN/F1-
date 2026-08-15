@@ -1428,7 +1428,8 @@ class TelemetryAnalytics:
             if not mask.any():
                 sectors.append({"sector": si + 1, "deploy_total": 0.0, "recover_total": 0.0, "efficiency": 0.0})
                 continue
-            dep_total = float(np.sum(dep_s[mask]))
+            # Iter-260: ers_deployed_this_lap 是累计能量, 扇区部署量 = 末-首
+            dep_total = float(dep_s[mask][-1] - dep_s[mask][0]) if mask.sum() >= 2 else 0.0
             rec_total = float(np.sum(np.clip(brk_s[mask] - 0.3, 0.0, 1.0)))
             eff = dep_total / rec_total if rec_total > 0 else 0.0
             sectors.append({"sector": si + 1, "deploy_total": dep_total, "recover_total": rec_total, "efficiency": eff})
@@ -1534,7 +1535,11 @@ class TelemetryAnalytics:
             # Recovery is proportional to brake pressure; deploy during
             # braking is typically 0 (MGU-K harvests, doesn't deploy).
             brake_intensity = float(np.sum(brake[start:end]))
-            deploy_during = float(np.sum(deploy[start:end]))
+            # Iter-260: 累计能量字段, 制动区部署量 = 末-首
+            deploy_during = (
+                float(deploy[end - 1] - deploy[start])
+                if end > start + 1 else 0.0
+            )
             # Recovery efficiency: 1.0 means no deploy during braking
             # (pure recovery), 0.0 means full deploy during braking.
             rec_eff = 1.0 - (deploy_during / max(brake_intensity, 1.0))
@@ -1743,7 +1748,9 @@ class AnomalyDetector:
         throttle = _field(frames, "throttle")
         brake = _field(frames, "brake")
         steer = _field(frames, "steer")
-        ers = _field_multi(frames, ("ers_deployed_this_lap", "ers_deploy", "ers_deployed"))
+        # Iter-260: 过部署用 ERS 模式 (0=none/1=medium/2=hotlap/3=overtake),
+        # 而非累计能量 (m_ersDeployedThisLap 是 MJ, 阈值 0.9 会恒为真)。
+        ers_mode = _field(frames, "ers_deploy_mode")
 
         n = len(frames)
 
@@ -1830,8 +1837,8 @@ class AnomalyDetector:
                     ),
                 })
 
-        # 6) ERS overdeploy: deploy > threshold sustained > window.
-        ers_mask = ers > self.ers_overdeploy_threshold
+        # 6) ERS overdeploy: hotlap/overtake mode sustained > window.
+        ers_mask = ers_mode >= 2.0
         for start, end in self._runs(ers_mask):
             duration = float(times[end - 1] - times[start]) + float(dt[end - 1])
             if duration > self.ers_overdeploy_window_s:
@@ -1840,7 +1847,7 @@ class AnomalyDetector:
                     "type": "ers_overdeploy",
                     "severity": "medium",
                     "description": (
-                        f"ers_deploy > {self.ers_overdeploy_threshold:.1f} for"
+                        f"ERS hotlap/overtake mode sustained for"
                         f" {duration:.2f}s"
                     ),
                 })
