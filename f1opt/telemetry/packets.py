@@ -229,39 +229,54 @@ def parse_motion(data: bytes) -> dict[str, Any]:
 
 
 # --------------------------------------------------------------------------- #
-# Packet 1 — Session  (MEDIUM confidence)
+# Packet 1 — Session  (Iter-286: F1 26 权威规范)
 # --------------------------------------------------------------------------- #
 CONFIDENCE_SESSION = (
-    "MEDIUM — follows F1 24 layout (WeatherForecastSample = 7B with rainPercentage "
-    "+ weatherDelta). F1 25 delta did not list Session changes."
+    "HIGH — PacketSessionData per MacManley/f1-26-udp 权威规范 (Iter-286). "
+    "64 天气样本 (旧版 20) + sessionLinkIdentifier + 主动空力/DRS 区 + F1 26 字段, 897B."
 )
-_WFS_FMT = "BBBbbbbB"  # Iter-281: sessionType, timeOffset, weather, trackTemp, trackTempChange, airTemp, airTempChange, rain% (权威 8 字段)
+_WFS_FMT = "BBBbbbbB"
 _SESSION_BODY = struct.Struct(
     "<"
-    + "BbbBHBbBHHBBBBBBB"  # weather..numMarshalZones (16 fields, includes m_formula)
-    + "fb" * 21  # marshal zones
-    + "BBB"  # safetyCar, networkGame, numWeatherForecastSamples
-    + _WFS_FMT * 20  # weather forecast samples
-    + "BBII"  # forecastAccuracy, aiDifficulty, seasonLink, weekendLink
-    + "B" * 12  # pit-stop window + assists + racing line flags
+    + "BbbBHBbBHHBBBBBB"   # 16 header fields (Iter-286: 修正多余 1B)
+    + "fb" * 21            # marshal zones
+    + "BBB"                # safetyCar, networkGame, numWeatherForecastSamples
+    + _WFS_FMT * 64        # 64 weather forecast samples (Iter-286)
+    + "BBIII"              # forecastAccuracy, aiDifficulty, season/weekend/session link
+    + "BBB"                # pitStopWindowIdealLap, LatestLap, RejoinPosition
+    + "B" * 9              # steering..dynamicRacingLineType
+    + "BB"                 # gameMode, ruleSet
+    + "I"                  # timeOfDay
+    + "B"                  # sessionLength
+    + "B" * 4              # speed/temperature units
+    + "B" * 3              # num safety car / VSC / red flag periods
+    + "B" * 25             # equalCarPerformance..numSessionsInWeekend
+    + "B" * 12             # weekendStructure[12]
+    + "ff"                 # sector2/3 lap distance start
+    + "BB"                 # activeAeroTrackStatus, numActiveAeroZonesFull
+    + "ff" * 8             # activeAeroZonesFull[8]
+    + "B"                  # numActiveAeroZonesPartial
+    + "ff" * 8             # activeAeroZonesPartial[8]
+    + "B"                  # numDRSZones
+    + "ff" * 4             # drsZones[4]
+    + "f"                  # startReactionTime
+    + "B" * 5              # antiLockBrakesAssist..recurringRewindPrompt
 )
 
 
 def parse_session(data: bytes) -> dict[str, Any]:
-    """Parse PacketSessionData (packet id 1)."""
+    """Parse PacketSessionData (packet id 1) — F1 26 权威规范 (Iter-286)."""
     v = _unpack_body(data, _SESSION_BODY)
     (weather, track_temp, air_temp, total_laps, track_len, session_type, track_id,
      formula, session_time_left, session_duration, pit_speed_limit, game_paused,
      is_spectating, spectator_car_idx, sli_pro, num_marshal) = v[0:16]
     i = 16
-    zones = []
-    for _ in range(21):
-        zones.append({"m_zoneStart": v[i], "m_zoneFlag": v[i + 1]})
-        i += 2
+    zones = [{"m_zoneStart": v[i + 2 * k], "m_zoneFlag": v[i + 2 * k + 1]} for k in range(21)]
+    i += 42
     sc_status, network_game, num_wfs = v[i], v[i + 1], v[i + 2]
     i += 3
     wfs = []
-    for _ in range(20):
+    for _ in range(64):
         wfs.append({
             "m_sessionType": v[i], "m_timeOffset": v[i + 1], "m_weather": v[i + 2],
             "m_trackTemperature": v[i + 3], "m_trackTemperatureChange": v[i + 4],
@@ -269,9 +284,45 @@ def parse_session(data: bytes) -> dict[str, Any]:
             "m_rainPercentage": v[i + 7],
         })
         i += 8
-    (forecast_acc, ai_diff, season_link, weekend_link) = v[i], v[i + 1], v[i + 2], v[i + 3]
+    forecast_acc, ai_diff = v[i], v[i + 1]
+    i += 2
+    season_link, weekend_link, session_link = v[i], v[i + 1], v[i + 2]
+    i += 3
+    pit_ideal, pit_latest, pit_rejoin = v[i], v[i + 1], v[i + 2]
+    i += 3
+    assists = v[i:i + 9]
+    i += 9
+    game_mode, rule_set = v[i], v[i + 1]
+    i += 2
+    time_of_day = v[i]
+    i += 1
+    session_length = v[i]
+    i += 1
+    units = v[i:i + 4]
     i += 4
-    assists = v[i:i + 12]
+    sc_periods = v[i:i + 3]
+    i += 3
+    flags = v[i:i + 25]
+    i += 25
+    weekend_structure = list(v[i:i + 12])
+    i += 12
+    sector2_start, sector3_start = v[i], v[i + 1]
+    i += 2
+    aero_track_status, num_aero_full = v[i], v[i + 1]
+    i += 2
+    aero_full = [{"m_zoneStart": v[i + 2 * k], "m_zoneEnd": v[i + 2 * k + 1]} for k in range(8)]
+    i += 16
+    num_aero_partial = v[i]
+    i += 1
+    aero_partial = [{"m_zoneStart": v[i + 2 * k], "m_zoneEnd": v[i + 2 * k + 1]} for k in range(8)]
+    i += 16
+    num_drs = v[i]
+    i += 1
+    drs_zones = [{"m_zoneStart": v[i + 2 * k], "m_zoneEnd": v[i + 2 * k + 1]} for k in range(4)]
+    i += 8
+    start_reaction_time = v[i]
+    i += 1
+    trailing = v[i:i + 5]
     return {
         "m_weather": weather,
         "m_trackTemperature": track_temp,
@@ -298,18 +349,71 @@ def parse_session(data: bytes) -> dict[str, Any]:
         "m_aiDifficulty": ai_diff,
         "m_seasonLinkIdentifier": season_link,
         "m_weekendLinkIdentifier": weekend_link,
-        "m_pitStopWindowIdealLap": assists[0],
-        "m_pitStopWindowLatestLap": assists[1],
-        "m_pitStopRejoinWindow": assists[2],
-        "m_steeringAssist": assists[3],
-        "m_brakingAssist": assists[4],
-        "m_gearboxAssist": assists[5],
-        "m_pitAssist": assists[6],
-        "m_pitReleaseAssist": assists[7],
-        "m_ERSAssist": assists[8],
-        "m_drivingAssist": assists[9],
-        "m_dynamicRacingLine": assists[10],
-        "m_dynamicRacingLineType": assists[11],
+        "m_sessionLinkIdentifier": session_link,
+        "m_pitStopWindowIdealLap": pit_ideal,
+        "m_pitStopWindowLatestLap": pit_latest,
+        "m_pitStopRejoinPosition": pit_rejoin,
+        "m_steeringAssist": assists[0],
+        "m_brakingAssist": assists[1],
+        "m_gearboxAssist": assists[2],
+        "m_pitAssist": assists[3],
+        "m_pitReleaseAssist": assists[4],
+        "m_ERSAssist": assists[5],
+        "m_DRSAssist": assists[6],
+        "m_dynamicRacingLine": assists[7],
+        "m_dynamicRacingLineType": assists[8],
+        "m_gameMode": game_mode,
+        "m_ruleSet": rule_set,
+        "m_timeOfDay": time_of_day,
+        "m_sessionLength": session_length,
+        "m_speedUnitsLeadPlayer": units[0],
+        "m_temperatureUnitsLeadPlayer": units[1],
+        "m_speedUnitsSecondaryPlayer": units[2],
+        "m_temperatureUnitsSecondaryPlayer": units[3],
+        "m_numSafetyCarPeriods": sc_periods[0],
+        "m_numVirtualSafetyCarPeriods": sc_periods[1],
+        "m_numRedFlagPeriods": sc_periods[2],
+        "m_equalCarPerformance": flags[0],
+        "m_recoveryMode": flags[1],
+        "m_flashbackLimit": flags[2],
+        "m_surfaceType": flags[3],
+        "m_lowFuelMode": flags[4],
+        "m_raceStarts": flags[5],
+        "m_tyreTemperature": flags[6],
+        "m_pitLaneTyreSim": flags[7],
+        "m_carDamage": flags[8],
+        "m_carDamageRate": flags[9],
+        "m_collisions": flags[10],
+        "m_collisionsOffForFirstLapOnly": flags[11],
+        "m_mpUnsafePitRelease": flags[12],
+        "m_mpOffForGriefing": flags[13],
+        "m_cornerCuttingStringency": flags[14],
+        "m_parcFermeRules": flags[15],
+        "m_pitStopExperience": flags[16],
+        "m_safetyCar": flags[17],
+        "m_safetyCarExperience": flags[18],
+        "m_formationLap": flags[19],
+        "m_formationLapExperience": flags[20],
+        "m_redFlags": flags[21],
+        "m_affectsLicenceLevelSolo": flags[22],
+        "m_affectsLicenceLevelMP": flags[23],
+        "m_numSessionsInWeekend": flags[24],
+        "m_weekendStructure": weekend_structure,
+        "m_sector2LapDistanceStart": sector2_start,
+        "m_sector3LapDistanceStart": sector3_start,
+        "m_activeAeroTrackStatus": aero_track_status,
+        "m_numActiveAeroZonesFull": num_aero_full,
+        "m_activeAeroZonesFull": aero_full,
+        "m_numActiveAeroZonesPartial": num_aero_partial,
+        "m_activeAeroZonesPartial": aero_partial,
+        "m_numDRSZones": num_drs,
+        "m_drsZones": drs_zones,
+        "m_startReactionTime": start_reaction_time,
+        "m_antiLockBrakesAssist": trailing[0],
+        "m_tractionControlAssist": trailing[1],
+        "m_dynamicRacingLineHiVis": trailing[2],
+        "m_dynamicRacingLineColourBlind": trailing[3],
+        "m_recurringRewindPrompt": trailing[4],
     }
 
 
@@ -985,7 +1089,7 @@ def parse_packet(data: bytes) -> tuple[PacketHeader, dict[str, Any]]:
 # Used for informational logging; parsing is still tolerant of truncation.
 _EXPECTED_BODY_SIZES: dict[int, int] = {
     0: 1296,   # Motion: 24 × 54B (Iter-285, 权威规范, 无玩家段)
-    1: 614,    # Session (approx — 待权威规范重写)
+    1: 897,    # Session: 897B (Iter-286, 权威规范: 64 WFS + F1 26 字段)
     2: 1370,   # LapData: 57B × 24 + 2 timeTrial carIdx (Iter-285)
     3: 4,      # Event (min: 4-byte code)
     4: 1441,   # Participants: 60B × 24 + 1 (Iter-285)

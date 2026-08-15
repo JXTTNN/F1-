@@ -4,6 +4,18 @@
 
 ## 2026-08 优化迭代
 
+### 按权威规范重写 Session 数据包 (Iter-286)
+- 按 MacManley/f1-26-udp 权威规范重写 PacketSessionData (id 1):
+  - 天气样本 20 → **64** (旧版 20 导致 forecastAccuracy 及之后字段错位数百字节);
+  - 头字段修正多余 1B (`BbbBHBbBHHBBBBBBB` → `BbbBHBbBHHBBBBBB`);
+  - 补 `m_sessionLinkIdentifier` (第 3 个 uint32);
+  - 补 `m_DRSAssist` (旧版误名 drivingAssist)、`m_pitStopRejoinPosition` (旧版误名
+    RejoinWindow)、`m_gameMode`/`m_ruleSet`/`m_timeOfDay`/`m_sessionLength` 等;
+  - 补 **主动空力区** (`m_activeAeroTrackStatus` + Full/Partial 各 8 区) 与 **DRS 区**
+    (`m_numDRSZones` + 4 区) — F1 26 主动空力关键数据;
+  - 补 weekendStructure[12]、sector2/3LapDistanceStart、startReactionTime 等。
+- 身体 614 → 897B (匹配权威规范 926-29); 测试同步 (64 WFS + 16 字段头)。
+
 ### F1 26 权威规范: 24 车位 + Motion 速度/g-force + 尾部字段 (Iter-285)
 - **关键发现**: MacManley/f1-26-udp 权威规范 (README) 全包数组为 **24 车位** (非 22)。
   所有缓冲区大小 (Motion 1325/LapData 1399/CarStatus 1445/CarTelemetry 1448/

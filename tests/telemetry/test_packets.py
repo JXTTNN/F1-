@@ -176,14 +176,14 @@ class TestSession:
         assert p["m_totalLaps"] == 0
         assert p["m_numMarshalZones"] == 0
         assert len(p["m_marshalZones"]) == 21
-        assert len(p["m_weatherForecastSamples"]) == 20
+        assert len(p["m_weatherForecastSamples"]) == 64  # Iter-286: F1 26 64 样本
         assert "m_pitStopWindowIdealLap" in p
         assert "m_dynamicRacingLineType" in p
 
     def test_leading_field_round_trip(self) -> None:
-        # Leading 16 fields: BbbBHBbBHHBBBBBBB (19 bytes)
+        # Iter-286: 前 16 字段: BbbBHBbBHHBBBBBB (19 bytes)
         body = struct.pack(
-            "<BbbBHBbBHHBBBBBBB",
+            "<BbbBHBbBHHBBBBBB",
             2,     # weather
             30,    # trackTemp
             25,    # airTemp
@@ -195,7 +195,7 @@ class TestSession:
             1800,  # sessionTimeLeft
             3600,  # sessionDuration
             80,    # pitSpeedLimit
-            0, 0, 0, 0, 0, 0,  # gamePaused..numMarshalZones
+            0, 0, 0, 0, 0,  # gamePaused..numMarshalZones
         )
         body += b"\x00" * 400
         _, p = parse_packet(make_packet(1, body))
