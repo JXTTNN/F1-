@@ -442,11 +442,30 @@ USER_PROMPT_TEMPLATE = (
     "question using ONLY the evidence above. Match the detected granularity. "
     "Do not introduce new numbers."
 )
+REFLECTION_PROMPT_TEMPLATE = (
+    "You just produced this answer to the driver:\n"
+    "{previous}\n"
+    "\n"
+    "Now critically re-read it against the telemetry evidence below. "
+    "Reflect step by step:\n"
+    "1. Does every numeric claim (speed, g-force, wear, lap time, sector) "
+    "trace to a concrete evidence row?\n"
+    "2. Is any setup advice unsafe or unsupported by the evidence?\n"
+    "3. Did you stay within the detected granularity and the driver's question?\n"
+    "\n"
+    "Telemetry evidence (frame_t + field + value):\n"
+    "{evidence}\n"
+    "\n"
+    "Produce a CORRECTED final answer (3-6 sentences, no bullet lists), "
+    "fixing any unsupported numbers. If the original answer is already "
+    "correct, repeat it unchanged. Answer in the same language as before."
+)
 __all__ = [
     "FEEDBACK_DIMENSIONS",
     "FEEDBACK_EXAMPLES",
     "SYSTEM_PROMPT",
     "USER_PROMPT_TEMPLATE",
+    "REFLECTION_PROMPT_TEMPLATE",
     "format_driver_profile",
     "DRIVER_FEEDBACK_TEMPLATES",
     "FEEDBACK_TEMPLATE_GROUPS",

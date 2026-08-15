@@ -4,6 +4,15 @@
 
 ## 2026-08 优化迭代
 
+### 内置 LLM 多反思自评 (Iter-258)
+- **新增反射式 (reflective) 第二轮自评修正**：`llm_enhance` / `llm_enhance_async`
+  在首轮回答后, 若 `F1OPT_LLM_REFLECTION=true` (新增 `Settings.llm_reflection`,
+  默认关闭保持轻量), 会把首轮回答连同遥测证据回传给模型做"逐条核验数字是否
+  有据可依 / 建议是否安全 / 粒度是否匹配"的自评, 返回修正后的最终答案。
+- 新增 `REFLECTION_PROMPT_TEMPLATE` (prompts.py) + 第二轮 token 用量记录。
+- 测试：`test_llm_enhance_reflection_refines_summary` (两轮调用)、
+  `test_llm_enhance_no_reflection_by_default` (默认单轮)。
+
 ### 内置 LLM 尊重用户自定义模型 (Iter-257)
 - **修复 `llm_model` 配置被静默忽略**：4 个 `llm_enhance*` 入口 + `preload_llm`
   一律硬编码 `_LLM_DEFAULT_MODEL`，用户通过 `LLM_MODEL` 环境变量或

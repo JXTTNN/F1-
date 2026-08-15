@@ -75,6 +75,11 @@ class Settings(BaseModel):
         default_factory=lambda: _env("LLM_MODEL", "gpt-4o-mini"),
         description="LLM 模型名称",
     )
+    llm_reflection: bool = Field(
+        default_factory=lambda: _env("LLM_REFLECTION", "false").strip().lower()
+        in ("1", "true", "yes", "on"),
+        description="LLM 多反思: 首轮回答后再做一轮自评修正 (默认关闭以保持轻量)",
+    )
 
     # --- 日志 ---
     log_level: str = Field(

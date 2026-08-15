@@ -53,6 +53,7 @@ from f1opt.driver.profile import DriverProfile
 from .conversation import ConversationSession, get_session
 from .prompts import (
     FEEDBACK_DIMENSIONS,
+    REFLECTION_PROMPT_TEMPLATE,
     SYSTEM_PROMPT,
     USER_PROMPT_TEMPLATE,
     format_driver_profile,
@@ -2676,15 +2677,12 @@ def llm_enhance(
             "messages": messages,
             "temperature": 0.3,
         }
+        headers = {
+            "Authorization": f"Bearer {config.llm_api_key}",
+            "Content-Type": "application/json",
+        }
         with httpx.Client(timeout=10.0) as client:
-            r = client.post(
-                endpoint,
-                headers={
-                    "Authorization": f"Bearer {config.llm_api_key}",
-                    "Content-Type": "application/json",
-                },
-                json=payload,
-            )
+            r = client.post(endpoint, headers=headers, json=payload)
             r.raise_for_status()
             data = r.json()
             content = data["choices"][0]["message"]["content"]
@@ -2693,6 +2691,33 @@ def llm_enhance(
                 backend, model_name, _extract_usage(data),
                 success=True, streamed=False,
             )
+            # Iter-258: reflective refinement (多反思) — 首轮后自评修正.
+            if config.llm_reflection and content:
+                reflect_messages = list(messages) + [
+                    {"role": "assistant", "content": content},
+                    {
+                        "role": "user",
+                        "content": REFLECTION_PROMPT_TEMPLATE.format(
+                            previous=content,
+                            evidence=_metrics_for_prompt(feedback),
+                        ),
+                    },
+                ]
+                payload2 = {
+                    "model": model_name,
+                    "messages": reflect_messages,
+                    "temperature": 0.2,
+                }
+                r2 = client.post(endpoint, headers=headers, json=payload2)
+                r2.raise_for_status()
+                data2 = r2.json()
+                content2 = (data2["choices"][0]["message"]["content"] or "").strip()
+                tk.record(
+                    backend, model_name, _extract_usage(data2),
+                    success=True, streamed=False,
+                )
+                if content2:
+                    content = content2
         text = (content or "").strip()
         if text:
             feedback = {**feedback, "summary": text}
@@ -2784,16 +2809,13 @@ async def llm_enhance_async(
             "messages": messages,
             "temperature": 0.3,
         }
+        headers = {
+            "Authorization": f"Bearer {config.llm_api_key}",
+            "Content-Type": "application/json",
+        }
         # Iter-122: AsyncClient + await — non-blocking I/O.
         async with httpx.AsyncClient(timeout=10.0) as client:
-            r = await client.post(
-                endpoint,
-                headers={
-                    "Authorization": f"Bearer {config.llm_api_key}",
-                    "Content-Type": "application/json",
-                },
-                json=payload,
-            )
+            r = await client.post(endpoint, headers=headers, json=payload)
             r.raise_for_status()
             data = r.json()
             content = data["choices"][0]["message"]["content"]
@@ -2802,6 +2824,33 @@ async def llm_enhance_async(
                 backend, model_name, _extract_usage(data),
                 success=True, streamed=False,
             )
+            # Iter-258: reflective refinement (多反思) — 首轮后自评修正.
+            if config.llm_reflection and content:
+                reflect_messages = list(messages) + [
+                    {"role": "assistant", "content": content},
+                    {
+                        "role": "user",
+                        "content": REFLECTION_PROMPT_TEMPLATE.format(
+                            previous=content,
+                            evidence=_metrics_for_prompt(feedback),
+                        ),
+                    },
+                ]
+                payload2 = {
+                    "model": model_name,
+                    "messages": reflect_messages,
+                    "temperature": 0.2,
+                }
+                r2 = await client.post(endpoint, headers=headers, json=payload2)
+                r2.raise_for_status()
+                data2 = r2.json()
+                content2 = (data2["choices"][0]["message"]["content"] or "").strip()
+                tk.record(
+                    backend, model_name, _extract_usage(data2),
+                    success=True, streamed=False,
+                )
+                if content2:
+                    content = content2
         text = (content or "").strip()
         if text:
             feedback = {**feedback, "summary": text}

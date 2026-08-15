@@ -594,6 +594,93 @@ def test_llm_enhance_honors_config_llm_model(monkeypatch: pytest.MonkeyPatch) ->
     assert payload["model"] == "my-custom-model"
 
 
+def test_llm_enhance_reflection_refines_summary(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Iter-258: 开启 llm_reflection 时做第二轮自评修正, 返回修正后的答案。"""
+    import httpx
+
+    calls: list[str] = []
+
+    class _Resp:
+        def __init__(self, content: str) -> None:
+            self._content = content
+
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict:
+            return {"choices": [{"message": {"content": self._content}}]}
+
+    class _Client:
+        def __init__(self, *a: object, **k: object) -> None:
+            pass
+
+        def __enter__(self) -> _Client:
+            return self
+
+        def __exit__(self, *a: object) -> bool:
+            return False
+
+        def post(self, url: str, **k: object) -> _Resp:
+            calls.append("post")
+            if len(calls) == 1:
+                return _Resp("draft answer")
+            return _Resp("refined answer")
+
+    monkeypatch.setattr(httpx, "Client", _Client)
+    settings = Settings(
+        llm_backend="openai", llm_api_key="sk-fake", llm_reflection=True
+    )
+    feedback = {
+        "summary": "rule-based",
+        "dimensions": [],
+        "setup_suggestions": [],
+        "sources": [{"frame_t": 1.0, "field": "speed", "value": 200.0}],
+    }
+    out = llm_enhance(feedback, "why?", settings)
+    assert out["summary"] == "refined answer"
+    assert len(calls) == 2  # 首轮 + 反思轮
+
+
+def test_llm_enhance_no_reflection_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Iter-258: 默认 llm_reflection=False 只做单轮调用 (保持轻量)。"""
+    import httpx
+
+    calls: list[str] = []
+
+    class _Resp:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict:
+            return {"choices": [{"message": {"content": "single answer"}}]}
+
+    class _Client:
+        def __init__(self, *a: object, **k: object) -> None:
+            pass
+
+        def __enter__(self) -> _Client:
+            return self
+
+        def __exit__(self, *a: object) -> bool:
+            return False
+
+        def post(self, url: str, **k: object) -> _Resp:
+            calls.append("post")
+            return _Resp()
+
+    monkeypatch.setattr(httpx, "Client", _Client)
+    settings = Settings(llm_backend="openai", llm_api_key="sk-fake")
+    feedback = {
+        "summary": "rule-based",
+        "dimensions": [],
+        "setup_suggestions": [],
+        "sources": [],
+    }
+    out = llm_enhance(feedback, "why?", settings)
+    assert out["summary"] == "single answer"
+    assert len(calls) == 1  # 默认单轮
+
+
 # --------------------------------------------------------------------------- #
 # Re-exports
 # --------------------------------------------------------------------------- #
