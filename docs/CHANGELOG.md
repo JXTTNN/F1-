@@ -91,10 +91,11 @@
   `await asyncio.sleep(0)` 让监听器 recv 回调排空 socket，测试稳定通过。
 
 ### 分发 (EXE 可下载)
-- **发布 GitHub Release v1.1.0 (Windows EXE)**：上传 `f1opt.exe` (47.7MB,
-  PyInstaller) 至 Release，直达下载链接：
+- **发布 GitHub Release v1.1.0 (Windows EXE)**：从最新源码重建并上传
+  `f1opt.exe` (55MB, PyInstaller, 含 serve 遥测修复 + 惰性解析) 至 Release，
+  直达下载链接：
   https://github.com/JXTTNN/F1-/releases/download/v1.1.0/f1opt.exe
-  (SHA256: f985c94a4a3dc615b584e86ebe8138a48afaca05650126e365159c97cc14fc65)。
+  (SHA256: 4A284EFDC0F9385FF2BAC9A51CD82EE0239A6D46E41EB05062E1D1476B627884)。
 - README 补全 Windows/Linux 双平台下载入口。
 
 ---
