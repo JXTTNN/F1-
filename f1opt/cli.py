@@ -109,6 +109,13 @@ def build_parser() -> argparse.ArgumentParser:
     p_tracks_info.add_argument("--json", action="store_true")
     p_tracks_info.set_defaults(func=cmd_tracks_info)
 
+    # --- teams (subcommand group) ------------------------------------------
+    p_teams = subparsers.add_parser("teams", help="team & driver information")
+    teams_sub = p_teams.add_subparsers(dest="teams_command")
+    p_teams_list = teams_sub.add_parser("list", help="list all 11 teams / 22 drivers")
+    p_teams_list.add_argument("--json", action="store_true")
+    p_teams_list.set_defaults(func=cmd_teams_list)
+
     # --- setup (subcommand group) ------------------------------------------
     p_setup = subparsers.add_parser("setup", help="setup information")
     setup_sub = p_setup.add_subparsers(dest="setup_command")
@@ -487,6 +494,36 @@ def cmd_tracks_list(args: argparse.Namespace) -> int:
         for t in ALL_TRACKS
     ]
     _print(tracks, args.json)
+    return 0
+
+
+def cmd_teams_list(args: argparse.Namespace) -> int:
+    """List all 11 teams and 22 drivers (F1 2026 grid)."""
+    from f1opt.data.drivers_2026 import all_drivers_2026
+    from f1opt.data.teams_2026 import all_teams_2026_profiles
+
+    teams = all_teams_2026_profiles()
+    drivers = all_drivers_2026()
+    result = {
+        "n_teams": len(teams),
+        "n_drivers": len(drivers),
+        "teams": [
+            {
+                "team_id": t.team_id,
+                "team_name": t.team_name,
+                "full_name": t.full_name,
+                "power_unit_supplier": t.power_unit_supplier,
+                "pace_offset_s": t.pace_offset_s,
+                "drivers": [
+                    {"driver_id": d.driver_id, "driver_name": d.driver_name}
+                    for d in drivers
+                    if d.team_id == t.team_id
+                ],
+            }
+            for t in teams
+        ],
+    }
+    _print(result, args.json)
     return 0
 
 
