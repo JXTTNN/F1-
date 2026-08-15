@@ -152,6 +152,13 @@
   `ValueError: values length 2 != objectives 1`。现归一化为规范双目标, 单目标
   请求返回 200。新增 `test_search_single_objective_does_not_crash` 回归测试。
 
+### 车手反馈性能 (接线死代码优化)
+- **接线 `col_multi` 批量字段提取 (Iter-229 死代码激活)**：`extract_metrics`
+  此前用 `col()` 逐字段遍历帧 (33 次调用 → 33 趟 O(n) 扫描), 而 Iter-229 已实现
+  的 `col_multi` (一趟 O(n) 提取全部字段) 从未被调用, 是死代码。现改为单次
+  `col_multi()` 提取 32 字段, 移除死掉的 `col()`。600 帧实测 6.64ms → 5.65ms。
+  feedback 315 + smoke 109 = 424 passed。
+
 ---
 
 ## 已知限制 (Known Limitations)

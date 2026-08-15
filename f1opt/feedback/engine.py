@@ -703,19 +703,6 @@ def extract_metrics(
             seen.add(dedup)
             metrics["sources"].append(ref)
 
-    def col(field: str) -> tuple[np.ndarray, np.ndarray]:
-        vals: list[float] = []
-        ts: list[float] = []
-        for f in frames:
-            v = _num(f, field)
-            if v is not None:
-                vals.append(v)
-                ts.append(float(f.get("session_time") or 0.0))
-        return (
-            np.asarray(vals, dtype=np.float64),
-            np.asarray(ts, dtype=np.float64),
-        )
-
     # Iter-229: batch extraction of multiple fields in a single pass.
     def col_multi(*fields: str) -> dict[str, tuple[np.ndarray, np.ndarray]]:
         """Extract multiple fields from frames in one pass (O(n) instead of O(n*k))."""
@@ -734,8 +721,10 @@ def extract_metrics(
             for f, (vals, ts) in result.items()
         }
 
+    cols = col_multi("speed", "throttle", "brake", "steer", "g_lat", "ers_store", "ers_deployed", "ers_harvested", "ers_deploy_mode", "ers_mgu_k_deploy", "drs_allowed", "drs_active", "drs_zone", "lap_time", "lap_distance", "fuel_in_tank", "brake_temp_fl", "brake_temp_rl", "brake_temp_fr", "brake_temp_rr", "tyre_temp_fl", "tyre_temp_fr", "tyre_temp_rl", "tyre_temp_rr", "tyre_wear_fl", "tyre_wear_fr", "tyre_wear_rl", "tyre_wear_rr", "tyre_inner_temp_fl", "tyre_inner_temp_fr", "tyre_outer_temp_fl", "tyre_outer_temp_fr")
+
     # --- Speed ---
-    speed, speed_t = col("speed")
+    speed, speed_t = cols["speed"]
     if len(speed):
         avg_speed = float(np.mean(speed))
         max_idx = int(np.argmax(speed))
@@ -749,7 +738,7 @@ def extract_metrics(
         add_ref("avg_speed", float(speed_t[mid_idx]), "speed", float(speed[mid_idx]))
 
     # --- Throttle smoothness: 1 - std(throttle gradient) ---
-    throttle, throttle_t = col("throttle")
+    throttle, throttle_t = cols["throttle"]
     if len(throttle) >= 2:
         std_grad = float(np.std(np.diff(throttle)))
         smoothness = max(0.0, min(1.0, 1.0 - std_grad))
@@ -763,7 +752,7 @@ def extract_metrics(
         )
 
     # --- Brake aggression: max positive brake gradient ---
-    brake, brake_t = col("brake")
+    brake, brake_t = cols["brake"]
     if len(brake) >= 2:
         grad = np.diff(brake)
         max_grad = float(np.max(grad))
@@ -804,8 +793,8 @@ def extract_metrics(
             pass
 
     # --- Understeer indicator: low g_lat relative to |steer| mid-corner ---
-    steer, steer_t = col("steer")
-    g_lat, g_lat_t = col("g_lat")
+    steer, steer_t = cols["steer"]
+    g_lat, g_lat_t = cols["g_lat"]
     if len(steer) and len(g_lat):
         n = min(len(steer), len(g_lat))
         s = steer[:n]
@@ -875,7 +864,7 @@ def extract_metrics(
     wear_fields = ("tyre_wear_fl", "tyre_wear_fr", "tyre_wear_rl", "tyre_wear_rr")
     wears: list[float | None] = []
     for k in wear_fields:
-        w, _ = col(k)
+        w, _ = cols[k]
         wears.append(float(w[-1]) if len(w) else None)
     if all(w is not None for w in wears):
         front_avg = (wears[0] + wears[1]) / 2.0  # type: ignore[index]
@@ -898,7 +887,7 @@ def extract_metrics(
     temp_fields = ("tyre_temp_fl", "tyre_temp_fr", "tyre_temp_rl", "tyre_temp_rr")
     temps: list[float | None] = []
     for k in temp_fields:
-        t_arr, _ = col(k)
+        t_arr, _ = cols[k]
         temps.append(float(np.mean(t_arr)) if len(t_arr) else None)
     if all(t is not None for t in temps):
         spread = float(max(temps) - min(temps))  # type: ignore[arg-type]
@@ -918,10 +907,10 @@ def extract_metrics(
     inner_temps: list[float] = []
     outer_temps: list[float] = []
     for k in inner_temp_fields:
-        t_arr, _ = col(k)
+        t_arr, _ = cols[k]
         inner_temps.append(float(np.mean(t_arr)) if len(t_arr) else None)
     for k in outer_temp_fields:
-        t_arr, _ = col(k)
+        t_arr, _ = cols[k]
         outer_temps.append(float(np.mean(t_arr)) if len(t_arr) else None)  # type: ignore[arg-type]
     if all(t is not None for t in inner_temps + outer_temps):
         # Average inner vs outer across FL+FR.
@@ -971,7 +960,7 @@ def extract_metrics(
         add_ref("max_g_lat", float(g_lat_t[mi]), "g_lat", float(g_lat[mi]))
 
     # --- ers_deployment: ERS store level, harvest/deploy totals, mode efficiency ---
-    ers, ers_t = col("ers_store")
+    ers, ers_t = cols["ers_store"]
     if len(ers) >= 2:
         ers_store_mean_val = float(np.mean(ers))
         metrics["values"]["ers_store_mean"] = ers_store_mean_val
@@ -982,32 +971,32 @@ def extract_metrics(
         metrics["values"]["ers_slope_per_s"] = slope
         add_ref("ers_start", float(ers_t[0]), "ers_store", float(ers[0]))
         add_ref("ers_end", float(ers_t[-1]), "ers_store", float(ers[-1]))
-    ers_deploy, deploy_t = col("ers_deployed")
+    ers_deploy, deploy_t = cols["ers_deployed"]
     deployed_total = None
     if len(ers_deploy) >= 2:
         deployed_total = float(ers_deploy[-1] - ers_deploy[0])
         metrics["values"]["ers_deployed_total"] = deployed_total
         add_ref("ers_deployed_total", float(deploy_t[-1]), "ers_deployed", float(ers_deploy[-1]))
-    ers_harv, harv_t = col("ers_harvested")
+    ers_harv, harv_t = cols["ers_harvested"]
     if len(ers_harv) >= 2:
         harvested_total = float(ers_harv[-1] - ers_harv[0])
         metrics["values"]["ers_harvested_total"] = harvested_total
         add_ref("ers_harvested_total", float(harv_t[-1]), "ers_harvested", float(ers_harv[-1]))
-    deploy_mode, mode_t = col("ers_deploy_mode")
+    deploy_mode, mode_t = cols["ers_deploy_mode"]
     if len(deploy_mode) >= 2:
         hotlap_mask = deploy_mode == 1.0
         hotlap_pct = float(np.mean(hotlap_mask)) * 100.0
         metrics["values"]["deploy_mode_hotlap_pct"] = hotlap_pct
         add_ref("deploy_mode_hotlap_pct", float(mode_t[0]), "ers_deploy_mode", float(hotlap_pct))
     if deployed_total is not None:
-        ers_consum, consum_t = col("ers_mgu_k_deploy")
+        ers_consum, consum_t = cols["ers_mgu_k_deploy"]
         if len(ers_consum) >= 2:
             total_consumed = float(ers_consum[-1] - ers_consum[0])
             if total_consumed > 0:
                 metrics["values"]["ers_efficiency"] = deployed_total / total_consumed
 
     # --- drs_usage: DRS activation timing, zone utilisation ---
-    drs, drs_t = col("drs_allowed")
+    drs, drs_t = cols["drs_allowed"]
     if len(drs) >= 2:
         drs_int = np.round(drs).astype(int)
         diffs = np.diff(drs_int)
@@ -1016,13 +1005,13 @@ def extract_metrics(
         if transitions > 0:
             idx = int(np.where(diffs > 0)[0][0])
             add_ref("drs_first_activation", float(drs_t[idx + 1]), "drs_allowed", 1.0)
-    drs_active, drs_at = col("drs_active")
+    drs_active, drs_at = cols["drs_active"]
     if len(drs_active) >= 2:
         active_mask = drs_active >= 0.5
         active_pct = float(np.mean(active_mask)) * 100.0
         metrics["values"]["drs_active_pct"] = active_pct
         add_ref("drs_active_pct", float(drs_at[0]), "drs_active", active_pct)
-    drs_zone, zone_t = col("drs_zone")
+    drs_zone, zone_t = cols["drs_zone"]
     if len(drs_zone) >= 1:
         zone_ids = np.unique(np.round(drs_zone).astype(int))
         zone_ids = zone_ids[zone_ids > 0]
@@ -1044,7 +1033,7 @@ def extract_metrics(
             metrics["values"]["drs_activation_delay_mean"] = float(np.mean(delays))
 
     # --- Lap time (from last frame) ---
-    lap_times, lap_t = col("lap_time")
+    lap_times, lap_t = cols["lap_time"]
     if len(lap_times):
         last_lap = float(lap_times[-1])
         metrics["values"]["lap_time"] = last_lap
@@ -1054,7 +1043,7 @@ def extract_metrics(
     # (NEW Iter-03). If lap_distance spans >= 2/3 of track_length, interpolate
     # lap_time at L/3 and 2L/3 boundaries to get sector splits. Otherwise the
     # sector_compare dimension falls back to the nominal track_type split.
-    lap_dist, _ = col("lap_distance")
+    lap_dist, _ = cols["lap_distance"]
     track = _resolve_track(track_id)
     track_length = track.length_m if track else 5000.0
     if (
@@ -1084,14 +1073,14 @@ def extract_metrics(
                 add_ref("sector_s3", ref_t, "lap_time", s3)
 
     # --- Fuel used ---
-    fuel, fuel_t = col("fuel_in_tank")
+    fuel, fuel_t = cols["fuel_in_tank"]
     if len(fuel) >= 2:
         fuel_used = max(0.0, float(fuel[0] - fuel[-1]))
         metrics["values"]["fuel_used"] = fuel_used
         add_ref("fuel_start", float(fuel_t[0]), "fuel_in_tank", float(fuel[0]))
         add_ref("fuel_end", float(fuel_t[-1]), "fuel_in_tank", float(fuel[-1]))
         # Iter-200: fuel consumption rate (kg/lap) and per-sector efficiency.
-        lap_dist, _ = col("lap_distance")
+        lap_dist, _ = cols["lap_distance"]
         if len(lap_dist) >= 2:
             track_len = float(lap_dist[-1] - lap_dist[0])
             if track_len > 0:
@@ -1116,8 +1105,8 @@ def extract_metrics(
         pass  # Fallback gracefully if analytics unavailable.
 
     # --- Throttle/brake overlap (Iter-206) ---
-    thr_arr, _ = col("throttle")
-    brk_arr, _ = col("brake")
+    thr_arr, _ = cols["throttle"]
+    brk_arr, _ = cols["brake"]
     if len(thr_arr) >= 2 and len(brk_arr) >= 2:
         n_overlap = min(len(thr_arr), len(brk_arr))
         overlap_mask = (thr_arr[:n_overlap] > 0.3) & (brk_arr[:n_overlap] > 0.3)
@@ -1128,7 +1117,7 @@ def extract_metrics(
     # --- Mechanical grip trend (Iter-217) ---
     # Slope of low-speed g_lat over lap_distance to detect grip degradation.
     if len(g_lat) >= 3 and len(speed) >= 3 and len(steer) >= 3:
-        lap_dist_m, _ = col("lap_distance")
+        lap_dist_m, _ = cols["lap_distance"]
         if len(lap_dist_m) >= 3:
             n_m = min(len(g_lat), len(speed), len(steer), len(lap_dist_m))
             g_m = g_lat[:n_m]
@@ -1155,11 +1144,11 @@ def extract_metrics(
 
     # --- Brake temperature balance (Iter-223) ---
     # Front/rear brake temp ratio to detect brake bias imbalance.
-    btf_arr, _ = col("brake_temp_fl")
-    btr_arr, _ = col("brake_temp_rl")
+    btf_arr, _ = cols["brake_temp_fl"]
+    btr_arr, _ = cols["brake_temp_rl"]
     if len(btf_arr) >= 2 and len(btr_arr) >= 2:
-        btf_fr_arr, _ = col("brake_temp_fr")
-        btr_rr_arr, _ = col("brake_temp_rr")
+        btf_fr_arr, _ = cols["brake_temp_fr"]
+        btr_rr_arr, _ = cols["brake_temp_rr"]
         n_bt = min(len(btf_arr), len(btf_fr_arr), len(btr_arr), len(btr_rr_arr))
         front_avg = float((np.mean(btf_arr[:n_bt]) + np.mean(btf_fr_arr[:n_bt])) / 2.0)
         rear_avg = float((np.mean(btr_arr[:n_bt]) + np.mean(btr_rr_arr[:n_bt])) / 2.0)
@@ -1174,10 +1163,10 @@ def extract_metrics(
                 metrics["values"]["brake_temp_balance_diag"] = "balanced"
 
     # --- Tyre temperature gradient (Iter-227) ---
-    ts_fl_arr, _ = col("tyre_temp_fl")
-    ts_fr_arr, _ = col("tyre_temp_fr")
-    ts_rl_arr, _ = col("tyre_temp_rl")
-    ts_rr_arr, _ = col("tyre_temp_rr")
+    ts_fl_arr, _ = cols["tyre_temp_fl"]
+    ts_fr_arr, _ = cols["tyre_temp_fr"]
+    ts_rl_arr, _ = cols["tyre_temp_rl"]
+    ts_rr_arr, _ = cols["tyre_temp_rr"]
     if len(ts_fl_arr) >= 2 and len(ts_fr_arr) >= 2:
         n_tt = min(len(ts_fl_arr), len(ts_fr_arr), len(ts_rl_arr), len(ts_rr_arr))
         lr_front = float(np.mean(ts_fl_arr[:n_tt] - ts_fr_arr[:n_tt]))
@@ -1204,7 +1193,7 @@ def extract_metrics(
             gc_std = float(np.std(g_corner))
             metrics["values"]["grip_consistency_overall_std"] = gc_std
             # Per-sector worst determination via lap_distance.
-            lap_dist_gc, _ = col("lap_distance")
+            lap_dist_gc, _ = cols["lap_distance"]
             if len(lap_dist_gc) >= 2:
                 track_len = 5000.0  # default
                 track_info = TRACKS_BY_ID.get(track_id)
