@@ -529,10 +529,10 @@ class TelemetryAligner:
         for key in UNIFIED_KEYS[1:]:
             frame[key] = None
         for pid, spec in _SOURCE_SPECS.items():
-            it = latest.get(pid)
-            if it is None:
+            entry = latest.get(pid)
+            if entry is None:
                 continue
-            fields = it[1]
+            fields = entry[1]
             for unified_key, _src, is_int in spec:
                 v = fields.get(unified_key, 0.0)
                 frame[unified_key] = int(v) if is_int else float(v)

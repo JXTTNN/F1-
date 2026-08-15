@@ -176,6 +176,13 @@
   2s 健康探测, 不可达时返回 `loaded=False` + 明确 reason。
   新增 `test_preload_llm_local_backend_unreachable` 回归测试。
 
+### 类型安全 (mypy 继续收敛 70 → 66)
+- `config.py`：`udp_port`/`api_port` 的 `_env` 返回 str 却标注 int → lambda 内
+  `int(_env(...))` 显式转换。
+- `pareto.py`：`MultiObjectiveOptimizer.bounds` 标注放宽为 array-like。
+- `aligner.py`：`latest_unified_frame` 复用 `it` 变量 (tuple vs Optional) → 改
+  独立变量 `entry`。
+
 ---
 
 ## 已知限制 (Known Limitations)

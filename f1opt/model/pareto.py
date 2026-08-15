@@ -467,7 +467,7 @@ class MultiObjectiveOptimizer:
 
     def __init__(
         self,
-        bounds: np.ndarray,
+        bounds: Any,  # array-like (list[list[float]] or np.ndarray); np.asarray normalizes
         objectives: list[str],
         n_iterations: int = 20,
         seed: int = 42,

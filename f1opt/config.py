@@ -42,7 +42,7 @@ class Settings(BaseModel):
         description="UDP 监听地址",
     )
     udp_port: int = Field(
-        default_factory=lambda: _env("UDP_PORT", "20777"),
+        default_factory=lambda: int(_env("UDP_PORT", "20777")),
         description="F1 25/2026 默认遥测端口",
     )
 
@@ -52,7 +52,7 @@ class Settings(BaseModel):
         description="FastAPI 监听地址",
     )
     api_port: int = Field(
-        default_factory=lambda: _env("API_PORT", "8000"),
+        default_factory=lambda: int(_env("API_PORT", "8000")),
         description="FastAPI 监听端口",
     )
 
