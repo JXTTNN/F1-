@@ -267,6 +267,8 @@
   (显式产出 ndarray, 规避 mypy 把 `Generator.random(n) < prob` 误判为 bool)。
 - `strategy_optimizer.py`：`candidates`/`out` 组合列表注解 `list[tuple[int/str, ...]]`
   (消除变长元组长度不一致错误)。pareto+strategy_optimizer 50 passed。全项目 18 → 12。
+- `surrogate.py`：`state_dict`/`load_state_dict` 覆写签名加 `# type: ignore[override]`
+  (有意覆写: 返回含版本号的富字典, 与 torch `Module` 签名不同)。全项目 12 → 8。
 
 ---
 

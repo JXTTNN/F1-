@@ -637,7 +637,7 @@ class SurrogateModel(nn.Module):
         return out
 
     # --- 存取 ---------------------------------------------------------------
-    def state_dict(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
+    def state_dict(self, *args: Any, **kwargs: Any) -> dict[str, Any]:  # type: ignore[override]  # type: ignore[override]
         """返回可序列化的模型状态 (含版本号与 torch state_dict)."""
         return {
             "model_version": MODEL_VERSION,
@@ -645,7 +645,7 @@ class SurrogateModel(nn.Module):
             "state_dict": super().state_dict(*args, **kwargs),
         }
 
-    def load_state_dict(
+    def load_state_dict(  # type: ignore[override]
         self, d: dict[str, Any], strict: bool = True
     ) -> None:
         """从 :meth:`state_dict` 返回值恢复权重."""
@@ -967,7 +967,7 @@ class EnsembleSurrogateModel(nn.Module):
     # ------------------------------------------------------------------ #
     # Persistence
     # ------------------------------------------------------------------ #
-    def state_dict(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
+    def state_dict(self, *args: Any, **kwargs: Any) -> dict[str, Any]:  # type: ignore[override]
         """Serialize all member models + ensemble metadata."""
         return {
             "model_version": f"{MODEL_VERSION}-ensemble-{self.n_members}",
@@ -976,7 +976,7 @@ class EnsembleSurrogateModel(nn.Module):
             "members": [m.state_dict(*args, **kwargs) for m in self._members],
         }
 
-    def load_state_dict(
+    def load_state_dict(  # type: ignore[override]
         self, d: dict[str, Any], strict: bool = True
     ) -> None:
         """Restore member weights from :meth:`state_dict` output.
