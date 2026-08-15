@@ -44,6 +44,7 @@
   }
   .badge.ok{color:var(--green);border-color:rgba(34,197,94,.4)}
   .badge.bad{color:var(--red);border-color:rgba(255,45,45,.4)}
+  .badge.warn{color:var(--amber);border-color:rgba(245,158,11,.4)}
   #iter-link{font-size:12px}
 
   /* ---------- layout ---------- */
@@ -1201,14 +1202,20 @@
       var b=el("health-badge");
       var txt="API "+h.version+" · UDP "+(h.udp_listening?"监听中":"未监听");
       // 附加实时遥测统计 (收包数/圈数), 让用户确认 F1 2026 游戏正在流式传输.
+      var recv=0, laps=0;
       try{
         var s=await fetchJSON("/api/telemetry/stats");
-        var recv=(s&&s.listener_received)||0;
-        var laps=(s&&s.aggregator_rows)||0;
-        txt+=" · 收包 "+recv+" · 圈 "+laps;
+        recv=(s&&s.listener_received)||0;
+        laps=(s&&s.aggregator_rows)||0;
       }catch(e2){ /* 统计端点可选, 忽略 */ }
+      if(recv===0){
+        txt+=" · 收包 0 — 请在 F1 2026 游戏设置开启 UDP 遥测(端口 20777)";
+        b.className="badge warn";
+      }else{
+        txt+=" · 收包 "+recv+" · 圈 "+laps;
+        b.className="badge ok";
+      }
       b.textContent=txt;
-      b.className="badge ok";
     }catch(e){
       var b2=el("health-badge");
       b2.textContent="API 不可用";

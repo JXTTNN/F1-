@@ -196,6 +196,12 @@
   的 `.get` 返回 `T | None` 触发 overloaded 类型错误 → 改用 `lambda k: d[k]`
   (直接索引, 返回 `T`)。
 
+### UI 设计 (新手接入引导)
+- **收包为 0 时显示 UDP 设置提示**：health badge 现在当 `listener_received==0`
+  时显示琥珀色警告「收包 0 — 请在 F1 2026 游戏设置开启 UDP 遥测(端口 20777)」,
+  新增 `.badge.warn` 样式。新用户开箱即可知道如何让游戏遥测接入, 而非面对
+  「收包 0」无从下手。
+
 ---
 
 ## 已知限制 (Known Limitations)
