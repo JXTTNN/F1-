@@ -159,6 +159,12 @@
   `col_multi()` 提取 32 字段, 移除死掉的 `col()`。600 帧实测 6.64ms → 5.65ms。
   feedback 315 + smoke 109 = 424 passed。
 
+### 类型安全 (工厂级 mypy 收敛)
+- **engine.py 轮胎分析段 mypy 错误 12 → 0**：`wears`/`temps`/`inner_temps`/
+  `outer_temps` 列表此前混入 `None` (`list[float | None]`), 触发 ~12 处
+  `float | None` 类型错误。改为「仅追加 float + 用 `len(list)==N` 判断」的
+  类型收窄写法, 移除全部 `# type: ignore` 注释。feedback 315 passed。
+
 ---
 
 ## 已知限制 (Known Limitations)

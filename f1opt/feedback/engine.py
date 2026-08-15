@@ -862,13 +862,14 @@ def extract_metrics(
 
     # --- Oversteer indicator: rear tyre wear imbalance vs front ---
     wear_fields = ("tyre_wear_fl", "tyre_wear_fr", "tyre_wear_rl", "tyre_wear_rr")
-    wears: list[float | None] = []
+    wears: list[float] = []
     for k in wear_fields:
         w, _ = cols[k]
-        wears.append(float(w[-1]) if len(w) else None)
-    if all(w is not None for w in wears):
-        front_avg = (wears[0] + wears[1]) / 2.0  # type: ignore[index]
-        rear_avg = (wears[2] + wears[3]) / 2.0  # type: ignore[index]
+        if len(w):
+            wears.append(float(w[-1]))
+    if len(wears) == 4:
+        front_avg = (wears[0] + wears[1]) / 2.0
+        rear_avg = (wears[2] + wears[3]) / 2.0
         oversteer = max(0.0, min(1.0, (rear_avg - front_avg) / 20.0))
         metrics["values"]["oversteer_indicator"] = float(oversteer)
         metrics["values"]["tyre_wear_balance"] = {
@@ -885,12 +886,13 @@ def extract_metrics(
 
     # --- Tyre temp spread ---
     temp_fields = ("tyre_temp_fl", "tyre_temp_fr", "tyre_temp_rl", "tyre_temp_rr")
-    temps: list[float | None] = []
+    temps: list[float] = []
     for k in temp_fields:
         t_arr, _ = cols[k]
-        temps.append(float(np.mean(t_arr)) if len(t_arr) else None)
-    if all(t is not None for t in temps):
-        spread = float(max(temps) - min(temps))  # type: ignore[arg-type]
+        if len(t_arr):
+            temps.append(float(np.mean(t_arr)))
+    if len(temps) == 4:
+        spread = float(max(temps) - min(temps))
         metrics["values"]["tyre_temp_spread"] = spread
         metrics["values"]["tyre_temps_avg"] = list(temps)
         mid_t = float(frames[len(frames) // 2].get("session_time") or 0.0)
@@ -908,19 +910,21 @@ def extract_metrics(
     outer_temps: list[float] = []
     for k in inner_temp_fields:
         t_arr, _ = cols[k]
-        inner_temps.append(float(np.mean(t_arr)) if len(t_arr) else None)
+        if len(t_arr):
+            inner_temps.append(float(np.mean(t_arr)))
     for k in outer_temp_fields:
         t_arr, _ = cols[k]
-        outer_temps.append(float(np.mean(t_arr)) if len(t_arr) else None)  # type: ignore[arg-type]
-    if all(t is not None for t in inner_temps + outer_temps):
+        if len(t_arr):
+            outer_temps.append(float(np.mean(t_arr)))
+    if len(inner_temps) == 2 and len(outer_temps) == 2:
         # Average inner vs outer across FL+FR.
-        avg_inner = sum(inner_temps) / 2.0  # type: ignore[arg-type]
-        avg_outer = sum(outer_temps) / 2.0  # type: ignore[arg-type]
+        avg_inner = sum(inner_temps) / 2.0
+        avg_outer = sum(outer_temps) / 2.0
         temp_gradient = avg_inner - avg_outer
         metrics["values"]["tyre_temp_gradient"] = temp_gradient
         mid_t = float(frames[len(frames) // 2].get("session_time") or 0.0)
-        add_ref("tyre_inner_temp_fl", mid_t, "tyre_inner_temp_fl", float(inner_temps[0]))  # type: ignore[arg-type]
-        add_ref("tyre_outer_temp_fl", mid_t, "tyre_outer_temp_fl", float(outer_temps[0]))  # type: ignore[arg-type]
+        add_ref("tyre_inner_temp_fl", mid_t, "tyre_inner_temp_fl", float(inner_temps[0]))
+        add_ref("tyre_outer_temp_fl", mid_t, "tyre_outer_temp_fl", float(outer_temps[0]))
 
     # --- Aero balance (downforce) — Iter-214 ---
     # Compares g_lat at high speed (>250 km/h) vs low speed (<150 km/h) while
