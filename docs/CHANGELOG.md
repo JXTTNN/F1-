@@ -4,6 +4,11 @@
 
 ## 2026-08 优化迭代
 
+### 文档一致性: 移除硬编码维度计数 (Iter-262)
+- 反馈引擎/quality/__init__ 多处注释仍写死 "18/12/10 个维度", 与实际
+  `FEEDBACK_DIMENSIONS` (现 20 维) 脱节。改为引用 `FEEDBACK_DIMENSIONS` 常量,
+  避免后续新增维度时文档再度陈旧。
+
 ### 车手画像 DRS 使用效率修正 (Iter-261)
 - **`_drs_usage_efficiency` 改用 `drs_active` (实际 DRS 激活, m_drs)**：原用
   `drs_allowed` (仅"此区段允许 DRS") 作代理, 会把"允许但未使用"也计为使用,

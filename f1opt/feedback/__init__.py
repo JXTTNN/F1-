@@ -2,7 +2,7 @@
 
 Re-exports the public entry point :func:`generate_feedback`, the
 :class:`FeedbackEngine` wrapper, and the :data:`FEEDBACK_DIMENSIONS` constant
-(all 10 spec dimensions). The engine produces evidence-grounded feedback
+(all spec dimensions). The engine produces evidence-grounded feedback
 covering every dimension (balance / grip / tyres / braking / ers_drs /
 throttle_brake_smoothness / confidence / lap_time_potential / sector_compare /
 setup_advice) and supports a pluggable chat backend.

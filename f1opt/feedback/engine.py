@@ -6,7 +6,7 @@ throttle_brake_smoothness / confidence / lap_time_potential / sector_compare /
 setup_advice). Works without an LLM API key via a comprehensive rule-based
 fallback, and supports a pluggable LLM backend (``config.llm_backend``) for
 richer natural language — the LLM-enhance path stays gated (default off) but
-its prompt already lists all 18 dimensions.
+its prompt already lists all FEEDBACK_DIMENSIONS.
 
 Pipeline:
 
@@ -69,7 +69,7 @@ __all__ = [
     "rule_based_feedback",
 ]
 
-#: All 12 feedback dimensions required by the setup-optimizer spec (Iter-03).
+#: All feedback dimensions required by the setup-optimizer spec (Iter-03).
 #: Re-exported from :mod:`f1opt.feedback.prompts` (single source of truth) so
 #: the rule-based path and the LLM prompt dimension list never drift apart.
 #: The rule-based path always emits one entry per name in this order.
@@ -2486,7 +2486,7 @@ def rule_based_feedback(
     track = _resolve_track(track_id)
     ref_lap = _ref_lap_for(track)
 
-    # Build the 18 dimensions in FEEDBACK_DIMENSIONS order. Rule-based
+    # Build all dimensions in FEEDBACK_DIMENSIONS order. Rule-based
     # suggestions accumulate from balance / grip / tyres / braking dims.
     dim_balance, sug = _dim_balance(values, refs, setup)
     dim_balance = _apply_personal_advice(dim_balance, profile, _balance_personal)
@@ -3643,7 +3643,7 @@ def generate_feedback(
 ) -> dict[str, Any]:
     """Public entry point: produce evidence-grounded driver feedback.
 
-    Returns a dict with ``summary``, ``dimensions`` (all 10 FEEDBACK_DIMENSIONS),
+    Returns a dict with ``summary``, ``dimensions`` (all FEEDBACK_DIMENSIONS),
     ``setup_suggestions`` and ``sources`` (see module docstring). Works without
     an LLM API key via the rule-based path; uses ``config.llm_backend`` for
     richer prose when set.

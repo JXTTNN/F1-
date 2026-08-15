@@ -7,8 +7,8 @@ path (external-audit).
 Key assessments:
 - **Groundedness** (0.0–1.0): Do numeric claims in the response trace back to
   telemetry evidence? Penalises invented numbers and hallucinated values.
-- **Completeness** (0.0–1.0): How many of the 10 feedback dimensions have
-  meaningful non-empty entries?
+- **Completeness** (0.0–1.0): How many of the feedback dimensions have
+  meaningful non-empty entries? (uses the live ``FEEDBACK_DIMENSIONS`` count)
 - **Actionability** (0.0–1.0): Does the response contain concrete, specific
   advice (setup changes, lap-time estimates, sector-specific guidance)?
 - **Overall** (0.0–1.0): Weighted average of the three scores.
