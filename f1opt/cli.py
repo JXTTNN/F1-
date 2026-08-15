@@ -74,6 +74,8 @@ def build_parser() -> argparse.ArgumentParser:
         default="differential",
     )
     p_search.add_argument("--iterations", type=int, default=100)
+    p_search.add_argument("--seed", type=int, default=42,
+                         help="随机种子 (固定可复现)")
     p_search.add_argument("--json", action="store_true")
     p_search.set_defaults(func=cmd_search)
 
@@ -81,6 +83,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_bayes = subparsers.add_parser("bayesian", help="Bayesian search")
     p_bayes.add_argument("--track", required=True)
     p_bayes.add_argument("--iterations", type=int, default=15)
+    p_bayes.add_argument("--seed", type=int, default=42,
+                         help="随机种子 (固定可复现)")
     p_bayes.add_argument(
         "--acquisition",
         choices=["ei", "ucb", "pi"],
@@ -374,6 +378,7 @@ def cmd_search(args: argparse.Namespace) -> int:
                 DEFAULT_SETUP,
                 n_iterations=args.iterations,
                 acquisition="ei",
+                seed=args.seed,
             )
             output = {
                 "method": "bayesian",
@@ -391,6 +396,7 @@ def cmd_search(args: argparse.Namespace) -> int:
                 args.track,
                 iterations=args.iterations,
                 tire_wear_weight=args.tire_wear_weight,
+                seed=args.seed,
             )
             output = {
                 "method": "differential",
@@ -420,6 +426,7 @@ def cmd_bayesian(args: argparse.Namespace) -> int:
             DEFAULT_SETUP,
             n_iterations=args.iterations,
             acquisition=args.acquisition,
+            seed=args.seed,
         )
         output = {
             "track": args.track,
