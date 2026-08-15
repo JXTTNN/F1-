@@ -233,10 +233,10 @@ class SeasonSimulator:
 
             # 更新 driver_points (用于下站 momentum)
             for cr in champ_results:
-                pos = cr["position"]
-                if pos is not None and int(pos) <= 10:
+                race_pos = cr["position"]
+                if race_pos is not None and int(race_pos) <= 10:
                     from f1opt.model.championship import RACE_POINTS
-                    driver_points[str(cr["driver_id"])] += RACE_POINTS[int(pos) - 1]
+                    driver_points[str(cr["driver_id"])] += RACE_POINTS[int(race_pos) - 1]
 
             # 简短摘要
             race_summaries.append({

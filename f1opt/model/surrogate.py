@@ -485,9 +485,9 @@ class SurrogateModel(nn.Module):
         driver_corr = _driver_sector_correction(dv, sv, track_id)
         self.eval()
         with torch.no_grad():
-            sec_res, resp_res = self.forward(x)
-        sec_res = sec_res.squeeze(0).numpy() * SECTOR_SCALE + sec_prior + driver_corr
-        resp_res = resp_res.squeeze(0).numpy() * scales + resp_prior
+            sec_res_t, resp_res_t = self.forward(x)
+        sec_res = sec_res_t.squeeze(0).numpy() * SECTOR_SCALE + sec_prior + driver_corr
+        resp_res = resp_res_t.squeeze(0).numpy() * scales + resp_prior
         sectors = [max(0.01, float(s)) for s in sec_res]
         lap_time = float(sum(sectors))
         responses = {

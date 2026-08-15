@@ -272,6 +272,11 @@
 - `app.py`：`lifespan` 返回类型 `None` → `AsyncIterator[None]` (修复
   asynccontextmanager 类型)；`add_exception_handler` 加 `# type: ignore[arg-type]`。
   api 25 passed。全项目 8 → 5。
+- **mypy 全项目清零 (里程碑)**：修复最后 5 处 —
+  `surrogate.py` tensor 变量重命名 (`sec_res_t`/`resp_res_t`)、
+  `strategy_optimizer.py` 去重注解、`season_simulator.py` `pos` → `race_pos`。
+  **`mypy f1opt/` → Success: no issues found in 117 source files**。
+  season+strategy_optimizer 33 passed。全项目 5 → 0。
 
 ---
 
