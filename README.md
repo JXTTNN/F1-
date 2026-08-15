@@ -9,7 +9,9 @@
 
 ## 下载即用
 
-[下载 EXE](https://github.com/JXTTNN/F1-/releases) — 无需 Python，双击运行。
+- **Windows EXE**：[下载 f1opt.exe (v1.1.0)](https://github.com/JXTTNN/F1-/releases/download/v1.1.0/f1opt.exe) — 无需 Python，双击运行。
+- **Linux**：[下载 f1opt-linux-x86_64.tar.gz (v1.0.0)](https://github.com/JXTTNN/F1-/releases/download/v1.0.0/f1opt-linux-x86_64.tar.gz)
+- 全部版本：[GitHub Releases](https://github.com/JXTTNN/F1-/releases)
 
 ---
 

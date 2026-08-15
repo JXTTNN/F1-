@@ -90,6 +90,13 @@
   此前同步连发 10 包无 yield，内核丢包导致只收到 1 包 (预存失败)。改为每包
   `await asyncio.sleep(0)` 让监听器 recv 回调排空 socket，测试稳定通过。
 
+### 分发 (EXE 可下载)
+- **发布 GitHub Release v1.1.0 (Windows EXE)**：上传 `f1opt.exe` (47.7MB,
+  PyInstaller) 至 Release，直达下载链接：
+  https://github.com/JXTTNN/F1-/releases/download/v1.1.0/f1opt.exe
+  (SHA256: f985c94a4a3dc615b584e86ebe8138a48afaca05650126e365159c97cc14fc65)。
+- README 补全 Windows/Linux 双平台下载入口。
+
 ---
 
 ## 已知限制 (Known Limitations)
