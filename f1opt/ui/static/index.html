@@ -313,6 +313,7 @@
         <div class="head"><span>横向 G</span><span id="glat-val" class="mono">0.00</span></div>
         <div class="head"><span>纵向 G</span><span id="glong-val" class="mono">0.00</span></div>
         <div class="head"><span>DRS</span><span id="drs-val" class="mono" style="color:var(--amber)">—</span></div>
+        <div class="head"><span>主动空力</span><span id="aero-val" class="mono" style="color:var(--cyan)">—</span></div>
         <div class="head"><span>圈距</span><span id="lapdist-val" class="mono">0 m</span></div>
       </div>
     </div>
@@ -840,6 +841,11 @@
     setText("glat-val", glat.toFixed(2));
     setText("glong-val", glong.toFixed(2));
     setText("drs-val", f.drs_allowed? "允许":"—");
+    // F1 2026 主动空力 (X=低阻直道 / Z=高下压力弯道)
+    var ax=Number(f.active_aero_x)||0, az=Number(f.active_aero_z)||0;
+    if(ax>0.5){ setText("aero-val","X-Mode"); el("aero-val").style.color="var(--cyan)"; }
+    else if(az>0.5){ setText("aero-val","Z-Mode"); el("aero-val").style.color="var(--purple)"; }
+    else { setText("aero-val","—"); el("aero-val").style.color="var(--muted)"; }
     setText("lapdist-val", num(f.lap_distance,0)+" m");
 
     // lap time + delta
