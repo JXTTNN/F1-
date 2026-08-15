@@ -254,6 +254,9 @@
   (`list[SurrogateModel]`), 循环改用 `self._members` 替代 `nn.ModuleList` 迭代
   (mypy 把 ModuleList 元素推断为 Tensor, 导致 `m.predict()` 报 "Tensor not
   callable")。surrogate 23 passed。全项目 32 → 29。
+- `bayesian.py`：`predict` / `log_marginal_likelihood` / `_optimize_hyperparams`
+  的 `neg_lml` 闭包改用局部 `X`/`y`/`L`/`alpha`/`V`/`w` 变量 (替代可选属性),
+  彻底消除 `ndarray | None` 收窄问题。bayesian 24 passed。全项目 29 → 22。
 
 ---
 

@@ -133,7 +133,9 @@ class GaussianProcessSurrogate:
             from scipy.optimize import minimize
         except ImportError:
             return
-        if self._X is None or self._X.shape[0] < 2:
+        X = self._X
+        y = self._y
+        if X is None or y is None or X.shape[0] < 2:
             return
 
         def neg_lml(theta: np.ndarray) -> float:
@@ -141,13 +143,13 @@ class GaussianProcessSurrogate:
             ls = max(ls, 1e-3)
             sig = max(sig, 1e-3)
             nz = max(nz, _NOISE_FLOOR)
-            K = _matern52(self._X, self._X, ls, sig)
+            K = _matern52(X, X, ls, sig)
             n = K.shape[0]
             Kn = K + (nz + _JITTER) * np.eye(n)
             try:
                 L = np.linalg.cholesky(Kn)
-                alpha = np.linalg.solve(L.T, np.linalg.solve(L, self._y))
-                lml = -0.5 * (self._y @ alpha) - np.sum(np.log(np.diag(L))) \
+                alpha = np.linalg.solve(L.T, np.linalg.solve(L, y))
+                lml = -0.5 * (y @ alpha) - np.sum(np.log(np.diag(L))) \
                     - 0.5 * n * np.log(2 * np.pi)
                 return -float(lml)
             except np.linalg.LinAlgError:
@@ -171,36 +173,47 @@ class GaussianProcessSurrogate:
     def predict(self, X: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         """Posterior (mean, std) at query points. Shape (n,) each."""
         X = np.atleast_2d(np.asarray(X, dtype=np.float64))
-        if self._X is None or self._X.shape[0] == 0:
+        X_train = self._X
+        alpha = self._alpha
+        if X_train is None or alpha is None or X_train.shape[0] == 0:
             # No data: return prior mean 0, prior std = signal.
             return np.zeros(X.shape[0]), np.full(X.shape[0], self.signal)
-        K_xs = _matern52(X, self._X, self.lengthscale, self.signal)
-        mean = K_xs @ self._alpha
+        K_xs = _matern52(X, X_train, self.lengthscale, self.signal)
+        mean = K_xs @ alpha
         # Variance: k(x,x) - v^T v
         k_ss = self.signal * self.signal * np.ones(X.shape[0])
         if not self._use_eig:
-            v = np.linalg.solve(self._L, K_xs.T)  # (n, m)
+            L = self._L
+            if L is None:
+                return mean, np.full(X.shape[0], self.signal)
+            v = np.linalg.solve(L, K_xs.T)  # (n, m)
             var = k_ss - np.sum(v * v, axis=0)
         else:
             # Eigen fallback: K_xs @ V @ diag(1/w) @ V^T @ K_xs^T
-            VtKxs = self._V.T @ K_xs.T  # (n, m)
-            var = k_ss - np.sum((VtKxs ** 2) * (1.0 / self._w)[:, None], axis=0)
+            V = self._V
+            w = self._w
+            if V is None or w is None:
+                return mean, np.full(X.shape[0], self.signal)
+            VtKxs = V.T @ K_xs.T  # (n, m)
+            var = k_ss - np.sum((VtKxs ** 2) * (1.0 / w)[:, None], axis=0)
         var = np.maximum(var, 0.0)
         return mean, np.sqrt(var)
 
     # ------------------------------------------------------------------ #
     def log_marginal_likelihood(self) -> float:
         """Log marginal likelihood of the training data under current hyperparams."""
-        if self._X is None or self._X.shape[0] == 0:
+        X = self._X
+        y = self._y
+        if X is None or y is None or X.shape[0] == 0:
             return 0.0
-        K = _matern52(self._X, self._X, self.lengthscale, self.signal)
+        K = _matern52(X, X, self.lengthscale, self.signal)
         n = K.shape[0]
         Kn = K + (self.noise + _JITTER) * np.eye(n)
         try:
             L = np.linalg.cholesky(Kn)
-            alpha = np.linalg.solve(L.T, np.linalg.solve(L, self._y))
+            alpha = np.linalg.solve(L.T, np.linalg.solve(L, y))
             return float(
-                -0.5 * (self._y @ alpha) - np.sum(np.log(np.diag(L)))
+                -0.5 * (y @ alpha) - np.sum(np.log(np.diag(L)))
                 - 0.5 * n * np.log(2 * np.pi)
             )
         except np.linalg.LinAlgError:
