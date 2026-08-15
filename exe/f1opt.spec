@@ -92,7 +92,7 @@ a = Analysis(
     runtime_hooks=[],
     excludes=[
         'pytest', 'setuptools', 'pip', 'wheel',
-        'tkinter', 'unittest', 'test', 'tests',
+        'tkinter', 'tests',
         'docutils', 'sphinx', 'IPython', 'jupyter', 'notebook',
         'matplotlib', 'PIL', 'cv2',
         'tensorflow', 'keras', 'tensorboard',
