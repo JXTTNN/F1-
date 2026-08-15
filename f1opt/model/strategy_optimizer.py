@@ -211,6 +211,7 @@ class StrategyOptimizer:
         """执行网格搜索, 返回最优策略."""
         self.all_candidates = []
         # 决定候选 compound (干地 vs 湿地)
+        compounds_pool: tuple[str, ...]
         if self.weather is not None and self.weather.state.track_wetness > 0.3:
             compounds_pool = _WET_COMPOUNDS
         else:

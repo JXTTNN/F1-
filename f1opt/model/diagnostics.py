@@ -185,13 +185,6 @@ class ModelComparisonReport:
     seed: int
 
 
-def _predict_lap(model: SurrogateModel, x: _np.ndarray) -> _np.ndarray:
-    xt = _torch.as_tensor(x, dtype=_torch.float32)
-    with _torch.no_grad():
-        sectors, _ = model(xt)
-    return _np.asarray(sectors.sum(dim=1))
-
-
 def calibration_curve(
     model: SurrogateModel, x: _np.ndarray, y_lap: _np.ndarray,
     *, n_bins: int = 10,

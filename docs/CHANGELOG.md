@@ -233,6 +233,13 @@
   overloaded 错误 → 显式 `float(high_g) / max(float(low_g), 1.0)`。
   analytics 31 passed。全项目 43 → 41。
 
+### 类型/死代码修复 (mypy 继续收敛 41 → 35)
+- `pareto.py`：`_mutate` 的 `mask` 加 `np.ndarray` 显式注解 (mypy 误判为 bool)。
+- `diagnostics.py`：**移除重复定义的 `_predict_lap`** (第一个无 `model.eval()`,
+  被第二个遮蔽, 是死代码)。
+- `strategy_optimizer.py`：`compounds_pool` 注解 `tuple[str, ...]` (干地 3 元素
+  vs 湿地 2 元素长度不一致)。pareto+diagnostics+strategy_optimizer 69 passed。
+
 ---
 
 ## 已知限制 (Known Limitations)
