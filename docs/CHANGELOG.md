@@ -239,6 +239,8 @@
   被第二个遮蔽, 是死代码)。
 - `strategy_optimizer.py`：`compounds_pool` 注解 `tuple[str, ...]` (干地 3 元素
   vs 湿地 2 元素长度不一致)。pareto+diagnostics+strategy_optimizer 69 passed。
+- `bayesian.py`：`_compute_factor` 用局部 `X`/`y`/`L` 变量替代 `self._X`/`_y`/`_L`
+  (帮助 mypy 收窄 None), 语义等价。bayesian 24 passed。全项目 35 → 33。
 
 ---
 

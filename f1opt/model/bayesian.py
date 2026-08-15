@@ -104,23 +104,24 @@ class GaussianProcessSurrogate:
     # ------------------------------------------------------------------ #
     def _compute_factor(self) -> None:
         """Compute Cholesky factor (or eigen fallback) of K + noise I."""
-        if self._X is None:
+        X = self._X
+        y = self._y
+        if X is None or y is None:
             return
-        K = _matern52(self._X, self._X, self.lengthscale, self.signal)
+        K = _matern52(X, X, self.lengthscale, self.signal)
         n = K.shape[0]
         K_noise = K + (self.noise + _JITTER) * np.eye(n)
         try:
-            self._L = np.linalg.cholesky(K_noise)
-            self._alpha = np.linalg.solve(
-                self._L.T, np.linalg.solve(self._L, self._y)
-            )
+            L = np.linalg.cholesky(K_noise)
+            self._alpha = np.linalg.solve(L.T, np.linalg.solve(L, y))
+            self._L = L
             self._use_eig = False
         except np.linalg.LinAlgError:
             # Eigen-decomposition fallback.
             w, V = np.linalg.eigh(K_noise)
             w = np.maximum(w, _JITTER)
             self._L = None
-            self._alpha = (V * (1.0 / w)) @ (V.T @ self._y)
+            self._alpha = (V * (1.0 / w)) @ (V.T @ y)
             self._V = V
             self._w = w
             self._use_eig = True
