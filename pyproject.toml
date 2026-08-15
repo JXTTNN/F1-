@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "f1opt"
-version = "0.1.0"
+version = "1.2.0"
 description = "F1 2026 Setup Optimizer: telemetry, driver feedback, and setup search"
 requires-python = ">=3.11"
 readme = "README.md"
