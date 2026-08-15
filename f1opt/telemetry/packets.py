@@ -138,9 +138,59 @@ def _unpack_body(data: bytes, body_struct: struct.Struct) -> tuple:
     return body_struct.unpack(body[:expected])
 
 
-def _cars(vals: tuple, per: int, names: tuple[str, ...]) -> list[dict[str, Any]]:
-    """Group a flat tuple of ``NUM_CARS * per`` values into per-car dicts."""
-    return [dict(zip(names, vals[i * per : (i + 1) * per], strict=False)) for i in range(NUM_CARS)]
+class _LazyCarList:
+    """List-like, lazily materialized per-car dict sequence (22 cars).
+
+    Eagerly parsing every 60Hz Motion packet builds 22 per-car dicts (~58µs,
+    GIL-bound) even though the hot ingest path (``TelemetryAligner.on_packet``)
+    only reads the single player car. This sequence defers dict construction
+    to ``__getitem__``, so the player-car-only path materializes exactly one
+    dict while preserving the ``len`` / indexing / iteration / mutation
+    contract of a regular list.
+    """
+
+    __slots__ = ("_vals", "_per", "_names", "_cache")
+
+    def __init__(self, vals: tuple, per: int, names: tuple[str, ...]) -> None:
+        self._vals = vals
+        self._per = per
+        self._names = names
+        self._cache: list[dict[str, Any] | None] = [None] * NUM_CARS
+
+    def __len__(self) -> int:
+        return NUM_CARS
+
+    def __bool__(self) -> bool:
+        return True
+
+    def __iter__(self):
+        for i in range(NUM_CARS):
+            yield self[i]
+
+    def __getitem__(self, i):
+        if isinstance(i, slice):
+            return [self[j] for j in range(*i.indices(NUM_CARS))]
+        if i < 0:
+            i += NUM_CARS
+        if not 0 <= i < NUM_CARS:
+            raise IndexError(i)
+        d = self._cache[i]
+        if d is None:
+            base = i * self._per
+            d = dict(zip(self._names, self._vals[base : base + self._per]))
+            self._cache[i] = d
+        return d
+
+
+def _cars(vals: tuple, per: int, names: tuple[str, ...]) -> _LazyCarList:
+    """Group a flat tuple of ``NUM_CARS * per`` values into per-car dicts.
+
+    Returns a :class:`_LazyCarList` that materializes per-car dicts on access;
+    this keeps the 60Hz Motion hot path cheap (player-car-only ingest builds
+    one dict instead of 22) while preserving list-like semantics for full-scan
+    consumers (validation, aggregator, lobby decode).
+    """
+    return _LazyCarList(vals, per, names)
 
 
 # --------------------------------------------------------------------------- #

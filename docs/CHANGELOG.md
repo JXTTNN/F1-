@@ -77,10 +77,23 @@
   改为 `start_listener=True`，监听失败仍优雅降级 (API 保持可用)。
   实测 `f1opt serve` + `GET /api/health` 返回 `udp_listening:true`。
 
+### 遥测收集 (性能关键修复)
+- **修复 UDP 洪泛吞吐瓶颈 (唯一失败的压力测试)**：Motion body 解析从 ~86µs
+  降至 **~13µs (6.6x)**。根因是每包 eager 构造 22 个 per-car 字典 (~58µs,
+  GIL-bound)，而热路径 (aligner) 只读玩家单车。改为 `_LazyCarList` 惰性物化
+  (按需构造单个车字典，保留 len/索引/迭代/变异契约)。
+  `test_stress_udp_flood_6000_motion` 从 ~60% 投递 (阈值 75%) 提升为 **通过**。
+  全量遥测套件 359 passed。
+
+### 测试可靠性 (工厂级)
+- **修复 e2e UDP 真实 socket 测试的发送时序**：`test_e2e_udp_listener_real_socket`
+  此前同步连发 10 包无 yield，内核丢包导致只收到 1 包 (预存失败)。改为每包
+  `await asyncio.sleep(0)` 让监听器 recv 回调排空 socket，测试稳定通过。
+
 ---
 
 ## 已知限制 (Known Limitations)
 
-- **UDP 洪泛吞吐**：body 解析（Motion ≈ 75µs，22 车字典构造）仍在事件循环上，
-  25k pps 人工洪泛约 60% 投递（阈值 75%）。真实 F1 60Hz 无影响。根治需线程卸载或
-  numpy 向量化（见 `f1opt/telemetry/listener.py` 注释）。
+- ~~**UDP 洪泛吞吐**~~：**已修复**。惰性 per-car 物化使 Motion 解析 6.6x 提速，
+  人工洪泛测试现已通过。剩余上限为真实 UDP 内核缓冲 + 事件循环调度，远高于
+  F1 2026 实际 60Hz 速率。

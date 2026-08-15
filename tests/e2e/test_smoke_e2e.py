@@ -284,6 +284,10 @@ async def test_e2e_udp_listener_real_socket() -> None:
         try:
             for pkt in packets:
                 transport.sendto(pkt)
+                # Yield so the listener's recv callback drains the socket
+                # between datagrams (matches real F1 60Hz spacing; without the
+                # yield a synchronous burst is dropped by the kernel).
+                await asyncio.sleep(0)
         finally:
             transport.close()
         await asyncio.sleep(0.3)
