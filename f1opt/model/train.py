@@ -856,8 +856,8 @@ def _build_tensors(
 
 
 def _held_out_mae(
-    model: SurrogateModel, seed: int, n: int, noise_std: float = 0.0,
-    label_source: str = "physics",
+    model: SurrogateModel | EnsembleSurrogateModel, seed: int, n: int,
+    noise_std: float = 0.0, label_source: str = "physics",
 ) -> tuple[float, float]:
     """在无噪声 held-out 集上计算 sector MAE 与 lap-time MAE.
 

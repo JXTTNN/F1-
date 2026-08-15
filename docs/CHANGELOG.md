@@ -246,6 +246,11 @@
 - `pyproject.toml` 补全可选依赖：dev 加 `pytest-timeout` (支持测试超时保护,
   防止未来压测挂起), 新增 `build` extra (含 `pyinstaller`, 一键 EXE 构建)。
 
+### 类型安全 (mypy 继续收敛 33 → 32)
+- `train.py`：`_held_out_mae` 的 `model` 参数标注放宽为 `SurrogateModel |
+  EnsembleSurrogateModel` (实际两种模型均接受, 且均有 `predict` 方法)。
+  train 26 passed。
+
 ---
 
 ## 已知限制 (Known Limitations)
