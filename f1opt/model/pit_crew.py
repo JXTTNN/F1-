@@ -42,8 +42,9 @@ _PIT_CREW_RATING: dict[str, int] = {
     "wil": 84,   # Williams — 中等
     "alp": 82,   # Alpine — 中等
     "rb": 86,    # Racing Bulls — 与 RBR 同体系, 训练有素
-    "kck": 78,   # Kick Sauber — 后段
+    "aud": 78,   # Audi — 后段
     "has": 76,   # Haas — 最慢之一
+    "cad": 74,   # Cadillac — 新车队, 进站磨合期
 }
 
 
@@ -158,7 +159,7 @@ def effective_pit_loss_s(team_id: str, track_id: str) -> float:
 
 
 def all_pit_crew_ratings() -> dict[str, int]:
-    """返回全部 10 队 pit crew 评分."""
+    """返回全部 11 队 pit crew 评分."""
     return dict(_PIT_CREW_RATING)
 
 

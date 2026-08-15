@@ -1,7 +1,7 @@
 """F1 2026 真实车手档案 (Iter-35).
 
 F1 2026 EA Sports 游戏官方车手数据 (基于公开 2025 赛季数据外推):
-20 位车手 × 综合能力评分 (1-99) + 6 维子能力.
+22 位车手 × 综合能力评分 (1-99) + 6 维子能力.
 
 车手能力维度 (F1 2026 游戏标准):
 - pace: 单圈速度
@@ -13,7 +13,7 @@ F1 2026 EA Sports 游戏官方车手数据 (基于公开 2025 赛季数据外推
 
 公开 API:
     - :class:`DriverProfile2026` — 单车手档案.
-    - :func:`all_drivers_2026` — 全部 20 车手.
+    - :func:`all_drivers_2026` — 全部 22 车手.
     - :func:`get_driver_2026` — 按 id 查询.
 """
 
@@ -80,7 +80,7 @@ class DriverProfile2026:
 
 
 # --------------------------------------------------------------------------- #
-# F1 2026 20 车手档案 (基于 2025 公开评分外推, 2026 车手市场)
+# F1 2026 22 车手档案 (基于 2025 公开评分外推, 2026 车手市场)
 # 数据来源: F1 2026 游戏官方 + 公开 F1 媒体评分综合
 # --------------------------------------------------------------------------- #
 _DRIVERS_2026: list[DriverProfile2026] = [
@@ -163,24 +163,24 @@ _DRIVERS_2026: list[DriverProfile2026] = [
     ),
     # RB Honda RBPT (Racing Bulls)
     DriverProfile2026(
-        driver_id="had", driver_name="Liam Lawson",
+        driver_id="law", driver_name="Liam Lawson",
         team_id="rb", team_name="Racing Bulls", country_code="nz",
         pace=87, race=85, consistency=83, tyre_management=82, wet=83, defending=84,
     ),
     DriverProfile2026(
-        driver_id="bea", driver_name="Isack Hadjar",
+        driver_id="had", driver_name="Isack Hadjar",
         team_id="rb", team_name="Racing Bulls", country_code="fr",
         pace=85, race=82, consistency=80, tyre_management=80, wet=80, defending=82,
     ),
-    # Kick Sauber Ferrari
+    # Audi Ferrari
     DriverProfile2026(
         driver_id="hul", driver_name="Nico Hulkenberg",
-        team_id="kck", team_name="Kick Sauber", country_code="de",
+        team_id="aud", team_name="Audi", country_code="de",
         pace=86, race=87, consistency=86, tyre_management=87, wet=86, defending=85,
     ),
     DriverProfile2026(
         driver_id="bor", driver_name="Gabriel Bortoleto",
-        team_id="kck", team_name="Kick Sauber", country_code="br",
+        team_id="aud", team_name="Audi", country_code="br",
         pace=84, race=82, consistency=80, tyre_management=80, wet=80, defending=82,
     ),
     # Haas Ferrari
@@ -194,11 +194,22 @@ _DRIVERS_2026: list[DriverProfile2026] = [
         team_id="has", team_name="Haas", country_code="gb",
         pace=86, race=83, consistency=80, tyre_management=80, wet=82, defending=83,
     ),
+    # Cadillac Ferrari
+    DriverProfile2026(
+        driver_id="per", driver_name="Sergio Perez",
+        team_id="cad", team_name="Cadillac", country_code="mx",
+        pace=86, race=85, consistency=84, tyre_management=85, wet=82, defending=86,
+    ),
+    DriverProfile2026(
+        driver_id="bot", driver_name="Valtteri Bottas",
+        team_id="cad", team_name="Cadillac", country_code="fi",
+        pace=87, race=86, consistency=86, tyre_management=86, wet=87, defending=83,
+    ),
 ]
 
 
 def all_drivers_2026() -> list[DriverProfile2026]:
-    """返回全部 20 位 F1 2026 车手."""
+    """返回全部 22 位 F1 2026 车手."""
     return list(_DRIVERS_2026)
 
 
@@ -211,7 +222,7 @@ def get_driver_2026(driver_id: str) -> DriverProfile2026:
 
 
 def all_teams_2026() -> list[tuple[str, str]]:
-    """返回全部 10 支 F1 2026 车队 (team_id, team_name)."""
+    """返回全部 11 支 F1 2026 车队 (team_id, team_name)."""
     seen = []
     for d in _DRIVERS_2026:
         if (d.team_id, d.team_name) not in seen:

@@ -19,14 +19,14 @@ from f1opt.model.season_simulator import (
 # --------------------------------------------------------------------------- #
 # 数据构建
 # --------------------------------------------------------------------------- #
-def test_build_2026_season_drivers_returns_20():
+def test_build_2026_season_drivers_returns_22():
     drivers = build_2026_season_drivers()
-    assert len(drivers) == 20
+    assert len(drivers) == 22
 
 
-def test_build_2026_season_teams_returns_10():
+def test_build_2026_season_teams_returns_11():
     teams = build_2026_season_teams()
-    assert len(teams) == 10
+    assert len(teams) == 11
 
 
 def test_2026_drivers_have_team_offsets():
@@ -62,8 +62,8 @@ def test_season_2026_completes(season_2026_result):
     result, elapsed = season_2026_result
     assert "champions" in result
     assert "summary" in result
-    # 性能: 应在 10s 内完成 24 场赛季
-    assert elapsed < 10.0, f"Season took {elapsed:.1f}s, expected <10s"
+    # 性能: 应在 20s 内完成 24 场赛季 (22 车手)
+    assert elapsed < 20.0, f"Season took {elapsed:.1f}s, expected <20s"
 
 
 def test_season_2026_has_champions(season_2026_result):
@@ -82,20 +82,20 @@ def test_season_2026_24_races(season_2026_result):
 def test_season_2026_champion_has_points(season_2026_result):
     result, _ = season_2026_result
     standings = result["final_driver_standings"]
-    assert len(standings) == 20
+    assert len(standings) == 22
     # 冠军 (榜首) 应有可观积分 (>300, 24 场均 12+ 分)
     assert standings[0].points > 200
 
 
 def test_season_2026_top_teams_score_higher(season_2026_result):
-    """顶队 (RBR/MCL/MER/FER) 总积分应高于后段 (Sauber/Haas)."""
+    """顶队 (RBR/MCL/MER/FER) 总积分应高于后段 (Audi/Haas/RB/Cadillac)."""
     result, _ = season_2026_result
     constructor_standings = result["final_constructor_standings"]
     by_team = {s.team_id: s.points for s in constructor_standings}
     top_avg = (by_team.get("rbr", 0) + by_team.get("mcl", 0)
                + by_team.get("mer", 0) + by_team.get("fer", 0)) / 4
-    back_avg = (by_team.get("kck", 0) + by_team.get("has", 0)
-                + by_team.get("rb", 0)) / 3
+    back_avg = (by_team.get("aud", 0) + by_team.get("has", 0)
+                + by_team.get("rb", 0) + by_team.get("cad", 0)) / 4
     assert top_avg > back_avg, \
         f"top_avg={top_avg} should > back_avg={back_avg}"
 

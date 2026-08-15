@@ -14,7 +14,7 @@ from f1opt.model.season_simulator import (
 # --------------------------------------------------------------------------- #
 # Helpers
 # --------------------------------------------------------------------------- #
-def _make_drivers(n: int = 20) -> list[SeasonDriver]:
+def _make_drivers(n: int = 22) -> list[SeasonDriver]:
     return [
         SeasonDriver(
             driver_id=f"d{i:02d}",
@@ -28,7 +28,7 @@ def _make_drivers(n: int = 20) -> list[SeasonDriver]:
     ]
 
 
-def _make_teams(n: int = 10) -> list[tuple[str, str]]:
+def _make_teams(n: int = 11) -> list[tuple[str, str]]:
     return [(f"t{i:02d}", f"Team {i + 1}") for i in range(n)]
 
 
@@ -37,12 +37,12 @@ def _make_teams(n: int = 10) -> list[tuple[str, str]]:
 # --------------------------------------------------------------------------- #
 class TestValidation:
     def test_wrong_driver_count_raises(self) -> None:
-        with pytest.raises(ValueError, match="20 drivers"):
-            SeasonSimulator(drivers=_make_drivers(15), teams=_make_teams(10))
+        with pytest.raises(ValueError, match="22 drivers"):
+            SeasonSimulator(drivers=_make_drivers(15), teams=_make_teams(11))
 
     def test_wrong_team_count_raises(self) -> None:
-        with pytest.raises(ValueError, match="10 teams"):
-            SeasonSimulator(drivers=_make_drivers(20), teams=_make_teams(5))
+        with pytest.raises(ValueError, match="11 teams"):
+            SeasonSimulator(drivers=_make_drivers(22), teams=_make_teams(5))
 
 
 # --------------------------------------------------------------------------- #
@@ -52,8 +52,8 @@ class TestFullSeason:
     def test_short_season_runs(self) -> None:
         """短 3 场赛季应成功运行."""
         sim = SeasonSimulator(
-            drivers=_make_drivers(20),
-            teams=_make_teams(10),
+            drivers=_make_drivers(22),
+            teams=_make_teams(11),
             calendar=("melbourne", "monza", "spa"),
             total_laps_per_race=20,  # 短赛快测
             seed=42,
@@ -66,11 +66,11 @@ class TestFullSeason:
     def test_deterministic_with_seed(self) -> None:
         """同 seed 两赛季 → 同冠军同积分."""
         s1 = SeasonSimulator(
-            drivers=_make_drivers(20), teams=_make_teams(10),
+            drivers=_make_drivers(22), teams=_make_teams(11),
             calendar=("melbourne", "monza"), total_laps_per_race=15, seed=42,
         )
         s2 = SeasonSimulator(
-            drivers=_make_drivers(20), teams=_make_teams(10),
+            drivers=_make_drivers(22), teams=_make_teams(11),
             calendar=("melbourne", "monza"), total_laps_per_race=15, seed=42,
         )
         r1 = s1.run()
@@ -83,7 +83,7 @@ class TestFullSeason:
     def test_all_drivers_have_points(self) -> None:
         """24 场赛季后所有车手应有积分 (除非全 DNF, 极不可能)."""
         sim = SeasonSimulator(
-            drivers=_make_drivers(20), teams=_make_teams(10),
+            drivers=_make_drivers(22), teams=_make_teams(11),
             calendar=("melbourne", "monza", "spa"),
             total_laps_per_race=20, seed=42,
         )
@@ -95,13 +95,13 @@ class TestFullSeason:
     def test_constructor_points_sum_equals_drivers(self) -> None:
         """车队总积分应等于其两位车手积分之和."""
         sim = SeasonSimulator(
-            drivers=_make_drivers(20), teams=_make_teams(10),
+            drivers=_make_drivers(22), teams=_make_teams(11),
             calendar=("melbourne", "monza"), total_laps_per_race=15, seed=42,
         )
         r = sim.run()
         driver_pts = {d.driver_id: d.points for d in r["final_driver_standings"]}
         # team_id 映射
-        team_of_driver = {d.driver_id: d.team_id for d in _make_drivers(20)}
+        team_of_driver = {d.driver_id: d.team_id for d in _make_drivers(22)}
         for team in r["final_constructor_standings"]:
             team_driver_pts = sum(
                 pts for did, pts in driver_pts.items()
@@ -111,7 +111,7 @@ class TestFullSeason:
 
     def test_winner_exists_per_race(self) -> None:
         sim = SeasonSimulator(
-            drivers=_make_drivers(20), teams=_make_teams(10),
+            drivers=_make_drivers(22), teams=_make_teams(11),
             calendar=("melbourne",), total_laps_per_race=15, seed=42,
         )
         r = sim.run()
@@ -120,7 +120,7 @@ class TestFullSeason:
 
     def test_races_completed_in_summary(self) -> None:
         sim = SeasonSimulator(
-            drivers=_make_drivers(20), teams=_make_teams(10),
+            drivers=_make_drivers(22), teams=_make_teams(11),
             calendar=("melbourne", "monza", "spa", "suzuka"),
             total_laps_per_race=15, seed=42,
         )
@@ -157,8 +157,8 @@ class TestPhysicsSanity:
         from f1opt.model.race_simulator import RaceStrategy
         # 创建两组车手: 一致性高 vs 低
         drivers = []
-        for i in range(20):
-            consistency = 0.9 if i < 10 else 0.4
+        for i in range(22):
+            consistency = 0.9 if i < 11 else 0.4
             drivers.append(SeasonDriver(
                 driver_id=f"d{i:02d}",
                 driver_name=f"D{i + 1}",
@@ -171,16 +171,16 @@ class TestPhysicsSanity:
                 ),
             ))
         sim = SeasonSimulator(
-            drivers=drivers, teams=_make_teams(10),
+            drivers=drivers, teams=_make_teams(11),
             calendar=("melbourne", "monza", "spa"),
             total_laps_per_race=30, seed=42,
         )
         r = sim.run()
-        # 高一致性组 (d00-d09) 平均积分应高于低一致性组 (d10-d19)
+        # 高一致性组 (d00-d10) 平均积分应高于低一致性组 (d11-d21)
         high_pts = [d.points for d in r["final_driver_standings"]
-                    if d.driver_id in {f"d{i:02d}" for i in range(10)}]
+                    if d.driver_id in {f"d{i:02d}" for i in range(11)}]
         low_pts = [d.points for d in r["final_driver_standings"]
-                   if d.driver_id in {f"d{i:02d}" for i in range(10, 20)}]
+                   if d.driver_id in {f"d{i:02d}" for i in range(11, 22)}]
         avg_high = sum(high_pts) / len(high_pts)
         avg_low = sum(low_pts) / len(low_pts)
         assert avg_high > avg_low, (

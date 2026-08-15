@@ -15,19 +15,19 @@ from f1opt.data.teams_2026 import (
 # --------------------------------------------------------------------------- #
 # 注册表完整性
 # --------------------------------------------------------------------------- #
-def test_10_teams_registered():
+def test_11_teams_registered():
     teams = all_teams_2026_profiles()
-    assert len(teams) == 10
+    assert len(teams) == 11
 
 
 def test_team_ids_unique():
     teams = all_teams_2026_profiles()
     ids = [t.team_id for t in teams]
-    assert len(set(ids)) == 10
+    assert len(set(ids)) == 11
 
 
 @pytest.mark.parametrize("team_id", ["rbr", "mer", "fer", "mcl", "amr",
-                                     "alp", "wil", "rb", "kck", "has"])
+                                     "alp", "wil", "rb", "aud", "has", "cad"])
 def test_known_team_lookup(team_id):
     t = get_team_profile_2026(team_id)
     assert t.team_id == team_id
@@ -87,7 +87,7 @@ def test_fuel_efficiency_in_range():
 def test_top_teams_faster_than_backmarkers():
     """顶队 (RBR/MCL/MER/FER) 圈速偏移应显著低于后段 (Sauber/Haas)."""
     top = ["rbr", "mcl", "mer", "fer"]
-    back = ["kck", "has"]
+    back = ["aud", "has", "cad"]
     avg_top = sum(pace_offset_for_team(t) for t in top) / len(top)
     avg_back = sum(pace_offset_for_team(t) for t in back) / len(back)
     assert avg_top < avg_back
@@ -131,12 +131,13 @@ def test_mercedes_pu_customers():
 
 
 def test_ferrari_pu_customers():
-    """Ferrari 供应 Ferrari + Sauber + Haas."""
+    """Ferrari 供应 Ferrari + Audi + Haas + Cadillac (2026)."""
     fer_teams = teams_by_pu_supplier("ferrari")
     fer_ids = {t.team_id for t in fer_teams}
     assert "fer" in fer_ids
-    assert "kck" in fer_ids
+    assert "aud" in fer_ids
     assert "has" in fer_ids
+    assert "cad" in fer_ids  # 2026 Cadillac 客户 Ferrari PU
 
 
 def test_honda_rbpt_customers():
@@ -149,7 +150,7 @@ def test_honda_rbpt_customers():
 
 
 def test_pu_suppliers_cover_all_teams():
-    """所有 10 队都应能在 PU 供应商列表中找到."""
+    """所有 11 队都应能在 PU 供应商列表中找到."""
     all_teams = all_teams_2026_profiles()
     for t in all_teams:
         assert teams_by_pu_supplier(t.power_unit_supplier), \

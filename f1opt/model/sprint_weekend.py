@@ -54,7 +54,7 @@ class SprintWeekendSimulator:
 
     track_id: str
     drivers: list[DriverQualifyingInput]
-    """全部 20 车手."""
+    """全部 22 车手."""
     race_setups: dict[str, CarSetup]
     """driver_id → 正赛 setup."""
     sprint_total_laps: int = _SPRINT_LAPS_DEFAULT

@@ -10,6 +10,7 @@ References (textbook formulas, no papers):
 from __future__ import annotations
 
 import statistics
+import sys
 import time
 from collections import deque
 from collections.abc import Callable
@@ -224,16 +225,13 @@ class MemoryTracker:
     """Track memory usage (RSS + VMS)."""
 
     def snapshot(self) -> dict[str, float]:
-        """Return current memory snapshot (MB)."""
-        rss_mb = vms_mb = 0.0
-        try:
-            import resource
-            # ru_maxrss is in KB on Linux.
-            usage = resource.getrusage(resource.RUSAGE_SELF)
-            rss_mb = usage.ru_maxrss / 1024.0
-            vms_mb = rss_mb  # ru_maxrss is peak RSS; approximate VMS.
-        except (ImportError, AttributeError):
-            pass
+        """Return current memory snapshot (MB).
+
+        Cross-platform: uses ``GetProcessMemoryInfo`` (psapi) on Windows and
+        ``resource.getrusage`` on POSIX; the GC object count is always included
+        as a rough, platform-independent estimate.
+        """
+        rss_mb, vms_mb = self._process_memory_mb()
         # Python object count estimate (rough).
         import gc
         python_objects_estimate = len(gc.get_objects())
@@ -242,6 +240,65 @@ class MemoryTracker:
             "vms_mb": vms_mb,
             "python_objects_estimate": float(python_objects_estimate),
         }
+
+    @staticmethod
+    def _process_memory_mb() -> tuple[float, float]:
+        """Return ``(rss_mb, vms_mb)`` for the current process."""
+        if sys.platform == "win32":
+            return MemoryTracker._windows_memory_mb()
+        try:
+            import resource
+            usage = resource.getrusage(resource.RUSAGE_SELF)
+            # ru_maxrss is KiB on Linux but BYTES on macOS.
+            divisor = 1024.0 if sys.platform == "darwin" else 1.0
+            rss_mb = usage.ru_maxrss / divisor / 1024.0
+            return rss_mb, rss_mb
+        except (ImportError, AttributeError, OSError):
+            return 0.0, 0.0
+
+    @staticmethod
+    def _windows_memory_mb() -> tuple[float, float]:
+        """Query WorkingSetSize (RSS) and PagefileUsage (VMS) via psapi."""
+        try:
+            import ctypes
+            from ctypes import wintypes
+
+            class _PROCESS_MEMORY_COUNTERS(ctypes.Structure):
+                _fields_ = [
+                    ("cb", wintypes.DWORD),
+                    ("PageFaultCount", wintypes.DWORD),
+                    ("PeakWorkingSetSize", ctypes.c_size_t),
+                    ("WorkingSetSize", ctypes.c_size_t),
+                    ("QuotaPeakPagedPoolUsage", ctypes.c_size_t),
+                    ("QuotaPagedPoolUsage", ctypes.c_size_t),
+                    ("QuotaPeakNonPagedPoolUsage", ctypes.c_size_t),
+                    ("QuotaNonPagedPoolUsage", ctypes.c_size_t),
+                    ("PagefileUsage", ctypes.c_size_t),
+                    ("PeakPagefileUsage", ctypes.c_size_t),
+                ]
+
+            counters = _PROCESS_MEMORY_COUNTERS()
+            counters.cb = ctypes.sizeof(_PROCESS_MEMORY_COUNTERS)
+            psapi = ctypes.windll.psapi
+            kernel32 = ctypes.windll.kernel32
+            kernel32.GetCurrentProcess.restype = wintypes.HANDLE
+            psapi.GetProcessMemoryInfo.argtypes = [
+                wintypes.HANDLE,
+                ctypes.POINTER(_PROCESS_MEMORY_COUNTERS),
+                wintypes.DWORD,
+            ]
+            psapi.GetProcessMemoryInfo.restype = wintypes.BOOL
+            ok = psapi.GetProcessMemoryInfo(
+                kernel32.GetCurrentProcess(), ctypes.byref(counters), counters.cb
+            )
+            if ok:
+                return (
+                    counters.WorkingSetSize / (1024.0 * 1024.0),
+                    counters.PagefileUsage / (1024.0 * 1024.0),
+                )
+        except Exception:
+            pass
+        return 0.0, 0.0
 
     def delta(self, func: Callable, *args: Any, **kwargs: Any) -> tuple[Any, dict[str, float]]:
         """Call ``func``, return (result, {before_mb, after_mb, delta_mb})."""

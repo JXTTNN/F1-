@@ -17,9 +17,9 @@ from f1opt.model.pit_crew import (
 # --------------------------------------------------------------------------- #
 # 评分
 # --------------------------------------------------------------------------- #
-def test_all_10_teams_have_ratings():
+def test_all_11_teams_have_ratings():
     ratings = all_pit_crew_ratings()
-    assert len(ratings) == 10
+    assert len(ratings) == 11
 
 
 def test_red_bull_top_rating():
@@ -62,7 +62,7 @@ def test_red_bull_fastest_pit_stop():
 
 def test_pit_stop_time_in_reasonable_range():
     """进站停车换胎时间应在 1.5-9.0s (含慢停最大)."""
-    for tid in ["rbr", "mer", "fer", "has", "kck"]:
+    for tid in ["rbr", "mer", "fer", "has", "aud", "cad"]:
         for seed in range(50):
             t = pit_stop_time_s(tid, seed=seed)
             assert 1.5 <= t <= 9.0, f"{tid} seed={seed}: {t}"

@@ -2,8 +2,8 @@
 
 FIA 真实排位赛格式 (Sporting Regulations 33.1-33.5):
 
-- **Q1**: 18 分钟, 全部 20 车手 → 淘汰最慢 5 名 (P16-P20).
-- **Q2**: 15 分钟, 剩余 15 车手 → 淘汰最慢 5 名 (P11-P15).
+- **Q1**: 18 分钟, 全部 22 车手 → 淘汰最慢 6 名 (P17-P22).
+- **Q2**: 15 分钟, 剩余 16 车手 → 淘汰最慢 6 名 (P11-P16).
 - **Q3**: 12 分钟, 前 10 车手 → 决定 P1-P10.
 
 每阶段车手需跑 2-3 个计时圈 (out-lap + flying + in-lap).
@@ -38,8 +38,8 @@ _Q1_DURATION_MIN = 18.0
 _Q2_DURATION_MIN = 15.0
 _Q3_DURATION_MIN = 12.0
 
-_Q1_ELIMINATE = 5   # P16-P20 eliminated in Q1
-_Q2_ELIMINATE = 5   # P11-P15 eliminated in Q2
+_Q1_ELIMINATE = 6   # P17-P22 eliminated in Q1
+_Q2_ELIMINATE = 6   # P11-P16 eliminated in Q2
 
 # 新软胎相对基础圈速的提升 (Pirelli 软胎 vs 中性胎)
 _TIRE_GAIN_SOFT_S = 0.45
@@ -116,7 +116,7 @@ class DriverQualifyingResult:
     driver_name: str
     team_id: str
     grid_position: int
-    """最终发车位 1..20."""
+    """最终发车位 1..22."""
     best_lap_time_s: float | None
     """该车手最佳圈速 (None = 未出圈, 但应极少发生)."""
     q1_laps: list[QualifyingLap] = field(default_factory=list)
@@ -164,7 +164,7 @@ class QualifyingSession:
             for d in self.drivers
         }
 
-        # === Q1: 全部 20 车手, 淘汰 5 ===
+        # === Q1: 全部 22 车手, 淘汰 6 ===
         q1_standings = self._run_phase(
             phase="Q1",
             drivers=self.drivers,
@@ -176,14 +176,14 @@ class QualifyingSession:
             rng=rng,
             results=results,
         )
-        # Q1 后 5 名 → P16-P20
-        q1_bottom_5 = [d_id for d_id, _ in q1_standings[-_Q1_ELIMINATE:]]
-        for rank_offset, d_id in enumerate(q1_bottom_5):
-            results[d_id].grid_position = 20 - rank_offset
+        # Q1 后 6 名 → P17-P22
+        q1_bottom_6 = [d_id for d_id, _ in q1_standings[-_Q1_ELIMINATE:]]
+        for rank_offset, d_id in enumerate(q1_bottom_6):
+            results[d_id].grid_position = 22 - rank_offset
             results[d_id].eliminated_in = "Q1"
 
-        # === Q2: 前 15 车手, 淘汰 5 ===
-        q2_drivers_ids = [d_id for d_id, _ in q1_standings[:15]]
+        # === Q2: 前 16 车手, 淘汰 6 ===
+        q2_drivers_ids = [d_id for d_id, _ in q1_standings[:16]]
         q2_driver_inputs = [d for d in self.drivers if d.driver_id in q2_drivers_ids]
         # Q2 用不同胎 (Pirelli soft/medium), Q2 最快圈所用胎 = 正赛首段胎
         q2_standings = self._run_phase(
@@ -198,9 +198,9 @@ class QualifyingSession:
             results=results,
             record_q2_tire=True,
         )
-        q2_bottom_5 = [d_id for d_id, _ in q2_standings[-_Q2_ELIMINATE:]]
-        for rank_offset, d_id in enumerate(q2_bottom_5):
-            results[d_id].grid_position = 15 - rank_offset
+        q2_bottom_6 = [d_id for d_id, _ in q2_standings[-_Q2_ELIMINATE:]]
+        for rank_offset, d_id in enumerate(q2_bottom_6):
+            results[d_id].grid_position = 16 - rank_offset
             results[d_id].eliminated_in = "Q2"
 
         # === Q3: 前 10 车手 ===

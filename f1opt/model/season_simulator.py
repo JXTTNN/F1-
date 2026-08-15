@@ -3,7 +3,7 @@
 整合 :class:`RaceSimulation` + :class:`Championship` + :class:`QualifyingSession`
 模拟完整 F1 赛季:
 
-1. 输入: 20 车手 + 10 车队 + 24 场赛历.
+1. 输入: 22 车手 + 11 车队 + 24 场赛历.
 2. 每场:
    - :class:`QualifyingSession` 三阶段排位赛决定发车位 (Iter-21).
    - 用 :class:`RaceSimulation` 跑完正赛.
@@ -87,8 +87,8 @@ class SeasonSimulator:
     用法::
 
         drivers = [SeasonDriver(driver_id=f"d{i:02d}", driver_name=f"D{i+1}",
-                                team_id=f"t{i//2:02d}") for i in range(20)]
-        teams = [(f"t{i:02d}", f"Team {i}") for i in range(10)]
+                                team_id=f"t{i//2:02d}") for i in range(22)]
+        teams = [(f"t{i:02d}", f"Team {i}") for i in range(11)]
         sim = SeasonSimulator(drivers=drivers, teams=teams, seed=42)
         result = sim.run()
         # result["champions"]["drivers_champion"]
@@ -102,10 +102,10 @@ class SeasonSimulator:
     weather_wetness_range: tuple[float, float] = (0.0, 0.15)  # 大部分干地
 
     def __post_init__(self) -> None:
-        if len(self.drivers) != 20:
-            raise ValueError(f"Need 20 drivers, got {len(self.drivers)}")
-        if len(self.teams) != 10:
-            raise ValueError(f"Need 10 teams, got {len(self.teams)}")
+        if len(self.drivers) != 22:
+            raise ValueError(f"Need 22 drivers, got {len(self.drivers)}")
+        if len(self.teams) != 11:
+            raise ValueError(f"Need 11 teams, got {len(self.teams)}")
 
     # ------------------------------------------------------------------ #
     def run(self) -> dict[str, Any]:
@@ -261,12 +261,12 @@ class SeasonSimulator:
 # Convenience function
 # --------------------------------------------------------------------------- #
 def simulate_season(
-    n_drivers: int = 20,
-    n_teams: int = 10,
+    n_drivers: int = 22,
+    n_teams: int = 11,
     seed: int | None = None,
     calendar: tuple[str, ...] = SEASON_2026_CALENDAR,
 ) -> dict[str, Any]:
-    """便捷函数: 生成默认 20 车 10 队赛季并仿真."""
+    """便捷函数: 生成默认 22 车 11 队赛季并仿真."""
     drivers = [
         SeasonDriver(
             driver_id=f"d{i:02d}",
@@ -290,7 +290,7 @@ def build_2026_season_drivers() -> list[SeasonDriver]:
     整合 :mod:`f1opt.data.drivers_2026` 与 :mod:`f1opt.data.teams_2026`,
     让赛季仿真器使用真实车手能力评分 + 真实车队赛车性能偏移.
 
-    返回 20 位真实 F1 2026 车手配置.
+    返回 22 位真实 F1 2026 车手配置.
     """
     from f1opt.data.drivers_2026 import all_drivers_2026
     from f1opt.data.teams_2026 import pace_offset_for_team
@@ -315,7 +315,7 @@ def build_2026_season_drivers() -> list[SeasonDriver]:
 
 
 def build_2026_season_teams() -> list[tuple[str, str]]:
-    """返回 F1 2026 真实 10 支车队 (team_id, team_name) (Iter-36)."""
+    """返回 F1 2026 真实 11 支车队 (team_id, team_name) (Iter-36)."""
     from f1opt.data.teams_2026 import all_teams_2026_profiles
     return [(t.team_id, t.team_name) for t in all_teams_2026_profiles()]
 

@@ -26,21 +26,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
 
-# Windows: 在 FastAPI 导入之前设置 ProactorEventLoop 策略
+# Windows: 兼容性处理。
+# ProactorEventLoop 自 Python 3.8 起即为 Windows 默认事件循环，无需显式设置
+# （显式设置 WindowsProactorEventLoopPolicy 在 Python 3.14+ 已弃用）；
+# subprocess 默认 close_fds=True 已正确处理句柄继承。
 if sys.platform == "win32":
-    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
-    # Windows: 防止子进程继承文件描述符导致的文件锁定问题
-    import msvcrt
-    import subprocess as _subprocess
-    # 确保 subprocess 默认不使用继承句柄
-    if hasattr(_subprocess, "STARTUPINFO"):
-        _subprocess.STARTUPINFO.dwFlags |= 0x100  # STARTF_USESTDHANDLES
-    # Windows: 记录 Windows 版本信息用于调试
-    try:
-        import platform as _platform
-        _win_ver = _platform.version()
-    except Exception:
-        _win_ver = "unknown"
     # Windows: 设置 multiprocessing 启动方法为 spawn (避免 fork 问题)
     import multiprocessing as _mp
     if hasattr(_mp, "set_start_method"):

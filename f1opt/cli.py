@@ -667,9 +667,8 @@ def main(argv: list[str] | None = None) -> int:
     if sys.platform == "win32":
         import multiprocessing
         multiprocessing.freeze_support()
-        # Windows: 设置 ProactorEventLoop 以支持子进程和命名管道
-        import asyncio as _asyncio
-        _asyncio.set_event_loop_policy(_asyncio.WindowsProactorEventLoopPolicy())
+        # Windows: ProactorEventLoop 自 Python 3.8 起即为默认事件循环，
+        # 无需显式设置；显式设置 WindowsProactorEventLoopPolicy 在 3.14+ 已弃用。
         # Windows: 注册信号处理 (SIGINT=SIGBREAK, SIGTERM 不可用)
         import signal as _signal
         def _win_signal_handler(signum, frame):
@@ -711,3 +710,7 @@ def main(argv: list[str] | None = None) -> int:
         parser.print_help()
         return 1
     return args.func(args)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

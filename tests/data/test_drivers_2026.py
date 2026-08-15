@@ -16,16 +16,16 @@ from f1opt.data.drivers_2026 import (
 # --------------------------------------------------------------------------- #
 # 注册表完整性
 # --------------------------------------------------------------------------- #
-def test_20_drivers_registered():
+def test_22_drivers_registered():
     drivers = all_drivers_2026()
-    assert len(drivers) == 20
+    assert len(drivers) == 22
 
 
-def test_10_teams_registered():
+def test_11_teams_registered():
     teams = all_teams_2026()
-    assert len(teams) == 10
+    assert len(teams) == 11
     team_ids = [t[0] for t in teams]
-    assert len(set(team_ids)) == 10  # unique
+    assert len(set(team_ids)) == 11  # unique
 
 
 def test_each_team_has_2_drivers():
@@ -38,11 +38,11 @@ def test_each_team_has_2_drivers():
 def test_driver_ids_unique():
     drivers = all_drivers_2026()
     ids = [d.driver_id for d in drivers]
-    assert len(set(ids)) == 20
+    assert len(set(ids)) == 22
 
 
 @pytest.mark.parametrize("team_id", ["rbr", "mer", "fer", "mcl", "amr",
-                                     "alp", "wil", "rb", "kck", "has"])
+                                     "alp", "wil", "rb", "aud", "has", "cad"])
 def test_known_team_has_drivers(team_id):
     ds = drivers_by_team(team_id)
     assert len(ds) == 2
@@ -63,8 +63,8 @@ def test_top_teams_have_higher_pace():
     """Red Bull / Ferrari / Mercedes / McLaren 平均 pace 应高于后段车队."""
     top = (drivers_by_team("rbr") + drivers_by_team("mer")
            + drivers_by_team("fer") + drivers_by_team("mcl"))
-    back = (drivers_by_team("kck") + drivers_by_team("has")
-            + drivers_by_team("rb"))
+    back = (drivers_by_team("aud") + drivers_by_team("has")
+            + drivers_by_team("rb") + drivers_by_team("cad"))
     avg_top = sum(d.pace for d in top) / len(top)
     avg_back = sum(d.pace for d in back) / len(back)
     assert avg_top > avg_back
@@ -176,7 +176,7 @@ def test_all_drivers_returns_copy():
     lst1.append("hack")
     lst2 = all_drivers_2026()
     assert "hack" not in lst2
-    assert len(lst2) == 20
+    assert len(lst2) == 22
 
 
 # --------------------------------------------------------------------------- #

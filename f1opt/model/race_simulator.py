@@ -149,7 +149,7 @@ class RaceSimulation:
                         setup=DEFAULT_SETUP, grid_position=i+1,
                         strategy=RaceStrategy(pit_laps=(20, 40),
                                               compounds=('medium','medium','soft')))
-                for i in range(20)]
+                for i in range(22)]
         sim = RaceSimulation(track_id="monza", cars=cars, total_laps=53, seed=42)
         results = sim.run()
         # results = list[(position, RaceCar)]

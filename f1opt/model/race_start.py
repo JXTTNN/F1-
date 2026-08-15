@@ -108,7 +108,7 @@ class RaceStartModel:
     用法::
 
         inputs = [StartDriverInput(driver_id=f"d{i}", grid_position=i+1,
-                                    driver_aggression=0.7) for i in range(20)]
+                                    driver_aggression=0.7) for i in range(22)]
         model = RaceStartModel(track_id="monza", seed=42)
         results = model.simulate(inputs)
         # results[0].new_position  # 第 1 圈后位置
@@ -116,7 +116,7 @@ class RaceStartModel:
 
     track_id: str = "monza"
     seed: int | None = None
-    n_drivers: int = 20
+    n_drivers: int = 22
     """预期车手数 (用于概率校准)."""
 
     # ------------------------------------------------------------------ #

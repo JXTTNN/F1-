@@ -1,12 +1,12 @@
 """F1 2026 车队赛车性能数据库 (Iter-36).
 
 F1 2026 EA Sports 官方 / 公开媒体综合车队赛车性能评级:
-10 支车队 × 多维性能参数 (相对参考基准的偏移).
+11 支车队 × 多维性能参数 (相对参考基准的偏移).
 
 车队性能维度 (F1 2026 车队 simulator 标准):
 - pace_offset_s: 圈速偏移 (s/lap, 负=快于基准, 正=慢于基准).
   以 2026 赛季中位车队为基准 (≈0). 顶队 RBR/MCL ≈ -0.6s,
-  后段 Sauber/Haas ≈ +0.8s.
+  后段 Audi/Haas/Cadillac ≈ +0.8s.
 - aero_efficiency: 空气动力学效率 0.85-1.10 (1.0 = 基准).
 - power_unit_kW: 2026 PU 峰值功率 (ICE+MGU-K), 730-755 kW.
   规则上限 750 kW, 但实际各队有差异.
@@ -163,11 +163,11 @@ _TEAMS_2026: list[TeamCarProfile2026] = [
         tire_degradation_factor=1.04, reliability=0.94,
         drs_effectiveness=0.99, fuel_efficiency=1.00,
     ),
-    # Kick Sauber — Ferrari (Hulkenberg + Bortoleto)
-    # 2026 Audi 过渡年, 期待改善
+    # Audi — Ferrari (Hulkenberg + Bortoleto)
+    # 2026 Audi 正式接管 Sauber
     TeamCarProfile2026(
-        team_id="kck", team_name="Kick Sauber",
-        full_name="Kick Sauber F1 Team-Ferrari",
+        team_id="aud", team_name="Audi",
+        full_name="Audi F1 Team-Ferrari",
         pace_offset_s=0.65, aero_efficiency=0.93,
         power_unit_kW=749, power_unit_supplier="ferrari",
         tire_degradation_factor=1.08, reliability=0.91,
@@ -183,11 +183,21 @@ _TEAMS_2026: list[TeamCarProfile2026] = [
         tire_degradation_factor=1.10, reliability=0.92,
         drs_effectiveness=0.97, fuel_efficiency=1.01,
     ),
+    # Cadillac — Ferrari (Perez + Bottas)
+    # 2026 全新车队 (第 11 队), 使用 Ferrari 客户 PU (2026-2027)
+    TeamCarProfile2026(
+        team_id="cad", team_name="Cadillac",
+        full_name="Cadillac Formula 1 Team-Ferrari",
+        pace_offset_s=0.80, aero_efficiency=0.91,
+        power_unit_kW=749, power_unit_supplier="ferrari",
+        tire_degradation_factor=1.10, reliability=0.90,
+        drs_effectiveness=0.96, fuel_efficiency=1.02,
+    ),
 ]
 
 
 def all_teams_2026_profiles() -> list[TeamCarProfile2026]:
-    """返回全部 10 支 F1 2026 车队性能档案."""
+    """返回全部 11 支 F1 2026 车队性能档案."""
     return list(_TEAMS_2026)
 
 

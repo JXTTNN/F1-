@@ -116,13 +116,13 @@ def test_pit_crew_offset_applied_during_sc():
 # 整场比赛: 多车手不同车队 pit crew
 # --------------------------------------------------------------------------- #
 def test_multi_team_race_pit_crew_differences():
-    """整场 20 车比赛, 顶队总进站时间应 < 后段."""
+    """整场 22 车比赛, 顶队总进站时间应 < 后段."""
     # 简化: 4 车队各 1 车, 在同一位发车, 同一策略
     cars = [
         _make_car(driver_id="rbr", team_id="rbr", grid_position=1),
         _make_car(driver_id="mer", team_id="mer", grid_position=2),
         _make_car(driver_id="has", team_id="has", grid_position=3),
-        _make_car(driver_id="kck", team_id="kck", grid_position=4),
+        _make_car(driver_id="aud", team_id="aud", grid_position=4),
     ]
     sim = RaceSimulation(track_id="monza", cars=cars, total_laps=25, seed=42)
     results = sim.run()

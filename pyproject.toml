@@ -36,6 +36,9 @@ dev = [
     "mypy",
 ]
 
+[project.scripts]
+f1opt = "f1opt.cli:main"
+
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["f1opt*"]
