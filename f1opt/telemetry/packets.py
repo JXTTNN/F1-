@@ -665,11 +665,11 @@ CONFIDENCE_CARDAMAGE = (
     "MEDIUM-LOW — includes F1 25 m_tyreBlisters[4]. Tyre wear arrays modelled as "
     "float[4]; exact byte total is best-effort (EA PDF reports 1041B)."
 )
-# per car: tyresWear[4](f) tyresDamage[4](f) frontLeftWingDamage(f) frontRightWingDamage(f)
-# rearWingDamage(f) floorDamage(f) diffuserDamage(f) sidepodDamage(f) drsDamage(f)
-# engineDamage(B) gearBoxDamage(B) suspensionDamage[4](4B) ersDamage(B)
-# tyreBlisters[4](4B)
-_DMG_PER = "4f4f7f2B4BB4B"
+# Iter-282: 按权威规范修正 CarDamage — tyresWear[4](f) tyresDamage[4](B)
+# brakesDamage[4](B) tyreBlisters[4](B) + 18 个 uint8 损伤/故障字段。
+# 旧版把 tyresDamage/翼面损伤误作 float, 且虚构 suspensionDamage, 导致
+# tyresDamage 起全部错位。
+_DMG_PER = "4f" + "B" * 30
 _DMG_BODY = struct.Struct("<" + _DMG_PER * NUM_CARS)
 
 
@@ -684,18 +684,26 @@ def parse_car_damage(data: bytes) -> dict[str, Any]:
         cars.append({
             "m_tyresWear": list(c[0:4]),
             "m_tyresDamage": list(c[4:8]),
-            "m_frontLeftWingDamage": c[8],
-            "m_frontRightWingDamage": c[9],
-            "m_rearWingDamage": c[10],
-            "m_floorDamage": c[11],
-            "m_diffuserDamage": c[12],
-            "m_sidepodDamage": c[13],
-            "m_drsDamage": c[14],
-            "m_engineDamage": c[15],
-            "m_gearBoxDamage": c[16],
-            "m_suspensionDamage": list(c[17:21]),
-            "m_ersDamage": c[21],
-            "m_tyreBlisters": list(c[22:26]),
+            "m_brakesDamage": list(c[8:12]),
+            "m_tyreBlisters": list(c[12:16]),
+            "m_frontLeftWingDamage": c[16],
+            "m_frontRightWingDamage": c[17],
+            "m_rearWingDamage": c[18],
+            "m_floorDamage": c[19],
+            "m_diffuserDamage": c[20],
+            "m_sidepodDamage": c[21],
+            "m_drsFault": c[22],
+            "m_ersFault": c[23],
+            "m_gearBoxDamage": c[24],
+            "m_engineDamage": c[25],
+            "m_engineMGUHWear": c[26],
+            "m_engineESWear": c[27],
+            "m_engineCEWear": c[28],
+            "m_engineICEWear": c[29],
+            "m_engineMGUKWear": c[30],
+            "m_engineTCWear": c[31],
+            "m_engineBlown": c[32],
+            "m_engineSeized": c[33],
         })
         base += fpc
     return {"m_carDamageData": cars}

@@ -4,6 +4,12 @@
 
 ## 2026-08 优化迭代
 
+### 修复 CarDamage 线格式 (Iter-282)
+- 按权威规范修正 CarDamage：tyresWear[4](f) + tyresDamage[4](B) + brakesDamage[4](B)
+  + tyreBlisters[4](B) + 18 个 uint8 损伤/故障字段 (翼面/地板/扩散器/DRS/ERS/变速箱/
+  引擎 + 5 项引擎磨损 + blown/seized)。旧版把 tyresDamage 与翼面损伤误作 float,
+  且虚构 suspensionDamage, 导致 tyresDamage 起全部错位。
+
 ### 修复 Session 天气预报样本线格式 (Iter-281b)
 - WeatherForecastSample 权威规范为 8 字段 (trackTemp + trackTempChange + airTemp +
   airTempChange + rain%), 旧版 `_WFS_FMT` 仅 7 字段 (把两个 change 合并为
