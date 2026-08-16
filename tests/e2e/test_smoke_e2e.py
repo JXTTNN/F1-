@@ -375,7 +375,8 @@ async def test_e2e_feedback_with_real_frames() -> None:
     out = generate_feedback(
         frames, DEFAULT_SETUP.model_dump(), "melbourne", question="为什么推头",
     )
-    assert set(out.keys()) == {"summary", "dimensions", "setup_suggestions", "sources", "_quality"}
+    # Iter-290: 带 question 时额外输出 driver_intent
+    assert set(out.keys()) == {"summary", "dimensions", "setup_suggestions", "sources", "_quality", "driver_intent"}
     assert isinstance(out["summary"], str) and out["summary"]
     names = [d["name"] for d in out["dimensions"]]
     assert "lap_time_potential" in names
