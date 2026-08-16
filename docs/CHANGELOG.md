@@ -4,6 +4,15 @@
 
 ## 2026-08 优化迭代
 
+### UI 中文化 + 精简搜索参数 (Iter-293)
+- 赛道下拉框全部显示中文名 (如「日本大奖赛 · 铃鹿」), 不再显示英文赛道名;
+  `f1opt/data/tracks.py` 新增 `TRACK_NAME_CN`/`TRACK_COUNTRY_CN`/`TRACK_TYPE_CN`
+  与 `track_name_cn`/`country_name_cn`/`track_type_cn` 辅助函数 (24 条赛道全覆盖)。
+- `f1opt/api/app.py` `_track_dict` 注入 `name_cn`/`country_cn`/`track_type_cn` 三个字段;
+  index.html 的赛道信息行 (国家/类型) 与 dashboard.html 同步中文化, "Sprint"→"冲刺赛"。
+- 移除智能分析中心「调教搜索」里的「随机种子」输入框 (bayes/pareto), 后端 seed 使用
+  默认值 42 —— 普通用户无需关心该高级参数。
+
 ### 双击即用 (无参自动启动智能分析中心) (Iter-292)
 - 修复「EXE 打不开」: 此前双击 `f1opt.exe` 无参时 `main()` 仅打印 `--help` 后返回 1,
   控制台窗口一闪而过。现改为 **无参启动时自动拉起 API 服务器并打开浏览器**

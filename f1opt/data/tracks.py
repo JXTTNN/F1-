@@ -506,6 +506,84 @@ ALL_TRACKS: list[Track] = [
 ]
 
 
+# --------------------------------------------------------------------------- #
+# 中文本地化 (Iter-293): 赛道 / 国家 / 赛道类型中文名, 供 UI 与 API 展示.
+# --------------------------------------------------------------------------- #
+TRACK_NAME_CN: dict[str, str] = {
+    "melbourne": "澳大利亚大奖赛 · 墨尔本",
+    "shanghai": "中国大奖赛 · 上海",
+    "suzuka": "日本大奖赛 · 铃鹿",
+    "sakhir": "巴林大奖赛 · 萨基尔",
+    "jeddah": "沙特阿拉伯大奖赛 · 吉达",
+    "miami": "迈阿密大奖赛",
+    "montreal": "加拿大大奖赛 · 蒙特利尔",
+    "monaco": "摩纳哥大奖赛",
+    "barcelona": "西班牙大奖赛 · 巴塞罗那",
+    "spielberg": "奥地利大奖赛 · 红牛环",
+    "silverstone": "英国大奖赛 · 银石",
+    "spa": "比利时大奖赛 · 斯帕",
+    "hungaroring": "匈牙利大奖赛 · 布达佩斯",
+    "zandvoort": "荷兰大奖赛 · 赞德沃特",
+    "monza": "意大利大奖赛 · 蒙扎",
+    "madrid": "西班牙大奖赛 · 马德里",
+    "baku": "阿塞拜疆大奖赛 · 巴库",
+    "singapore": "新加坡大奖赛",
+    "austin": "美国大奖赛 · 奥斯汀",
+    "mexico_city": "墨西哥城大奖赛",
+    "sao_paulo": "圣保罗大奖赛",
+    "las_vegas": "拉斯维加斯大奖赛",
+    "lusail": "卡塔尔大奖赛 · 卢赛尔",
+    "yas_marina": "阿布扎比大奖赛 · 亚斯码头",
+}
+
+TRACK_COUNTRY_CN: dict[str, str] = {
+    "Australia": "澳大利亚",
+    "China": "中国",
+    "Japan": "日本",
+    "Bahrain": "巴林",
+    "Saudi Arabia": "沙特阿拉伯",
+    "United States": "美国",
+    "Canada": "加拿大",
+    "Monaco": "摩纳哥",
+    "Spain": "西班牙",
+    "Austria": "奥地利",
+    "United Kingdom": "英国",
+    "Belgium": "比利时",
+    "Hungary": "匈牙利",
+    "Netherlands": "荷兰",
+    "Italy": "意大利",
+    "Azerbaijan": "阿塞拜疆",
+    "Singapore": "新加坡",
+    "Mexico": "墨西哥",
+    "Brazil": "巴西",
+    "Qatar": "卡塔尔",
+    "United Arab Emirates": "阿联酋",
+}
+
+TRACK_TYPE_CN: dict[str, str] = {
+    "high_speed_low_downforce": "高速 · 低下压力",
+    "street": "街道赛",
+    "high_downforce": "高下压力",
+    "medium": "中等下压力",
+    "mixed": "混合型",
+}
+
+
+def track_name_cn(track_id: str) -> str:
+    """返回赛道中文名, 未知 id 回退为原始 id."""
+    return TRACK_NAME_CN.get(track_id, track_id)
+
+
+def country_name_cn(country: str) -> str:
+    """返回国家中文名, 未知国家回退为英文原名."""
+    return TRACK_COUNTRY_CN.get(country, country)
+
+
+def track_type_cn(track_type: str) -> str:
+    """返回赛道调教分类中文名, 未知类型回退为原始值."""
+    return TRACK_TYPE_CN.get(track_type, track_type)
+
+
 TRACKS_BY_ID: dict[str, Track] = {t.track_id: t for t in ALL_TRACKS}
 
 

@@ -248,9 +248,6 @@
               <option value="pi">PI (改进概率)</option>
             </select>
           </label>
-          <label class="field">随机种子
-            <input id="bayes-seed" type="number" value="42">
-          </label>
         </div>
         <div class="row">
           <button id="bayes-run" class="btn primary">搜索</button>
@@ -266,9 +263,6 @@
           </label>
           <label class="field" style="min-width:200px">迭代次数 <span id="pareto-iter-val" class="mono" style="color:var(--cyan)">20</span>
             <input id="pareto-iter" type="range" min="5" max="50" value="20" step="1">
-          </label>
-          <label class="field">随机种子
-            <input id="pareto-seed" type="number" value="42">
           </label>
         </div>
         <div class="row">
@@ -687,7 +681,7 @@
     state.tracks.forEach(function(t){
       var o=document.createElement("option");
       o.value=t.track_id;
-      o.textContent="R"+t.round_number+" · "+t.circuit_name+(t.is_sprint?" (Sprint)":"");
+      o.textContent="R"+t.round_number+" · "+(t.name_cn||t.circuit_name)+(t.is_sprint?" (冲刺赛)":"");
       sel.appendChild(o);
     });
   }
@@ -810,8 +804,7 @@
     var body={
       track_id: el("bayes-track").value,
       n_iterations: parseInt(el("bayes-iter").value,10)||15,
-      acquisition: el("bayes-acq").value,
-      seed: parseInt(el("bayes-seed").value,10)||42
+      acquisition: el("bayes-acq").value
     };
     try{
       var r=await fetchJSON("/api/bayesian-search",{
@@ -853,8 +846,7 @@
     el("pareto-result-panel").classList.add("hidden");
     var body={
       track_id: el("pareto-track").value,
-      n_iterations: parseInt(el("pareto-iter").value,10)||20,
-      seed: parseInt(el("pareto-seed").value,10)||42
+      n_iterations: parseInt(el("pareto-iter").value,10)||20
     };
     try{
       var r=await fetchJSON("/api/pareto-search",{

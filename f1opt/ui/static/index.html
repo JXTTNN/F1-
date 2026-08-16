@@ -718,7 +718,7 @@
       state.tracks.forEach(function(t){
         var o=document.createElement("option");
         o.value=t.track_id;
-        o.textContent="R"+t.round_number+" · "+t.circuit_name+(t.is_sprint?" (Sprint)":"");
+        o.textContent="R"+t.round_number+" · "+(t.name_cn||t.circuit_name)+(t.is_sprint?" (冲刺赛)":"");
         sel.appendChild(o);
       });
       if(state.tracks.length){
@@ -736,7 +736,7 @@
     var t=null;
     for(var i=0;i<state.tracks.length;i++){ if(state.tracks[i].track_id===state.currentTrackId){t=state.tracks[i];break;} }
     if(!t){ el("track-info").textContent="—"; return; }
-    el("track-info").textContent = t.country+" · "+(t.length_m/1000).toFixed(3)+" km · "+t.corners+" 弯 · "+t.track_type;
+    el("track-info").textContent = (t.country_cn||t.country)+" · "+(t.length_m/1000).toFixed(3)+" km · "+t.corners+" 弯 · "+(t.track_type_cn||t.track_type);
   }
 
   // ---------- setup ----------

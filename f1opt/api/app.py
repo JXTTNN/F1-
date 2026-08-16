@@ -53,7 +53,14 @@ from starlette.staticfiles import StaticFiles
 from f1opt import __version__
 from f1opt.config import get_settings
 from f1opt.data.setup_schema import DEFAULT_SETUP, CarSetup
-from f1opt.data.tracks import ALL_TRACKS, TRACKS_BY_ID, get_track
+from f1opt.data.tracks import (
+    ALL_TRACKS,
+    TRACKS_BY_ID,
+    country_name_cn,
+    get_track,
+    track_name_cn,
+    track_type_cn,
+)
 from f1opt.model.online_correction import ObservationBuffer, add_observation
 from f1opt.observability.audit import get_audit_logger
 from f1opt.observability.metrics import MetricsRegistry
@@ -92,7 +99,12 @@ _ITER_SUMMARY_MAX = 300
 
 def _track_dict(track: Any) -> dict[str, Any]:
     """Project a Track model onto the public Track dict (shared contract)."""
-    return {k: getattr(track, k) for k in _TRACK_FIELDS}
+    d = {k: getattr(track, k) for k in _TRACK_FIELDS}
+    # Iter-293: 注入中文本地化字段供 UI 展示 (赛道名/国家/类型).
+    d["name_cn"] = track_name_cn(track.track_id)
+    d["country_cn"] = country_name_cn(track.country)
+    d["track_type_cn"] = track_type_cn(track.track_type)
+    return d
 
 
 def _compound_label(compound: Any) -> str | None:
