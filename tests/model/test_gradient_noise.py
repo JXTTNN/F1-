@@ -21,7 +21,7 @@ from f1opt.model.train import _add_gradient_noise, train, train_ensemble
 def test_add_gradient_noise_modifies_gradients() -> None:
     """_add_gradient_noise(std=0.1) 会使梯度发生改变."""
     model = SurrogateModel()
-    x = torch.randn(4, 39)
+    x = torch.randn(4, 41)
     sr, _rr = model(x)
     sr.sum().backward()
     # 记录原始梯度副本
@@ -42,7 +42,7 @@ def test_add_gradient_noise_modifies_gradients() -> None:
 def test_add_gradient_noise_zero_std_no_change() -> None:
     """_add_gradient_noise(std=0.0) 不改变梯度."""
     model = SurrogateModel()
-    x = torch.randn(4, 39)
+    x = torch.randn(4, 41)
     sr, _rr = model(x)
     sr.sum().backward()
     original_grads = {
@@ -67,7 +67,7 @@ def test_add_gradient_noise_no_gradients_safe() -> None:
 def test_add_gradient_noise_scale_proportional() -> None:
     """std=0.5 的噪声幅度大于 std=0.01 (噪声尺度与 std 成正比)."""
     model = SurrogateModel()
-    x = torch.randn(4, 39)
+    x = torch.randn(4, 41)
     sr, _rr = model(x)
     sr.sum().backward()
     grads_small = {name: p.grad.clone() for name, p in model.named_parameters() if p.grad is not None}
@@ -159,7 +159,7 @@ def test_gradient_noise_does_not_destroy_training() -> None:
         gradient_noise=0.005,
     )
     # 验证模型可正常推理
-    x = torch.randn(10, 39)
+    x = torch.randn(10, 41)
     sr, rr = model(x)
     assert sr.shape == (10, 3)
     assert rr.shape == (10, 7)

@@ -19,16 +19,16 @@ from f1opt.model.train import train
 
 # --- layout invariants ------------------------------------------------------ #
 def test_feature_names_length_matches_input_dim() -> None:
-    assert len(FEATURE_NAMES) == INPUT_DIM == 39
+    assert len(FEATURE_NAMES) == INPUT_DIM == 41
 
 
 def test_feature_groups_length_and_labels() -> None:
     assert len(FEATURE_GROUPS) == INPUT_DIM
     assert set(FEATURE_GROUPS) == {"setup", "track", "driver"}
     # setup = first 21, track = next 10, driver = last 8.
-    assert all(g == "setup" for g in FEATURE_GROUPS[:21])
-    assert all(g == "track" for g in FEATURE_GROUPS[21:31])
-    assert all(g == "driver" for g in FEATURE_GROUPS[31:])
+    assert all(g == "setup" for g in FEATURE_GROUPS[:23])
+    assert all(g == "track" for g in FEATURE_GROUPS[23:33])
+    assert all(g == "driver" for g in FEATURE_GROUPS[33:])
 
 
 def test_feature_names_include_known_setup_fields() -> None:

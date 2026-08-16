@@ -51,11 +51,11 @@ from f1opt.data.setup_schema import CarSetup
 from f1opt.data.tracks import TRACKS_BY_ID, Track
 
 # --- 维度常量 ---------------------------------------------------------------
-SETUP_DIM = 21  # Iter-194: 21 setup fields (19 original + active_aero_mode + x_mode_activations)
+SETUP_DIM = 23  # Iter-288: 23 setup fields (21 physical incl. engine_braking/ballast + active_aero_mode + x_mode_activations)
 # [length, corners, is_sprint, one-hot track_type (5), elevation, unknown_flag]
 TRACK_CONTEXT_DIM = 1 + 1 + 1 + 5 + 1 + 1
 DRIVER_DIM = 8
-INPUT_DIM = SETUP_DIM + TRACK_CONTEXT_DIM + DRIVER_DIM  # 39
+INPUT_DIM = SETUP_DIM + TRACK_CONTEXT_DIM + DRIVER_DIM  # 41
 
 N_SECTORS = 3
 N_RESPONSES = 7

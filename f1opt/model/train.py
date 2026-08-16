@@ -729,8 +729,8 @@ def generate_dataset(
 # Iter-123: 物理一致性 loss 的 driver 向量索引 (driver 在输入向量的最后 8 维).
 # Iter-271: 不再硬编码 29/37 (SETUP_DIM 19->21 后 driver 段实际在 [31:39]);
 # 硬编码 29 会覆盖末尾 2 维 track-context 且漏掉末尾 2 维 driver。
-_DRIVER_VEC_START = SETUP_DIM + TRACK_CONTEXT_DIM  # 21 + 10 = 31
-_DRIVER_VEC_END = INPUT_DIM  # 39
+_DRIVER_VEC_START = SETUP_DIM + TRACK_CONTEXT_DIM  # 23 + 10 = 33
+_DRIVER_VEC_END = INPUT_DIM  # 41
 
 
 def _add_gradient_noise(model: SurrogateModel, std: float) -> None:

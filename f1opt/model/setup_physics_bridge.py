@@ -67,7 +67,7 @@ _TRACK_TYPE_OPTIMA: dict[TrackType, dict[str, float]] = {
         # Monza / Baku / Jeddah / Montreal / Las Vegas — 长直道为主, 低下压力
         "front_wing": 8.0, "rear_wing": 6.0,
         "active_aero_mode": 2.0, "x_mode_activations": 3.0,
-        "on_throttle_diff": 92.0, "off_throttle_diff": 18.0,
+        "on_throttle_diff": 92.0, "off_throttle_diff": 18.0, "engine_braking": 70.0,
         "front_camber": -3.0, "rear_camber": -1.5,
         "front_toe": 0.05, "rear_toe": 0.15,
         "front_suspension": 35.0, "rear_suspension": 28.0,
@@ -75,13 +75,14 @@ _TRACK_TYPE_OPTIMA: dict[TrackType, dict[str, float]] = {
         "front_ride_height": 35.0, "rear_ride_height": 40.0,
         "brake_pressure": 96.0, "front_brake_bias": 50.0,
         "front_tyre_pressure": 24.5, "rear_tyre_pressure": 21.0,
+        "ballast": 0.0,
         "fuel_load": 50.0,  # EA F1 2026 reference (penalty 不计入 fuel, 仅 CarSetup 必填)
     },
     "street": {
         # Monaco / Singapore / Madrid / Miami — 街道赛, 最大化下压力 + 慢弯抓地
         "front_wing": 40.0, "rear_wing": 42.0,
         "active_aero_mode": 0.0, "x_mode_activations": 0.0,
-        "on_throttle_diff": 80.0, "off_throttle_diff": 50.0,
+        "on_throttle_diff": 80.0, "off_throttle_diff": 50.0, "engine_braking": 40.0,
         "front_camber": -3.4, "rear_camber": -1.9,
         "front_toe": 0.08, "rear_toe": 0.20,
         "front_suspension": 18.0, "rear_suspension": 12.0,
@@ -89,13 +90,14 @@ _TRACK_TYPE_OPTIMA: dict[TrackType, dict[str, float]] = {
         "front_ride_height": 18.0, "rear_ride_height": 30.0,
         "brake_pressure": 100.0, "front_brake_bias": 53.0,
         "front_tyre_pressure": 23.5, "rear_tyre_pressure": 20.5,
+        "ballast": 0.0,
         "fuel_load": 50.0,
     },
     "high_downforce": {
         # Hungaroring / Zandvoort — 高下压力技术赛道
         "front_wing": 32.0, "rear_wing": 34.0,
         "active_aero_mode": 0.0, "x_mode_activations": 1.0,
-        "on_throttle_diff": 85.0, "off_throttle_diff": 35.0,
+        "on_throttle_diff": 85.0, "off_throttle_diff": 35.0, "engine_braking": 45.0,
         "front_camber": -3.3, "rear_camber": -1.8,
         "front_toe": 0.06, "rear_toe": 0.18,
         "front_suspension": 22.0, "rear_suspension": 16.0,
@@ -103,6 +105,7 @@ _TRACK_TYPE_OPTIMA: dict[TrackType, dict[str, float]] = {
         "front_ride_height": 22.0, "rear_ride_height": 34.0,
         "brake_pressure": 98.0, "front_brake_bias": 52.0,
         "front_tyre_pressure": 24.0, "rear_tyre_pressure": 20.8,
+        "ballast": 0.0,
         "fuel_load": 50.0,
     },
     "medium": {
@@ -110,7 +113,7 @@ _TRACK_TYPE_OPTIMA: dict[TrackType, dict[str, float]] = {
         # 攻守均衡, 中等下压力 (与 DEFAULT_SETUP 完全一致, 作为校准锚点)
         "front_wing": 25.0, "rear_wing": 27.0,
         "active_aero_mode": 1.0, "x_mode_activations": 2.0,
-        "on_throttle_diff": 80.0, "off_throttle_diff": 55.0,
+        "on_throttle_diff": 80.0, "off_throttle_diff": 55.0, "engine_braking": 50.0,
         "front_camber": -3.5, "rear_camber": -2.0,
         "front_toe": 0.05, "rear_toe": 0.20,
         "front_suspension": 21.0, "rear_suspension": 11.0,
@@ -118,13 +121,14 @@ _TRACK_TYPE_OPTIMA: dict[TrackType, dict[str, float]] = {
         "front_ride_height": 20.0, "rear_ride_height": 40.0,
         "brake_pressure": 100.0, "front_brake_bias": 55.0,
         "front_tyre_pressure": 24.0, "rear_tyre_pressure": 20.5,
+        "ballast": 0.0,
         "fuel_load": 50.0,
     },
     "mixed": {
         # Suzuka / Silverstone / Spa / COTA / Losail / Yas Marina — 三段差异大
         "front_wing": 18.0, "rear_wing": 20.0,
         "active_aero_mode": 1.0, "x_mode_activations": 2.0,
-        "on_throttle_diff": 88.0, "off_throttle_diff": 30.0,
+        "on_throttle_diff": 88.0, "off_throttle_diff": 30.0, "engine_braking": 55.0,
         "front_camber": -3.2, "rear_camber": -1.7,
         "front_toe": 0.05, "rear_toe": 0.18,
         "front_suspension": 26.0, "rear_suspension": 20.0,
@@ -132,6 +136,7 @@ _TRACK_TYPE_OPTIMA: dict[TrackType, dict[str, float]] = {
         "front_ride_height": 26.0, "rear_ride_height": 36.0,
         "brake_pressure": 97.0, "front_brake_bias": 51.0,
         "front_tyre_pressure": 24.2, "rear_tyre_pressure": 21.0,
+        "ballast": 0.0,
         "fuel_load": 50.0,
     },
 }
@@ -191,6 +196,9 @@ _BASE_SENSITIVITY_S_PER_CLICK: dict[str, float] = {
     "front_brake_bias": 0.015,    # 制动分配, 影响进弯稳定性
     "front_tyre_pressure": 0.020, # 胎压 (0.1 psi 步长) 影响胎温 + 抓地
     "rear_tyre_pressure": 0.020,
+    # Iter-289: F1 26 新字段
+    "engine_braking": 0.010,       # 发动机制动, 影响收油减速/能量回收
+    "ballast": 0.012,              # 配重, 影响整车重量/轮胎负载
 }
 
 # 赛道类型 *敏感度缩放因子* (乘到 _BASE_SENSITIVITY 上).
@@ -210,6 +218,7 @@ _TRACK_TYPE_SCALE: dict[TrackType, dict[str, float]] = {
         "front_ride_height": 1.2, "rear_ride_height": 1.2,
         "brake_pressure": 1.2, "front_brake_bias": 1.4,  # 重制动赛道
         "front_tyre_pressure": 1.0, "rear_tyre_pressure": 1.0,
+        "engine_braking": 1.0, "ballast": 1.0,
     },
     "street": {
         "front_wing": 1.3, "rear_wing": 1.3,        # 慢弯抓地主导, 仍要下压力
@@ -222,6 +231,7 @@ _TRACK_TYPE_SCALE: dict[TrackType, dict[str, float]] = {
         "front_ride_height": 1.5, "rear_ride_height": 1.5,  # 路肩 + 减速带
         "brake_pressure": 1.3, "front_brake_bias": 1.5,     # 重制动频繁
         "front_tyre_pressure": 1.2, "rear_tyre_pressure": 1.2,
+        "engine_braking": 1.0, "ballast": 1.0,
     },
     "high_downforce": {
         "front_wing": 1.4, "rear_wing": 1.4,        # 弯角主导, 翼面平衡关键
@@ -234,6 +244,7 @@ _TRACK_TYPE_SCALE: dict[TrackType, dict[str, float]] = {
         "front_ride_height": 1.0, "rear_ride_height": 1.0,
         "brake_pressure": 1.1, "front_brake_bias": 1.2,
         "front_tyre_pressure": 1.1, "rear_tyre_pressure": 1.1,
+        "engine_braking": 1.0, "ballast": 1.0,
     },
     "medium": {  # 校准锚点: 全 1.0
         "front_wing": 1.0, "rear_wing": 1.0,
@@ -246,6 +257,7 @@ _TRACK_TYPE_SCALE: dict[TrackType, dict[str, float]] = {
         "front_ride_height": 1.0, "rear_ride_height": 1.0,
         "brake_pressure": 1.0, "front_brake_bias": 1.0,
         "front_tyre_pressure": 1.0, "rear_tyre_pressure": 1.0,
+        "engine_braking": 1.0, "ballast": 1.0,
     },
     "mixed": {
         "front_wing": 1.2, "rear_wing": 1.2,        # 直道+弯角都需要妥协
@@ -258,6 +270,7 @@ _TRACK_TYPE_SCALE: dict[TrackType, dict[str, float]] = {
         "front_ride_height": 1.1, "rear_ride_height": 1.1,
         "brake_pressure": 1.1, "front_brake_bias": 1.2,
         "front_tyre_pressure": 1.05, "rear_tyre_pressure": 1.05,
+        "engine_braking": 1.0, "ballast": 1.0,
     },
 }
 
@@ -415,7 +428,7 @@ def setup_penalty_s(setup: CarSetup, track_id: str) -> float:
         else:
             step = 1.0
         clicks = delta_clicks / step
-        total += clicks * base_s * scale[name]
+        total += clicks * base_s * scale.get(name, 1.0)
     # Iter-107: 全局 cap — 保留单维线性灵敏度, 仅极端总惩罚封顶到 EA F1 2026
     # 权威上限 (6s). 消除线性叠加导致的极端 setup 惩罚过高 (10-13s → 6s).
     return float(min(total, _TOTAL_PENALTY_CAP_S))

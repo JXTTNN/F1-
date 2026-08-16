@@ -117,7 +117,7 @@ def test_state_dict_roundtrip_identical(trained_model: SurrogateModel) -> None:
     """state_dict 保存/加载后预测与原模型一致, 且含版本号与 input_dim."""
     sd = trained_model.state_dict()
     assert sd["model_version"] == "seg-dnn-torch-v0.3"
-    assert sd["input_dim"] == 39
+    assert sd["input_dim"] == 41
     reloaded = SurrogateModel()
     reloaded.load_state_dict(sd)
     for track_id in ["melbourne", "monaco", "spa", "jeddah"]:

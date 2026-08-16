@@ -312,7 +312,7 @@ class TestSetupSchemaEdgeCases:
         # Re-constructing DEFAULT_SETUP from its dump should not raise.
         rebuilt = CarSetup(**DEFAULT_SETUP.model_dump())
         assert rebuilt == DEFAULT_SETUP
-        assert len(rebuilt.to_vector()) == 21
+        assert len(rebuilt.to_vector()) == 23
 
 
 # --------------------------------------------------------------------------- #
@@ -770,7 +770,7 @@ class TestBatchPredictEdgeCases:
     def test_sensitivity_analysis_returns_21_keys(self) -> None:
         result = sensitivity_analysis(DEFAULT_SETUP, "melbourne")
         assert isinstance(result, dict)
-        assert len(result) == 21
+        assert len(result) == 23
         assert set(result.keys()) == set(SETUP_FIELDS.keys())
         for v in result.values():
             assert isinstance(v, float)

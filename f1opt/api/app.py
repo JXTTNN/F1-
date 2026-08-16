@@ -260,13 +260,15 @@ def _emit_lap(state: _TelemetryState, row: dict[str, Any]) -> None:
 
 
 # Iter-117: packet 5 (CarSetups) m_carSetups 字段名 → CarSetup 构造参数映射.
-# packet 5 有 22 字段 (4 胎压 + ballast), CarSetup 有 19 字段 (前/后胎压各 1 + fuel).
-# 胎压取左右平均, ballast 忽略 (CarSetup 无此字段).
+# Iter-288: packet 5 有 23 字段, CarSetup 也有 23 字段 (engine_braking + ballast +
+# 前/后胎压各 1)。胎压取左右平均, ballast 直接映射。
 _PACKET5_TO_CARSETUP: dict[str, str] = {
     "m_frontWing": "front_wing",
     "m_rearWing": "rear_wing",
     "m_onThrottleDiff": "on_throttle_diff",
     "m_offThrottleDiff": "off_throttle_diff",
+    "m_engineBraking": "engine_braking",
+    "m_ballast": "ballast",
     "m_frontCamber": "front_camber",
     "m_rearCamber": "rear_camber",
     "m_frontToe": "front_toe",

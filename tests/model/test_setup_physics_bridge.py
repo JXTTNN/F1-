@@ -275,11 +275,11 @@ def test_unknown_track_falls_back_to_medium() -> None:
 
 # --- 内部表一致性 -------------------------------------------------------------
 def test_sensitivity_table_covers_all_non_fuel_fields() -> None:
-    """_BASE_SENSITIVITY 覆盖 20 项非 fuel 参数 (21 - fuel_load)."""
+    """_BASE_SENSITIVITY 覆盖 22 项非 fuel 参数 (23 - fuel_load)."""
     # fuel_load 不在敏感度表 (燃油通过 current_fuel_kg 直接映射)
     assert "fuel_load" not in _BASE_SENSITIVITY_S_PER_CLICK
-    # 20 项非 fuel 参数全部覆盖
-    assert len(_BASE_SENSITIVITY_S_PER_CLICK) == 20
+    # 22 项非 fuel 参数全部覆盖
+    assert len(_BASE_SENSITIVITY_S_PER_CLICK) == 22
     # 所有值 > 0 (惩罚必须非零)
     for name, s in _BASE_SENSITIVITY_S_PER_CLICK.items():
         assert s > 0.0, f"{name} 敏感度={s} <= 0"

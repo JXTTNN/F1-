@@ -502,10 +502,11 @@ def bayesian_search_setup(
         predicted_gain_s, iterations, acquisition, history, gp_final_std.
     """
     from f1opt.data.setup_schema import CarSetup
+    from f1opt.model.surrogate import SETUP_DIM
 
     # to_vector() normalizes each setup field to [0, 1], so BO operates in the
-    # unit hypercube of dimension 21.
-    n_dim = 21
+    # unit hypercube of dimension SETUP_DIM.
+    n_dim = SETUP_DIM
     bounds = np.array([[0.0, 1.0]] * n_dim)
 
     # Objective: predict_lap_time via surrogate (best-effort; fallback heuristic).

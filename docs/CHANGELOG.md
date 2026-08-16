@@ -4,6 +4,16 @@
 
 ## 2026-08 优化迭代
 
+### 模型调校维度 21→23 (engine_braking + ballast) (Iter-289)
+- 按 EA F1 2026 权威规范补齐模型优化空间: 新增 `engine_braking` (发动机制动 0-100%)
+  与 `ballast` (配重 0-10), 模型 setup 维度 **21→23**, 输入维度 **39→41**。
+- 全链路同步: `setup_schema` (字段+5 预设) / `surrogate` (SETUP_DIM/INPUT_DIM) /
+  `app` (packet5→CarSetup 映射, 取消 ballast 忽略) / `setup_physics_bridge` (5 optima) /
+  `presets` (3 显式 setup) / `causal` (2 条新因果规则)。
+- 依据 `docs/F1_2026_Research_Summary.md` 第 17 行: 发动机制动 0-100% (100%=最大能量
+  回收 + 入弯过度转向)。
+- 测试同步: ~15 测试文件 21/39 → 23/41 断言 + CarSetup 构造补字段。
+
 ### 轮胎化合物贯通遥测→UI + rate_monitor 全 17 包 (Iter-288)
 - **模块衔接**: `_frame_to_ws` 新增 `actual_tyre_compound`/`tyre_compound`/
   `tyre_compound_name` (服务端用 `tyre_compound_name` 把 uint8 映射为 C0-C6/雨胎),

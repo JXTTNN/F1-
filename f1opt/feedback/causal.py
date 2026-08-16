@@ -54,7 +54,7 @@ RISK_HIGH_STEPS: float = 5.0
 
 
 # --------------------------------------------------------------------------- #
-# CAUSAL_RULES — physically-reasonable rules for all 21 setup fields.
+# CAUSAL_RULES — physically-reasonable rules for all 23 setup fields.
 # Each entry:
 #   primary_effect_inc / _dec : Chinese primary effect (for value inc / dec)
 #   secondary_inc / _dec      : 1-3 cascading secondary effects
@@ -92,6 +92,20 @@ CAUSAL_RULES: dict[str, dict[str, Any]] = {
         "secondary_inc": ["入弯后轴锁止增强", "收油稳定性提升", "转向不足略增"],
         "secondary_dec": ["收油后轴更灵活", "入弯转向更敏锐", "收油稳定性下降"],
         "metric_deltas": {"stability": 0.04, "understeer": 0.02},
+    },
+    "engine_braking": {
+        "primary_effect_inc": "提高发动机制动",
+        "primary_effect_dec": "降低发动机制动",
+        "secondary_inc": ["收油减速更强", "能量回收更多", "入弯过度转向倾向"],
+        "secondary_dec": ["收油滑行更顺", "能量回收更少", "入弯转向不足倾向"],
+        "metric_deltas": {"stability": -0.03, "understeer": -0.04},
+    },
+    "ballast": {
+        "primary_effect_inc": "增加配重",
+        "primary_effect_dec": "减少配重",
+        "secondary_inc": ["整车重量增加", "轮胎负载升高", "圈速略降"],
+        "secondary_dec": ["整车重量减轻", "轮胎负载降低", "圈速略升"],
+        "metric_deltas": {"tyre_wear_r": 1.0, "lap_time": 0.02},
     },
     # --- Suspension Geometry ---
     "front_camber": {

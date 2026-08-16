@@ -21,11 +21,12 @@ from f1opt.feedback.nlg import FeedbackNarrator, ToneAdapter
 from f1opt.model.bayesian import bayesian_search_setup
 from f1opt.model.pareto import MultiObjectiveOptimizer
 from f1opt.model.strategy import RaceStrategyPlanner
+from f1opt.model.surrogate import SETUP_DIM
 
 __all__ = ["router"]
 
-#: Normalized CarSetup search space (21 dims, each in [0, 1]).
-_SETUP_BOUNDS: list[list[float]] = [[0.0, 1.0]] * 21
+#: Normalized CarSetup search space (SETUP_DIM dims, each in [0, 1]).
+_SETUP_BOUNDS: list[list[float]] = [[0.0, 1.0]] * SETUP_DIM
 
 #: Approximate total test count reported by /api/health/extended.
 _TEST_COUNT_ESTIMATE = 837

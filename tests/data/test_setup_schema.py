@@ -29,15 +29,15 @@ EXPECTED_GROUP_ORDER = [
 
 
 def test_setup_fields_registry_size_and_groups() -> None:
-    """注册表恰好 21 项，分组集合等于 8 个 garage 分组。"""
-    assert len(SETUP_FIELDS) == 21
+    """注册表恰好 23 项，分组集合等于 8 个 garage 分组。"""
+    assert len(SETUP_FIELDS) == 23
     assert {f.group for f in SETUP_FIELDS.values()} == set(EXPECTED_GROUP_ORDER)
 
 
 def test_all_setup_fields_order_grouped() -> None:
     """ALL_SETUP_FIELDS 按 garage 顺序返回，分组连续排列。"""
     fields = ALL_SETUP_FIELDS()
-    assert len(fields) == 21
+    assert len(fields) == 23
     # 顺序与注册表插入顺序一致
     assert [f.name for f in fields] == list(SETUP_FIELDS.keys())
     # 分组连续出现且顺序正确
@@ -111,7 +111,7 @@ def test_boundary_values_accepted() -> None:
 def test_to_vector_length_and_range() -> None:
     """to_vector 长度为 21 且全部落在 [0,1]。"""
     vec = DEFAULT_SETUP.to_vector()
-    assert len(vec) == 21
+    assert len(vec) == 23
     assert all(0.0 <= v <= 1.0 for v in vec)
 
 
@@ -129,6 +129,7 @@ def test_vector_round_trip_random_setup() -> None:
         rear_wing=40,
         on_throttle_diff=70,
         off_throttle_diff=100,
+        engine_braking=80,
         front_camber=-3.00,
         rear_camber=-1.50,
         front_toe=0.08,
@@ -143,6 +144,7 @@ def test_vector_round_trip_random_setup() -> None:
         front_brake_bias=50,
         front_tyre_pressure=26.5,
         rear_tyre_pressure=21.2,
+        ballast=5,
         fuel_load=105.0,
         active_aero_mode=0,  # Iter-219
         x_mode_activations=0.0,  # Iter-219
@@ -159,9 +161,9 @@ def test_from_vector_wrong_length_raises() -> None:
 
 
 def test_to_dict_all_floats() -> None:
-    """to_dict 返回 21 项且值均为 float。"""
+    """to_dict 返回 23 项且值均为 float。"""
     d = DEFAULT_SETUP.to_dict()
-    assert len(d) == 21
+    assert len(d) == 23
     assert all(isinstance(v, float) for v in d.values())
     assert d["front_wing"] == 25.0
     assert d["fuel_load"] == 30.0

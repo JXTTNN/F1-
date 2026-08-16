@@ -61,6 +61,8 @@ _FIELD_DEFS: list[tuple[str, GroupName, FieldKind, float, float, float, str, str
     # Transmission
     ("on_throttle_diff", "Transmission", "int", 50.0, 100.0, 1.0, "percent", "油门差速器锁止率"),
     ("off_throttle_diff", "Transmission", "int", 10.0, 100.0, 1.0, "percent", "收油滑行差速率"),
+    # Iter-288: F1 26 发动机制动 (0-100%, 100% = 最大能量回收 + 入弯过度转向)
+    ("engine_braking", "Transmission", "int", 0.0, 100.0, 1.0, "percent", "发动机制动"),
     # Suspension Geometry
     ("front_camber", "Suspension Geometry", "float", -3.50, -2.50, 0.01, "degrees", "前轮外倾角"),
     ("rear_camber", "Suspension Geometry", "float", -2.00, -1.00, 0.01, "degrees", "后轮外倾角"),
@@ -79,7 +81,9 @@ _FIELD_DEFS: list[tuple[str, GroupName, FieldKind, float, float, float, str, str
     # Tyres
     ("front_tyre_pressure", "Tyres", "float", 21.0, 28.0, 0.1, "psi", "前轮胎压"),
     ("rear_tyre_pressure", "Tyres", "float", 19.0, 25.0, 0.1, "psi", "后轮胎压"),
-    # Fuel
+    # Weight / Fuel
+    # Iter-288: F1 26 ballast (My Team 配重, 线格式 uint8 m_ballast; 0-10 clicks 假设)
+    ("ballast", "Fuel", "int", 0.0, 10.0, 1.0, "clicks", "配重 (重量分配)"),
     ("fuel_load", "Fuel", "float", 5.0, 110.0, 0.1, "kg", "燃油装载量"),
 ]
 
@@ -99,7 +103,7 @@ SETUP_FIELDS: dict[str, SetupField] = {
 
 
 def ALL_SETUP_FIELDS() -> list[SetupField]:
-    """按游戏 garage 显示顺序（分组连续）返回全部 21 项调教参数。"""
+    """按游戏 garage 显示顺序（分组连续）返回全部 23 项调教参数。"""
     return [SETUP_FIELDS[d[0]] for d in _FIELD_DEFS]
 
 
@@ -146,6 +150,7 @@ class CarSetup(BaseModel):
     # --- Transmission ---
     on_throttle_diff: int = Field(description="油门差速器锁止率")
     off_throttle_diff: int = Field(description="收油滑行差速率")
+    engine_braking: int = Field(description="发动机制动 (0-100%)")
     # --- Suspension Geometry ---
     front_camber: float = Field(description="前轮外倾角 (degrees)")
     rear_camber: float = Field(description="后轮外倾角 (degrees)")
@@ -164,7 +169,8 @@ class CarSetup(BaseModel):
     # --- Tyres ---
     front_tyre_pressure: float = Field(description="前轮胎压 (psi)")
     rear_tyre_pressure: float = Field(description="后轮胎压 (psi)")
-    # --- Fuel ---
+    # --- Weight / Fuel ---
+    ballast: int = Field(description="配重 (重量分配)")
     fuel_load: float = Field(description="燃油装载量 (kg)")
 
     @model_validator(mode="after")
@@ -246,6 +252,7 @@ DEFAULT_SETUP = CarSetup(
     x_mode_activations=2,
     on_throttle_diff=80,
     off_throttle_diff=55,
+    engine_braking=50,
     front_camber=-3.50,
     rear_camber=-2.00,
     front_toe=0.05,
@@ -260,6 +267,7 @@ DEFAULT_SETUP = CarSetup(
     front_brake_bias=55,
     front_tyre_pressure=24.0,
     rear_tyre_pressure=20.5,
+    ballast=0,
     fuel_load=30.0,
 )
 
@@ -271,6 +279,7 @@ HIGH_DOWNFORCE_PRESET = CarSetup(
     x_mode_activations=1,
     on_throttle_diff=85,
     off_throttle_diff=60,
+    engine_braking=50,
     front_camber=-3.50,
     rear_camber=-2.00,
     front_toe=0.05,
@@ -285,6 +294,7 @@ HIGH_DOWNFORCE_PRESET = CarSetup(
     front_brake_bias=55,
     front_tyre_pressure=23.5,
     rear_tyre_pressure=20.0,
+    ballast=0,
     fuel_load=30.0,
 )
 
@@ -295,6 +305,7 @@ LOW_DOWNFORCE_PRESET = CarSetup(
     x_mode_activations=3,
     on_throttle_diff=75,
     off_throttle_diff=50,
+    engine_braking=50,
     front_camber=-3.20,
     rear_camber=-1.80,
     front_toe=0.06,
@@ -309,6 +320,7 @@ LOW_DOWNFORCE_PRESET = CarSetup(
     front_brake_bias=55,
     front_tyre_pressure=24.5,
     rear_tyre_pressure=21.0,
+    ballast=0,
     fuel_load=30.0,
 )
 
@@ -319,6 +331,7 @@ STREET_PRESET = CarSetup(
     x_mode_activations=0,
     on_throttle_diff=82,
     off_throttle_diff=58,
+    engine_braking=50,
     front_camber=-3.40,
     rear_camber=-1.90,
     front_toe=0.04,
@@ -333,6 +346,7 @@ STREET_PRESET = CarSetup(
     front_brake_bias=54,
     front_tyre_pressure=23.0,
     rear_tyre_pressure=19.5,
+    ballast=0,
     fuel_load=25.0,
 )
 
@@ -343,6 +357,7 @@ MIXED_PRESET = CarSetup(
     x_mode_activations=2,
     on_throttle_diff=80,
     off_throttle_diff=55,
+    engine_braking=50,
     front_camber=-3.40,
     rear_camber=-1.90,
     front_toe=0.05,
@@ -357,6 +372,7 @@ MIXED_PRESET = CarSetup(
     front_brake_bias=55,
     front_tyre_pressure=24.0,
     rear_tyre_pressure=20.5,
+    ballast=0,
     fuel_load=30.0,
 )
 

@@ -42,6 +42,7 @@ CONSISTENT_SETUP = CarSetup(
     x_mode_activations=2,
     on_throttle_diff=80,
     off_throttle_diff=55,
+    engine_braking=50,
     front_camber=-3.50,
     rear_camber=-2.00,
     front_toe=0.05,
@@ -56,6 +57,7 @@ CONSISTENT_SETUP = CarSetup(
     front_brake_bias=55,
     front_tyre_pressure=24.0,
     rear_tyre_pressure=20.5,
+    ballast=0,
     fuel_load=30.0,
 )
 

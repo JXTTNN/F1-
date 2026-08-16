@@ -26,7 +26,7 @@ from f1opt.model.surrogate import predict_lap_time
 def test_analyze_returns_20_params_excluding_fuel() -> None:
     """analyze_setup_contributions 返回 20 个参数 (fuel_load 除外)."""
     contribs = analyze_setup_contributions(DEFAULT_SETUP, "melbourne", None)
-    assert len(contribs) == 20
+    assert len(contribs) == 22
     names = {c.field_name for c in contribs}
     assert "fuel_load" not in names
     # 所有 20 个非 fuel 参数都在
@@ -87,7 +87,7 @@ def test_rank_parameter_sensitivity_top_n() -> None:
 def test_rank_top_n_clamped() -> None:
     """top_n > 20 时返回全部 20 个."""
     top = rank_parameter_sensitivity(DEFAULT_SETUP, "melbourne", None, top_n=100)
-    assert len(top) == 20
+    assert len(top) == 22
 
 
 def test_explain_setup_change_basic() -> None:

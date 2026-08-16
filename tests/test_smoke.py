@@ -767,7 +767,7 @@ class TestDataModels:
         """验证调教 schema 完整."""
         from f1opt.data.setup_schema import DEFAULT_SETUP, SETUP_FIELDS, CarSetup
 
-        assert len(SETUP_FIELDS) == 21  # 21 个调教字段
+        assert len(SETUP_FIELDS) == 23  # 23 个调教字段
         assert isinstance(DEFAULT_SETUP, CarSetup)
 
         # 验证默认值在合法范围内
