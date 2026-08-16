@@ -4,6 +4,13 @@
 
 ## 2026-08 优化迭代
 
+### 反馈模板分组补全 (Iter-295)
+- 修复「最全模板参考」缺陷: `corner_apex_speed`(弯心速度) 与 `corner_kerb_usage`
+  (路肩使用) 两个弯道级模板 (Iter-196 新增) 此前未被 `FEEDBACK_TEMPLATE_GROUPS` 引用,
+  导致 ``f1opt template --group corner`` 只返回 4 个、``--group all`` 只返回 10 个,
+  遗漏这 2 个模板。现 corner 组 6 个、all 组 12 个, 与 `DRIVER_FEEDBACK_TEMPLATES` 一致。
+- `/api/templates` 端点复用同一分组, 修复后 corner=6 / all=12 端到端生效。
+
 ### 策略面板「Pirelli 选胎」数据补全 (Iter-294)
 - 修复前端策略卡片永远显示「—」: `model/strategy.py` `optimal_strategy` 此前未返回
   `pirelli_compounds`, 现新增 `_compound_laps` 从进站列表推导各配方 (软/中/硬) 圈数,

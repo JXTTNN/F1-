@@ -755,11 +755,15 @@ Where do you think you can improve: _________________________""",
 
 # 模板分组 (按使用场景)
 FEEDBACK_TEMPLATE_GROUPS: dict[str, list[str]] = {
-    "corner": ["corner_understeer", "corner_oversteer", "corner_braking", "corner_traction"],
+    "corner": [
+        "corner_understeer", "corner_oversteer", "corner_braking", "corner_traction",
+        "corner_apex_speed", "corner_kerb_usage",
+    ],
     "sector": ["sector_balance", "sector_tyres"],
     "overall": ["overall_general", "overall_setup", "overall_ers", "overall_comparison"],
     "all": [
         "corner_understeer", "corner_oversteer", "corner_braking", "corner_traction",
+        "corner_apex_speed", "corner_kerb_usage",
         "sector_balance", "sector_tyres",
         "overall_general", "overall_setup", "overall_ers", "overall_comparison",
     ],
