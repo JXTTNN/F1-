@@ -4,6 +4,16 @@
 
 ## 2026-08 优化迭代
 
+### 车手口头反馈识别 + 映射到调教字段 (Iter-290)
+- 打通「车手反馈 → 调教分析」链路: `generate_feedback(question=...)` 现调用
+  `classify_intent`/`classify_sub_intent` 识别车手口头反馈, 输出 `driver_intent`
+  (intent/sub_intent/problem/setup_hint)。
+- 问题子意图 (understeer/oversteer/tyre_wear/brake/ers/traction/balance) 映射到
+  相关调教字段 (如 oversteer → rear_wing/rear_arb/rear_toe), 供调教分析模型定向优化。
+- 补强中文识别: problem_report 增加「甩 / 车尾.*松 / 尾.*松 / 后轴.*松 / 尾部.*滑」;
+  oversteer 子意图增加同类信号。此前「车尾太松了, 出弯总是甩」被误判为 other。
+- 新增 test_driver_intent_recognized_when_question (含无 question 不附加断言)。
+
 ### 模型调校维度 21→23 (engine_braking + ballast) (Iter-289)
 - 按 EA F1 2026 权威规范补齐模型优化空间: 新增 `engine_braking` (发动机制动 0-100%)
   与 `ballast` (配重 0-10), 模型 setup 维度 **21→23**, 输入维度 **39→41**。

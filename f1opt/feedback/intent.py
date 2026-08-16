@@ -122,7 +122,8 @@ _INTENT_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     (
         "problem_report",
         re.compile(
-            r"(?:推头|甩尾|转向不足|转向过度|打滑|抓地力|没抓地|胎温.*高|"
+            r"(?:推头|甩尾|甩|转向不足|转向过度|打滑|抓地力|没抓地|胎温.*高|"
+            r"车尾.*松|尾.*松|后轴.*松|车尾.*滑|尾部.*滑|"
             r"温度.*高|磨损.*快|刹车.*不好|油门.*响应|ERS.*不够|动力.*不足|"
             r"understeer|oversteer|no grip|overheating|wear.*fast|"
             r"loose|tight|pushing|sliding|wheel spin|tire.*wear|"
@@ -481,11 +482,12 @@ _PROBLEM_SUB_INTENT_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     (
         "oversteer",
         re.compile(
-            r"(?:甩尾|转向过度|oversteer|snap|loose|tail.*happy|"
+            r"(?:甩尾|甩|转向过度|oversteer|snap|loose|tail.*happy|"
             r"rear.*slide|rear.*loose|rear.*moving|stepping.*out|"
             r"step.*out|unstable|nervous|twitchy|"
             r"rotate.*too.*much|too.*pointy|snap.*oversteer|"
-            r"lift.?off.*oversteer|power.*oversteer)",
+            r"lift.?off.*oversteer|power.*oversteer|"
+            r"车尾.*松|尾.*松|后轴.*松|出弯.*甩|尾部.*滑|后.*滑)",
             re.IGNORECASE,
         ),
     ),

@@ -189,6 +189,24 @@ def test_generate_feedback_returns_contract_shape() -> None:
     assert isinstance(out["sources"], list)
 
 
+def test_driver_intent_recognized_when_question() -> None:
+    """Iter-290: 车手口头反馈被识别并映射到调教字段 (传给调教分析模型)."""
+    out = generate_feedback(
+        _scripted_frames(), DEFAULT_SETUP.model_dump(), "monza",
+        question="车尾太松了, 出弯总是甩",
+    )
+    assert "driver_intent" in out
+    di = out["driver_intent"]
+    assert di["intent"] == "problem_report"
+    assert di["sub_intent"] == "oversteer"
+    assert di["problem"] == "oversteer"
+    assert "rear_wing" in di["setup_hint"]
+
+    # 无 question 时不附加 driver_intent
+    out2 = generate_feedback(_scripted_frames(), DEFAULT_SETUP.model_dump(), "monza")
+    assert "driver_intent" not in out2
+
+
 def test_dimensions_all_10_names_in_order() -> None:
     out = generate_feedback(_scripted_frames(), DEFAULT_SETUP.model_dump(), "melbourne")
     names = [d["name"] for d in out["dimensions"]]

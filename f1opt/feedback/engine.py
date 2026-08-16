@@ -51,6 +51,7 @@ from f1opt.data.tracks import TRACKS_BY_ID, Track, get_track
 from f1opt.driver.profile import DriverProfile
 
 from .conversation import ConversationSession, get_session
+from .intent import classify_intent, classify_sub_intent
 from .prompts import (
     FEEDBACK_DIMENSIONS,
     REFLECTION_PROMPT_TEMPLATE,
@@ -73,6 +74,43 @@ __all__ = [
 #: Re-exported from :mod:`f1opt.feedback.prompts` (single source of truth) so
 #: the rule-based path and the LLM prompt dimension list never drift apart.
 #: The rule-based path always emits one entry per name in this order.
+
+# Iter-290: 车手问题 → 相关调教字段映射 (把口头反馈传到调教分析模型)。
+_PROBLEM_TO_SETUP_HINT: dict[str, list[str]] = {
+    "understeer": ["front_wing", "rear_wing", "front_arb", "rear_arb", "front_toe"],
+    "oversteer": ["rear_wing", "front_wing", "rear_arb", "front_arb", "rear_toe"],
+    "tyre_wear": ["front_tyre_pressure", "rear_tyre_pressure", "front_camber", "rear_camber"],
+    "brake": ["brake_pressure", "front_brake_bias", "engine_braking"],
+    "ers": ["ers_deploy_mode"],
+    "traction": ["on_throttle_diff", "off_throttle_diff", "rear_suspension"],
+    "balance": ["front_wing", "rear_wing", "front_arb", "rear_arb"],
+}
+
+
+def _classify_driver_intent(question: str) -> dict[str, Any]:
+    """识别车手口头反馈 (Iter-290): 意图 + 子意图 + 问题→调教字段映射。
+
+    车手报告操控问题 (problem_report) 时, 把子意图 (understeer/oversteer/
+    tyre_wear/brake/ers/traction/balance) 映射到相关调教字段, 供调教分析模型
+    定向优化 (setup_hint)。任何异常都降级为 ``other/general``, 绝不影响反馈主流程。
+    """
+    try:
+        intent = classify_intent(question)
+        sub = classify_sub_intent(question, intent.intent)
+        result: dict[str, Any] = {
+            "intent": intent.intent,
+            "sub_intent": sub.sub_intent,
+        }
+        if intent.intent in ("problem_report", "setup_advice"):
+            hint = _PROBLEM_TO_SETUP_HINT.get(sub.sub_intent, [])
+            if hint:
+                result["setup_hint"] = list(hint)
+        if intent.intent == "problem_report":
+            result["problem"] = sub.sub_intent
+        return result
+    except Exception:  # pragma: no cover - defensive
+        return {"intent": "other", "sub_intent": "general"}
+
 
 # Nominal F1 2026 reference lap pace (seconds) per track_type, scaled per-track
 # by length relative to a 5 km nominal circuit.
@@ -3427,6 +3465,8 @@ class FeedbackEngine:
                 question, metrics, track, conversation=conversation
             )
             feedback = {**feedback, "summary": answer + "\n\n" + feedback["summary"]}
+            # Iter-290: 识别车手口头反馈意图并映射到调教字段, 传给调教分析模型。
+            feedback["driver_intent"] = _classify_driver_intent(question)
             if conversation is not None:
                 conversation.add("user", question)
                 conversation.add("assistant", answer)
@@ -3485,6 +3525,8 @@ class FeedbackEngine:
                 question, metrics, track, conversation=conversation
             )
             feedback = {**feedback, "summary": answer + "\n\n" + feedback["summary"]}
+            # Iter-290: 识别车手口头反馈意图并映射到调教字段, 传给调教分析模型。
+            feedback["driver_intent"] = _classify_driver_intent(question)
             if conversation is not None:
                 conversation.add("user", question)
                 conversation.add("assistant", answer)
@@ -3544,6 +3586,8 @@ class FeedbackEngine:
                 question, metrics, track, conversation=conversation
             )
             feedback = {**feedback, "summary": answer + "\n\n" + feedback["summary"]}
+            # Iter-290: 识别车手口头反馈意图并映射到调教字段, 传给调教分析模型。
+            feedback["driver_intent"] = _classify_driver_intent(question)
             if conversation is not None:
                 conversation.add("user", question)
                 conversation.add("assistant", answer)
@@ -3599,6 +3643,8 @@ class FeedbackEngine:
                 question, metrics, track, conversation=conversation
             )
             feedback = {**feedback, "summary": answer + "\n\n" + feedback["summary"]}
+            # Iter-290: 识别车手口头反馈意图并映射到调教字段, 传给调教分析模型。
+            feedback["driver_intent"] = _classify_driver_intent(question)
             if conversation is not None:
                 conversation.add("user", question)
                 conversation.add("assistant", answer)
