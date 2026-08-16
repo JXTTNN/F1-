@@ -334,7 +334,6 @@ class TelemetryAnalytics:
     # ------------------------------------------------------------------ #
     def throttle_trace_analysis(self) -> dict[str, Any]:
         thr = _field(self.frames, "throttle")
-        times = self._get_times()
         dt = self._get_deltas()
         if thr.size == 0:
             return {
@@ -530,7 +529,6 @@ class TelemetryAnalytics:
     def ers_analysis(self) -> dict[str, Any]:
         deploy = _field_multi(self.frames, ("ers_deployed_this_lap", "ers_deploy", "ers_deployed"))
         brake = _field(self.frames, "brake")
-        times = self._get_times()
         dt = self._get_deltas()
         if deploy.size == 0:
             return {
@@ -579,7 +577,6 @@ class TelemetryAnalytics:
         # 否则会把"允许但未使用"的整个 DRS 区段都计为激活, 高估激活次数/时长。
         drs = _field_multi(self.frames, ("drs_active", "drs", "drs_allowed"))
         speed = _field(self.frames, "speed")
-        times = self._get_times()
         dt = self._get_deltas()
         if drs.size == 0:
             return {

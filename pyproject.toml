@@ -54,6 +54,10 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
+# E402 (module 级延迟/顺序 import) 与 E501 (行长) 为风格项, 不影响正确性:
+# 项目中广泛使用延迟导入以避免循环依赖 / 缩短冷启动, 行长 100 对长 docstring
+# 与公式注释过严。保留功能与缺陷类规则 (F/UP/B/I/E9)。
+ignore = ["E402", "E501"]
 
 [tool.ruff.lint.per-file-ignores]
 # 测试模块允许宽松断言与未使用的 fixture 参数

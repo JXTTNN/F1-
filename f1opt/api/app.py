@@ -21,10 +21,11 @@ import os as _os
 import re
 import sys
 import time
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, AsyncIterator, Literal
+from typing import Any, Literal
 
 # Windows: 兼容性处理。
 # ProactorEventLoop 自 Python 3.8 起即为 Windows 默认事件循环，无需显式设置
@@ -1231,7 +1232,7 @@ def create_app(start_listener: bool = True) -> FastAPI:
                 ) from None
 
             try:
-                from f1opt.model.strategy import RaceStrategyPlanner, StrategyComparator
+                from f1opt.model.strategy import RaceStrategyPlanner
             except ImportError:
                 raise HTTPException(
                     status_code=503, detail="strategy planner not available"

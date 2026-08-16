@@ -272,19 +272,19 @@ def generate_corner_profile(track_id: str) -> list[Corner]:
     # 赛道类型决定弯角速度分布
     if track.track_type == "high_speed_low_downforce":
         # Monza-like: 多直道 + 少慢弯, 极速高
-        slow_frac, med_frac, fast_frac = 0.25, 0.30, 0.45
+        slow_frac, _, fast_frac = 0.25, 0.30, 0.45
         speed_range = (75, 280)
     elif track.track_type == "street":
         # Monaco-like: 多慢弯, 极速低
-        slow_frac, med_frac, fast_frac = 0.55, 0.35, 0.10
+        slow_frac, _, fast_frac = 0.55, 0.35, 0.10
         speed_range = (50, 200)
     elif track.track_type == "high_downforce":
         # Hungaroring-like: 多中慢弯, 少直道
-        slow_frac, med_frac, fast_frac = 0.40, 0.45, 0.15
+        slow_frac, _, fast_frac = 0.40, 0.45, 0.15
         speed_range = (70, 230)
     elif track.track_type == "mixed":
         # Suzuka-like: 各类型均衡
-        slow_frac, med_frac, fast_frac = 0.35, 0.40, 0.25
+        slow_frac, _, fast_frac = 0.35, 0.40, 0.25
         speed_range = (70, 270)
     else:  # medium
         slow_frac, _, fast_frac = 0.33, 0.45, 0.22

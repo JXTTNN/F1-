@@ -182,7 +182,7 @@ class _LazyCarList:
         d = self._cache[i]
         if d is None:
             base = i * self._per
-            d = dict(zip(self._names, self._vals[base : base + self._per]))
+            d = dict(zip(self._names, self._vals[base : base + self._per], strict=True))
             self._cache[i] = d
         return d
 
