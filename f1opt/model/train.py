@@ -376,7 +376,7 @@ def _latin_hypercube_sample(
 
     在 ``[lower, upper]^dim`` 空间生成 ``n`` 个样本, 保证每一维都被分层覆盖
     (每维分成 ``n`` 个等概率 stratum, 每个 stratum 恰好一个样本点). 相比独立
-    均匀采样, LHS 消除了聚类空洞, 在高维空间 (21 维 setup) 显著改善覆盖率.
+    均匀采样, LHS 消除了聚类空洞, 在高维空间 (23 维 setup) 显著改善覆盖率.
 
     算法:
     1. 每维生成 ``n`` 个 stratum 中心: ``[0.5/n, 1.5/n, ..., (n-0.5)/n]``
@@ -621,7 +621,7 @@ def generate_physics_dataset(
       speed_max/slip_angle/...), 由 setup + track + sectors 推得.
 
     Iter-121 增强: ``use_lhs=True`` (默认) 用 Latin Hypercube Sampling 替代
-    独立均匀/高斯采样, 在 21 维 setup 空间消除聚类空洞, 改善 OOD 泛化. 采样
+    独立均匀/高斯采样, 在 23 维 setup 空间消除聚类空洞, 改善 OOD 泛化. 采样
     分层比例不变 (20% uniform / 30% tight / 50% practice), 但每层内部用 LHS
     分层覆盖. ``use_lhs=False`` 回退到 Iter-67 的逐样本独立采样 (向后兼容).
 
@@ -1532,7 +1532,7 @@ def train(
     - **AdamW** (weight_decay=1e-5): L2 正则化.
     - **Cosine LR schedule** (1e-3 -> 1e-5): 前期高 lr 探索, 后期低 lr 精细收敛.
     - **Gradient clipping** (max_norm=1.0): BatchNorm + GELU 训练稳定性.
-    - **n_samples=8000** (from 5000): 更好覆盖 39 维输入空间.
+    - **n_samples=8000** (from 5000): 更好覆盖 41 维输入空间.
     - **Mini-batch + early stopping** (batch_size>0, early_stopping_patience>0):
       90/10 train/val split, 每 epoch 评估 val loss, 保存最优模型, patience
       轮无改善则早停. 防止全批量 GD 在高迭代数下过拟合 (3000 iter 比 1500 iter
@@ -1575,7 +1575,7 @@ def train(
       mini-batch 采样 ``lam ~ Beta(alpha, alpha)`` (clamp 到 [0.5, 1.0] 防止
       退化), 用 ``x_mixed = lam*x + (1-lam)*x[perm]`` 与对应 target 同样线性
       插值, 生成虚拟训练样本. 作为正则化手段提升泛化 (鼓励模型在相近 setup
-      之间平滑插值), 在小数据集 + 高维输入 (39 维) 上减少过拟合. ``0.0``
+      之间平滑插值), 在小数据集 + 高维输入 (41 维) 上减少过拟合. ``0.0``
       (默认) = 禁用, 向后兼容. 仅在 mini-batch 路径生效 (batch_size > 0).
 
     - ``save=True`` 时写入 ``{data_dir}/models/segment_surrogate.pt`` 并刷新缓存.

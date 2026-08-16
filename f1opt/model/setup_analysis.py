@@ -84,7 +84,7 @@ def analyze_setup_contributions(
     返回 20 个参数 (fuel_load 除外, 因为它是策略参数不是调教参数) 的贡献列表.
 
     Args:
-        setup: 待分析的调教 (21 维).
+        setup: 待分析的调教 (23 维).
         track_id: 赛道 ID.
         driver_profile: 车手画像 (任何 surrogate 接受的形态).
 

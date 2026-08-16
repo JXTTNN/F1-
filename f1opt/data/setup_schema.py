@@ -1,6 +1,6 @@
 """F1 25 / 2026 调教参数 Schema.
 
-定义与游戏内 garage 完全一致的调教参数集合（21 项，分 8 组），
+定义与游戏内 garage 完全一致的调教参数集合（23 项，分 8 组），
 包含取值范围与档位步长。:class:`CarSetup` 提供：
 
 - 合法性校验（范围 + 档位对齐）；
@@ -139,7 +139,7 @@ def _check_value(name: str, spec: SetupField, value: float) -> None:
 
 
 class CarSetup(BaseModel):
-    """一份完整的 F1 25 / 2026 调教（21 项参数，与游戏 garage 一一对应）。"""
+    """一份完整的 F1 25 / 2026 调教（23 项参数，与游戏 garage 一一对应）。"""
 
     # --- Aerodynamics ---
     front_wing: int = Field(description="前翼下压力等级")

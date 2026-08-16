@@ -1,6 +1,6 @@
-"""Setup 21 维 -> lap_simulator_2026 物理参数映射层 (Iter-66).
+"""Setup 23 维 -> lap_simulator_2026 物理参数映射层 (Iter-66).
 
-把 :class:`CarSetup` 21 维调教参数映射到 :class:`LapConfig2026` 物理输入,
+把 :class:`CarSetup` 23 维调教参数映射到 :class:`LapConfig2026` 物理输入,
 让 EA F1 2026 lap_simulator 物理引擎 (24 赛道 0.01% 精度) 能评估任意 setup.
 
 **设计动机** (用户 Iter-65 后方向):
@@ -388,7 +388,7 @@ def setup_penalty_s(setup: CarSetup, track_id: str) -> float:
     单参数扫描仍单调, 最优附近完全线性.
 
     Args:
-        setup: 待评估的 21 维调教.
+        setup: 待评估的 23 维调教.
         track_id: 赛道 ID (用于解析 track_type).
 
     Returns:
@@ -455,7 +455,7 @@ def setup_to_lap_config(
     lap_in_stint: int = _REF_LAP_IN_STINT,
     sc_just_ended_lap: int = 0,
 ) -> LapConfig2026:
-    """把 21 维 CarSetup 映射到 :class:`LapConfig2026` 物理输入.
+    """把 23 维 CarSetup 映射到 :class:`LapConfig2026` 物理输入.
 
     映射规则:
     - ``setup.fuel_load`` -> ``current_fuel_kg`` (1:1 物理一致)
@@ -466,7 +466,7 @@ def setup_to_lap_config(
     本身只决定 *车体性能* (aero/suspension/brake/tire/fuel), 不决定策略状态.
 
     Args:
-        setup: 21 维调教.
+        setup: 23 维调教.
         track_id: 赛道 ID.
         **: 其余 LapConfig2026 字段 (默认 reference state).
 
