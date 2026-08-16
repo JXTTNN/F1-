@@ -3466,7 +3466,11 @@ class FeedbackEngine:
             )
             feedback = {**feedback, "summary": answer + "\n\n" + feedback["summary"]}
             # Iter-290: 识别车手口头反馈意图并映射到调教字段, 传给调教分析模型。
-            feedback["driver_intent"] = _classify_driver_intent(question)
+            # Iter-296: 先做多轮指代解析 (它/这个/那个 -> 前文名词) 再分类.
+            resolved = question
+            if conversation is not None:
+                resolved = conversation.resolve_reference(question)
+            feedback["driver_intent"] = _classify_driver_intent(resolved)
             if conversation is not None:
                 conversation.add("user", question)
                 conversation.add("assistant", answer)
@@ -3526,7 +3530,11 @@ class FeedbackEngine:
             )
             feedback = {**feedback, "summary": answer + "\n\n" + feedback["summary"]}
             # Iter-290: 识别车手口头反馈意图并映射到调教字段, 传给调教分析模型。
-            feedback["driver_intent"] = _classify_driver_intent(question)
+            # Iter-296: 先做多轮指代解析 (它/这个/那个 -> 前文名词) 再分类.
+            resolved = question
+            if conversation is not None:
+                resolved = conversation.resolve_reference(question)
+            feedback["driver_intent"] = _classify_driver_intent(resolved)
             if conversation is not None:
                 conversation.add("user", question)
                 conversation.add("assistant", answer)
@@ -3587,7 +3595,11 @@ class FeedbackEngine:
             )
             feedback = {**feedback, "summary": answer + "\n\n" + feedback["summary"]}
             # Iter-290: 识别车手口头反馈意图并映射到调教字段, 传给调教分析模型。
-            feedback["driver_intent"] = _classify_driver_intent(question)
+            # Iter-296: 先做多轮指代解析 (它/这个/那个 -> 前文名词) 再分类.
+            resolved = question
+            if conversation is not None:
+                resolved = conversation.resolve_reference(question)
+            feedback["driver_intent"] = _classify_driver_intent(resolved)
             if conversation is not None:
                 conversation.add("user", question)
                 conversation.add("assistant", answer)
@@ -3644,7 +3656,11 @@ class FeedbackEngine:
             )
             feedback = {**feedback, "summary": answer + "\n\n" + feedback["summary"]}
             # Iter-290: 识别车手口头反馈意图并映射到调教字段, 传给调教分析模型。
-            feedback["driver_intent"] = _classify_driver_intent(question)
+            # Iter-296: 先做多轮指代解析 (它/这个/那个 -> 前文名词) 再分类.
+            resolved = question
+            if conversation is not None:
+                resolved = conversation.resolve_reference(question)
+            feedback["driver_intent"] = _classify_driver_intent(resolved)
             if conversation is not None:
                 conversation.add("user", question)
                 conversation.add("assistant", answer)

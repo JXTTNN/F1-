@@ -4,6 +4,15 @@
 
 ## 2026-08 优化迭代
 
+### 多轮对话指代解析接线 (Iter-296)
+- 修复「准确理解车手反馈」多轮场景缺陷: `resolve_reference` 此前只替换
+  「这个/那个/这/那」, 不含「它」; 且该解析结果从未在 feedback 引擎 run 流程接线,
+  导致第二轮「它还会推吗」被 `_classify_driver_intent` 判为 other 而非 understeer。
+- 修复: `conversation.resolve_reference` 增加「它」指代; `engine.py` 的 run/run_async/
+  run_stream/run_stream_async 四入口在分类 driver_intent 前先做指代解析。
+- 端到端验证: turn1「T1 入弯总推头」→ understeer; turn2「它还会推吗」→ 解析为
+  「推头还会推吗」→ understeer (此前为 other)。
+
 ### 反馈模板分组补全 (Iter-295)
 - 修复「最全模板参考」缺陷: `corner_apex_speed`(弯心速度) 与 `corner_kerb_usage`
   (路肩使用) 两个弯道级模板 (Iter-196 新增) 此前未被 `FEEDBACK_TEMPLATE_GROUPS` 引用,

@@ -294,7 +294,7 @@ class ConversationSession:
         noun = _extract_reference_noun(prior_user)
         if not noun:
             return question
-        for demo in ("这个", "那个", "这", "那"):
+        for demo in ("这个", "那个", "这", "那", "它"):
             if demo in question:
                 return question.replace(demo, noun, 1)
         return question
