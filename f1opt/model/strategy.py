@@ -347,6 +347,30 @@ class RaceStrategyPlanner:
         return out
 
     # ------------------------------------------------------------------ #
+    @staticmethod
+    def _compound_laps(plan: dict, total_laps: int, default_compound: str) -> dict:
+        """从 plan 的进站列表推导每种配方 (soft/medium/hard) 的圈数.
+
+        Iter-294: 供 UI 的「Pirelli 选胎」卡片展示各配方圈数分配.
+        """
+        laps = {"soft": 0, "medium": 0, "hard": 0}
+        stops = plan.get("stops", [])
+        if not stops:
+            laps[default_compound] = max(0, int(total_laps))
+            return laps
+        prev = 0
+        for stop in stops:
+            stint_laps = int(stop["lap"]) - prev
+            compound = stop.get("compound_in", default_compound)
+            if compound in laps:
+                laps[compound] += max(0, stint_laps)
+            prev = int(stop["lap"])
+        last_compound = stops[-1].get("compound_out", default_compound)
+        if last_compound in laps:
+            laps[last_compound] += max(0, int(total_laps) - prev)
+        return laps
+
+    # ------------------------------------------------------------------ #
     def optimal_strategy(self, available_compounds: list[str]) -> dict:
         """Pick the best of 0/1/2-stop by estimated total time."""
         avail = list(available_compounds) if available_compounds else ["hard"]
@@ -378,6 +402,7 @@ class RaceStrategyPlanner:
             "plan": best_plan,
             "total_time_est": best_plan["total_time_est"],
             "recommendation_reason": reason,
+            "pirelli_compounds": self._compound_laps(best_plan, self.total_laps, no_compound),
         }
 
     # ------------------------------------------------------------------ #

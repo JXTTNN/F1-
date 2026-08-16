@@ -4,6 +4,14 @@
 
 ## 2026-08 优化迭代
 
+### 策略面板「Pirelli 选胎」数据补全 (Iter-294)
+- 修复前端策略卡片永远显示「—」: `model/strategy.py` `optimal_strategy` 此前未返回
+  `pirelli_compounds`, 现新增 `_compound_laps` 从进站列表推导各配方 (软/中/硬) 圈数,
+  如 53 圈 → `{soft:17, medium:17, hard:19}`, UI「Pirelli 选胎 (软/中/硬)」卡片正确显示。
+- 端到端复核 dashboard 各图表数据源: strategy (plan.stops / tire_wear_projection /
+  fuel_projection) / weather (GET, grip/lap/compound/setup) / bayesian (history) /
+  pareto (front + 3 anchor setups) 前后端字段契约一致。
+
 ### UI 中文化 + 精简搜索参数 (Iter-293)
 - 赛道下拉框全部显示中文名 (如「日本大奖赛 · 铃鹿」), 不再显示英文赛道名;
   `f1opt/data/tracks.py` 新增 `TRACK_NAME_CN`/`TRACK_COUNTRY_CN`/`TRACK_TYPE_CN`
