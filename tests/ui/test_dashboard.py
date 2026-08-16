@@ -189,9 +189,15 @@ async def test_dashboard_has_bayesian_search_ui_elements() -> None:
 
 
 async def test_dashboard_has_bayesian_seed_input() -> None:
-    """A seed input is exposed for reproducible Bayesian searches."""
+    """Iter-293: the advanced seed input is removed from the search UI.
+
+    The Bayesian / Pareto search forms no longer expose a raw random-seed
+    field (ordinary users do not need it); the backend still defaults seed=42
+    so searches stay reproducible.
+    """
     text = _dashboard_html()
-    assert 'id="bayes-seed"' in text
+    assert 'id="bayes-seed"' not in text
+    assert 'id="pareto-seed"' not in text
 
 
 # --------------------------------------------------------------------------- #

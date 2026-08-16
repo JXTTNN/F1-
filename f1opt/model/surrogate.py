@@ -415,7 +415,7 @@ def _clamp_lap_time(value: float) -> float:
 class SurrogateModel(nn.Module):
     """分段多任务代理模型: (setup, track, driver) -> (3 sectors, 7 responses).
 
-    Iter-3v3 升级: 主干 ``37 -> 256 -> 256 -> 128 -> 64`` (GELU + BatchNorm),
+    Iter-3v3 升级: 主干 ``41 -> 256 -> 256 -> 128 -> 64`` (GELU + BatchNorm),
     参数量 ~120K (v0.2 为 ~30K). 零初始化输出头保留, 使未训练模型预测 == 先验.
     BatchNorm 在 eval 模式下使用 running stats (未训练时 mean=0/var=1, 不影响零头).
     """
