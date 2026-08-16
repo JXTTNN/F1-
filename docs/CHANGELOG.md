@@ -4,6 +4,15 @@
 
 ## 2026-08 优化迭代
 
+### 轮胎化合物贯通遥测→UI + rate_monitor 全 17 包 (Iter-288)
+- **模块衔接**: `_frame_to_ws` 新增 `actual_tyre_compound`/`tyre_compound`/
+  `tyre_compound_name` (服务端用 `tyre_compound_name` 把 uint8 映射为 C0-C6/雨胎),
+  实时 UI 新增「轮胎」指示器显示当前配方。此前化合物数据在 aligner 采集后无下游消费。
+- **rate_monitor 修复**: 覆盖全部 17 包类型 (复用 `packets.PACKET_NAMES` 单一事实来源),
+  旧版本地字典只到 SessionHistory(11), 缺失 TyreSets/MotionEx/TimeTrial/LapPositions/
+  CarTelemetry2 → 会误报 `Unknown(12-16)`。
+- 训练冒烟测试通过 (seg-dnn-torch-v0.3); API 55 测试 + UI 29 测试通过。
+
 ### 权威包大小综合验证 + Event 身体大小 (Iter-287)
 - 新增 `TestVerifiedSizes` 参数化测试: 锁定 F1 26 权威规范全部 **17 个包的总大小**
   (Motion 1325 / Session 926 / LapData 1399 / ... / CarTelemetry2 269), 逐一验证

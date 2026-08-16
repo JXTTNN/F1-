@@ -61,7 +61,7 @@ from f1opt.observability.tracing import is_tracing_enabled, span
 from f1opt.telemetry.aggregator import LapAggregator
 from f1opt.telemetry.aligner import TelemetryAligner
 from f1opt.telemetry.listener import TelemetryListener
-from f1opt.telemetry.packets import PacketHeader
+from f1opt.telemetry.packets import PacketHeader, tyre_compound_name
 
 # Fields exposed by the public Track dict (shared API contract).
 _TRACK_FIELDS: tuple[str, ...] = (
@@ -95,6 +95,16 @@ def _track_dict(track: Any) -> dict[str, Any]:
     return {k: getattr(track, k) for k in _TRACK_FIELDS}
 
 
+def _compound_label(compound: Any) -> str | None:
+    """Map an actual-tyre-compound uint8 to a human-readable label (e.g. C2)."""
+    if compound is None:
+        return None
+    try:
+        return tyre_compound_name(int(compound))
+    except (TypeError, ValueError):
+        return None
+
+
 def _frame_to_ws(frame: dict[str, Any]) -> dict[str, Any]:
     """Project a unified aligner frame onto the WS frame message (shared contract)."""
     return {
@@ -121,6 +131,10 @@ def _frame_to_ws(frame: dict[str, Any]) -> dict[str, Any]:
         "fuel_in_tank": frame.get("fuel_in_tank"),
         # F1 2026 主动空力 (0=Corner/Z / 1=Straight/X) — 供 UI 指示器显示
         "active_aero_mode": frame.get("active_aero_mode"),
+        # Iter-287b: 当前轮胎化合物 (actual uint8 + 名称) — 供 UI 显示
+        "actual_tyre_compound": frame.get("actual_tyre_compound"),
+        "tyre_compound": frame.get("tyre_compound"),
+        "tyre_compound_name": _compound_label(frame.get("actual_tyre_compound")),
     }
 
 

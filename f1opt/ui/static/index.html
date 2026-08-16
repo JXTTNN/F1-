@@ -316,6 +316,7 @@
         <div class="head"><span>纵向 G</span><span id="glong-val" class="mono">0.00</span></div>
         <div class="head"><span>DRS</span><span id="drs-val" class="mono" style="color:var(--amber)">—</span></div>
         <div class="head"><span>主动空力</span><span id="aero-val" class="mono" style="color:var(--cyan)">—</span></div>
+        <div class="head"><span>轮胎</span><span id="compound-val" class="mono" style="color:var(--cyan)">—</span></div>
         <div class="head"><span>圈距</span><span id="lapdist-val" class="mono">0 m</span></div>
       </div>
     </div>
@@ -851,6 +852,9 @@
     if(am===1){ setText("aero-val","X-Mode"); el("aero-val").style.color="var(--cyan)"; }
     else if(am===0){ setText("aero-val","Z-Mode"); el("aero-val").style.color="var(--purple)"; }
     else { setText("aero-val","—"); el("aero-val").style.color="var(--muted)"; }
+    // 轮胎化合物 (来自 Packet 7 actualTyreCompound, 服务端已映射为 C0-C6/雨胎)
+    if(f.tyre_compound_name){ setText("compound-val", f.tyre_compound_name); el("compound-val").style.color="var(--cyan)"; }
+    else { setText("compound-val","—"); el("compound-val").style.color="var(--muted)"; }
     setText("lapdist-val", num(f.lap_distance,0)+" m");
 
     // lap time + delta

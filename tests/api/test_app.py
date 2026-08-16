@@ -58,6 +58,21 @@ def test_frame_to_ws_includes_active_aero() -> None:
     assert msg["active_aero_mode"] == 1
 
 
+def test_frame_to_ws_includes_tyre_compound() -> None:
+    """WS frame message must carry the tyre compound (uint8 + name) for the UI."""
+    from f1opt.api.app import _frame_to_ws
+
+    msg = _frame_to_ws({"session_time": 1.0, "actual_tyre_compound": 21, "tyre_compound": 21})
+    assert msg["actual_tyre_compound"] == 21
+    assert msg["tyre_compound_name"] == "C0"  # 21 → C0 (F1 26 最硬新配方)
+
+    # 未知化合物 ID → Unknown 标签; None → None
+    msg2 = _frame_to_ws({"actual_tyre_compound": 99})
+    assert msg2["tyre_compound_name"] == "Unknown(99)"
+    msg3 = _frame_to_ws({})
+    assert msg3["tyre_compound_name"] is None
+
+
 # --------------------------------------------------------------------------- #
 # REST (async)
 # --------------------------------------------------------------------------- #
