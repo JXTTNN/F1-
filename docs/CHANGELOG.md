@@ -4,6 +4,13 @@
 
 ## 2026-08 优化迭代
 
+### 单文件 EXE (one-file) + README 修正 (Iter-291)
+- `exe/f1opt.spec` 由 one-folder 切换为 **one-file**: 产物为单个 `dist/f1opt.exe`
+  (255MB, 含 torch 训练/推理全栈), 满足「最终是一个 exe」。
+- 单 EXE 本地冒烟通过: `--help` / `tracks info monza` (C2/C1/C0) /
+  `train --iterations 3` (seg-dnn-torch-v0.3 trained)。
+- README 修正: 21→23 维调校、C1-C5→C0-C5、UDP 24 车位、打包产物路径。
+
 ### 车手口头反馈识别 + 映射到调教字段 (Iter-290)
 - 打通「车手反馈 → 调教分析」链路: `generate_feedback(question=...)` 现调用
   `classify_intent`/`classify_sub_intent` 识别车手口头反馈, 输出 `driver_intent`

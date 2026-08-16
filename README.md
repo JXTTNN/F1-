@@ -40,7 +40,7 @@ f1opt serve          # 启动服务 → 开游戏跑圈 → 停遥测自动出�
 | `search` | 调校搜索 — 差分进化 / 贝叶斯优化，24 条赛道，帕累托前沿 |
 | `serve` | API 服务 — FastAPI + WebSocket，实时遥测流 + 跑后自动分析 |
 | `telemetry` | 遥测采集 — F1 25/26 UDP 协议全解析，60Hz 对齐，自适应队列 |
-| `model` | 性能模型 — 21 维调校参数预测圈速，Pirelli 2026 轮胎模型 |
+| `model` | 性能模型 — 23 维调校参数预测圈速（含发动机制动/配重/主动空力），Pirelli 2026 轮胎模型 |
 
 ---
 
@@ -48,9 +48,9 @@ f1opt serve          # 启动服务 → 开游戏跑圈 → 停遥测自动出�
 
 严格贴合 EA Sports F1 2026 Season Pack：
 
-- **11 车队 / 22 车手**：完整阵容（含 Audi、Cadillac 新车队）
+- **11 车队 / 22 车手**：完整阵容（含 Audi、Cadillac 新车队；UDP 预留 24 车位）
 - **主动空力**：X-Mode（直道低阻）/ Z-Mode（弯道下压力）分析
-- **Pirelli C1-C5 轮胎**：2026 轮胎模型与温度梯度
+- **Pirelli C0-C5 轮胎**：2026 轮胎模型（新增 C0 最硬配方）与温度梯度
 - **50-50 动力单元**：MGU-K 350kW + Overtake 模式
 - **24 条赛道**：含马德里 Madring 新赛道
 
@@ -111,5 +111,5 @@ ruff check f1opt tests
 # Windows: 双击 exe/build.bat
 # 或手动:
 pyinstaller exe/f1opt.spec --noconfirm
-# → 产物在 dist/f1opt/f1opt.exe
+# → 产物为单个 dist/f1opt.exe（one-file 模式）
 ```
