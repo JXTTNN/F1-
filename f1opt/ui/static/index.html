@@ -458,9 +458,14 @@
       {name:"front_wing",label:"前翼",unit:"clicks"},
       {name:"rear_wing",label:"后翼",unit:"clicks"}
     ]},
+    {group:"主动空动", fields:[
+      {name:"active_aero_mode",label:"主动空动",unit:"mode"},
+      {name:"x_mode_activations",label:"X-Mode 激活",unit:"count"}
+    ]},
     {group:"传动", fields:[
       {name:"on_throttle_diff",label:"油门差速",unit:"%"},
-      {name:"off_throttle_diff",label:"收油差速",unit:"%"}
+      {name:"off_throttle_diff",label:"收油差速",unit:"%"},
+      {name:"engine_braking",label:"发动机制动",unit:"%"}
     ]},
     {group:"悬挂几何", fields:[
       {name:"front_camber",label:"前轮外倾",unit:"°"},
@@ -485,6 +490,7 @@
       {name:"rear_tyre_pressure",label:"后胎压",unit:"psi"}
     ]},
     {group:"燃油", fields:[
+      {name:"ballast",label:"配重",unit:"clicks"},
       {name:"fuel_load",label:"燃油",unit:"kg"}
     ]}
   ];
@@ -504,9 +510,14 @@
       {name:"front_wing", unit:"clicks"},
       {name:"rear_wing", unit:"clicks"}
     ]},
+    {group:"Active Aero", fields:[
+      {name:"active_aero_mode", unit:"mode"},
+      {name:"x_mode_activations", unit:"count"}
+    ]},
     {group:"Transmission", fields:[
       {name:"on_throttle_diff", unit:"percent"},
-      {name:"off_throttle_diff", unit:"percent"}
+      {name:"off_throttle_diff", unit:"percent"},
+      {name:"engine_braking", unit:"percent"}
     ]},
     {group:"Suspension Geometry", fields:[
       {name:"front_camber", unit:"degrees"},
@@ -531,6 +542,7 @@
       {name:"rear_tyre_pressure", unit:"psi"}
     ]},
     {group:"Fuel", fields:[
+      {name:"ballast", unit:"clicks"},
       {name:"fuel_load", unit:"kg"}
     ]}
   ];

@@ -12,6 +12,11 @@
   index.html 的赛道信息行 (国家/类型) 与 dashboard.html 同步中文化, "Sprint"→"冲刺赛"。
 - 移除智能分析中心「调教搜索」里的「随机种子」输入框 (bayes/pareto), 后端 seed 使用
   默认值 42 —— 普通用户无需关心该高级参数。
+- 修复 index.html 调教面板漏显 4 项 (active_aero_mode/x_mode_activations/engine_braking/
+  ballast): `SETUP_GROUPS`/`SETUP_GAME_GROUPS` 21→23 项, 「当前调教 (23 项)」面板与
+  游戏格式导出现完整覆盖全部 23 维调教参数。
+- 智能分析中心推荐调教表格改为中文参数名 + 单位 (新增 `SETUP_FIELD_CN` 映射), 不再
+  显示英文 field key (front_wing 等)。
 
 ### 双击即用 (无参自动启动智能分析中心) (Iter-292)
 - 修复「EXE 打不开」: 此前双击 `f1opt.exe` 无参时 `main()` 仅打印 `--help` 后返回 1,

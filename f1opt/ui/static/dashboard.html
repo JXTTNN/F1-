@@ -675,6 +675,24 @@
     svg.appendChild(lt);
   }
 
+  // ---------- setup 中文名映射 (Iter-293) ----------
+  var SETUP_FIELD_CN = {
+    "front_wing":["前翼","clicks"], "rear_wing":["后翼","clicks"],
+    "active_aero_mode":["主动空动","mode"], "x_mode_activations":["X-Mode 激活","count"],
+    "on_throttle_diff":["油门差速","%"], "off_throttle_diff":["收油差速","%"],
+    "engine_braking":["发动机制动","%"],
+    "front_camber":["前轮外倾","°"], "rear_camber":["后轮外倾","°"],
+    "front_toe":["前轮前束","°"], "rear_toe":["后轮前束","°"],
+    "front_suspension":["前弹簧","clicks"], "rear_suspension":["后弹簧","clicks"],
+    "front_arb":["前防倾杆","clicks"], "rear_arb":["后防倾杆","clicks"],
+    "front_ride_height":["前离地","clicks"], "rear_ride_height":["后离地","clicks"],
+    "brake_pressure":["制动压力","%"], "front_brake_bias":["前制动力","%"],
+    "front_tyre_pressure":["前胎压","psi"], "rear_tyre_pressure":["后胎压","psi"],
+    "ballast":["配重","clicks"], "fuel_load":["燃油","kg"]
+  };
+  function setupLabel(k){ var m=SETUP_FIELD_CN[k]; return m?m[0]:k; }
+  function setupUnit(k){ var m=SETUP_FIELD_CN[k]; return m?m[1]:""; }
+
   // ---------- tracks ----------
   var state={tracks:[]};
   function populateTracks(sel){
@@ -831,7 +849,7 @@
     var setup=r.recommended_setup||{};
     Object.keys(setup).forEach(function(k){
       var tr=document.createElement("tr");
-      tr.innerHTML='<td class="name">'+esc(k)+'</td><td class="ba">'+fmtVal(setup[k])+'</td><td></td>';
+      tr.innerHTML='<td class="name">'+esc(setupLabel(k))+'</td><td class="ba">'+fmtVal(setup[k])+'</td><td class="dim">'+esc(setupUnit(k))+'</td>';
       tb.appendChild(tr);
     });
 
@@ -901,7 +919,7 @@
       {label:"拐点 (Knee)", setup:r.knee_setup}
     ].forEach(function(row){
       if(!row.setup) return;
-      var keys=Object.keys(row.setup).slice(0,4).map(function(k){return k+"="+fmtVal(row.setup[k]);}).join(", ");
+      var keys=Object.keys(row.setup).slice(0,4).map(function(k){return setupLabel(k)+"="+fmtVal(row.setup[k]);}).join(", ");
       var tr=document.createElement("tr");
       tr.innerHTML='<td class="name">'+row.label+'</td><td class="ba">'+(row.setup.fuel_load!==undefined?'—':'—')+'</td><td class="ba">—</td><td style="font-size:11px">'+esc(keys)+'</td>';
       tb.appendChild(tr);
