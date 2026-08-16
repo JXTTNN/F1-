@@ -136,7 +136,7 @@ class TestParetoFront:
 # --------------------------------------------------------------------------- #
 # MultiObjectiveOptimizer
 # --------------------------------------------------------------------------- #
-def _bounds(n: int = 21) -> np.ndarray:
+def _bounds(n: int = 23) -> np.ndarray:
     return np.array([[0.0, 1.0]] * n)
 
 
@@ -190,7 +190,7 @@ class TestMultiObjectiveOptimizer:
 
     def test_evaluate_returns_list_of_two_floats(self) -> None:
         opt = MultiObjectiveOptimizer(_bounds(), ["lap_time", "tire_wear"], seed=1)
-        vals = opt.evaluate(np.full(21, 0.5), "melbourne")
+        vals = opt.evaluate(np.full(23, 0.5), "melbourne")
         assert isinstance(vals, list)
         assert len(vals) == 2
         assert all(isinstance(v, float) for v in vals)
