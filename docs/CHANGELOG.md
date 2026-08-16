@@ -4,6 +4,15 @@
 
 ## 2026-08 优化迭代
 
+### 双击即用 (无参自动启动智能分析中心) (Iter-292)
+- 修复「EXE 打不开」: 此前双击 `f1opt.exe` 无参时 `main()` 仅打印 `--help` 后返回 1,
+  控制台窗口一闪而过。现改为 **无参启动时自动拉起 API 服务器并打开浏览器**
+  (`http://127.0.0.1:8000/dashboard.html`), 实现「点开即用」。
+- `f1opt/cli.py` 新增 `_launch_gui()`: 主线程阻塞运行 uvicorn (Ctrl+C 仍可退出),
+  守护线程等待端口就绪后 `webbrowser.open` 打开分析中心; 遥测监听 (端口 20777) 自动开启。
+- 显式空参 `main([])` 仍保留打印帮助的旧行为, 测试 `test_cli.py`/`test_smoke.py` 不受影响
+  (134 passed)。README 补充双击说明。
+
 ### 单文件 EXE (one-file) + README 修正 (Iter-291)
 - `exe/f1opt.spec` 由 one-folder 切换为 **one-file**: 产物为单个 `dist/f1opt.exe`
   (255MB, 含 torch 训练/推理全栈), 满足「最终是一个 exe」。

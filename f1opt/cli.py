@@ -755,6 +755,76 @@ def cmd_template(args: argparse.Namespace) -> int:
         return 1
 
 
+def _launch_gui(host: str = "127.0.0.1", port: int = 8000) -> int:
+    """Double-click entry point: start the server and open the analysis center.
+
+    When ``f1opt.exe`` (or ``python -m f1opt``) is launched with *no* arguments —
+    e.g. by double-clicking the executable in Explorer — a console-only CLI that
+    merely prints ``--help`` and exits makes the window flash and vanish, which
+    reads as "cannot open".  Instead we auto-start the API server and open the
+    smart analysis center (dashboard) in the default browser so the packaged app
+    is usable with zero flags (点开即用).
+
+    The server binds in the *main* thread (so Ctrl+C / SIGBREAK keep working),
+    while a daemon thread waits for the port to come up and then opens the
+    browser.  Returns 0 on clean shutdown, 1 on bind failure.
+    """
+    import socket
+    import threading
+    import time
+    import webbrowser
+
+    from f1opt.api.extended_app import create_extended_app
+
+    url = f"http://{host}:{port}/dashboard.html"
+    print("=" * 72)
+    print("  F1 2026 Setup Optimizer — 智能分析中心正在启动 ...")
+    print(f"  请在浏览器中访问: {url}")
+    print("  按 Ctrl+C 或关闭本窗口即可退出。")
+    print("=" * 72)
+    sys.stdout.flush()
+
+    def _open_browser() -> None:
+        # 等待端口就绪后再打开浏览器, 避免页面先于服务器加载而报错.
+        for _ in range(200):  # ~20s max
+            try:
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                    sock.settimeout(0.2)
+                    if sock.connect_ex((host, port)) == 0:
+                        break
+            except OSError:
+                pass
+            time.sleep(0.1)
+        try:
+            webbrowser.open(url)
+        except Exception:  # 打开浏览器失败不阻断服务器
+            pass
+
+    threading.Thread(target=_open_browser, name="f1opt-browser", daemon=True).start()
+
+    app = create_extended_app(start_listener=True)
+    try:
+        import uvicorn
+
+        if sys.platform == "win32":
+            uvicorn.run(app, host=host, port=port, loop="asyncio")
+        else:
+            uvicorn.run(app, host=host, port=port)
+        return 0
+    except KeyboardInterrupt:
+        return 0
+    except Exception as exc:
+        _err(f"服务器启动失败: {exc}")
+        # 双击场景下控制台窗口一闪而过, 用户看不到错误; 保持窗口直到回车,
+        # 便于用户截屏反馈。仅在交互式 (双击/终端) 场景生效。
+        try:
+            print(f"\n服务器启动失败: {exc}", file=sys.stderr)
+            input("按回车键退出...")
+        except (EOFError, OSError):
+            pass
+        return 1
+
+
 def main(argv: list[str] | None = None) -> int:
     """Entry point: parse args, dispatch to handler, print result."""
     # Windows: multiprocessing freeze_support 必须在任何 multiprocessing 使用前调用
@@ -793,6 +863,13 @@ def main(argv: list[str] | None = None) -> int:
             if sys.platform == "win32" and hasattr(os, "add_dll_directory"):
                 os.add_dll_directory(_meipass)
     parser = build_parser()
+    # 无参数启动 (如双击 f1opt.exe): 直接打开智能分析中心, 而不是打印帮助后
+    # 退出 — 否则控制台窗口一闪而过, 表现为"打不开"。显式传入空列表 (如测试
+    # 中的 ``main([])``) 仍保留打印帮助的旧行为。
+    if argv is None:
+        argv = sys.argv[1:]
+        if not argv:
+            return _launch_gui()
     args = parser.parse_args(argv)
     if not hasattr(args, "func"):
         parser.print_help()
