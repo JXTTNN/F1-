@@ -7,11 +7,12 @@
 
 ---
 
-## 下载即用
+## 下载即用（单文件 EXE）
 
-- **Windows EXE**：[下载 f1opt.exe (v1.1.0)](https://github.com/JXTTNN/F1-/releases/download/v1.1.0/f1opt.exe) — 无需 Python，双击运行。
-- **Linux**：[下载 f1opt-linux-x86_64.tar.gz (v1.0.0)](https://github.com/JXTTNN/F1-/releases/download/v1.0.0/f1opt-linux-x86_64.tar.gz)
+- **Windows EXE**：[下载 f1opt.exe (v1.2.0)](https://github.com/JXTTNN/F1-/releases/download/v1.2.0/f1opt.exe) — 单个文件，无需 Python，双击/命令行运行。
 - 全部版本：[GitHub Releases](https://github.com/JXTTNN/F1-/releases)
+
+> 首次启动会自动解压（约几秒），之后秒开。包含遥测采集、车手反馈、调校优化、模型训练全功能。
 
 ---
 
@@ -29,6 +30,17 @@ f1opt serve          # 启动服务 → 开游戏跑圈 → 停遥测自动出�
 ```
 
 系统自动识别你的问题是 **弯道级**、**扇区级** 还是 **整体级**，回答匹配对应精度。
+
+### 游戏内设置（接遥测）
+
+在 F1 2026 游戏里打开遥测输出：
+
+- **UDP Telemetry** → `On`
+- **UDP Format** → `2026`
+- **UDP Port** → `20777`
+- **UDP IP** → `127.0.0.1`（本机）
+
+设置好后启动 `f1opt serve`，跑圈即可实时采集、停后自动出分析报告。
 
 ---
 
