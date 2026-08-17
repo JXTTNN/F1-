@@ -769,11 +769,22 @@
       g.fields.forEach(function(f){
         var v=state.setup[f.name];
         var row=document.createElement("div"); row.className="row";
+        var valStr=(v===undefined||v===null)?"":String(v);
         row.innerHTML='<span class="name">'+f.label+'</span>'+
-                      '<span class="val mono">'+(v===undefined||v===null?"—":v)+'<span class="u">'+f.unit+'</span></span>';
+          '<input class="val mono" type="number" step="any" data-field="'+f.name+'" value="'+esc(valStr)+'" '+
+          'style="width:62px;background:var(--bg);border:1px solid var(--line);color:var(--txt);font-size:12px;text-align:right;padding:1px 4px;border-radius:2px">'+
+          '<span class="u">'+f.unit+'</span>';
         div.appendChild(row);
       });
       c.appendChild(div);
+    });
+    // 绑定修改事件: 用户编辑后自动更新 state.setup
+    c.querySelectorAll('input[data-field]').forEach(function(inp){
+      inp.addEventListener('change', function(){
+        var fname = this.getAttribute('data-field');
+        var val = parseFloat(this.value);
+        if(!isNaN(val)) state.setup[fname] = val;
+      });
     });
   }
 
