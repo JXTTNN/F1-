@@ -9,10 +9,10 @@
 
 ## 下载即用（单文件 EXE）
 
-- **Windows EXE**：[下载 f1opt.exe (v1.2.0)](https://github.com/JXTTNN/F1-/releases/download/v1.2.0/f1opt.exe) — 单个文件，无需 Python，**双击即可用**：界面直接显示在桌面窗口（无需浏览器），也可命令行运行。
+- **Windows EXE**：[下载 f1opt.exe (v1.2.0)](https://github.com/JXTTNN/F1-/releases/download/v1.2.0/f1opt.exe) — 单个文件，无需 Python，**双击即可用**：自动打开浏览器进入实时面板；也可命令行运行。
 - 全部版本：[GitHub Releases](https://github.com/JXTTNN/F1-/releases)
 
-> 双击 `f1opt.exe` 会弹出桌面窗口，界面直接显示在窗口内（首次解压约几秒）。实时面板 + 车手反馈 + 调教编辑 + 最优搜索全部在一个页面。关闭窗口即退出。
+> 双击 `f1opt.exe` 会看到启动横幅，随后自动在默认浏览器打开实时面板（首次解压约几秒）。实时遥测 + 车手反馈 + 调教编辑 + 最优搜索全部在一个页面。关闭控制台窗口或按 Ctrl+C 即退出。
 
 ---
 

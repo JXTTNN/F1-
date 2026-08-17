@@ -756,16 +756,15 @@ def cmd_template(args: argparse.Namespace) -> int:
 
 
 def _launch_gui(host: str = "127.0.0.1", port: int = 8000) -> int:
-    """Double-click entry point: start the server inside a native desktop window.
+    """Double-click entry: start the API server and open the browser.
 
-    When ``f1opt.exe`` is launched with no arguments (double-click), we start the
-    API server in a background thread and open a native WebView window (pywebview)
-    that loads the UI directly — no external browser needed.  Closing the window
-    shuts down the server.
+    When ``f1opt.exe`` is launched with no arguments (double-click), we start
+    the API server in the main thread and open the UI in the default browser.
+    The server stays alive until the user closes the console window or presses
+    Ctrl+C.  On any startup error the window stays open so the user can read
+    the message.
     """
-    import socket
     import threading
-    import time
     import webbrowser
 
     from f1opt.api.extended_app import create_extended_app
@@ -773,60 +772,50 @@ def _launch_gui(host: str = "127.0.0.1", port: int = 8000) -> int:
     url = f"http://{host}:{port}/"
     print("=" * 72)
     print("  F1 2026 Setup Optimizer — 正在启动 ...")
-    print("  关闭窗口即可退出。")
+    print(f"  浏览器打开后访问: {url}")
+    print("  按 Ctrl+C 或关闭本窗口即可退出。")
     print("=" * 72)
     sys.stdout.flush()
 
-    app = create_extended_app(start_listener=True)
+    # 在后台线程打开浏览器 (等服务器就绪后)
+    def _open_browser() -> None:
+        import socket
+        import time
 
-    def _run_server() -> None:
-        import uvicorn
-
-        try:
-            if sys.platform == "win32":
-                uvicorn.run(app, host=host, port=port, loop="asyncio", log_level="warning")
-            else:
-                uvicorn.run(app, host=host, port=port, log_level="warning")
-        except Exception:
-            pass
-
-    t = threading.Thread(target=_run_server, name="f1opt-server", daemon=True)
-    t.start()
-
-    # 等待服务器就绪
-    for _ in range(200):
-        try:
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-                sock.settimeout(0.2)
-                if sock.connect_ex((host, port)) == 0:
-                    break
-        except OSError:
-            pass
-        time.sleep(0.1)
-
-    # 尝试桌面窗口 (pywebview), 失败则回退浏览器
-    try:
-        import webview
-
-        webview.create_window(
-            "F1 2026 调教优化系统", url,
-            width=1280, height=860, resizable=True, min_size=(900, 600),
-        )
-        webview.start()
-        return 0
-    except Exception:
-        print("  桌面窗口不可用, 改用浏览器打开...", file=sys.stderr)
+        for _ in range(200):
+            try:
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                    sock.settimeout(0.2)
+                    if sock.connect_ex((host, port)) == 0:
+                        break
+            except OSError:
+                pass
+            time.sleep(0.1)
         try:
             webbrowser.open(url)
         except Exception:
             pass
-        # 服务器在后台线程, 主线程等待用户 Ctrl+C
-        try:
-            while t.is_alive():
-                t.join(1)
-        except KeyboardInterrupt:
-            pass
+
+    threading.Thread(target=_open_browser, name="f1opt-browser", daemon=True).start()
+
+    app = create_extended_app(start_listener=True)
+    try:
+        import uvicorn
+
+        if sys.platform == "win32":
+            uvicorn.run(app, host=host, port=port, loop="asyncio")
+        else:
+            uvicorn.run(app, host=host, port=port)
         return 0
+    except KeyboardInterrupt:
+        return 0
+    except Exception as exc:
+        _err(f"服务器启动失败: {exc}")
+        try:
+            input("按回车键退出...")
+        except (EOFError, OSError):
+            pass
+        return 1
 
 
 def main(argv: list[str] | None = None) -> int:
