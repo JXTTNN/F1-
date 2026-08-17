@@ -86,6 +86,9 @@ a = Analysis(
         'ctypes', 'ctypes.wintypes',
         'encodings', 'encodings.utf_8', 'encodings.gbk', 'encodings.ascii',
         'encodings.latin_1', 'encodings.idna', 'encodings.aliases',
+        # --- pywebview (桌面窗口嵌入, 替代浏览器) ---
+        'webview', 'webview.platforms.edgechromium', 'webview.js',
+        'webview.util', 'webview.http',
     ],
     hookspath=[],
     hooksconfig={},

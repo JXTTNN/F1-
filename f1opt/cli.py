@@ -756,69 +756,65 @@ def cmd_template(args: argparse.Namespace) -> int:
 
 
 def _launch_gui(host: str = "127.0.0.1", port: int = 8000) -> int:
-    """Double-click entry point: start the server and open the analysis center.
+    """Double-click entry point: start the server inside a native desktop window.
 
-    When ``f1opt.exe`` (or ``python -m f1opt``) is launched with *no* arguments —
-    e.g. by double-clicking the executable in Explorer — a console-only CLI that
-    merely prints ``--help`` and exits makes the window flash and vanish, which
-    reads as "cannot open".  Instead we auto-start the API server and open the
-    smart analysis center (dashboard) in the default browser so the packaged app
-    is usable with zero flags (点开即用).
-
-    The server binds in the *main* thread (so Ctrl+C / SIGBREAK keep working),
-    while a daemon thread waits for the port to come up and then opens the
-    browser.  Returns 0 on clean shutdown, 1 on bind failure.
+    When ``f1opt.exe`` is launched with no arguments (double-click), we start the
+    API server in a background thread and open a native WebView window (pywebview)
+    that loads the UI directly — no external browser needed.  Closing the window
+    shuts down the server.
     """
     import socket
     import threading
     import time
-    import webbrowser
+
+    import webview
 
     from f1opt.api.extended_app import create_extended_app
 
     url = f"http://{host}:{port}/"
     print("=" * 72)
-    print("  F1 2026 Setup Optimizer — 智能分析中心正在启动 ...")
-    print(f"  请在浏览器中访问: {url}")
-    print("  按 Ctrl+C 或关闭本窗口即可退出。")
+    print("  F1 2026 Setup Optimizer — 正在启动 ...")
+    print("  关闭窗口即可退出。")
     print("=" * 72)
     sys.stdout.flush()
 
-    def _open_browser() -> None:
-        # 等待端口就绪后再打开浏览器, 避免页面先于服务器加载而报错.
-        for _ in range(200):  # ~20s max
-            try:
-                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-                    sock.settimeout(0.2)
-                    if sock.connect_ex((host, port)) == 0:
-                        break
-            except OSError:
-                pass
-            time.sleep(0.1)
-        try:
-            webbrowser.open(url)
-        except Exception:  # 打开浏览器失败不阻断服务器
-            pass
-
-    threading.Thread(target=_open_browser, name="f1opt-browser", daemon=True).start()
-
     app = create_extended_app(start_listener=True)
-    try:
+
+    def _run_server() -> None:
         import uvicorn
 
-        if sys.platform == "win32":
-            uvicorn.run(app, host=host, port=port, loop="asyncio")
-        else:
-            uvicorn.run(app, host=host, port=port)
-        return 0
-    except KeyboardInterrupt:
+        try:
+            if sys.platform == "win32":
+                uvicorn.run(app, host=host, port=port, loop="asyncio", log_level="warning")
+            else:
+                uvicorn.run(app, host=host, port=port, log_level="warning")
+        except Exception:
+            pass
+
+    t = threading.Thread(target=_run_server, name="f1opt-server", daemon=True)
+    t.start()
+
+    # 等待服务器就绪
+    for _ in range(200):
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                sock.settimeout(0.2)
+                if sock.connect_ex((host, port)) == 0:
+                    break
+        except OSError:
+            pass
+        time.sleep(0.1)
+
+    try:
+        webview.create_window(
+            "F1 2026 调教优化系统", url,
+            width=1280, height=860, resizable=True, min_size=(900, 600),
+        )
+        webview.start()
         return 0
     except Exception as exc:
-        _err(f"服务器启动失败: {exc}")
-        # 双击场景下控制台窗口一闪而过, 用户看不到错误; 保持窗口直到回车,
-        # 便于用户截屏反馈。仅在交互式 (双击/终端) 场景生效。
+        _err(f"界面启动失败: {exc}")
         try:
-            print(f"\n服务器启动失败: {exc}", file=sys.stderr)
             input("按回车键退出...")
         except (EOFError, OSError):
             pass
