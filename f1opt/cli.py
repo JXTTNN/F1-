@@ -766,8 +766,7 @@ def _launch_gui(host: str = "127.0.0.1", port: int = 8000) -> int:
     import socket
     import threading
     import time
-
-    import webview
+    import webbrowser
 
     from f1opt.api.extended_app import create_extended_app
 
@@ -805,20 +804,29 @@ def _launch_gui(host: str = "127.0.0.1", port: int = 8000) -> int:
             pass
         time.sleep(0.1)
 
+    # 尝试桌面窗口 (pywebview), 失败则回退浏览器
     try:
+        import webview
+
         webview.create_window(
             "F1 2026 调教优化系统", url,
             width=1280, height=860, resizable=True, min_size=(900, 600),
         )
         webview.start()
         return 0
-    except Exception as exc:
-        _err(f"界面启动失败: {exc}")
+    except Exception:
+        print("  桌面窗口不可用, 改用浏览器打开...", file=sys.stderr)
         try:
-            input("按回车键退出...")
-        except (EOFError, OSError):
+            webbrowser.open(url)
+        except Exception:
             pass
-        return 1
+        # 服务器在后台线程, 主线程等待用户 Ctrl+C
+        try:
+            while t.is_alive():
+                t.join(1)
+        except KeyboardInterrupt:
+            pass
+        return 0
 
 
 def main(argv: list[str] | None = None) -> int:
