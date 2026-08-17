@@ -101,6 +101,9 @@ a = Analysis(
         'tensorflow', 'keras', 'tensorboard',
         'sqlalchemy', 'alembic',
         'pandas.tests', 'numpy.tests', 'scipy.tests', 'pyarrow.tests',
+        # 非 f1opt 依赖, 加速构建并减小体积
+        'openpyxl', 'lxml', 'onnxruntime', 'sympy', 'jinja2',
+        'PIL', 'cv2', 'matplotlib',
     ],
     noarchive=False,
     optimize=0,
