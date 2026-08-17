@@ -776,7 +776,7 @@ def _launch_gui(host: str = "127.0.0.1", port: int = 8000) -> int:
 
     from f1opt.api.extended_app import create_extended_app
 
-    url = f"http://{host}:{port}/dashboard.html"
+    url = f"http://{host}:{port}/"
     print("=" * 72)
     print("  F1 2026 Setup Optimizer — 智能分析中心正在启动 ...")
     print(f"  请在浏览器中访问: {url}")

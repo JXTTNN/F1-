@@ -363,6 +363,7 @@
 
     <div class="ctl-row">
       <button id="predict-btn" class="btn primary">预测圈速</button>
+      <input id="feedback-input" type="text" placeholder="问车手问题，如：车尾太松了怎么办" style="flex:1;min-width:140px;padding:5px 8px;background:var(--bg);border:1px solid var(--line);border-radius:4px;color:var(--txt);font-size:12px">
       <button id="feedback-btn" class="btn cyan">获取反馈</button>
       <span id="predict-out" class="predict-out mono"></span>
     </div>
@@ -1268,7 +1269,7 @@
       state.currentTrackId=this.value; renderTrackInfo();
     });
     el("predict-btn").addEventListener("click", predict);
-    el("feedback-btn").addEventListener("click", function(){ feedback(null); });
+    el("feedback-btn").addEventListener("click", function(){ var q=el("feedback-input").value.trim()||null; feedback(q); });
     el("search-btn").addEventListener("click", runSearch);
     el("apply-recommended-btn").addEventListener("click", applyRecommended);
     el("export-setup-btn").addEventListener("click", function(){

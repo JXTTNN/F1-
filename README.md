@@ -9,10 +9,10 @@
 
 ## 下载即用（单文件 EXE）
 
-- **Windows EXE**：[下载 f1opt.exe (v1.2.0)](https://github.com/JXTTNN/F1-/releases/download/v1.2.0/f1opt.exe) — 单个文件，无需 Python，**双击即可用**：自动启动智能分析中心并打开浏览器；也可命令行运行。
+- **Windows EXE**：[下载 f1opt.exe (v1.2.0)](https://github.com/JXTTNN/F1-/releases/download/v1.2.0/f1opt.exe) — 单个文件，无需 Python，**双击即可用**：自动打开实时面板（可切换智能分析中心）；也可命令行运行。
 - 全部版本：[GitHub Releases](https://github.com/JXTTNN/F1-/releases)
 
-> 双击 `f1opt.exe` 会看到启动横幅，随后自动在默认浏览器打开 `http://127.0.0.1:8000/dashboard.html`（首次解压约几秒）。包含遥测采集、车手反馈、调校优化、模型训练全功能。关闭控制台窗口或按 Ctrl+C 即退出。
+> 双击 `f1opt.exe` 会看到启动横幅，随后自动在默认浏览器打开 `http://127.0.0.1:8000/`（实时面板，首次解压约几秒）。右上角可切换「智能分析中心」。包含遥测采集、车手反馈、调校优化、模型训练全功能。关闭控制台窗口或按 Ctrl+C 即退出。
 
 ---
 
