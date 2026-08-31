@@ -40,7 +40,7 @@ SESSION_UID = 0x0123456789ABCDEF
 
 
 # --------------------------------------------------------------------------- #
-# Real-format F1 25 byte-packet builders (layouts mirror f1opt.telemetry.packets)
+# Real-format F1 26 byte-packet builders (layouts mirror f1opt.telemetry.packets)
 # --------------------------------------------------------------------------- #
 # Per-car struct formats — identical to the layouts in packets.py.
 _MOTION_PER = struct.Struct("<" + "f" * 6 + "h" * 9 + "f" * 3)  # F1 26: 18 fields/car, g-force int16

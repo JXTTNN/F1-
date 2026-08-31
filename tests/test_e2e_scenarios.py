@@ -203,7 +203,7 @@ def _lap(lap_time: float, s1: float, s2: float, s3: float) -> dict[str, Any]:
 
 
 # --------------------------------------------------------------------------- #
-# F1 25 byte-packet builders (mirror f1opt.telemetry.packets layouts)
+# F1 26 byte-packet builders (mirror f1opt.telemetry.packets layouts)
 # --------------------------------------------------------------------------- #
 _MOTION_PER = struct.Struct("<" + "f" * 6 + "h" * 9 + "f" * 3)  # F1 26: 54B/car, g-force int16
 _TELEM_PER = struct.Struct("<HfffBbHBBH4H4B4BB4f4B")  # Iter-278

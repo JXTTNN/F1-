@@ -9,8 +9,8 @@
   原样透传使统一帧 `g_lat` 为 2500 量级；现 `parse_motion` ÷1000 转为 G 单位浮点，
   `aligner` 同步改为线性插值（不再入 `_INT_KEYS`），与全库消费者
   (quality_score/analytics/surrogate) 口径一致。
-- **active_aero 编码统一**: 三套互斥编码（遥测 0=Z/1=X、helper 0=Fixed/2=Z/3=Auto、
-  setup 0=Z/1=Balanced/2=X）统一为遥测权威 0=Z/1=X；`is_high_downforce_mode(0)` 修正。
+- **active_aero 编码统一**: 遥测 helper 统一为 0=Z/1=X（`is_high_downforce_mode(0)` 修正）；
+  setup 三态(0=Z/1=Balanced/2=X)保留并加注释去歧义（见 `setup_schema.py`）。
 
 ### 多轮对话指代解析接线 (Iter-296)
 - 修复「准确理解车手反馈」多轮场景缺陷: `resolve_reference` 此前只替换
