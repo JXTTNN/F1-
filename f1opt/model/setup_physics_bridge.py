@@ -37,7 +37,7 @@ from __future__ import annotations
 from typing import Any
 
 from f1opt.data.ea_f1_2026_benchmark import canonical_track_id
-from f1opt.data.setup_schema import DEFAULT_SETUP, CarSetup
+from f1opt.data.setup_schema import DEFAULT_SETUP, SETUP_FIELDS, CarSetup
 from f1opt.data.tracks import TRACKS_BY_ID, TrackType
 from f1opt.model.lap_simulator_2026 import (
     _REF_AMBIENT_TEMP_C,
@@ -332,7 +332,6 @@ def _track_engineering_adjusted_optima(
     if cached is not None:
         return cached
 
-    from f1opt.data.setup_schema import SETUP_FIELDS
     from f1opt.data.track_engineering import _ENGINEERING_BY_TRACK
 
     base = dict(_TRACK_TYPE_OPTIMA[track_type])
@@ -367,9 +366,9 @@ def _track_engineering_adjusted_optima(
     for name, spec in SETUP_FIELDS.items():
         if name in base:
             val = base[name]
-            # round 到 step
-            steps = round(val / spec.step)
-            base[name] = max(spec.min, min(spec.max, steps * spec.step))
+            # round 到 step (相对 spec.min, 与 setup_schema._snap_to_step 一致)
+            steps = round((val - spec.min) / spec.step)
+            base[name] = max(spec.min, min(spec.max, spec.min + steps * spec.step))
 
     _eng_optima_cache[track_id] = base
     return base
@@ -419,14 +418,8 @@ def setup_penalty_s(setup: CarSetup, track_id: str) -> float:
         #   代价 = (delta_clicks / step) × base_s × scale
         # 但 _BASE_SENSITIVITY 已经标定为 *步长单位* (例 camber 0.02 s/0.01°
         # = 0.02 s/档), 所以直接用 delta_clicks / step × base_s.
-        if name in ("front_camber", "rear_camber"):
-            step = 0.01
-        elif name in ("front_toe", "rear_toe"):
-            step = 0.01
-        elif name in ("front_tyre_pressure", "rear_tyre_pressure"):
-            step = 0.1
-        else:
-            step = 1.0
+        # step 直接取 SETUP_FIELDS 的权威步长, 不再硬编码 0.01/0.1/1.0.
+        step = SETUP_FIELDS[name].step
         clicks = delta_clicks / step
         total += clicks * base_s * scale.get(name, 1.0)
     # Iter-107: 全局 cap — 保留单维线性灵敏度, 仅极端总惩罚封顶到 EA F1 2026

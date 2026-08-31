@@ -13,7 +13,7 @@ EA F1 2026 专业车队工作流: 工程师不只看最终推荐 setup, 还需�
 
 物理动机: DNN 是黑盒, 但边际扰动分析 (one-at-a-time sensitivity) 能揭示局部
 响应曲面形状. 这是 *事后可解释性* (post-hoc interpretability), 不修改 DNN,
-只在推理时做有限次 forward (19 参数 × 2 方向 = 38 次, ~1ms).
+只在推理时做有限次 forward (22 参数 × 2 方向 = 44 次, ~1ms).
 """
 
 from __future__ import annotations
@@ -81,7 +81,7 @@ def analyze_setup_contributions(
     """逐参数边际贡献分析 (one-at-a-time ±1 档扰动).
 
     对 setup 的每个参数, 分别 +1 档和 -1 档 (在合法范围内), 测量圈速变化.
-    返回 20 个参数 (fuel_load 除外, 因为它是策略参数不是调教参数) 的贡献列表.
+    返回 22 个参数 (fuel_load 除外, 因为它是策略参数不是调教参数) 的贡献列表.
 
     Args:
         setup: 待分析的调教 (23 维).
@@ -89,10 +89,10 @@ def analyze_setup_contributions(
         driver_profile: 车手画像 (任何 surrogate 接受的形态).
 
     Returns:
-        20 个 :class:`ParameterContribution` (fuel_load 除外). 按 sensitivity 降序.
+        22 个 :class:`ParameterContribution` (fuel_load 除外). 按 sensitivity 降序.
 
     Iter-86: 内部用 :func:`analyze_setup_contributions_batched` (predict_batch
-    一次评估全部 41 个扰动 setup), 比逐条 predict_lap_time 快 ~7x (3.5ms vs 26ms).
+    一次评估全部 45 个扰动 setup), 比逐条 predict_lap_time 快 ~7x (3.5ms vs 26ms).
     """
     return analyze_setup_contributions_batched(setup, track_id, driver_profile)
 
@@ -102,10 +102,10 @@ def analyze_setup_contributions_batched(
     track_id: str,
     driver_profile: object | None = None,
 ) -> list[ParameterContribution]:
-    """Iter-86: 批量化版本 — 用 predict_batch 一次评估全部 41 个扰动 setup.
+    """Iter-86: 批量化版本 — 用 predict_batch 一次评估全部 45 个扰动 setup.
 
-    构造 1 (base) + 20 × 2 (±1 step) = 41 个 setup, 一次性传给
-    :meth:`SurrogateModel.predict_batch`, 避免 41 次顺序 predict_lap_time
+    构造 1 (base) + 22 × 2 (±1 step) = 45 个 setup, 一次性传给
+    :meth:`SurrogateModel.predict_batch`, 避免 45 次顺序 predict_lap_time
     的 Python 循环 + per-call overhead. 实测 ~7x 加速 (26ms → 4ms).
     返回与 :func:`analyze_setup_contributions` 一致.
     """
@@ -114,7 +114,7 @@ def analyze_setup_contributions_batched(
     model = _get_default_model()
     contributions: list[ParameterContribution] = []
 
-    # 构造 41 个 setup: base + 20 个 (plus, minus)
+    # 构造 45 个 setup: base + 22 个 (plus, minus)
     items: list[tuple[CarSetup, str, object]] = [(setup, track_id, driver_profile)]
     field_specs: list[tuple[str, float, CarSetup, CarSetup]] = []  # (name, current, plus, minus)
     for field in ALL_SETUP_FIELDS():

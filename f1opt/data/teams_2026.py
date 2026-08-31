@@ -59,7 +59,7 @@ class TeamCarProfile2026:
     """轮胎退化系数 0.90-1.15 (1.0 = 基准, 低 = 保护轮胎)."""
 
     reliability: float
-    """可靠性 0.85-0.99 (退赛概率 ≈ (1-reliability) × race_distance_factor)."""
+    """可靠性 0.85-0.99 (退赛概率 = max(0.005, (1-reliability) × 0.20))."""
 
     drs_effectiveness: float
     """DRS 增益系数 0.90-1.10 (1.0 = 基准)."""
@@ -69,8 +69,7 @@ class TeamCarProfile2026:
 
     @property
     def retirement_probability_per_race(self) -> float:
-        """单场退赛概率估计 (中位赛道 58 圈)."""
-        # 基础 1.5% × (1 - reliability) × 6.67 (放大到全场)
+        """单场退赛概率估计 (中位赛道 58 圈): max(0.005, (1-reliability) × 0.20)."""
         return max(0.005, (1.0 - self.reliability) * 0.20)
 
 

@@ -49,7 +49,6 @@ from f1opt.model.weather import WeatherModel
 # 默认参数
 # --------------------------------------------------------------------------- #
 _DEFAULT_FUEL_BURN_KG_PER_LAP = 1.6
-_DEFAULT_FUEL_PENALTY_S_PER_KG = 0.03
 _DRIVER_NEUTRAL_AGGRESSION = 0.5
 
 

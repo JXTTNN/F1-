@@ -43,6 +43,11 @@ _NORM_STEPS = np.array(
     [s.step / (s.max - s.min) for s in ALL_SETUP_FIELDS()], dtype=np.float64
 )
 _DIM = int(_NORM_STEPS.size)
+# fuel_load 归一化口径 (策略变量钳制用): norm = (kg - min) / (max - min),
+# 与 CarSetup.to_vector 一致; min/max 取自 SETUP_FIELDS 的 fuel_load 定义.
+_FUEL_LOAD_FIELD = next(s for s in ALL_SETUP_FIELDS() if s.name == "fuel_load")
+_FUEL_LOAD_MIN = _FUEL_LOAD_FIELD.min
+_FUEL_LOAD_MAX = _FUEL_LOAD_FIELD.max
 # DE 搜索区间: 与 CarSetup.to_vector/from_vector 一致的归一化 [0,1]^21.
 # (SETUP_FIELDS 的 min/max 经 to_vector 线性映射到 [0,1], DE 在归一化空间搜索,
 #  最优 x* 再经 from_vector 反归一化并 snap 到游戏档位.)
@@ -392,12 +397,12 @@ def _search(
     # 因为物理模型中燃油越轻圈速越快 — 这在物理上正确但在调教语义上错误 (车队
     # 不能用调教器决定跑多少燃油). 修复: 钳制 fuel_load 维度到 baseline 值,
     # DE 搜索该维度完全无效, 推荐的 fuel_load 永远 = baseline.
-    # Iter-267: 不再硬编码索引 18 (active_aero_mode/x_mode_activations 加入后
-    # fuel_load 索引从 18 变为 20, 硬编码 18 会误钳制 front_tyre_pressure)。
+    # Iter-267: 不再硬编码索引 18 (active_aero_mode/x_mode_activations/engine_braking/
+    # ballast 加入后 fuel_load 索引从 18 变为 22, 硬编码 18 会误钳制其他字段)。
     _FUEL_LOAD_IDX = next(
         i for i, s in enumerate(ALL_SETUP_FIELDS()) if s.name == "fuel_load"
     )
-    _base_fuel_norm = (float(base_setup.fuel_load) - 5.0) / 105.0
+    _base_fuel_norm = (float(base_setup.fuel_load) - _FUEL_LOAD_MIN) / (_FUEL_LOAD_MAX - _FUEL_LOAD_MIN)
 
     def evaluate(vec: np.ndarray) -> tuple[float, float]:
         """返回 ``(lap_time, tire_wear_proxy)``; 按 snapped setup 缓存.

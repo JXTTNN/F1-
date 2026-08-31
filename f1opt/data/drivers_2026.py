@@ -139,7 +139,7 @@ _DRIVERS_2026: list[DriverProfile2026] = [
         team_id="amr", team_name="Aston Martin", country_code="ca",
         pace=85, race=84, consistency=80, tyre_management=82, wet=83, defending=84,
     ),
-    # Alpine Renault
+    # Alpine Mercedes (2026 Alpine 换用 Mercedes PU, 不再使用 Renault)
     DriverProfile2026(
         driver_id="gas", driver_name="Pierre Gasly",
         team_id="alp", team_name="Alpine", country_code="fr",
