@@ -34,7 +34,7 @@ import csv
 import io
 import json
 import time
-from typing import Any
+from typing import Any, Callable
 
 #: Default 60 Hz frame interval used when a recorded frame lacks
 #: ``session_time`` and no prior frame exists to increment from.
@@ -80,12 +80,21 @@ class TelemetryReplay:
             consume(frame)
     """
 
-    def __init__(self, frames: list[dict], speed: float = 1.0) -> None:
+    def __init__(
+        self,
+        frames: list[dict],
+        speed: float = 1.0,
+        *,
+        clock: Callable[[], float] | None = None,
+    ) -> None:
         self._frames: list[dict] = sorted(
             (dict(f) for f in frames), key=_frame_session_time
         )
         # Defensive: non-positive speed would freeze or reverse time.
         self._speed: float = float(speed) if speed and speed > 0 else 1.0
+        # Injectable monotonic clock (defaults to time.monotonic) so timing-
+        # sensitive tests can advance time deterministically.
+        self._clock = clock if clock is not None else time.monotonic
         self._index: int = 0
         self._started: bool = False
         self._paused: bool = False
@@ -107,7 +116,7 @@ class TelemetryReplay:
         """
         self._started = True
         self._index = 0
-        self._start_wall = time.monotonic()
+        self._start_wall = self._clock()
         self._start_session_time = self._first_session_time()
         self._pause_offset = 0.0
         self._pause_start = None
@@ -119,14 +128,14 @@ class TelemetryReplay:
         if not self._started or self._paused:
             return
         self._paused = True
-        self._pause_start = time.monotonic()
+        self._pause_start = self._clock()
 
     def resume(self) -> None:
         """Resume a paused replay."""
         if not self._paused:
             return
         assert self._pause_start is not None
-        self._pause_offset += time.monotonic() - self._pause_start
+        self._pause_offset += self._clock() - self._pause_start
         self._pause_start = None
         self._paused = False
 
@@ -138,10 +147,10 @@ class TelemetryReplay:
         target = float(session_time)
         # Re-anchor: from now on, ``target`` is "now" in session time.
         self._start_session_time = target
-        self._start_wall = time.monotonic()
+        self._start_wall = self._clock()
         self._pause_offset = 0.0
         if self._paused:
-            self._pause_start = time.monotonic()
+            self._pause_start = self._clock()
         # Advance index to the first frame at/after target.
         times = [_frame_session_time(f) for f in self._frames]
         self._index = bisect.bisect_left(times, target)
@@ -193,7 +202,7 @@ class TelemetryReplay:
         now = (
             self._pause_start
             if self._paused and self._pause_start is not None
-            else time.monotonic()
+            else self._clock()
         )
         elapsed_wall = now - self._start_wall - self._pause_offset
         return self._start_session_time + elapsed_wall * self._speed

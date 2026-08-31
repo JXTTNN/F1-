@@ -91,10 +91,12 @@ class TestTelemetryRateMonitor:
         assert "CarTelemetry" in health["unhealthy_types"]
 
     def test_reset(self) -> None:
-        m = TelemetryRateMonitor()
+        now = [0.0]
+        m = TelemetryRateMonitor(clock=lambda: now[0])
         m.record(6)
+        now[0] = 1.0
         m.record(6)
-        assert m.rate(6) > 0  # Two rapid calls produce a high rate
+        assert m.rate(6) > 0  # Two calls 1s apart → ~1 Hz
         m.reset()
         assert m.rate(6) == 0.0
 

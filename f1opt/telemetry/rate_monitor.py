@@ -38,7 +38,7 @@ import time as _time
 from collections import deque as _deque
 from dataclasses import dataclass as _dataclass
 from threading import Lock as _Lock
-from typing import Any
+from typing import Any, Callable
 
 from .packets import PACKET_NAMES as _PACKET_NAMES
 
@@ -88,6 +88,7 @@ class TelemetryRateMonitor:
         min_hz: float = 1.0,
         *,
         max_packets_per_type: int = 5000,
+        clock: Callable[[], float] | None = None,
     ) -> None:
         if window_s <= 0:
             raise ValueError("window_s must be positive")
@@ -95,6 +96,9 @@ class TelemetryRateMonitor:
             raise ValueError("min_hz must be non-negative")
         self._window_s = window_s
         self._min_hz = min_hz
+        # Injectable monotonic clock (defaults to time.monotonic) so timing-
+        # sensitive tests can advance time deterministically.
+        self._clock = clock if clock is not None else _time.monotonic
         self._lock = _Lock()
         # per-packet-type timestamp deques
         self._timestamps: dict[int, _deque[float]] = {}
@@ -125,7 +129,7 @@ class TelemetryRateMonitor:
         Thread-safe. Call from any context (sync subscriber, batch replay,
         unit tests).
         """
-        now = _time.monotonic()
+        now = self._clock()
         with self._lock:
             if packet_id not in self._timestamps:
                 self._timestamps[packet_id] = _deque(maxlen=self._max_packets)

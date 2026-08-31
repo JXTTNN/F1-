@@ -69,16 +69,30 @@ def spaced_frames(times: list[float], **overrides) -> list[dict]:
     return [make_frame(t, **overrides) for t in times]
 
 
+class _MutableClock:
+    """Injectable monotonic clock: tests advance it manually for determinism."""
+
+    def __init__(self) -> None:
+        self._now = 0.0
+
+    def __call__(self) -> float:
+        return self._now
+
+    def advance(self, dt: float) -> None:
+        self._now += dt
+
+
 # --------------------------------------------------------------------------- #
 # TelemetryReplay
 # --------------------------------------------------------------------------- #
 class TestTelemetryReplay:
     def test_next_frame_returns_frames_in_order(self) -> None:
-        # 5 frames spaced 0.1s apart; speed=100 → all due in ~4ms wall.
+        # 5 frames spaced 0.1s apart; advance injected clock so all are due.
         frames = spaced_frames([0.0, 0.1, 0.2, 0.3, 0.4])
-        replay = TelemetryReplay(frames, speed=100.0)
+        clock = _MutableClock()
+        replay = TelemetryReplay(frames, speed=100.0, clock=clock)
         replay.start()
-        time.sleep(0.005)  # plenty for all to be due at 100x
+        clock.advance(0.1)  # session time 10.0 → all frames due at 100x
         drained: list[dict] = []
         while (f := replay.next_frame()) is not None:
             drained.append(f)
@@ -88,9 +102,10 @@ class TestTelemetryReplay:
 
     def test_next_frame_returns_none_when_finished(self) -> None:
         frames = spaced_frames([0.0, 0.01])
-        replay = TelemetryReplay(frames, speed=100.0)
+        clock = _MutableClock()
+        replay = TelemetryReplay(frames, speed=100.0, clock=clock)
         replay.start()
-        time.sleep(0.005)
+        clock.advance(0.01)
         # Drain all frames.
         while replay.next_frame() is not None:
             pass
@@ -98,21 +113,23 @@ class TestTelemetryReplay:
 
     def test_progress_goes_from_zero_to_one(self) -> None:
         frames = spaced_frames([0.0, 0.1, 0.2, 0.3, 0.4])
-        replay = TelemetryReplay(frames, speed=100.0)
+        clock = _MutableClock()
+        replay = TelemetryReplay(frames, speed=100.0, clock=clock)
         replay.start()
         # Immediately after start, progress should be near 0.
         assert replay.progress() == pytest.approx(0.0, abs=0.05)
-        time.sleep(0.01)  # well past total duration at 100x
+        clock.advance(0.1)  # session time 10.0 → well past total duration
         while replay.next_frame() is not None:
             pass
         assert replay.progress() == pytest.approx(1.0)
 
     def test_current_session_time_increases(self) -> None:
         frames = spaced_frames([0.0, 1.0, 2.0])
-        replay = TelemetryReplay(frames, speed=10.0)
+        clock = _MutableClock()
+        replay = TelemetryReplay(frames, speed=10.0, clock=clock)
         replay.start()
         t0 = replay.current_session_time()
-        time.sleep(0.02)
+        clock.advance(0.02)  # session +0.2 at 10x
         t1 = replay.current_session_time()
         assert t1 > t0
 
@@ -123,9 +140,10 @@ class TestTelemetryReplay:
 
     def test_frames_remaining_decreases(self) -> None:
         frames = spaced_frames([0.0, 0.05, 0.10, 0.15, 0.20])
-        replay = TelemetryReplay(frames, speed=200.0)
+        clock = _MutableClock()
+        replay = TelemetryReplay(frames, speed=200.0, clock=clock)
         replay.start()
-        time.sleep(0.005)
+        clock.advance(0.01)  # session 2.0 → all frames due at 200x
         initial = replay.frames_remaining()
         assert initial == len(frames)
         replay.next_frame()
@@ -135,9 +153,10 @@ class TestTelemetryReplay:
 
     def test_is_finished_true_after_all_frames(self) -> None:
         frames = spaced_frames([0.0, 0.01, 0.02])
-        replay = TelemetryReplay(frames, speed=100.0)
+        clock = _MutableClock()
+        replay = TelemetryReplay(frames, speed=100.0, clock=clock)
         replay.start()
-        time.sleep(0.005)
+        clock.advance(0.01)
         assert not replay.is_finished()
         while replay.next_frame() is not None:
             pass
@@ -159,18 +178,19 @@ class TestTelemetryReplay:
 
     def test_pause_and_resume(self) -> None:
         frames = spaced_frames([0.0, 0.05, 0.10, 0.15, 0.20])
-        replay = TelemetryReplay(frames, speed=10.0)
+        clock = _MutableClock()
+        replay = TelemetryReplay(frames, speed=10.0, clock=clock)
         replay.start()
         # Drain first frame (at t=0, always due).
         first = replay.next_frame()
         assert first is not None
         # Pause: while paused, next_frame returns None.
         replay.pause()
-        time.sleep(0.01)
+        clock.advance(0.01)
         assert replay.next_frame() is None
         # Resume: subsequent frames become due again.
         replay.resume()
-        time.sleep(0.05)  # at 10x → 0.5s session time, all remaining due
+        clock.advance(0.05)  # at 10x → 0.5s session time, all remaining due
         drained = []
         while (f := replay.next_frame()) is not None:
             drained.append(f)
