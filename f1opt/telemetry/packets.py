@@ -1218,7 +1218,11 @@ def active_aero_mode_from_frame(frame: dict) -> str:
     Tries ``active_aero_mode``, ``aero_mode``, and ``active_aero`` keys.
     Returns ``"unknown"`` when no key is present.
     """
-    mode = frame.get("active_aero_mode") or frame.get("aero_mode") or frame.get("active_aero")
+    mode = frame.get("active_aero_mode")
+    if mode is None:
+        mode = frame.get("aero_mode")
+    if mode is None:
+        mode = frame.get("active_aero")
     if mode is None:
         return "unknown"
     try:

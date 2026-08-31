@@ -56,6 +56,8 @@ _FIELD_DEFS: list[tuple[str, GroupName, FieldKind, float, float, float, str, str
     ("front_wing", "Aerodynamics", "int", 0.0, 50.0, 1.0, "clicks", "前翼下压力等级"),
     ("rear_wing", "Aerodynamics", "int", 0.0, 50.0, 1.0, "clicks", "后翼下压力等级"),
     # Active Aero (Iter-194: F1 2026 active aero settings)
+    # 注意: 此处「0=Z/1=Balanced/2=X」是调教参数三态，与遥测运行时 Packet 16 的
+    # 「0=Z/1=X」两态是不同概念，勿混用（遥测 helper 见 f1opt/telemetry/packets.py）。
     ("active_aero_mode", "Active Aero", "int", 0.0, 2.0, 1.0, "mode", "主动空动模式 (0=Z-Mode, 1=Balanced, 2=X-Mode)"),
     ("x_mode_activations", "Active Aero", "int", 0.0, 3.0, 1.0, "count", "X-Mode 每圈激活次数"),
     # Transmission

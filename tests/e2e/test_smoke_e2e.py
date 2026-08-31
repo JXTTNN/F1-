@@ -43,10 +43,9 @@ SESSION_UID = 0x0123456789ABCDEF
 # Real-format F1 25 byte-packet builders (layouts mirror f1opt.telemetry.packets)
 # --------------------------------------------------------------------------- #
 # Per-car struct formats — identical to the layouts in packets.py.
-_MOTION_PER = struct.Struct("<" + "fff" + "h" * 9 + "f" * 6)  # 18 fields/car
+_MOTION_PER = struct.Struct("<" + "f" * 6 + "h" * 9 + "f" * 3)  # F1 26: 18 fields/car, g-force int16
 _TELEM_PER = struct.Struct("<HfffBbHBBH4H4B4BB4f4B")          # 31 fields/car (Iter-278)
 _STATUS_PER = struct.Struct("<BBBBBfffHHBBHBBBbfffBffffB")    # 26 fields/car (Iter-278)
-_MOTION_TRAILER = struct.Struct("<30f")                        # player-only section
 _TELEM_TRAILER = struct.Struct("<BBB")                         # mfdPanel + suggestedGear
 
 
@@ -69,15 +68,17 @@ def _header(
 
 
 def _motion_packet(session_time: float, frame: int, g_lat: float) -> bytes:
-    """Packet 0 (Motion): car 0 carries the scripted lateral g-force."""
+    """Packet 0 (Motion): car 0 carries the scripted lateral g-force (int16 ÷1000)."""
     car0 = (
-        0.0, 0.0, 0.0,                              # worldPosition XYZ
-        0, 0, 0, 0, 0, 0, 0, 0, 0,                  # velocities + dirs (int16)
-        g_lat, 0.0, 1.0, 0.0, 0.0, 0.0,             # g-force + yaw/pitch/roll
+        0.0, 0.0, 0.0,                              # worldPosition XYZ (float)
+        0.0, 0.0, 0.0,                              # worldVelocity XYZ (float, F1 26)
+        0, 0, 0, 0, 0, 0,                           # forward/right dirs (int16)
+        int(round(g_lat * 1000)), 0, 0,             # g-force int16 (÷1000 量化)
+        0.0, 0.0, 0.0,                              # yaw/pitch/roll (float)
     )
     body = _MOTION_PER.pack(*car0)
-    full = NUM_CARS * _MOTION_PER.size + _MOTION_TRAILER.size
-    body += b"\x00" * (full - len(body))            # cars 1..21 + player section = 0
+    full = NUM_CARS * _MOTION_PER.size              # F1 26: 无玩家额外段
+    body += b"\x00" * (full - len(body))            # cars 1..23 = 0
     return _header(0, session_time=session_time, frame=frame) + body
 
 

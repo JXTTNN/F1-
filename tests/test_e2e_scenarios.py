@@ -205,10 +205,9 @@ def _lap(lap_time: float, s1: float, s2: float, s3: float) -> dict[str, Any]:
 # --------------------------------------------------------------------------- #
 # F1 25 byte-packet builders (mirror f1opt.telemetry.packets layouts)
 # --------------------------------------------------------------------------- #
-_MOTION_PER = struct.Struct("<" + "fff" + "h" * 9 + "f" * 6)
+_MOTION_PER = struct.Struct("<" + "f" * 6 + "h" * 9 + "f" * 3)  # F1 26: 54B/car, g-force int16
 _TELEM_PER = struct.Struct("<HfffBbHBBH4H4B4BB4f4B")  # Iter-278
 _STATUS_PER = struct.Struct("<BBBBBfffHHBBHBBBbfffBffffB")  # Iter-278
-_MOTION_TRAILER = struct.Struct("<30f")
 _TELEM_TRAILER = struct.Struct("<BBB")
 
 
@@ -230,13 +229,16 @@ def _header(
 
 
 def _motion_packet(session_time: float, frame: int, g_lat: float) -> bytes:
+    # F1 26: 速度 float + 方向/g-force int16; g-force ÷1000 量化; 无玩家额外段。
     car0 = (
-        0.0, 0.0, 0.0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0,
-        g_lat, 0.0, 1.0, 0.0, 0.0, 0.0,
+        0.0, 0.0, 0.0,                       # worldPosition XYZ (float)
+        0.0, 0.0, 0.0,                       # worldVelocity XYZ (float, F1 26)
+        0, 0, 0, 0, 0, 0,                    # forward/right dirs (int16)
+        int(round(g_lat * 1000)), 0, 0,      # g-force int16 (÷1000 量化)
+        0.0, 0.0, 0.0,                       # yaw/pitch/roll (float)
     )
     body = _MOTION_PER.pack(*car0)
-    full = NUM_CARS * _MOTION_PER.size + _MOTION_TRAILER.size
+    full = NUM_CARS * _MOTION_PER.size
     body += b"\x00" * (full - len(body))
     return _header(0, session_time=session_time, frame=frame) + body
 
