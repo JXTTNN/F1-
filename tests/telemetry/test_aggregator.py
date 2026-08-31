@@ -30,7 +30,7 @@ def make_header(
 ) -> PacketHeader:
     """Build a :class:`PacketHeader` directly (no byte packing needed)."""
     return PacketHeader(
-        packet_format=2025,
+        packet_format=2026,
         game_year=25,
         game_major_version=1,
         game_minor_version=0,

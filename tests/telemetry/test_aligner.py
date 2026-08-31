@@ -59,7 +59,7 @@ def make_header(
     player_car: int = 0,
 ) -> PacketHeader:
     return PacketHeader(
-        packet_format=2025,
+        packet_format=2026,
         game_year=25,
         game_major_version=1,
         game_minor_version=0,
@@ -515,7 +515,7 @@ class TestMultiCarAlignment:
         """on_packet_all_cars on a non-alignment packet returns 0."""
         from f1opt.telemetry.packets import PacketHeader
         h = PacketHeader(
-            packet_format=2025, game_year=25, game_major_version=1,
+            packet_format=2026, game_year=25, game_major_version=1,
             game_minor_version=0, packet_version=1, packet_id=1,  # Session
             session_uid=0, session_time=1.0, frame_identifier=0,
             overall_frame_identifier=0, player_car_index=0,

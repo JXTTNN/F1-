@@ -181,7 +181,7 @@ def _telemetry(car0: dict[str, Any]) -> dict[str, Any]:
 
 def _make_header(packet_id: int, *, frame: int, session_time: float) -> PacketHeader:
     return PacketHeader(
-        packet_format=2025, game_year=25, game_major_version=1,
+        packet_format=2026, game_year=25, game_major_version=1,
         game_minor_version=0, packet_version=1, packet_id=packet_id,
         session_uid=SESSION_UID, session_time=session_time,
         frame_identifier=frame, overall_frame_identifier=frame,

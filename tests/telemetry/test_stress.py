@@ -358,7 +358,7 @@ def _build_aligner_6000() -> TelemetryAligner:
 
 def _pkt_header(packet_id: int, session_time: float, player_car: int = 0) -> PacketHeader:
     return PacketHeader(
-        packet_format=2025, game_year=25, game_major_version=1, game_minor_version=0,
+        packet_format=2026, game_year=25, game_major_version=1, game_minor_version=0,
         packet_version=1, packet_id=packet_id, session_uid=SESSION_UID,
         session_time=session_time, frame_identifier=0, overall_frame_identifier=0,
         player_car_index=player_car, secondary_player_car_index=255,
