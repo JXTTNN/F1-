@@ -1,12 +1,12 @@
 """F1 ERS (Energy Recovery System) 部署模型 (Iter-5).
 
-F1 2026 规则下每圈可部署 4 MJ 电动能 (MGU-K) 与回收 2.5 MJ (FIA 2026
+F1 2026 规则下每圈可部署 9 MJ 电动能 (MGU-K) 与回收 6 MJ (FIA 2026
 技术规则 §5.4). ERS 部署策略对圈速影响 0.3-0.5 s/lap — 真实车队
 (Mercedes/Red Bull/Racing Bulls 等) 都会基于赛道特性为每段直道分配能量.
 
 本模块实现一个工程化的 ERS 部署模型:
 
-- 每圈 4 MJ 部署预算 + 2.5 MJ 回收预算 (FIA 限制).
+- 每圈 9 MJ 部署预算 + 6 MJ 回收预算 (FIA 限制).
 - 电池状态 (State of Charge, SoC): 0-100%, 起始 50%, 不能超出.
 - 部署区间: 按赛道最长直道优先分配 (drag-limited 直道收益最大).
 - 部署效率: 1 MJ ≈ 0.08 s 直道收益 (基于公开 F1 工程估算).
@@ -29,9 +29,9 @@ from dataclasses import dataclass, field
 from typing import Any
 
 # FIA 2026 限制
-_MAX_DEPLOY_MJ_PER_LAP = 4.0
-_MAX_HARVEST_MJ_PER_LAP = 2.5
-_BATTERY_CAPACITY_MJ = 4.0           # 电池容量 (MJ), 同单圈最大部署量
+_MAX_DEPLOY_MJ_PER_LAP = 9.0
+_MAX_HARVEST_MJ_PER_LAP = 6.0
+_BATTERY_CAPACITY_MJ = 9.0           # 电池容量 (MJ), 同单圈最大部署量
 _DEFAULT_INITIAL_SOC = 0.5            # 起始 SoC 50%
 
 # 工程化系数
@@ -287,7 +287,7 @@ class ERSDeploymentModel:
     # 部署分配 (MJ per zone)
     # ------------------------------------------------------------------ #
     def _allocate_deployment(self) -> list[tuple[ERSDeploymentZone, float]]:
-        """按 priority_weight 在所有部署区之间分配 4 MJ 预算."""
+        """按 priority_weight 在所有部署区之间分配 9 MJ 预算."""
         zones = list(self.profile.deployment_zones)
         if not zones:
             return []
@@ -317,7 +317,7 @@ class ERSDeploymentModel:
     # 回收分配
     # ------------------------------------------------------------------ #
     def _allocate_harvest(self) -> float:
-        """总回收量, 受 FIA 限额 2.5 MJ 限制."""
+        """总回收量, 受 FIA 限额 6 MJ 限制."""
         requested = self.profile.total_harvest_mj()
         # 攻击模式: 减少回收 (省刹车阻力), 保守模式: 增加回收
         if self.mode == "attack":

@@ -176,15 +176,15 @@ class TestERSPhysics:
         assert m.soc > soc_before
 
     def test_deploy_respects_fia_cap(self) -> None:
-        """Deploy cannot exceed FIA 4 MJ cap even with full SoC + attack mode."""
+        """Deploy cannot exceed FIA 9 MJ cap even with full SoC + attack mode."""
         m = ERSDeploymentModel(track_id="monza", mode="attack", initial_soc=1.0)
         r = m.simulate_lap()
-        # 4 MJ cap × 1.3 attack factor = 5.2 MJ; but also capped by SoC (4 MJ).
-        # So max deploy = min(5.2, 4.0) = 4.0 MJ.
-        assert r["deploy_mj"] <= 4.0 + 1e-6
+        # 9 MJ cap × 1.3 attack factor = 11.7 MJ; but also capped by SoC (9 MJ).
+        # So max deploy = min(11.7, 9.0) = 9.0 MJ.
+        assert r["deploy_mj"] <= 9.0 + 1e-6
 
     def test_harvest_respects_fia_cap(self) -> None:
-        """Harvest cannot exceed FIA 2.5 MJ cap."""
+        """Harvest cannot exceed FIA 6 MJ cap."""
         # Use a profile with very high harvest request
         big_profile = ERSTrackProfile(
             track_id="test", lap_length_m=5000.0,
@@ -195,7 +195,7 @@ class TestERSPhysics:
         m = ERSDeploymentModel(track_id="unknown", mode="balanced", initial_soc=0.5)
         m.profile = big_profile
         r = m.simulate_lap()
-        assert r["harvest_mj"] <= 2.5 + 1e-6
+        assert r["harvest_mj"] <= 6.0 + 1e-6
 
 
 # --------------------------------------------------------------------------- #
