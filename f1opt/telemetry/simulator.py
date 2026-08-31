@@ -186,8 +186,8 @@ class TelemetrySimulator:
                     continue
 
                 header = PacketHeader(
-                    packet_format=2025,
-                    game_year=25,
+                    packet_format=2026,  # F1 2026 Season Pack (packetFormat=2026)
+                    game_year=25,        # 权威 PHeader.h: m_gameYear=25 对应 2026 Season Pack
                     game_major_version=1,
                     game_minor_version=0,
                     packet_version=1,
