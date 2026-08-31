@@ -102,7 +102,7 @@ struct PacketHeader {
 - 游戏仅在 **计时圈**（timed lap）中发送有效遥测数据
 - 出圈（out-lap）不发送数据
 - 不完整圈速会被丢弃
-- 已知问题：LapData 包中 `m_driverStatus` 和 `m_gridPosition` 字段顺序与实际文档不符，需交换顺序
+- 已核实：LapData 包中 `m_gridPosition` 在 `m_driverStatus` 之前（现代码顺序正确，无需交换）
 
 ### 数据来源
 - https://github.com/MacManley/f1-26-udp
@@ -252,7 +252,7 @@ struct PacketHeader {
 | Wet（全雨胎） | 70 - 80°C |
 
 ### 2026 年轮胎策略变化
-- **C6 超软胎被取消**：2025 年新增的 C6 配方（圈速与 C5 仅差约 0.1 秒）在 2026 年被移除
+- **C6 存废待核**：主源(MacManley/f1-26-udp)列 22=C6，第二源(Go 独立实现)仅列 C0-C5，待 EA 官方 PDF/真实游戏数据终核
 - 配方间圈速梯度拉大至 **0.7-0.8 秒**，强化策略差异
 - 轮辋尺寸缩小（前轮窄 25mm、后轮窄 30mm），接触面积减少
 - 轮胎内部结构重新设计，适应更极端的主动空力工况

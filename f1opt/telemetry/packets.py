@@ -45,7 +45,7 @@ from typing import Any
 # --------------------------------------------------------------------------- #
 # PacketHeader
 # --------------------------------------------------------------------------- #
-# uint16 m_packetFormat (2025)
+# uint16 m_packetFormat (2026)
 # uint8  m_gameYear            (last two digits, e.g. 25 -> 2026 Season Pack)
 # uint8  m_gameMajorVersion
 # uint8  m_gameMinorVersion
@@ -1236,6 +1236,8 @@ def active_aero_mode_from_frame(frame: dict) -> str:
 # --------------------------------------------------------------------------- #
 # m_actualTyreCompound 值映射 (MacManley/f1-26-udp 权威规范 README):
 #   F1 Modern: 16=C5 17=C4 18=C3 19=C2 20=C1 21=C0 22=C6; 7=inter 8=wet
+#   22=C6 为单一权威源(MacManley/f1-26-udp)口径，Go 独立实现只列 C0-C5，
+#   待 EA 官方 PDF/真实游戏数据终核。
 _TYRE_COMPOUND_NAMES: dict[int, str] = {
     16: "C5", 17: "C4", 18: "C3", 19: "C2", 20: "C1", 21: "C0", 22: "C6",
     7: "intermediate", 8: "wet",
