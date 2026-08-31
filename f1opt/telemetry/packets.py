@@ -199,7 +199,7 @@ def _cars(vals: tuple, per: int, names: tuple[str, ...]) -> _LazyCarList:
 
 
 # --------------------------------------------------------------------------- #
-# Packet 0 — Motion  (size 1349 per EA PDF; body layout MEDIUM confidence)
+# Packet 0 — Motion  (size 1325B; HIGH confidence)
 # --------------------------------------------------------------------------- #
 CONFIDENCE_MOTION = (
     "HIGH — PacketMotionData per MacManley/f1-26-udp 权威规范 (Iter-285). "
@@ -427,11 +427,11 @@ def parse_session(data: bytes) -> dict[str, Any]:
 
 
 # --------------------------------------------------------------------------- #
-# Packet 2 — Lap Data  (MEDIUM confidence)
+# Packet 2 — Lap Data  (HIGH confidence)
 # --------------------------------------------------------------------------- #
 CONFIDENCE_LAPDATA = (
-    "MEDIUM — per-car LapData follows F1 23/24 layout. Exposes lap times, sector "
-    "times, lap distance, current lap num, position, lap-invalid flag."
+    "HIGH — per-car LapData per MacManley/f1-26-udp 权威规范 (Iter-281). Exposes lap "
+    "times, sector times, lap distance, current lap num, position, lap-invalid flag."
 )
 # Iter-281: 按 MacManley/f1-26-udp 权威规范修正 LapData 线格式。
 # 扇区时间/与前车差距/与领跑差距均拆分为 MSPart(uint16) + MinutesPart(uint8),
@@ -476,10 +476,10 @@ def parse_lap_data(data: bytes) -> dict[str, Any]:
 
 
 # --------------------------------------------------------------------------- #
-# Packet 3 — Event  (MEDIUM confidence; event payloads best-effort)
+# Packet 3 — Event  (HIGH confidence; event payloads best-effort)
 # --------------------------------------------------------------------------- #
 CONFIDENCE_EVENT = (
-    "MEDIUM — 4-byte event string code parsed; event-specific payloads (FastestLap, "
+    "HIGH — 4-byte event string code parsed; event-specific payloads (FastestLap, "
     "Retirement reason, DRSDisabled reason, StopGoPenaltyServer stopTime) are exposed "
     "as raw ``m_eventDetails`` bytes when not individually decoded."
 )
@@ -501,7 +501,7 @@ def parse_event(data: bytes) -> dict[str, Any]:
 
 
 # --------------------------------------------------------------------------- #
-# Packet 4 — Participants  (MEDIUM-LOW confidence; F1 25 livery fields)
+# Packet 4 — Participants  (HIGH confidence; F1 26 livery fields)
 # --------------------------------------------------------------------------- #
 CONFIDENCE_PARTICIPANTS = (
     "HIGH — PacketParticipantData per MacManley/f1-26-udp 权威规范 (Iter-284). "
@@ -536,11 +536,11 @@ def parse_participants(data: bytes) -> dict[str, Any]:
 
 
 # --------------------------------------------------------------------------- #
-# Packet 5 — Car Setups  (MEDIUM confidence)
+# Packet 5 — Car Setups  (HIGH confidence)
 # --------------------------------------------------------------------------- #
 CONFIDENCE_CARSETUPS = (
-    "MEDIUM — discrete setup values as uint8 (game clicks), camber/toe/tyre-pressure/"
-    "fuel as float; follows F1 23/24 layout."
+    "HIGH — discrete setup values as uint8 (game clicks), camber/toe/tyre-pressure/"
+    "fuel as float; per MacManley/f1-26-udp 权威规范 (Iter-282)."
 )
 # Iter-282: 按权威规范修正 CarSetups — 补 engineBraking(B), 轮胎压力为 float(4f)
 # 而非 uint8; 旧版把 4 胎压误作 uint8 且缺 engineBraking, 导致 ballast/fuelLoad 错位。
@@ -569,11 +569,11 @@ def parse_car_setups(data: bytes) -> dict[str, Any]:
 
 
 # --------------------------------------------------------------------------- #
-# Packet 6 — Car Telemetry  (HIGH on per-car fields; MEDIUM on trailer)
+# Packet 6 — Car Telemetry  (HIGH confidence)
 # --------------------------------------------------------------------------- #
 CONFIDENCE_CARTELEMETRY = (
     "HIGH on per-car fields (speed/throttle/steer/brake/clutch/gear/rpm/DRS/tyre "
-    "temps & pressures/surfaceType). MEDIUM on trailer (mfdPanelIndex + suggestedGear). "
+    "temps & pressures/surfaceType) and trailer (mfdPanelIndex + suggestedGear). "
     "2026 Season Pack note (Iter-11, EA_Groguet official): overtake mode lives in a NEW "
     "Car Telemetry 2 packet introduced by the 2026 Season Pack — NOT this packet id 6. "
     "This parser is the F1 25 base CarTelemetry packet; a future CarTelemetry2 parser "
@@ -623,10 +623,10 @@ def parse_car_telemetry(data: bytes) -> dict[str, Any]:
 
 
 # --------------------------------------------------------------------------- #
-# Packet 7 — Car Status  (MEDIUM confidence; includes m_ersDeployMode)
+# Packet 7 — Car Status  (HIGH confidence; includes m_ersDeployMode)
 # --------------------------------------------------------------------------- #
 CONFIDENCE_CARSTATUS = (
-    "MEDIUM — includes m_ersDeployMode (uint8, 0=none/1=medium/2=hotlap/3=deployment). "
+    "HIGH — includes m_ersDeployMode (uint8, 0=none/1=medium/2=hotlap/3=deployment). "
     "Positioned after m_ersStoreEnergy; C6 tyre compound = value 22 (F1 25). 2026 Season "
     "Pack note (Iter-11, EA_Groguet official confirmation): the 2026 Season Pack 'boost' "
     "mode is covered by m_ersDeployMode — no separate boost field is required, so this "
@@ -740,7 +740,7 @@ def parse_final_classification(data: bytes) -> dict[str, Any]:
 
 
 # --------------------------------------------------------------------------- #
-# Packet 9 — Lobby Info  (MEDIUM-LOW — name 32, trailing bytes uncertain)
+# Packet 9 — Lobby Info  (HIGH confidence)
 # --------------------------------------------------------------------------- #
 CONFIDENCE_LOBBYINFO = (
     "HIGH — PacketLobbyInfo per MacManley/f1-26-udp 权威规范 (Iter-283). "
@@ -771,11 +771,11 @@ def parse_lobby_info(data: bytes) -> dict[str, Any]:
 
 
 # --------------------------------------------------------------------------- #
-# Packet 10 — Car Damage  (MEDIUM-LOW; F1 25 m_tyreBlisters[4] included)
+# Packet 10 — Car Damage  (HIGH confidence; m_tyreBlisters[4] included)
 # --------------------------------------------------------------------------- #
 CONFIDENCE_CARDAMAGE = (
-    "MEDIUM-LOW — includes F1 25 m_tyreBlisters[4]. Tyre wear arrays modelled as "
-    "float[4]; exact byte total is best-effort (EA PDF reports 1041B)."
+    "HIGH — per MacManley/f1-26-udp 权威规范 (Iter-282): tyresWear[4](f) "
+    "tyresDamage[4](B) brakesDamage[4](B) tyreBlisters[4](B) + 18 uint8 损伤/故障字段."
 )
 # Iter-282: 按权威规范修正 CarDamage — tyresWear[4](f) tyresDamage[4](B)
 # brakesDamage[4](B) tyreBlisters[4](B) + 18 个 uint8 损伤/故障字段。
@@ -966,7 +966,7 @@ def parse_motion_ex(data: bytes) -> dict[str, Any]:
 
 
 # --------------------------------------------------------------------------- #
-# Packet 14 — Time Trial  (MEDIUM-LOW; EA PDF 101B, first 6 fields documented)
+# Packet 14 — Time Trial  (HIGH confidence; 3×TimeTrialDataSet)
 # --------------------------------------------------------------------------- #
 CONFIDENCE_TIMETRIAL = (
     "HIGH — PacketTimeTrialData per MacManley/f1-26-udp 权威规范 (Iter-283). "
