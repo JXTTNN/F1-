@@ -224,6 +224,15 @@ def parse_motion(data: bytes) -> dict[str, Any]:
     """Parse PacketMotionData (packet id 0)."""
     vals = _unpack_body(data, _MOTION_BODY)
     per = len(_CAR_MOTION_NAMES)
+    # F1 26 g-force 为 int16 量化 (÷1000) → 转为 G 单位浮点，与全库消费者一致
+    # (quality_score g_lat∈(-10,10)、analytics 阈值>3.0、surrogate g_lat_max=2.5)。
+    g_force_idx = [i for i, n in enumerate(_CAR_MOTION_NAMES) if n.startswith("m_gForce")]
+    if g_force_idx:
+        vals_list = list(vals)
+        for base in range(0, len(vals_list), per):
+            for gi in g_force_idx:
+                vals_list[base + gi] /= 1000.0
+        vals = tuple(vals_list)
     cars = _cars(vals, per, _CAR_MOTION_NAMES)
     return {"m_carMotionData": cars}
 
@@ -622,8 +631,8 @@ CONFIDENCE_CARSTATUS = (
     "Pack note (Iter-11, EA_Groguet official confirmation): the 2026 Season Pack 'boost' "
     "mode is covered by m_ersDeployMode — no separate boost field is required, so this "
     "parser already captures 2026 boost behaviour correctly."
-    "\nIter-191: Adds m_activeAeroX (float) and m_activeAeroZ (float) — F1 2026 active "
-    "aerodynamics front-wing angle (X) and rear-wing angle (Z) in degrees."
+    "\nNote: m_activeAeroX/Z are NOT in CarStatus — F1 2026 active aero lives in "
+    "Packet 16 (CarTelemetryData2); see parse_car_telemetry_2."
 )
 # per car: tractionControl, antiLockBrakes, fuelMix, frontBrakeBias, pitLimiterStatus,
 # fuelInTank(f), fuelCapacity(f), fuelRemainingLaps(f), maxRPM(H), idleRPM(H),
@@ -1177,17 +1186,14 @@ class PacketTypeStats:
 # downforce) modes. The driver can switch between them on-the-fly, and the
 # DRS-style zone activation partly depends on the active aero state.
 #
-# Active aero mode values (packetFormat=2025, CarStatus / CarTelemetry):
-#   0 = Fixed (legacy static aero)
-#   1 = Active (X mode — low drag, straight-line speed)
-#   2 = Active (Z mode — high downforce, cornering grip)
-#   3 = Auto (car decides)
+# Active aero mode values — F1 2026 authoritative (Packet 16 CarTelemetryData2,
+# ``m_activeAeroMode``; see the packet 16 parser above and aligner.py:93):
+#   0 = Z mode (cornering / high downforce)
+#   1 = X mode (straight-line / low drag)
 
 _ACTIVE_AERO_MODE_NAMES: dict[int, str] = {
-    0: "Fixed",
+    0: "Active-Z",
     1: "Active-X",
-    2: "Active-Z",
-    3: "Auto",
 }
 
 
@@ -1203,7 +1209,7 @@ def is_low_drag_mode(mode: int) -> bool:
 
 def is_high_downforce_mode(mode: int) -> bool:
     """Return True if the active aero mode is Z (high-downforce)."""
-    return mode == 2
+    return mode == 0
 
 
 def active_aero_mode_from_frame(frame: dict) -> str:

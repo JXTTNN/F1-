@@ -114,7 +114,7 @@ _INT_KEYS: frozenset[str] = frozenset(
         "tyre_compound", "actual_tyre_compound",
         "pit_status", "driver_status", "result_status", "penalties",
         "active_aero_mode", "active_aero_available",  # Iter-280: Packet 16 整数字段
-        "g_lat", "g_long", "g_vert",  # Iter-285: F1 26 g-force 为 int16 量化
+        # g_lat/g_long/g_vert 已改为 G 单位浮点 (parse_motion ÷1000)，走线性插值，不再入 _INT_KEYS
     }
 )
 
@@ -134,10 +134,10 @@ _FieldSpec = tuple[str, Source, bool]
 #:            +result_status, +penalties
 _SOURCE_SPECS: dict[int, tuple[_FieldSpec, ...]] = {
     _MOTION: (
-        # Iter-285: F1 26 g-force 为 int16 量化 (÷1000), 速度改为 float
-        ("g_lat", "m_gForceLateral", True),
-        ("g_long", "m_gForceLongitudinal", True),
-        ("g_vert", "m_gForceVertical", True),
+        # F1 26 g-force 已在 parse_motion ÷1000 → G 单位浮点，线性插值
+        ("g_lat", "m_gForceLateral", False),
+        ("g_long", "m_gForceLongitudinal", False),
+        ("g_vert", "m_gForceVertical", False),
         ("world_x", "m_worldPositionX", False),
         ("world_y", "m_worldPositionY", False),
         ("world_z", "m_worldPositionZ", False),

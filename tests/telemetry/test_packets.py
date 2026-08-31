@@ -658,3 +658,40 @@ class TestTyreCompoundName:
         assert tyre_compound_name(7) == "intermediate"
         assert tyre_compound_name(8) == "wet"
         assert tyre_compound_name(99) == "Unknown(99)"
+
+
+# --------------------------------------------------------------------------- #
+# Active aero mode helpers (回归: 统一 0=Z/1=X 编码, 与 Packet 16 一致)
+# --------------------------------------------------------------------------- #
+class TestActiveAeroModeHelpers:
+    def test_mode_names_match_packet16(self) -> None:
+        from f1opt.telemetry.packets import active_aero_mode_name
+
+        assert active_aero_mode_name(0) == "Active-Z"
+        assert active_aero_mode_name(1) == "Active-X"
+        assert active_aero_mode_name(2) == "Unknown(2)"
+
+    def test_is_low_drag_mode(self) -> None:
+        from f1opt.telemetry.packets import is_low_drag_mode
+
+        assert is_low_drag_mode(1) is True   # X = 直道低阻
+        assert is_low_drag_mode(0) is False  # Z = 弯道高下压力
+
+    def test_is_high_downforce_mode(self) -> None:
+        from f1opt.telemetry.packets import is_high_downforce_mode
+
+        assert is_high_downforce_mode(0) is True   # Z = 弯道高下压力
+        assert is_high_downforce_mode(1) is False  # X = 直道低阻
+
+
+# --------------------------------------------------------------------------- #
+# Motion g-force 缩放 (回归: int16 量化 ÷1000 → G 单位浮点)
+# --------------------------------------------------------------------------- #
+class TestMotionGForceScaling:
+    def test_gforce_divided_by_1000(self) -> None:
+        header = make_header(0)
+        body = bytearray(24 * 54)  # 24 cars × 54B
+        struct.pack_into("<h", body, 36, 2500)  # car0 m_gForceLateral (int16)
+        _h, parsed = parse_packet(header + bytes(body))
+        g_lat = parsed["m_carMotionData"][0]["m_gForceLateral"]
+        assert g_lat == pytest.approx(2.5)

@@ -4,9 +4,9 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                    F1 25 Game (UDP port 20777)                  │
-│  16 packet types: Motion, Session, LapData, Event, ...          │
-│  60Hz per frame, 22 cars (11 teams × 2, including Cadillac)     │
+│                    F1 2026 Game (UDP port 20777)                │
+│  17 packet types (0-16, incl. CarTelemetryData2): Motion, ...   │
+│  60Hz per frame, 24 car slots (22 drivers / 11 teams, Cadillac) │
 └───────────────────────────────┬─────────────────────────────────┘
                                 │ binary packets (29B header + body)
                                 ▼
@@ -75,7 +75,7 @@
 
 | Module | Purpose |
 |---|---|
-| `packets.py` | F1 25 binary protocol parser, 16 packet types, 29B header |
+| `packets.py` | F1 26 binary protocol parser, 17 packet types, 29B header |
 | `listener.py` | Async UDP listener (port 20777), drop-oldest backpressure |
 | `aligner.py` | Multi-source alignment, 60Hz unified frames, 47 fields |
 | `aggregator.py` | Clean lap detection, Parquet persistence |
