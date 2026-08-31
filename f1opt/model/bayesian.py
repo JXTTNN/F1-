@@ -501,13 +501,23 @@ def bayesian_search_setup(
         recommended_setup, recommended_lap_time, baseline_lap_time,
         predicted_gain_s, iterations, acquisition, history, gp_final_std.
     """
-    from f1opt.data.setup_schema import CarSetup
+    from f1opt.data.setup_schema import ALL_SETUP_FIELDS, CarSetup
     from f1opt.model.surrogate import SETUP_DIM
 
     # to_vector() normalizes each setup field to [0, 1], so BO operates in the
     # unit hypercube of dimension SETUP_DIM.
     n_dim = SETUP_DIM
     bounds = np.array([[0.0, 1.0]] * n_dim)
+
+    # fuel_load 是策略变量 (非调教自由度), 按名定位并钳制到 baseline, 与
+    # optimizer.py 的 _FUEL_LOAD_IDX 口径一致 (否则 BO 会把燃油推到最小值).
+    _fuel_load_idx = next(
+        i for i, s in enumerate(ALL_SETUP_FIELDS()) if s.name == "fuel_load"
+    )
+    _fuel_spec = ALL_SETUP_FIELDS()[_fuel_load_idx]
+    _base_fuel_norm = (
+        float(baseline.fuel_load) - _fuel_spec.min
+    ) / (_fuel_spec.max - _fuel_spec.min)
 
     # Objective: predict_lap_time via surrogate (best-effort; fallback heuristic).
     try:
@@ -518,6 +528,9 @@ def bayesian_search_setup(
         _surrogate_available = False
 
     def objective(vec: np.ndarray) -> float:
+        vec = np.asarray(vec, dtype=np.float64).copy()
+        # 钳制 fuel_load 到 baseline (策略变量, 非调教自由度).
+        vec[_fuel_load_idx] = _base_fuel_norm
         if _surrogate_available:
             try:
                 setup = CarSetup.from_vector(vec.tolist())
@@ -557,6 +570,9 @@ def bayesian_search_setup(
         })
 
     best_x, best_y = bo.best()
+    best_x = np.asarray(best_x, dtype=np.float64).copy()
+    # 钳制推荐结果的 fuel_load 维度到 baseline (BO 原始输出该维可能任意).
+    best_x[_fuel_load_idx] = _base_fuel_norm
     # Safety net: if best found is worse than baseline (shouldn't happen since
     # baseline is seeded, but guard against numerical edge cases), use baseline.
     if best_y > baseline_lap:

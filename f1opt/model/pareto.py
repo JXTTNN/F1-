@@ -23,6 +23,8 @@ from typing import Any
 
 import numpy as np
 
+from f1opt.data.setup_schema import ALL_SETUP_FIELDS, DEFAULT_SETUP
+
 __all__ = [
     "ParetoFront",
     "MultiObjectiveOptimizer",
@@ -471,6 +473,7 @@ class MultiObjectiveOptimizer:
         objectives: list[str],
         n_iterations: int = 20,
         seed: int = 42,
+        baseline: Any = None,
     ) -> None:
         self.bounds = np.asarray(bounds, dtype=np.float64)
         if self.bounds.ndim != 2 or self.bounds.shape[1] != 2:
@@ -485,6 +488,17 @@ class MultiObjectiveOptimizer:
         self.seed = int(seed)
         self._rng = np.random.default_rng(self.seed)
         self._pop_size = 12
+        # fuel_load 是策略变量 (非调教自由度), 按名定位并钳制到 baseline, 与
+        # optimizer.py 的 _FUEL_LOAD_IDX 口径一致.
+        self._fuel_load_idx = next(
+            i for i, s in enumerate(ALL_SETUP_FIELDS()) if s.name == "fuel_load"
+        )
+        _fuel_spec = ALL_SETUP_FIELDS()[self._fuel_load_idx]
+        base = DEFAULT_SETUP if baseline is None else baseline
+        base_fuel = (
+            base.fuel_load if hasattr(base, "fuel_load") else float(base["fuel_load"])
+        )
+        self._base_fuel_norm = (base_fuel - _fuel_spec.min) / (_fuel_spec.max - _fuel_spec.min)
 
     # ------------------------------------------------------------------ #
     def evaluate(self, setup_vec: np.ndarray, track_id: str) -> list[float]:
@@ -497,6 +511,9 @@ class MultiObjectiveOptimizer:
             self.bounds[:, 0],
             self.bounds[:, 1],
         )
+        # 钳制 fuel_load 到 baseline (策略变量), 与 optimizer.py 一致.
+        if vec.shape[0] > self._fuel_load_idx:
+            vec[self._fuel_load_idx] = self._base_fuel_norm
         try:
             setup = CarSetup.from_vector(vec.tolist())
             pred = predict_full(setup, track_id, None)
@@ -665,6 +682,9 @@ class MultiObjectiveOptimizer:
 
         def to_setup(arr: np.ndarray) -> CarSetup:
             clipped = np.clip(np.asarray(arr, dtype=np.float64), 0.0, 1.0)
+            # 钳制 fuel_load 到 baseline (与 evaluate 内部钳制一致).
+            if clipped.shape[0] > self._fuel_load_idx:
+                clipped[self._fuel_load_idx] = self._base_fuel_norm
             return CarSetup.from_vector(clipped.tolist())
 
         return {

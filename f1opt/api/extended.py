@@ -142,6 +142,7 @@ async def pareto_search(body: ParetoSearchRequest) -> dict[str, Any]:
         objectives=body.objectives,
         n_iterations=body.n_iterations,
         seed=body.seed,
+        baseline=DEFAULT_SETUP,
     )
     res = opt.search(body.track_id)
     pareto_front = res["pareto_front"]
