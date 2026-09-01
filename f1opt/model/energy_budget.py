@@ -35,7 +35,7 @@ class LapEnergyPlan:
     soc_before: float
     soc_after: float
     deploy_mode: str
-    """该圈部署模式: save/balanced/attack/quali."""
+    """该圈部署模式: conserve/balanced/attack/qualifying."""
     rationale: str
 
 
@@ -66,7 +66,7 @@ class EnergyBudgetPlanner:
         Args:
             recovery_per_lap: 平均每圈回收 MJ.
             final_attack_laps: 末段全力冲刺圈数.
-            quali_mode_laps: 圈号 (1-indexed) 列表, 这些圈用 quali 模式
+            quali_mode_laps: 圈号 (1-indexed) 列表, 这些圈用 qualifying 模式
                 (e.g. 排位赛, 或正赛关键超车圈).
         """
         plan: list[LapEnergyPlan] = []
@@ -78,7 +78,7 @@ class EnergyBudgetPlanner:
             is_quali = lap_idx in quali_mode_laps
 
             if is_quali:
-                deploy_mode = "quali"
+                deploy_mode = "qualifying"
                 deploy = _MAX_DEPLOY_MJ_PER_LAP  # 100% 部署
                 rationale = "Qualifying-style full deployment"
             elif is_final_attack:
@@ -141,7 +141,7 @@ class EnergyBudgetPlanner:
             "final_soc": plan[-1].soc_after,
             "initial_soc": plan[0].soc_before,
             "attack_laps": sum(1 for p in plan if p.deploy_mode == "attack"),
-            "quali_laps": sum(1 for p in plan if p.deploy_mode == "quali"),
+            "quali_laps": sum(1 for p in plan if p.deploy_mode == "qualifying"),
             "balanced_laps": sum(1 for p in plan if p.deploy_mode == "balanced"),
         }
 

@@ -24,7 +24,7 @@ class TestBasicPlan:
             assert 0 <= p.recover_mj <= 9.0
             assert 0 <= p.soc_before <= 1.0
             assert 0 <= p.soc_after <= 1.0
-            assert p.deploy_mode in ("save", "balanced", "attack", "quali")
+            assert p.deploy_mode in ("conserve", "balanced", "attack", "qualifying")
 
     def test_soc_continuity(self) -> None:
         """前一圈 soc_after = 后一圈 soc_before."""
@@ -67,7 +67,7 @@ class TestQualiMode:
             recovery_per_lap=5.5, final_attack_laps=5, quali_mode_laps=(30,),
         )
         # Lap 30 (1-indexed) → index 29
-        assert plan[29].deploy_mode == "quali"
+        assert plan[29].deploy_mode == "qualifying"
         assert plan[29].deploy_mj == 9.0
 
 

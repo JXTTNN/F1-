@@ -81,9 +81,9 @@ class SustainableFuelModel:
         """仿真单圈燃料消耗."""
         # 基础流量
         base_flow = _FUEL_FLOW_KG_PER_H
-        # 实际流量受模式影响 (quali 全油门, save 节流)
+        # 实际流量受模式影响 (qualifying 全油门, conserve 节流)
         mode_factor = {
-            "quali": 1.0, "race": 0.85, "save": 0.65, "attack": 0.95,
+            "qualifying": 1.0, "race": 0.85, "conserve": 0.65, "attack": 0.95,
         }.get(deploy_mode, 0.85)
         fuel_flow = base_flow * mode_factor
         fuel_used = fuel_flow / 3600.0 * _LAP_DURATION_S

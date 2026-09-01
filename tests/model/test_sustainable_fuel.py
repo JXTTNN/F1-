@@ -17,13 +17,13 @@ class TestBasic:
 
     def test_fuel_under_100_kg_per_h_limit(self) -> None:
         """FIA 2026: max 100 kg/h fuel flow."""
-        for mode in ("quali", "race", "save", "attack"):
+        for mode in ("qualifying", "race", "conserve", "attack"):
             r = fuel_consumption_lap("monza", mode)
             assert r.fuel_flow_kg_per_h <= 100.0 + 1e-6
 
     def test_quali_more_fuel_than_save(self) -> None:
-        r_q = fuel_consumption_lap("monza", "quali")
-        r_s = fuel_consumption_lap("monza", "save")
+        r_q = fuel_consumption_lap("monza", "qualifying")
+        r_s = fuel_consumption_lap("monza", "conserve")
         assert r_q.fuel_used_kg > r_s.fuel_used_kg
 
 

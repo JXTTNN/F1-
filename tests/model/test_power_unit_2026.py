@@ -20,7 +20,7 @@ class TestBasicStructure:
 
     def test_total_power_around_750kw(self) -> None:
         """Total power ~750 kW (400 ICE + 350 MGU-K)."""
-        r = simulate_pu_lap("monza", 0, "quali")
+        r = simulate_pu_lap("monza", 0, "qualifying")
         assert r.ice_power_kw == 400.0
         assert r.mguk_power_kw == 350.0
         assert r.total_power_kw == 750.0
@@ -28,7 +28,7 @@ class TestBasicStructure:
 
 class TestDeployModes:
     def test_quali_max_mguk(self) -> None:
-        r = simulate_pu_lap("monza", 0, "quali")
+        r = simulate_pu_lap("monza", 0, "qualifying")
         assert r.mguk_power_kw == 350.0
         assert r.electric_fraction == pytest.approx(350/750, rel=1e-3)
 
@@ -38,7 +38,7 @@ class TestDeployModes:
         assert r.electric_fraction < 0.5  # <50% since race mode 0.6
 
     def test_save_mode_lowest_mguk(self) -> None:
-        r = simulate_pu_lap("monza", 0, "save")
+        r = simulate_pu_lap("monza", 0, "conserve")
         assert r.mguk_power_kw == 350 * 0.3
 
     def test_attack_mode_burst(self) -> None:
@@ -50,7 +50,7 @@ class TestDeployModes:
 
     def test_attack_mode_disabled_in_quali(self) -> None:
         """Quali already 100%, no attack mode benefit."""
-        r = simulate_pu_lap("monza", 0, "quali", attack_mode=True)
+        r = simulate_pu_lap("monza", 0, "qualifying", attack_mode=True)
         assert r.attack_mode_activated is False  # quali already at 100%
         assert r.mguk_power_kw == 350.0
 
@@ -58,7 +58,7 @@ class TestDeployModes:
 class TestEnergyFlow:
     def test_deployed_energy_under_9_mj(self) -> None:
         """FIA 2026: max 9 MJ deployment per lap."""
-        for mode in ("quali", "race", "save", "attack"):
+        for mode in ("qualifying", "race", "conserve", "attack"):
             r = simulate_pu_lap("monza", 0, mode, attack_mode=(mode == "attack"))
             assert r.energy_deployed_mj <= 9.0 + 1e-6
 
@@ -67,14 +67,14 @@ class TestEnergyFlow:
         assert r.energy_recovered_mj <= 9.0 + 1e-6
 
     def test_quali_deploys_more_than_save(self) -> None:
-        r_q = simulate_pu_lap("monza", 0, "quali")
-        r_s = simulate_pu_lap("monza", 0, "save")
+        r_q = simulate_pu_lap("monza", 0, "qualifying")
+        r_s = simulate_pu_lap("monza", 0, "conserve")
         assert r_q.energy_deployed_mj > r_s.energy_deployed_mj
 
     def test_soc_decreases_in_quali(self) -> None:
         """Quali deploys more than recovers → SoC drops."""
         pu = PowerUnit2026(track_id="monza", initial_soc=0.8)
-        r = pu.simulate_lap(lap_idx=0, deploy_mode="quali",
+        r = pu.simulate_lap(lap_idx=0, deploy_mode="qualifying",
                             recovery_intensity=0.5)
         assert r.battery_soc < 0.8
 
@@ -88,7 +88,7 @@ class TestFuelFlow:
 
     def test_ice_power_constant_400kw(self) -> None:
         """ICE always 400 kW regardless of mode."""
-        for mode in ("quali", "race", "save", "attack"):
+        for mode in ("qualifying", "race", "conserve", "attack"):
             r = simulate_pu_lap("monza", 0, mode, attack_mode=(mode == "attack"))
             assert r.ice_power_kw == 400.0
 
@@ -102,9 +102,9 @@ class TestWetConditions:
 
 class TestConvenienceFunction:
     def test_total_power_for_mode(self) -> None:
-        assert total_power_for_mode("quali") == 750.0
+        assert total_power_for_mode("qualifying") == 750.0
         assert total_power_for_mode("race") == 400 + 350 * 0.6
-        assert total_power_for_mode("save") == 400 + 350 * 0.3
+        assert total_power_for_mode("conserve") == 400 + 350 * 0.3
         assert total_power_for_mode("attack") == 400 + 350 * 0.9
 
     def test_total_power_attack_burst(self) -> None:

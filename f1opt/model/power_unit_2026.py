@@ -35,9 +35,9 @@ _TOTAL_POWER_KW = _ICE_POWER_KW + _MGUK_POWER_KW  # ~750 kW
 
 # 部署模式系数 (相对最大电功率)
 _DEPLOY_MODE_FACTOR: dict[str, float] = {
-    "quali": 1.00,  # 100% MGU-K
+    "qualifying": 1.00,  # 100% MGU-K
     "race": 0.60,
-    "save": 0.30,
+    "conserve": 0.30,
     "attack": 0.90,  # burst 模式
 }
 _ATTACK_MODE_DURATION_S = 4.0  # 4s burst
@@ -66,7 +66,7 @@ class PULapResult:
 
     lap_idx: int
     deploy_mode: str
-    """使用模式: quali/race/save/attack."""
+    """使用模式: qualifying/race/conserve/attack."""
     ice_power_kw: float
     """内燃机功率 kW."""
     mguk_power_kw: float
@@ -123,7 +123,7 @@ class PowerUnit2026:
         """仿真单圈 PU 状态.
 
         Args:
-            deploy_mode: quali/race/save/attack.
+            deploy_mode: qualifying/race/conserve/attack.
             attack_mode: 本圈是否激活 Attack Mode (4s burst).
             recovery_intensity: 制动回收强度 0..1 (赛道制动能量).
             track_wetness: 湿润度 0..1 (湿地下部署降级).
@@ -134,7 +134,7 @@ class PowerUnit2026:
         # 模式系数
         mode_factor = _DEPLOY_MODE_FACTOR.get(deploy_mode, 0.60)
         # Attack Mode: 4s 100% 部署 + 其余时间 race 模式
-        attack_active = attack_mode and deploy_mode != "quali"
+        attack_active = attack_mode and deploy_mode != "qualifying"
         if attack_active:
             # 平均: 4s/90s × 100% + 86s/90s × mode_factor; 湿地同样降级.
             attack_fraction = _ATTACK_MODE_DURATION_S / 90.0
@@ -151,7 +151,7 @@ class PowerUnit2026:
         # 能量流 (简化: 总功率 × 90s 圈时间, 但需 MJ)
         lap_duration_s = 90.0
         # 部署能量 (MGU-K 输出, MJ)
-        # 模式决定实际部署能量 (quali 用满 9 MJ, save 仅用 30%)
+        # 模式决定实际部署能量 (qualifying 用满 9 MJ, conserve 仅用 30%)
         max_deployable_mj = _BATTERY_CAPACITY_MJ * effective_factor
         energy_deployed = min(
             mguk_power * lap_duration_s / 1000.0,
@@ -212,7 +212,7 @@ def simulate_pu_lap(
 def total_power_for_mode(deploy_mode: str, attack: bool = False) -> float:
     """返回模式的总功率 kW."""
     mode_factor = _DEPLOY_MODE_FACTOR.get(deploy_mode, 0.60)
-    if attack and deploy_mode != "quali":
+    if attack and deploy_mode != "qualifying":
         attack_fraction = _ATTACK_MODE_DURATION_S / 90.0
         effective = attack_fraction * 1.0 + (1 - attack_fraction) * mode_factor
     else:
