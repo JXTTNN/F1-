@@ -2,6 +2,28 @@
 
 > 本文件记录 f1opt 系统的优化迭代历史。每次迭代都有可验证的提升。
 
+## 2026-09 优化迭代
+
+### 真实 F1 26 遥测数据验证 + ERS 口径定案 (Iter-298, R4)
+- **真实数据最终裁判**: 使用用户实测 112,036 帧 F1 26 遥测数据包 (14 包类型) 全量逐包验证,
+  解析 0 失败, 头部字段 20,000 帧 0 不匹配; 新增抽样脚本 + 抽样集 fixture 回归测试
+  (`tests/telemetry`, commit 06cb44d / 3c41ed1)。
+- **ERS 电池容量定案 = 4MJ (非 9MJ)**: 真实数据 `m_ersStoreEnergy` n=386,232 全部 ≤4,000,000J,
+  p50=p90=p99=max=4MJ; 与 Go 权威源 `MaxERSStoreEnergyJoules = 4_000_000` 一致。
+  单圈收割上限 ≈7MJ (`m_ersHarvestLimitPerLap` 92.7% 为 7.0); 单圈部署上限 9MJ 保持。
+  语义: 4MJ 电池 + 圈内收割-再部署循环 → 单圈总部署可达 9MJ (9 ≤ 4+7 自洽)。
+  R3-I (98b5b7a) 容量 4→9 属过度修正, 本轮纠正回 4 (commit 5326dd9)。
+- **口径补丁**: optimizer `p_search --iterations` 默认 100→200 与 holistic 收敛一致;
+  `energy_budget.plan()` 内 `recovery_per_lap = min(recovery, 7.0)` 防超收;
+  6 处 ERS 注释/docstring 同步为 4/7/9 口径; 测试断言 ≤9.0→≤7.0,
+  `test_iter164` tolerance 1e-6→1e-3 吸收 scipy-DE 数值噪声 (commit 97b76b4)。
+- **trackId=0 = 墨尔本 Albert Park (5276m)** 定案 (初判巴林系误判, 经 4号 R4-B 质疑 +
+  1号 独立复核纠正; 解析器正确无缺陷)。
+- **stress 测试 loopback 适配**: `test_stress_udp_flood_6000_motion` 突发参数
+  (chunk50/sleep2ms) 在 Windows loopback 上触发内核丢包 (确定性 56%), 非代码回归
+  (裸 UDP echo 同模式同样丢包; 真实 60Hz 节拍 600 帧零丢失);
+  改为单包逐发 + 0.3ms (6000 帧总量与 ≥75% 断言不变), 连跑 3/3 全绿。
+
 ## 2026-08 优化迭代
 
 ### 遥测 g-force 缩放统一 + active_aero 编码统一 (Iter-297)
