@@ -22,8 +22,9 @@ from dataclasses import dataclass
 # FIA 2026 DRS 规则
 _DRS_GAP_THRESHOLD_S = 1.0
 """前车 1s 内可激活 DRS (传统 F1)."""
-_DRS_GAIN_S_PER_ZONE = 0.45
-"""每 DRS 区圈速增益 ~0.45s."""
+_DRS_GAIN_S_PER_ZONE = 0.30
+"""每 DRS 区圈速增益 ~0.30s (对齐 drs_coupling._DRS_GAIN_S_PER_M=0.000375 s/m
+× 800m 参考区 ≈ 0.30s; 旧口径 0.45s/zone 过高)."""
 _DRS_DISABLED_AFTER_SC_LAPS = 2
 """SC restart 后 2 圈 DRS 禁用."""
 _DRS_DISABLED_LAP_1 = True
