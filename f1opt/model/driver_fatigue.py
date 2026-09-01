@@ -36,15 +36,17 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from f1opt.data.ea_f1_2026_benchmark import canonical_track_id
+
 # --------------------------------------------------------------------------- #
 # 赛道疲劳难度系数 (0..1, 1 = 极端)
 # --------------------------------------------------------------------------- #
 _TRACK_FATIGUE_DIFFICULTY: dict[str, float] = {
     # 极端 (高温高湿)
     "singapore": 1.00,    # 夜赛但 32°C + 80% 湿度
-    "losail": 0.95,       # 2023 多人脱水退赛
+    "lusail": 0.95,       # 2023 多人脱水退赛
     "miami": 0.85,
-    "bahrain": 0.80,
+    "sakhir": 0.80,
     "jeddah": 0.75,
     "las_vegas": 0.70,    # 夜赛但干燥
     "yas_marina": 0.70,
@@ -53,15 +55,13 @@ _TRACK_FATIGUE_DIFFICULTY: dict[str, float] = {
     "melbourne": 0.50,
     "shanghai": 0.55,
     "austin": 0.60,
-    "interlagos": 0.55,
+    "sao_paulo": 0.55,
     "monza": 0.45,
     "spa": 0.50,          # 长距离但凉爽
     "silverstone": 0.45,
     "barcelona": 0.50,
-    "budapest": 0.60,     # 夏季高温
-    "hungaroring": 0.60,
+    "hungaroring": 0.60,  # 夏季高温
     "zandvoort": 0.50,
-    "amsterdam": 0.50,
     # 低 (街道赛 / 凉爽 / 短)
     "monaco": 0.35,       # 短距离 + 低速
     "baku": 0.45,
@@ -72,8 +72,13 @@ _DEFAULT_DIFFICULTY = 0.50
 
 
 def track_fatigue_difficulty(track_id: str) -> float:
-    """赛道疲劳难度系数 0..1."""
-    return _TRACK_FATIGUE_DIFFICULTY.get(track_id, _DEFAULT_DIFFICULTY)
+    """赛道疲劳难度系数 0..1.
+
+    用 ``canonical_track_id`` 归一化别名 (bahrain→sakhir 等), 避免旧键
+    静默回退默认值.
+    """
+    cid = canonical_track_id(track_id)
+    return _TRACK_FATIGUE_DIFFICULTY.get(cid, _DEFAULT_DIFFICULTY)
 
 
 # --------------------------------------------------------------------------- #

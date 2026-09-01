@@ -34,6 +34,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from f1opt.data.ea_f1_2026_benchmark import canonical_track_id
+
 
 # --------------------------------------------------------------------------- #
 # 化合物参数 (Pirelli 2026 公开范围, 数值为工程化合理估计)
@@ -114,11 +116,11 @@ def compound_work_window(compound: str) -> tuple[float, float]:
 _TRACK_ABRASIVENESS: dict[str, float] = {
     # 高磨蚀 (Pirelli 等级 4-5)
     "suzuka": 1.30, "barcelona": 1.25, "silverstone": 1.20, "spa": 1.18,
-    "budapest": 1.15, "shanghai": 1.15, "sakhir": 1.15, "amsterdam": 1.10,
+    "hungaroring": 1.15, "shanghai": 1.15, "sakhir": 1.15, "zandvoort": 1.10,
     # 中等磨蚀 (等级 3)
-    "melbourne": 1.00, "bahrain": 1.00, "jeddah": 1.05, "miami": 0.95,
-    "monza": 1.00, "las_vegas": 0.95, "austin": 1.05, "interlagos": 1.05,
-    "losail": 1.10, "yas_marina": 0.95, "montreal": 0.95,
+    "melbourne": 1.00, "jeddah": 1.05, "miami": 0.95,
+    "monza": 1.00, "las_vegas": 0.95, "austin": 1.05, "sao_paulo": 1.05,
+    "lusail": 1.10, "yas_marina": 0.95, "montreal": 0.95,
     # 低磨蚀 (等级 1-2)
     "monaco": 0.65, "singapore": 0.75, "madrid": 0.80,
 }
@@ -126,8 +128,13 @@ _DEFAULT_ABRASIVENESS = 1.00
 
 
 def track_abrasiveness(track_id: str) -> float:
-    """赛道磨蚀系数: >1 磨损快, <1 磨损慢, 默认 1.0."""
-    return _TRACK_ABRASIVENESS.get(track_id, _DEFAULT_ABRASIVENESS)
+    """赛道磨蚀系数: >1 磨损快, <1 磨损慢, 默认 1.0.
+
+    用 ``canonical_track_id`` 归一化别名 (bahrain→sakhir 等), 避免旧键
+    静默回退默认值.
+    """
+    cid = canonical_track_id(track_id)
+    return _TRACK_ABRASIVENESS.get(cid, _DEFAULT_ABRASIVENESS)
 
 
 # --------------------------------------------------------------------------- #

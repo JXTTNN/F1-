@@ -95,6 +95,12 @@ TRACK_ID_ALIASES: dict[str, str] = {
 # (bahrain/interlagos/losail). resolve_track_id 把城市名→赛道名 (查 benchmark),
 # canonical_track_id 把赛道名→城市名 (查 TRACKS_BY_ID).
 _TRACK_ID_CANONICAL: dict[str, str] = {v: k for k, v in TRACK_ID_ALIASES.items()}
+# 额外 model 层旧名 → 城市名 (benchmark 已直接使用 hungaroring/zandvoort 规范键,
+# 因此不进 TRACK_ID_ALIASES, 避免 resolve_track_id 误映射破坏 benchmark 查询).
+_TRACK_ID_CANONICAL.update({
+    "budapest": "hungaroring",   # 布达佩斯 → Hungaroring
+    "amsterdam": "zandvoort",    # 阿姆斯特丹 → Zandvoort
+})
 
 
 def resolve_track_id(track_id: str) -> str:
