@@ -17,7 +17,7 @@ FIA 2026 技术规则核心创新: **Power Unit** 完全重新设计, 电气化�
    - **Save Mode**: 30% 电力, 节能, 高回收
    - **Attack Mode**: 90% 电力, 4s burst (类似 Formula E 攻击模式)
 5. **电池能量上限**: 每圈 9 MJ 回收上限, 9 MJ 部署上限.
-6. **燃油流量上限**: 2026 起 30 kg/h (vs 2025 100 kg/h), 强制电气化.
+6. **燃油流量上限**: 2026 起 100 kg/h, 强制电气化.
 
 公开 API:
     - :class:`PowerUnit2026` — 单圈 PU 状态仿真.
@@ -49,9 +49,9 @@ _RECOVERY_EFFICIENCY = 0.85  # MGU-K 回收效率
 # 每圈可用部署能量 = min(电池容量, recovery + 电池存量)
 # 简化: 每圈 9 MJ 回收 + 9 MJ 部署, 取决于模式
 
-# 燃油流量上限 (2026: 30 kg/h, 一圈 ~90s = 0.75 kg)
-_FUEL_FLOW_KG_PER_H = 30.0
-_FUEL_PER_LAP_KG = _FUEL_FLOW_KG_PER_H / 3600.0 * 90.0  # ~0.75 kg
+# 燃油流量上限 (2026: 100 kg/h, 一圈 ~90s = 2.5 kg)
+_FUEL_FLOW_KG_PER_H = 100.0
+_FUEL_PER_LAP_KG = _FUEL_FLOW_KG_PER_H / 3600.0 * 90.0  # ~2.5 kg
 
 # 电液分配 (50/50 默认)
 _DEFAULT_ELECTRIC_FRACTION = 0.50
@@ -167,7 +167,7 @@ class PowerUnit2026:
         # 限制回收 ≤ 部署上限 9 MJ
         energy_recovered = min(energy_recovered, _BATTERY_CAPACITY_MJ)
 
-        # 燃油消耗 (ICE 工作, 简化 0.75 kg/lap × ICE 满负荷)
+        # 燃油消耗 (ICE 工作, 简化 2.5 kg/lap × ICE 满负荷)
         fuel_used = _FUEL_PER_LAP_KG
 
         # 电池 SoC 更新

@@ -80,11 +80,11 @@ class TestEnergyFlow:
 
 
 class TestFuelFlow:
-    def test_fuel_under_30_kg_per_h_limit(self) -> None:
-        """FIA 2026: 30 kg/h fuel flow, lap 90s = 0.75 kg/lap."""
+    def test_fuel_under_100_kg_per_h_limit(self) -> None:
+        """FIA 2026: 100 kg/h fuel flow, lap 90s = 2.5 kg/lap."""
         r = simulate_pu_lap("monza", 0, "race")
-        # 0.75 kg/lap approximate
-        assert 0.7 <= r.fuel_used_kg <= 0.8
+        # 2.5 kg/lap approximate
+        assert 2.4 <= r.fuel_used_kg <= 2.6
 
     def test_ice_power_constant_400kw(self) -> None:
         """ICE always 400 kW regardless of mode."""
