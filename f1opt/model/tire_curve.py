@@ -12,9 +12,9 @@ Pirelli 2026 轮胎性能曲线: 圈速随轮胎年龄变化的精确模型.
 - Optimal: lap_time = base + deg_per_lap * (lap - W)
 - Cliff: lap_time = base + deg_per_lap * (C - W) + cliff_slope * (lap - C)^1.5
 
-Pirelli 2026 化合物 (C0-C5 + intermediate + wet):
+Pirelli 2026 化合物 (C0-C6 + intermediate + wet):
 - C0 (最硬): warmup 慢, 退化极慢, cliff 晚
-- C5 (最软): warmup 快, 退化快, cliff 早
+- C6 (最软): warmup 快, 退化快, cliff 早
 
 数据来源: Pirelli 2026 pre-event technical notes + F1 车队 simulator 量级估计.
 所有数值是车队 simulator 合理工程估计, 不代表真实车队内部数据.
@@ -47,13 +47,14 @@ from dataclasses import dataclass
 # - c0 +0.8: 权威 +0.6~+0.9s (已正确)
 # - c5 -0.5: 权威 -0.4~-0.6s (已正确)
 _TIRE_CURVE_PARAMS: dict[str, tuple[int, int, float, float, float]] = {
-    # Slick compounds (C0-C5)
-    "c0": (3, 35, 0.018, 0.15, 0.8),    # 最硬, 慢但持久
-    "c1": (3, 32, 0.022, 0.18, 0.5),
-    "c2": (2, 30, 0.028, 0.22, 0.25),   # ~ medium
-    "c3": (2, 28, 0.035, 0.28, 0.0),    # medium baseline
-    "c4": (2, 25, 0.045, 0.35, -0.25),  # ~ soft
-    "c5": (1, 20, 0.060, 0.45, -0.5),   # 最软, 快但短命
+    # Slick compounds (C0-C6)
+    "C0": (3, 35, 0.018, 0.15, 0.8),    # 最硬, 慢但持久
+    "C1": (3, 32, 0.022, 0.18, 0.5),
+    "C2": (2, 30, 0.028, 0.22, 0.25),   # ~ medium
+    "C3": (2, 28, 0.035, 0.28, 0.0),    # medium baseline
+    "C4": (2, 25, 0.045, 0.35, -0.25),  # ~ soft
+    "C5": (1, 20, 0.060, 0.45, -0.5),   # 最软, 快但短命
+    "C6": (1, 18, 0.070, 0.50, -0.55),  # 2026 ultra-soft
     # 别名 (兼容 EA F1 命名)
     "hard": (3, 35, 0.020, 0.17, 0.4),     # ≈ C1, Iter-111: +0.6→+0.4 (权威 +0.3~+0.5)
     "medium": (2, 30, 0.030, 0.25, 0.0),   # ≈ C3
@@ -174,7 +175,7 @@ def tire_curve_for(compound: str) -> TirePerformanceCurve:
     """查询化合物性能曲线.
 
     Args:
-        compound: 化合物名 (c0-c5 / hard / medium / soft / intermediate / wet).
+        compound: 化合物名 (C0-C6 / hard / medium / soft / intermediate / wet).
 
     Returns:
         :class:`TirePerformanceCurve` 实例.

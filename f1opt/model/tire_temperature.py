@@ -35,12 +35,13 @@ from __future__ import annotations
 # - hot_penalty:  每高于上界 1°C 的圈速损失 (s/°C)
 _TIRE_TEMP_PARAMS: dict[str, tuple[float, float, float, float]] = {
     # Slick compounds (Pirelli 2026 命名)
-    "c0": (95.0, 115.0, 0.020, 0.030),  # 最硬, 窗口宽, 灵敏度低
-    "c1": (93.0, 113.0, 0.022, 0.032),
-    "c2": (90.0, 110.0, 0.025, 0.040),
-    "c3": (88.0, 108.0, 0.028, 0.050),
-    "c4": (85.0, 100.0, 0.030, 0.060),  # ~ soft
-    "c5": (82.0,  97.0, 0.035, 0.070),  # 最软, 窗口窄, 灵敏度高
+    "C0": (95.0, 115.0, 0.020, 0.030),  # 最硬, 窗口宽, 灵敏度低
+    "C1": (93.0, 113.0, 0.022, 0.032),
+    "C2": (90.0, 110.0, 0.025, 0.040),
+    "C3": (88.0, 108.0, 0.028, 0.050),
+    "C4": (85.0, 100.0, 0.030, 0.060),  # ~ soft
+    "C5": (82.0,  97.0, 0.035, 0.070),  # 最软, 窗口窄, 灵敏度高
+    "C6": (80.0,  95.0, 0.038, 0.075),  # 2026 ultra-soft
     # EA F1 别名
     "hard":         (95.0, 115.0, 0.020, 0.030),
     "medium":       (90.0, 110.0, 0.025, 0.040),
@@ -72,7 +73,7 @@ def tire_temp_at_lap(
     """估算单圈内轮胎平均工作温度 (°C).
 
     Args:
-        compound: 化合物名 (hard/medium/soft/c0-c5/intermediate/wet).
+        compound: 化合物名 (hard/medium/soft/C0-C6/intermediate/wet).
         track_temp_c: 赛道表面温度 (°C).
         ambient_temp_c: 环境温度 (°C). (保留参数, 当前模型以 track_temp 为主)
         lap_in_stint: 当前 stint 内的圈数 (0-based, 用于冷启动判断).

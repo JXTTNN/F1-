@@ -45,7 +45,7 @@ class TestTempWindow:
 
     def test_c5_narrowest_window(self):
         """C5 最软, 窗口最窄."""
-        c5_low, c5_high = tire_temp_window("c5")
+        c5_low, c5_high = tire_temp_window("C5")
         hard_low, hard_high = tire_temp_window("hard")
         assert (c5_high - c5_low) < (hard_high - hard_low)
 

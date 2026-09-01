@@ -57,22 +57,23 @@ class CompoundStintParams:
     front_wear_bias: float       # 前轴磨损占比 (0.5 = 对称)
 
 
-# Pirelli 2026 化合物: C1=硬, C2=中, C3=软, C4=超软, 中性胎, 雨胎.
+# Pirelli 2026 化合物统一 C-code 口径 (C1=硬, C3=中, C5=软, 中性胎, 雨胎).
+# 颜色名 (soft/medium/hard) 通过 _COLOR_TO_CODE 映射到 C-code, 向后兼容.
 COMPOUND_STINT_PARAMS: dict[str, CompoundStintParams] = {
-    "soft": CompoundStintParams(
-        name="soft", warmup_laps=1.5, warmup_penalty_s=0.45,
+    "C5": CompoundStintParams(
+        name="C5", warmup_laps=1.5, warmup_penalty_s=0.45,
         steady_rate_s=0.07, cliff_threshold_pct=65.0, cliff_rate_s=1.6,
         cliff_length_laps=3, temp_optimal_c=95.0, temp_window_c=12.0,
         front_wear_bias=0.52,
     ),
-    "medium": CompoundStintParams(
-        name="medium", warmup_laps=2.0, warmup_penalty_s=0.55,
+    "C3": CompoundStintParams(
+        name="C3", warmup_laps=2.0, warmup_penalty_s=0.55,
         steady_rate_s=0.045, cliff_threshold_pct=75.0, cliff_rate_s=1.2,
         cliff_length_laps=4, temp_optimal_c=100.0, temp_window_c=14.0,
         front_wear_bias=0.51,
     ),
-    "hard": CompoundStintParams(
-        name="hard", warmup_laps=2.8, warmup_penalty_s=0.70,
+    "C1": CompoundStintParams(
+        name="C1", warmup_laps=2.8, warmup_penalty_s=0.70,
         steady_rate_s=0.028, cliff_threshold_pct=85.0, cliff_rate_s=0.9,
         cliff_length_laps=5, temp_optimal_c=105.0, temp_window_c=16.0,
         front_wear_bias=0.50,
@@ -90,12 +91,20 @@ COMPOUND_STINT_PARAMS: dict[str, CompoundStintParams] = {
         front_wear_bias=0.48,
     ),
 }
-_DEFAULT_COMPOUND = COMPOUND_STINT_PARAMS["medium"]
+# 颜色名 → C-code 别名 (soft/medium/hard 为每场相对色, 默认按 C3 medium 基准).
+_COLOR_TO_CODE: dict[str, str] = {"soft": "C5", "medium": "C3", "hard": "C1"}
+_DEFAULT_COMPOUND = COMPOUND_STINT_PARAMS["C3"]
+
+
+def _resolve_compound(compound: str) -> str:
+    """把颜色名/别名解析为规范 C-code; 未知名回退默认化合物 (C3)."""
+    code = _COLOR_TO_CODE.get(compound, compound)
+    return code if code in COMPOUND_STINT_PARAMS else "C3"
 
 
 def compound_work_window(compound: str) -> tuple[float, float]:
     """返回化合物工作温度窗口 ``(low, high)`` (°C)."""
-    p = COMPOUND_STINT_PARAMS.get(compound, _DEFAULT_COMPOUND)
+    p = COMPOUND_STINT_PARAMS.get(_resolve_compound(compound), _DEFAULT_COMPOUND)
     return (p.temp_optimal_c - p.temp_window_c, p.temp_optimal_c + p.temp_window_c)
 
 
@@ -263,6 +272,7 @@ class TireStintPhysics:
     _params: CompoundStintParams = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
+        self.compound = _resolve_compound(self.compound)
         self._params = COMPOUND_STINT_PARAMS.get(self.compound, _DEFAULT_COMPOUND)
         if self.balance_tendency not in ("understeer", "oversteer", "neutral"):
             self.balance_tendency = "neutral"
@@ -296,7 +306,7 @@ class TireStintPhysics:
         离散的调教磨损更快, 把 TireStintPhysics 与调教耦合 (R8 深度集成).
         """
         base_rate = {
-            "soft": 5.2, "medium": 3.6, "hard": 2.5,
+            "C5": 5.2, "C3": 3.6, "C1": 2.5,
             "intermediate": 7.0, "wet": 3.0,
         }.get(self.compound, 3.6)
         # 车手轮胎管理系数 (0.75-1.30)

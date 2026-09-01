@@ -39,8 +39,8 @@ def test_curve_for_hard():
 def test_curve_for_c0_c5():
     """C0-C5 化合物应可查询."""
     for i in range(6):
-        c = tire_curve_for(f"c{i}")
-        assert c.compound == f"c{i}"
+        c = tire_curve_for(f"C{i}")
+        assert c.compound == f"C{i}"
 
 
 def test_curve_for_intermediate_wet():
@@ -210,22 +210,22 @@ def test_compare_margin_positive():
 # --------------------------------------------------------------------------- #
 def test_c0_to_c5_cliff_decreasing():
     """C0 (硬) 到 C5 (软) 临界圈数递减."""
-    cliffs = [tire_curve_for(f"c{i}").cliff_lap for i in range(6)]
+    cliffs = [tire_curve_for(f"C{i}").cliff_lap for i in range(6)]
     for i in range(5):
         assert cliffs[i] >= cliffs[i + 1]
 
 
 def test_c0_to_c5_deg_increasing():
     """C0 到 C5 退化率递增."""
-    degs = [tire_curve_for(f"c{i}").deg_per_lap_s for i in range(6)]
+    degs = [tire_curve_for(f"C{i}").deg_per_lap_s for i in range(6)]
     for i in range(5):
         assert degs[i] <= degs[i + 1]
 
 
 def test_c5_faster_at_fresh():
     """C5 新胎比 C0 快 (base_offset 更负)."""
-    c0 = tire_curve_for("c0")
-    c5 = tire_curve_for("c5")
+    c0 = tire_curve_for("C0")
+    c5 = tire_curve_for("C5")
     assert c5.base_offset_s < c0.base_offset_s
 
 
@@ -237,8 +237,8 @@ def test_all_compounds_includes_aliases():
     assert "medium" in compounds
     assert "soft" in compounds
     assert "hard" in compounds
-    assert "c0" in compounds
-    assert "c5" in compounds
+    assert "C0" in compounds
+    assert "C5" in compounds
     assert "intermediate" in compounds
     assert "wet" in compounds
 

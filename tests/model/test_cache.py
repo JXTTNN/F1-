@@ -124,8 +124,8 @@ class TestPrecomputedLookups:
     def test_compound_params_returns_dict(self) -> None:
         pl = PrecomputedLookups()
         cp = pl.compound_params()
-        assert "soft" in cp
-        assert "mu_peak" in cp["soft"]
+        assert "C5" in cp
+        assert "mu_peak" in cp["C5"]
 
     def test_invalidate_all_clears(self) -> None:
         pl = PrecomputedLookups()

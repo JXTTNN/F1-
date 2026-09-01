@@ -35,7 +35,7 @@ def test_track_abrasiveness_range() -> None:
 
 
 def test_compound_params_present_for_all_5_compounds() -> None:
-    for name in ("soft", "medium", "hard", "intermediate", "wet"):
+    for name in ("C5", "C3", "C1", "intermediate", "wet"):
         assert name in COMPOUND_STINT_PARAMS
         p = COMPOUND_STINT_PARAMS[name]
         assert 0.5 <= p.warmup_laps <= 3.5

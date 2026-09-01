@@ -182,7 +182,7 @@ class TestTireSet:
     def test_default_init(self) -> None:
         ts = TireSet(compound="soft", track_temp_c=30.0)
         assert len(ts.tires) == 4
-        assert ts.compound == "soft"
+        assert ts.compound == "C5"
 
     def test_update_all_four(self) -> None:
         ts = TireSet()
@@ -308,7 +308,7 @@ class TestTireSet:
 # --------------------------------------------------------------------------- #
 class TestCompoundAndEdge:
     def test_compound_params_complete(self) -> None:
-        for name in ["soft", "medium", "hard", "intermediate", "wet"]:
+        for name in ["C6", "C5", "C3", "C1", "intermediate", "wet"]:
             assert name in COMPOUND_PARAMS
             p = COMPOUND_PARAMS[name]
             assert p.mu_peak > 0
@@ -317,7 +317,7 @@ class TestCompoundAndEdge:
 
     def test_unknown_compound_falls_back(self) -> None:
         t = MagicFormulaTire(compound="nonexistent")
-        assert t.compound == "soft"
+        assert t.compound == "C5"
 
     def test_extreme_slip_clamped(self) -> None:
         t = MagicFormulaTire(load_n=4000.0, compound="soft")

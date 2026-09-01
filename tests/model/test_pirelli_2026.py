@@ -14,10 +14,10 @@ from f1opt.model.pirelli_2026 import (
 
 
 class TestPirelliRange:
-    def test_returns_8_compounds(self) -> None:
+    def test_returns_9_compounds(self) -> None:
         all_c = all_pirelli_compounds()
-        assert len(all_c) == 8
-        for code in ("C0", "C1", "C2", "C3", "C4", "C5", "intermediate", "wet"):
+        assert len(all_c) == 9
+        for code in ("C0", "C1", "C2", "C3", "C4", "C5", "C6", "intermediate", "wet"):
             assert code in all_c
 
     def test_compound_lookup(self) -> None:

@@ -2,9 +2,9 @@
 
 FIA 2026 Pirelli 轮胎规格 (与 F1 2026 EA Sports 游戏一致):
 
-1. **干地 slick 范围**: C0-C5 (6 种, 从硬到软).
+1. **干地 slick 范围**: C0-C6 (7 种, 从硬到软).
    - C0 = 最硬 (Spa/Monza 等高速低磨蚀)
-   - C5 = 最软 (Monaco/Singapore 等低速高 grip)
+   - C6 = 最软 (Monaco/Singapore 等低速高 grip)
 2. **每场选定 3 种**: Pirelli 每场从 6 种中选 3 种作为该场 "soft/medium/hard"
    颜色分配 (例如 Monaco 用 C3-C4-C5, Monza 用 C0-C1-C2).
 3. **2026 新增 wet 干湿两用**: 全新设计, 不需暖胎, 即装即用.
@@ -21,13 +21,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 
-# Pirelli 2026 化合物物理参数 (6 slick + intermediate + wet)
+# Pirelli 2026 化合物物理参数 (7 slick + intermediate + wet)
 # 单位: warmup_laps, steady_rate_s/lap, cliff_threshold_pct, cliff_rate_s
 @dataclass(frozen=True)
 class PirelliCompound2026:
     """Pirelli 2026 化合物参数."""
 
-    code: str  # C0-C5 / intermediate / wet
+    code: str  # C0-C6 / intermediate / wet
     warmup_laps: float
     warmup_penalty_s: float
     steady_rate_s: float
@@ -41,7 +41,7 @@ class PirelliCompound2026:
     """基础磨损 % / lap, 不含赛道磨蚀."""
 
 
-# Pirelli 2026 6 slick 化合物 + 2 雨胎
+# Pirelli 2026 7 slick 化合物 + 2 雨胎
 _PIRELLI_2026_RANGE: dict[str, PirelliCompound2026] = {
     "C0": PirelliCompound2026(
         code="C0", warmup_laps=3.0, warmup_penalty_s=0.80,
@@ -78,6 +78,12 @@ _PIRELLI_2026_RANGE: dict[str, PirelliCompound2026] = {
         steady_rate_s=0.075, cliff_threshold_pct=66.0, cliff_rate_s=1.7,
         temp_optimal_c=92.0, temp_window_c=12.0,
         grip_factor=1.08, wear_rate_per_lap=5.2,
+    ),
+    "C6": PirelliCompound2026(
+        code="C6", warmup_laps=1.2, warmup_penalty_s=0.40,
+        steady_rate_s=0.085, cliff_threshold_pct=62.0, cliff_rate_s=1.9,
+        temp_optimal_c=90.0, temp_window_c=11.0,
+        grip_factor=1.12, wear_rate_per_lap=6.0,
     ),
     "intermediate": PirelliCompound2026(
         code="intermediate", warmup_laps=1.0, warmup_penalty_s=0.30,
@@ -132,7 +138,7 @@ class Pirelli2026Range:
 
 
 # Pirelli 2026 各场选胎方案 (基于 Pirelli 公开 pre-event notes 估算)
-# 不同赛道选用 C0-C5 中的 3 种作为该场 soft/medium/hard
+# 不同赛道选用 C0-C6 中的 3 种作为该场 soft/medium/hard
 _TRACK_TIRE_SELECTION: dict[str, tuple[str, str, str]] = {
     # (soft, medium, hard) — 该场实际 C-code
     # 高速低磨蚀赛道用最硬 C0-C2
@@ -181,7 +187,7 @@ def tire_compound_for_track(track_id: str) -> Pirelli2026Range:
 
 
 def all_pirelli_compounds() -> dict[str, PirelliCompound2026]:
-    """返回 Pirelli 2026 全部 8 种化合物参数."""
+    """返回 Pirelli 2026 全部 9 种化合物参数."""
     return dict(_PIRELLI_2026_RANGE)
 
 
