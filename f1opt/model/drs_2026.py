@@ -1,5 +1,7 @@
 """F1 2026 — DRS 替代规则 (Iter-31).
 
+DEPRECATED：无生产调用，维护须对齐 2026 权威口径。
+
 FIA 2026 重大变化: **DRS 在部分场景被 Manual Override + Active Aero 替代**.
 
 但 DRS 仍保留用于:
