@@ -21,7 +21,7 @@ class TestBasicPlan:
         for p in plan:
             assert isinstance(p, LapEnergyPlan)
             assert 0 <= p.deploy_mj <= 9.0
-            assert 0 <= p.recover_mj <= 9.0
+            assert 0 <= p.recover_mj <= 7.0
             assert 0 <= p.soc_before <= 1.0
             assert 0 <= p.soc_after <= 1.0
             assert p.deploy_mode in ("conserve", "balanced", "attack", "qualifying")
@@ -41,10 +41,10 @@ class TestDeploymentLimits:
         for p in plan:
             assert p.deploy_mj <= 9.0 + 1e-6
 
-    def test_no_lap_exceeds_9_mj_recover(self) -> None:
+    def test_no_lap_exceeds_7_mj_recover(self) -> None:
         plan = plan_energy_budget(total_laps=58, recovery_per_lap=8.0)
         for p in plan:
-            assert p.recover_mj <= 9.0 + 1e-6
+            assert p.recover_mj <= 7.0 + 1e-6
 
 
 class TestFinalAttack:

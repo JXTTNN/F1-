@@ -71,6 +71,8 @@ class EnergyBudgetPlanner:
         """
         plan: list[LapEnergyPlan] = []
         soc = self.initial_soc
+        # 每圈回收上限 7MJ (FIA 2026 实测), 入参超限则截断
+        recovery_per_lap = min(float(recovery_per_lap), _MAX_RECOVER_MJ_PER_LAP)
 
         for lap_idx in range(1, self.total_laps + 1):
             soc_before = soc

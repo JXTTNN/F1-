@@ -1,12 +1,12 @@
 """F1 ERS (Energy Recovery System) 部署模型 (Iter-5).
 
-F1 2026 规则下每圈可部署 9 MJ 电动能 (MGU-K) 与回收 6 MJ (FIA 2026
+F1 2026 规则下每圈可部署 9 MJ 电动能 (MGU-K) 与回收 7 MJ (FIA 2026
 技术规则 §5.4). ERS 部署策略对圈速影响 0.3-0.5 s/lap — 真实车队
 (Mercedes/Red Bull/Racing Bulls 等) 都会基于赛道特性为每段直道分配能量.
 
 本模块实现一个工程化的 ERS 部署模型:
 
-- 每圈 9 MJ 部署预算 + 6 MJ 回收预算 (FIA 限制).
+- 每圈 9 MJ 部署预算 + 7 MJ 回收预算 (FIA 限制).
 - 电池状态 (State of Charge, SoC): 0-100%, 起始 50%, 不能超出.
 - 部署区间: 按赛道最长直道优先分配 (drag-limited 直道收益最大).
 - 部署效率: 1 MJ ≈ 0.08 s 直道收益 (基于公开 F1 工程估算).
@@ -316,7 +316,7 @@ class ERSDeploymentModel:
     # 回收分配
     # ------------------------------------------------------------------ #
     def _allocate_harvest(self) -> float:
-        """总回收量, 受 FIA 限额 6 MJ 限制."""
+        """总回收量, 受 FIA 限额 7 MJ 限制."""
         requested = self.profile.total_harvest_mj()
         # 攻击模式: 减少回收 (省刹车阻力), 保守模式: 增加回收
         if self.mode == "attack":

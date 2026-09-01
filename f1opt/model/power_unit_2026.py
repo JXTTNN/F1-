@@ -173,7 +173,7 @@ class PowerUnit2026:
         # 电池 SoC 更新
         # net_energy = recovered - deployed (MJ)
         net_energy = energy_recovered - energy_deployed
-        # 容量 9 MJ, SoC 变化 = net_energy / capacity
+        # 容量 4 MJ, SoC 变化 = net_energy / capacity
         soc_change = net_energy / _BATTERY_CAPACITY_MJ
         # SoC 持久化累加: 以上一圈结束 SoC 为基准 (而非每次用 initial_soc).
         new_soc = max(0.0, min(1.0, self._soc + soc_change))

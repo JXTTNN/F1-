@@ -64,7 +64,7 @@ class TestEnergyFlow:
 
     def test_recovered_energy_under_9_mj(self) -> None:
         r = simulate_pu_lap("monza", 0, "race", recovery_intensity=1.0)
-        assert r.energy_recovered_mj <= 9.0 + 1e-6
+        assert r.energy_recovered_mj <= 7.0 + 1e-6
 
     def test_quali_deploys_more_than_save(self) -> None:
         r_q = simulate_pu_lap("monza", 0, "qualifying")

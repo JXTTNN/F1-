@@ -73,7 +73,8 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["differential", "bayesian"],
         default="differential",
     )
-    p_search.add_argument("--iterations", type=int, default=100)
+    p_search.add_argument("--iterations", type=int, default=200,
+                          help="DE 迭代次数 (holistic 多目标建议 >=200 以收敛)")
     p_search.add_argument("--seed", type=int, default=42,
                          help="随机种子 (固定可复现)")
     p_search.add_argument("--json", action="store_true")

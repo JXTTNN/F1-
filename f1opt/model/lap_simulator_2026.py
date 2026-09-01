@@ -168,7 +168,9 @@ def _inline_pu_gain(
         (deploy_mj, harvest_mj, net_gain_s, soc_after_mj)
     """
     target, mode_eff = _PU_MODE_PARAMS_INLINE[mode]
-    actual_deploy = target  # 每圈部署上限 9MJ (4MJ 电池圈内收割-再部署, 非瞬时截断)
+    # 圈内收割-再部署为近似模型: 每圈 deploy 受 9MJ 单圈上限约束, 不逐时刻能量守恒,
+    # 末端 SoC 钳制 [0, BATTERY_CAPACITY_MJ] 吸收瞬时超支.
+    actual_deploy = target
     # 低 SoC + QUALIFYING 自动降级
     if soc_mj < 0.2 * BATTERY_CAPACITY_MJ and mode == PUDeployMode.QUALIFYING:
         actual_deploy = min(actual_deploy, target * 0.6)
