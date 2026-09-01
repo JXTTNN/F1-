@@ -1,5 +1,7 @@
 """F1 2026 — 50% 电动力分配规则 (Iter-26).
 
+DEPRECATED：无生产调用，维护须对齐 2026 权威口径。
+
 FIA 2026 技术规则核心创新: **Power Unit** 完全重新设计, 电气化大幅提升:
 
 1. **MGU-K 升级**: 最大功率 350 kW (vs 2025 120 kW), 部署上限大增.
@@ -24,7 +26,7 @@ FIA 2026 技术规则核心创新: **Power Unit** 完全重新设计, 电气化�
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 # FIA 2026 PU 规格
 _ICE_POWER_KW = 400.0
@@ -103,6 +105,12 @@ class PowerUnit2026:
     initial_soc: float = 0.6
     """初始电池 SoC 0..1."""
 
+    # 跨圈持久化的当前 SoC (上一圈结束后更新, 而非每次用 initial_soc 重置).
+    _soc: float = field(init=False, repr=False, default=0.0)
+
+    def __post_init__(self) -> None:
+        self._soc = max(0.0, min(1.0, float(self.initial_soc)))
+
     # ------------------------------------------------------------------ #
     def simulate_lap(
         self,
@@ -128,10 +136,10 @@ class PowerUnit2026:
         # Attack Mode: 4s 100% 部署 + 其余时间 race 模式
         attack_active = attack_mode and deploy_mode != "quali"
         if attack_active:
-            # 平均: 4s/90s × 100% + 86s/90s × mode_factor
+            # 平均: 4s/90s × 100% + 86s/90s × mode_factor; 湿地同样降级.
             attack_fraction = _ATTACK_MODE_DURATION_S / 90.0
             effective_factor = (attack_fraction * 1.0
-                                + (1 - attack_fraction) * mode_factor)
+                                + (1 - attack_fraction) * mode_factor) * wet_factor
         else:
             effective_factor = mode_factor * wet_factor
 
@@ -167,7 +175,9 @@ class PowerUnit2026:
         net_energy = energy_recovered - energy_deployed
         # 容量 9 MJ, SoC 变化 = net_energy / capacity
         soc_change = net_energy / _BATTERY_CAPACITY_MJ
-        new_soc = max(0.0, min(1.0, self.initial_soc + soc_change))
+        # SoC 持久化累加: 以上一圈结束 SoC 为基准 (而非每次用 initial_soc).
+        new_soc = max(0.0, min(1.0, self._soc + soc_change))
+        self._soc = new_soc
 
         return PULapResult(
             lap_idx=lap_idx,
