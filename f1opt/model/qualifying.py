@@ -48,8 +48,8 @@ _TIRE_GAIN_HARD_S = -0.35  # hard 略慢
 # 用过的胎 (磨损 > 30%) 损失
 _USED_TIRE_PENALTY_S = 0.15
 
-# 燃油量惩罚 (1 kg = 0.030 s, 起步 110 kg, Q1 末约 95 kg, Q3 末约 80 kg)
-_FUEL_PENALTY_S_PER_KG = 0.030
+# 燃油量惩罚 (1 kg = 0.035 s, 起步 110 kg, Q1 末约 95 kg, Q3 末约 80 kg)
+_FUEL_PENALTY_S_PER_KG = 0.035
 _Q1_FUEL_KG = 100.0
 _Q2_FUEL_KG = 90.0
 _Q3_FUEL_KG = 80.0

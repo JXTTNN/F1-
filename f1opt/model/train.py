@@ -177,7 +177,7 @@ def heuristic_sectors(
     fl = n["fl"]  # fuel_load norm
     aggression = _driver_aggression(driver_vec)
     # 燃油质量惩罚: 重燃油 × (1 + 赛道长度) — 长赛道每圈消耗更多时间.
-    fuel_per_sec = setup.fuel_load * 0.03 / 3.0 * (1.0 + 0.3 * track_len_norm)
+    fuel_per_sec = setup.fuel_load * 0.035 / 3.0 * (1.0 + 0.3 * track_len_norm)
 
     sectors: list[float] = []
     for s in range(3):

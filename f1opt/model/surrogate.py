@@ -93,7 +93,7 @@ AVG_SPEED: dict[str, float] = {
 }
 _DEFAULT_AVG_SPEED = 70.0
 _DEFAULT_LENGTH_M = 5000.0  # 未知赛道回退长度
-_FUEL_PENALTY_PER_KG = 0.03
+_FUEL_PENALTY_PER_KG = 0.035
 _MIN_LAP_TIME = 60.0
 _MAX_LAP_TIME = 200.0
 
@@ -337,7 +337,7 @@ def track_prior(track_id: str, setup: CarSetup) -> float:
     """物理先验圈速 (Iter-67: setup-aware, EA F1 2026 benchmark + setup 物理惩罚).
 
     24 赛道用 EA F1 2026 精确基准 (0.01% 误差), 未知赛道回退到 length/speed 启发式.
-    燃油惩罚叠加 (fuel_load × 0.03 s/kg).
+    燃油惩罚叠加 (fuel_load × 0.035 s/kg).
 
     Iter-67: 叠加 :func:`setup_penalty_s` (来自 setup_physics_bridge) — setup 偏离
     该赛道类型最优的物理代价. 这让先验 *setup-aware*, DNN 只需学习小残差
