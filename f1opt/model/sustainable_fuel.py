@@ -1,12 +1,14 @@
 """F1 2026 — 可持续燃料 E10+ 模型 (Iter-27).
 
+DEPRECATED：无生产调用，维护须对齐 2026 权威口径。
+
 FIA 2026 强制使用 **100% 可持续燃料** (advanced sustainable fuel).
 F1 2026 (EA Sports 官方) 还原此规则:
 
 1. **燃料组成**: 100% 可持续来源 (生物乙醇 + e-fuel 合成).
 2. **能量密度**: 比 2025 E10 (10% 乙醇) 略低 (~3% lower energy density).
 3. **冷却需求**: 可持续燃料燃烧温度高, 散热器需更大.
-4. **每圈消耗**: 30 kg/h 上限 (vs 2025 100 kg/h) — F1 2026 强制电气化.
+4. **每圈消耗**: 100 kg/h 上限 (FIA 2026 燃油质量流限, 与 2025 相同).
 5. **赛道温度耦合**: 高温环境冷却不足时, 引擎降功率.
 6. **海拔耦合**: 高海拔 (Mexico City) 空气稀薄 → 燃烧效率下降.
 
@@ -20,9 +22,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 # FIA 2026 燃料规格
-_FUEL_FLOW_KG_PER_H = 30.0  # max flow rate
+_FUEL_FLOW_KG_PER_H = 100.0  # max flow rate (FIA 2026 上限 100 kg/h)
 _LAP_DURATION_S = 90.0
-_FUEL_PER_LAP_KG_BASE = _FUEL_FLOW_KG_PER_H / 3600.0 * _LAP_DURATION_S  # ~0.75
+_FUEL_PER_LAP_KG_BASE = _FUEL_FLOW_KG_PER_H / 3600.0 * _LAP_DURATION_S  # ~2.5
 
 # 可持续燃料能量密度 (vs 2025 E10 = 1.0)
 _ENERGY_DENSITY_FACTOR = 0.97  # 3% lower

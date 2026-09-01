@@ -15,11 +15,11 @@ class TestBasic:
         r = fuel_consumption_lap("monza", "race")
         assert isinstance(r, FuelLapResult)
 
-    def test_fuel_under_30_kg_per_h_limit(self) -> None:
-        """FIA 2026: max 30 kg/h fuel flow."""
+    def test_fuel_under_100_kg_per_h_limit(self) -> None:
+        """FIA 2026: max 100 kg/h fuel flow."""
         for mode in ("quali", "race", "save", "attack"):
             r = fuel_consumption_lap("monza", mode)
-            assert r.fuel_flow_kg_per_h <= 30.0 + 1e-6
+            assert r.fuel_flow_kg_per_h <= 100.0 + 1e-6
 
     def test_quali_more_fuel_than_save(self) -> None:
         r_q = fuel_consumption_lap("monza", "quali")
