@@ -20,8 +20,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 _MAX_DEPLOY_MJ_PER_LAP = 9.0
-_MAX_RECOVER_MJ_PER_LAP = 9.0
-_BATTERY_CAPACITY_MJ = 9.0
+_MAX_RECOVER_MJ_PER_LAP = 7.0
+_BATTERY_CAPACITY_MJ = 4.0
 _DEFAULT_RECOVERY_PER_LAP = 5.5  # 平均每圈回收 5.5 MJ (制动 + MGU-K)
 
 

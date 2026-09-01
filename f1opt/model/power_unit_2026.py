@@ -44,10 +44,10 @@ _ATTACK_MODE_DURATION_S = 4.0  # 4s burst
 _ATTACK_MODE_COOLDOWN_S = 30.0  # 30s 冷却
 
 # 电池容量与能量流
-_BATTERY_CAPACITY_MJ = 9.0  # 每圈上限
+_BATTERY_CAPACITY_MJ = 4.0  # 电池容量 4MJ (与单圈部署上限 9MJ 是不同物理量)
 _RECOVERY_EFFICIENCY = 0.85  # MGU-K 回收效率
 # 每圈可用部署能量 = min(电池容量, recovery + 电池存量)
-# 简化: 每圈 9 MJ 回收 + 9 MJ 部署, 取决于模式
+# 简化: 每圈 7 MJ 回收 + 9 MJ 部署, 取决于模式
 
 # 燃油流量上限 (2026: 100 kg/h, 一圈 ~90s = 2.5 kg)
 _FUEL_FLOW_KG_PER_H = 100.0

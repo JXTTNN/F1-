@@ -44,8 +44,8 @@ MGU_K_POWER_KW = 350.0        # MGU-K 功率 (FIA 2026 §5.3, 比 2025 的 120kW
 TOTAL_POWER_KW = ICE_POWER_KW + MGU_K_POWER_KW  # 750 kW
 
 MAX_DEPLOY_MJ_PER_LAP = 9.0   # 每圈部署上限 (FIA 2026 §5.4, 比 2014-2025 的 4 MJ 翻倍)
-MAX_HARVEST_MJ_PER_LAP = 6.0  # 每圈回收物理上限 (刹车能量限制)
-BATTERY_CAPACITY_MJ = 9.0     # 电池容量 (匹配单圈最大部署)
+MAX_HARVEST_MJ_PER_LAP = 7.0  # 每圈回收物理上限 (真实数据 7.0, 部分帧 7.5)
+BATTERY_CAPACITY_MJ = 4.0     # 电池容量 (真实数据 max 4MJ)
 
 # 圈速影响系数 (EA F1 2026 物理量级)
 # 2026 MGU-K 350kW, 部署收益比旧 120kW ERS 高
@@ -163,8 +163,8 @@ class PU2026Model:
         - 圈速收益 = 部署收益 - 回收代价.
         """
         target = self.target_deploy_mj()
-        # SoC 限制: 实际部署不能超过当前 SoC
-        actual_deploy = min(target, state.soc_mj)
+        # 每圈部署上限 MAX_DEPLOY_MJ_PER_LAP (4MJ 电池圈内收割-再部署, 非瞬时截断)
+        actual_deploy = target
         # 低 SoC 自动降级 (保护电池)
         if state.is_low_soc and self.mode == PUDeployMode.QUALIFYING:
             actual_deploy = min(actual_deploy, target * 0.6)

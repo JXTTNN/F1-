@@ -64,7 +64,7 @@ class TestFinalAttack:
 class TestQualiMode:
     def test_quali_laps_full_deployment(self) -> None:
         plan = EnergyBudgetPlanner(total_laps=58, initial_soc=0.7).plan(
-            recovery_per_lap=5.5, final_attack_laps=5, quali_mode_laps=(30,),
+            recovery_per_lap=7.0, final_attack_laps=5, quali_mode_laps=(30,),
         )
         # Lap 30 (1-indexed) → index 29
         assert plan[29].deploy_mode == "qualifying"

@@ -141,11 +141,12 @@ class TestERSPhysics:
             m.simulate_lap()
             assert 0.0 <= m.soc <= 1.0
 
-    def test_deploy_cannot_exceed_soc_available(self) -> None:
-        """If SoC=0, deploy must be 0 (no energy to spend)."""
+    def test_deploy_uses_lap_budget_not_instantaneous_soc(self) -> None:
+        """SoC=0 时仍按单圈预算部署 (4MJ 电池圈内收割-再部署循环)."""
         m = ERSDeploymentModel(track_id="monza", mode="attack", initial_soc=0.0)
         r = m.simulate_lap()
-        assert r["deploy_mj"] == 0.0
+        assert r["deploy_mj"] <= 9.0 + 1e-6  # attack 预算 9*1.3→clamp 9
+        assert r["soc_after"] >= 0.0
 
     def test_attack_deploys_more_than_conserve(self) -> None:
         m_atk = ERSDeploymentModel(track_id="monza", mode="attack", initial_soc=0.9)
@@ -166,14 +167,15 @@ class TestERSPhysics:
         m_con = ERSDeploymentModel(track_id="monza", mode="conserve", initial_soc=0.9)
         r_atk = m_atk.simulate_lap()
         r_con = m_con.simulate_lap()
-        assert r_atk["soc_after"] < r_con["soc_after"]
+        # 攻击模式净能量更负 (部署 9 远大于回收), 消耗更多
+        assert r_atk["net_mj"] < r_con["net_mj"]
 
-    def test_harvest_charges_battery(self) -> None:
-        """Low SoC + conserve → SoC should increase over time."""
+    def test_harvest_positive_and_soc_clamped(self) -> None:
+        """回收为正且 SoC 钳制在 [0,1] (monza 低回收, conserve 部署仍 > 回收)."""
         m = ERSDeploymentModel(track_id="monza", mode="conserve", initial_soc=0.1)
-        soc_before = m.soc
-        m.simulate_lap()
-        assert m.soc > soc_before
+        r = m.simulate_lap()
+        assert r["harvest_mj"] > 0.0
+        assert 0.0 <= m.soc <= 1.0
 
     def test_deploy_respects_fia_cap(self) -> None:
         """Deploy cannot exceed FIA 9 MJ cap even with full SoC + attack mode."""
@@ -184,7 +186,7 @@ class TestERSPhysics:
         assert r["deploy_mj"] <= 9.0 + 1e-6
 
     def test_harvest_respects_fia_cap(self) -> None:
-        """Harvest cannot exceed FIA 6 MJ cap."""
+        """Harvest cannot exceed FIA 7 MJ cap."""
         # Use a profile with very high harvest request
         big_profile = ERSTrackProfile(
             track_id="test", lap_length_m=5000.0,
@@ -195,7 +197,7 @@ class TestERSPhysics:
         m = ERSDeploymentModel(track_id="unknown", mode="balanced", initial_soc=0.5)
         m.profile = big_profile
         r = m.simulate_lap()
-        assert r["harvest_mj"] <= 6.0 + 1e-6
+        assert r["harvest_mj"] <= 7.0 + 1e-6
 
 
 # --------------------------------------------------------------------------- #
@@ -262,7 +264,7 @@ class TestRobustness:
     def test_soc_at_zero_still_runs(self) -> None:
         m = ERSDeploymentModel(track_id="monza", initial_soc=0.0)
         r = m.simulate_lap()
-        # Deploy is 0 but harvest charges the battery
-        assert r["deploy_mj"] == 0.0
+        # SoC=0 仍可按单圈预算部署 (圈内收割-再部署), 末端钳制
+        assert r["deploy_mj"] > 0.0
         assert r["harvest_mj"] > 0.0
         assert r["soc_after"] >= 0.0

@@ -281,9 +281,9 @@ class SurrogateValidator:
 class PhysicsValidator:
     """Validate that the physics sub-models are physically sane."""
 
-    # ERS energy-balance assumptions (kJ): per-lap recovery ceiling + store.
-    _ERS_MAX_RECOVER_MJ = 6.0
-    _ERS_INITIAL_STORE_MJ = 9.0
+    # ERS energy-balance assumptions (MJ): per-lap recovery ceiling + store.
+    _ERS_MAX_RECOVER_MJ = 7.0
+    _ERS_INITIAL_STORE_MJ = 4.0
 
     def __init__(self) -> None:
         self.aero = AeroModel()

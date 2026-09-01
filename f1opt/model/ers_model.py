@@ -30,8 +30,8 @@ from typing import Any
 
 # FIA 2026 限制
 _MAX_DEPLOY_MJ_PER_LAP = 9.0
-_MAX_HARVEST_MJ_PER_LAP = 6.0
-_BATTERY_CAPACITY_MJ = 9.0           # 电池容量 (MJ), 同单圈最大部署量
+_MAX_HARVEST_MJ_PER_LAP = 7.0        # 游戏实测回收上限 7.0 (部分帧 7.5)
+_BATTERY_CAPACITY_MJ = 4.0           # 电池容量 4MJ — 与单圈部署上限 9MJ 是不同物理量
 _DEFAULT_INITIAL_SOC = 0.5            # 起始 SoC 50%
 
 # 工程化系数
@@ -302,9 +302,8 @@ class ERSDeploymentModel:
         else:
             budget = _MAX_DEPLOY_MJ_PER_LAP
 
-        # 受 SoC 限制: 最多用完电池剩余
-        soc_available_mj = self._soc * _BATTERY_CAPACITY_MJ
-        budget = min(budget, soc_available_mj)
+        # 每圈部署上限 _MAX_DEPLOY_MJ_PER_LAP (4MJ 电池圈内收割-再部署, 非瞬时截断)
+        budget = min(budget, _MAX_DEPLOY_MJ_PER_LAP)
 
         # 按权重分配
         out: list[tuple[ERSDeploymentZone, float]] = []
