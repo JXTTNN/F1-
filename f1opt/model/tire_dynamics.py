@@ -55,10 +55,10 @@ class CompoundParams:
 # Pirelli 2026 化合物统一 C-code 口径 (C0-C6). 颜色名 (soft/medium/hard)
 # 通过 _COLOR_TO_CODE 映射到 C-code, 保持向后兼容 (旧调用方无需改动).
 COMPOUND_PARAMS: dict[str, CompoundParams] = {
-    "C6": CompoundParams("C6", 1.95, 29.0, 0.32, 85.0, 18.0),  # ultra-soft
-    "C5": CompoundParams("C5", 1.90, 28.0, 0.30, 90.0, 20.0),  # ~ soft
-    "C3": CompoundParams("C3", 1.70, 27.0, 0.28, 90.0, 22.0),  # ~ medium
-    "C1": CompoundParams("C1", 1.50, 26.0, 0.27, 95.0, 25.0),  # ~ hard
+    "C6": CompoundParams("C6", 1.95, 29.0, 0.32, 90.0, 11.0),  # ultra-soft (pirelli)
+    "C5": CompoundParams("C5", 1.90, 28.0, 0.30, 92.0, 12.0),  # ~ soft (pirelli)
+    "C3": CompoundParams("C3", 1.70, 27.0, 0.28, 100.0, 15.0),  # ~ medium (pirelli)
+    "C1": CompoundParams("C1", 1.50, 26.0, 0.27, 107.0, 17.0),  # ~ hard (pirelli)
     "intermediate": CompoundParams("intermediate", 1.30, 22.0, 0.24, 80.0, 30.0),
     "wet": CompoundParams("wet", 0.90, 20.0, 0.20, 70.0, 35.0),
 }

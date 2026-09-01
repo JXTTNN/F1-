@@ -65,19 +65,19 @@ COMPOUND_STINT_PARAMS: dict[str, CompoundStintParams] = {
     "C5": CompoundStintParams(
         name="C5", warmup_laps=1.5, warmup_penalty_s=0.45,
         steady_rate_s=0.07, cliff_threshold_pct=65.0, cliff_rate_s=1.6,
-        cliff_length_laps=3, temp_optimal_c=95.0, temp_window_c=12.0,
+        cliff_length_laps=3, temp_optimal_c=92.0, temp_window_c=12.0,
         front_wear_bias=0.52,
     ),
     "C3": CompoundStintParams(
         name="C3", warmup_laps=2.0, warmup_penalty_s=0.55,
         steady_rate_s=0.045, cliff_threshold_pct=75.0, cliff_rate_s=1.2,
-        cliff_length_laps=4, temp_optimal_c=100.0, temp_window_c=14.0,
+        cliff_length_laps=4, temp_optimal_c=100.0, temp_window_c=15.0,
         front_wear_bias=0.51,
     ),
     "C1": CompoundStintParams(
         name="C1", warmup_laps=2.8, warmup_penalty_s=0.70,
         steady_rate_s=0.028, cliff_threshold_pct=85.0, cliff_rate_s=0.9,
-        cliff_length_laps=5, temp_optimal_c=105.0, temp_window_c=16.0,
+        cliff_length_laps=5, temp_optimal_c=107.0, temp_window_c=17.0,
         front_wear_bias=0.50,
     ),
     "intermediate": CompoundStintParams(

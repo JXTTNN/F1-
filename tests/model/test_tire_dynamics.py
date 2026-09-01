@@ -117,17 +117,17 @@ class TestCombinedForce:
 # Grip modifiers
 # --------------------------------------------------------------------------- #
 class TestGripModifiers:
-    def test_grip_vs_temp_peak_at_90(self) -> None:
-        t = MagicFormulaTire(compound="soft")  # peak_temp 90
-        assert t.grip_vs_temp(90.0) == pytest.approx(1.0, abs=1e-6)
+    def test_grip_vs_temp_peak_at_92(self) -> None:
+        t = MagicFormulaTire(compound="soft")  # C5 peak_temp 92 (pirelli)
+        assert t.grip_vs_temp(92.0) == pytest.approx(1.0, abs=1e-6)
         assert t.grip_vs_temp(70.0) < 1.0
         assert t.grip_vs_temp(110.0) < 1.0
 
     def test_grip_vs_temp_falloff(self) -> None:
         t = MagicFormulaTire(compound="soft")
         # At peak, full grip.
-        g_peak = t.grip_vs_temp(90.0)
-        # Well outside window (peak+2*window=130), grip ~0.
+        g_peak = t.grip_vs_temp(92.0)
+        # Well outside window (peak+2*window=116), grip ~0.
         g_hot = t.grip_vs_temp(130.0)
         assert g_peak > g_hot
         assert g_hot < 0.2
