@@ -23,6 +23,9 @@
   (chunk50/sleep2ms) 在 Windows loopback 上触发内核丢包 (确定性 56%), 非代码回归
   (裸 UDP echo 同模式同样丢包; 真实 60Hz 节拍 600 帧零丢失);
   改为单包逐发 + 0.3ms (6000 帧总量与 ≥75% 断言不变), 连跑 3/3 全绿。
+- **发布 v1.2.1**: 基于上述修复重打包 `dist/f1opt.exe` (211.4 MiB,
+  SHA256 `09A7989E...317D9DD`)，创建 GitHub Release v1.2.1 并上传 exe 资产，
+  README 下载区同步为最新版直链 + 校验哈希（6 提交 06cb44d..775b7d6 SSH push main）。
 
 ## 2026-08 优化迭代
 
