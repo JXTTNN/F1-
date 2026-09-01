@@ -825,7 +825,7 @@ class TestPhysicsIntegration:
         pt = PowertrainModel()
         ers = pt.ers_deploy_per_lap(2, "high_speed_low_downforce")
         assert ers > 0.0
-        benefit = pt.laptime_benefit_kj_to_s(ers, 5000.0)
+        benefit = pt.laptime_benefit_mj_to_s(ers, 5000.0)
         assert benefit > 0.0
         fuel_pen = pt.fuel_effect_laptime(80.0)
         assert fuel_pen > 0.0

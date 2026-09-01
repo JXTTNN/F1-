@@ -282,8 +282,8 @@ class PhysicsValidator:
     """Validate that the physics sub-models are physically sane."""
 
     # ERS energy-balance assumptions (kJ): per-lap recovery ceiling + store.
-    _ERS_MAX_RECOVER_KJ = 350.0
-    _ERS_INITIAL_STORE_KJ = 100.0
+    _ERS_MAX_RECOVER_MJ = 6.0
+    _ERS_INITIAL_STORE_MJ = 9.0
 
     def __init__(self) -> None:
         self.aero = AeroModel()
@@ -379,12 +379,12 @@ class PhysicsValidator:
                 d = float(self.powertrain.ers_deploy_per_lap(mode, layout))
                 if d > max_deploy:
                     max_deploy = d
-        balanced = max_deploy <= self._ERS_MAX_RECOVER_KJ + self._ERS_INITIAL_STORE_KJ
+        balanced = max_deploy <= self._ERS_MAX_RECOVER_MJ + self._ERS_INITIAL_STORE_MJ
         return {
             "balanced": bool(balanced),
-            "max_deploy_kj": float(max_deploy),
-            "max_recover_kj": float(self._ERS_MAX_RECOVER_KJ),
-            "initial_store_kj": float(self._ERS_INITIAL_STORE_KJ),
+            "max_deploy_mj": float(max_deploy),
+            "max_recover_mj": float(self._ERS_MAX_RECOVER_MJ),
+            "initial_store_mj": float(self._ERS_INITIAL_STORE_MJ),
         }
 
     def full_report(self) -> dict:

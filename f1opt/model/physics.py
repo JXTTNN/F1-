@@ -119,8 +119,10 @@ CD_GE = 0.2
 # === Powertrain / ERS (Iter-18) ============================================
 # 2026 regs: ERS deploys a per-lap energy budget; manual boost gives a fixed
 # laptime benefit; every kg of fuel costs ~0.035 s of laptime (F1 rule of thumb).
-ERS_BASE_KJ: dict[int, float] = {0: 0.0, 1: 120.0, 2: 200.0, 3: 350.0}
-"""Per-lap ERS deployment energy (kJ) by mode: none/medium/hotlap/deployment."""
+ERS_BASE_MJ: dict[int, float] = {0: 0.0, 1: 4.0, 2: 6.0, 3: 9.0}
+"""Per-lap ERS deployment energy (MJ) by mode: none/medium/hotlap/deployment.
+
+2026 口径: 每圈部署上限 9 MJ (对齐 pu_2026 / energy_budget)."""
 ERS_LAYOUT_FACTOR: dict[str, float] = {
     "high_speed_low_downforce": 1.2,
     "street": 0.9,
@@ -129,8 +131,10 @@ ERS_LAYOUT_FACTOR: dict[str, float] = {
     "mixed": 1.05,
 }
 """Track-layout multiplier on ERS deployment (long straights favour deployment)."""
-ERS_KJ_TO_S_COEFF = 0.015
-"""Converts deployed energy (kJ) to laptime benefit (s·km/kJ)."""
+ERS_MJ_TO_S_COEFF = 0.45
+"""Converts deployed energy (MJ) to laptime benefit (s·km/MJ).
+
+对标 pu_2026 DEPLOY_GAIN_S_PER_MJ≈0.09 s/MJ: 9 MJ 部署 ≈ 0.8 s (5 km 赛道)."""
 FUEL_TANK_MAX_KG = 110.0
 """2026 fuel tank capacity (kg) — fuel load is clamped to this."""
 FUEL_MIN_KG = 5.0
@@ -460,24 +464,24 @@ class PowertrainModel:
         ers_deploy_mode: int,
         track_layout: object,
     ) -> float:
-        """Return per-lap ERS deployment energy (kJ).
+        """Return per-lap ERS deployment energy (MJ).
 
         Modes 0/1/2/3 = none/medium/hotlap/deployment, scaled by a track-layout
         factor (long straights favour deployment). The mode is clamped to [0, 3].
         """
         mode = int(_clamp(float(ers_deploy_mode), 0.0, 3.0))
-        return ERS_BASE_KJ[mode] * _layout_factor(track_layout)
+        return ERS_BASE_MJ[mode] * _layout_factor(track_layout)
 
-    def laptime_benefit_kj_to_s(self, kj: float, track_length_m: float) -> float:
-        """Convert deployed ERS energy (kJ) to a laptime benefit (seconds).
+    def laptime_benefit_mj_to_s(self, mj: float, track_length_m: float) -> float:
+        """Convert deployed ERS energy (MJ) to a laptime benefit (seconds).
 
         Benefit grows with energy and shrinks with track length (the boost is
         spread over more distance on longer tracks). Track length is clamped to
         ≥ 500 m to avoid division blow-up.
         """
-        k = max(0.0, float(kj))
+        e = max(0.0, float(mj))
         length_km = max(0.5, float(track_length_m) / 1000.0)
-        return ERS_KJ_TO_S_COEFF * k / length_km
+        return ERS_MJ_TO_S_COEFF * e / length_km
 
     def fuel_effect_laptime(self, fuel_load_kg: float) -> float:
         """Return the laptime penalty (s) from carrying fuel mass.

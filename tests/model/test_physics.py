@@ -307,7 +307,7 @@ def test_ers_mode_clamped() -> None:
 def test_laptime_benefit_scales_with_energy() -> None:
     """More deployed energy yields more laptime benefit on the same track."""
     model = PowertrainModel()
-    assert model.laptime_benefit_kj_to_s(200.0, 5000.0) > model.laptime_benefit_kj_to_s(100.0, 5000.0)
+    assert model.laptime_benefit_mj_to_s(200.0, 5000.0) > model.laptime_benefit_mj_to_s(100.0, 5000.0)
 
 
 def test_fuel_effect_linear() -> None:
