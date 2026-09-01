@@ -261,7 +261,7 @@ class TireStintPhysics:
     track_temp_c: float = 35.0
     balance_tendency: str = "neutral"   # understeer / oversteer / neutral
     fuel_burn_rate_kg_per_lap: float = 1.6
-    fuel_penalty_s_per_kg: float = 0.03
+    fuel_penalty_s_per_kg: float = 0.035
     driver_tire_management: float = 0.5
     """车手轮胎管理风格 0..1 (Iter-22).
     0.5 = 中性 (默认). 1.0 = 极温和 (Verstappen/Hamilton 级, 磨损率 × 0.75,
@@ -367,7 +367,7 @@ class TireStintPhysics:
         p = self._params
         phase = self._phase(lap_idx, wear_pct)
 
-        # 燃油收益: 每圈少 1.6 kg, 每少 1kg 快 0.03s
+        # 燃油收益: 每圈少 1.6 kg, 每少 1kg 快 0.035s (对齐 physics/fuel_model)
         fuel_offset_kg = max(0.0, self.initial_fuel_kg - fuel_kg)
         fuel_gain = fuel_offset_kg * self.fuel_penalty_s_per_kg
 
