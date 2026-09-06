@@ -150,13 +150,24 @@ class TestTelemetryListenerStress:
                 body = b"\x00" * 1308  # 接近真实 Motion body 大小
                 pkt = header + body
 
-                # 高速发送
+                # Opt-011: 慢速云 runner 上同步洪泛会打满「1024 深内核+队列缓冲」
+                # 发生丢旧（GitHub Ubuntu 实测 received=912/3000, 仅略超队列容量），
+                # 属调度速率问题而非代码回归。改为 50 包脉冲 + 5ms 间隔
+                # （供给速率仍 ≥5000pps，不失压力语义）+ 发送后动态轮询排空
+                # （最多 5s，received 连续两轮不涨即提前退出），
+                # 与 Iter-298 flood-6000 loopback 适配同策。
                 for i in range(n_sent):
                     sock.sendto(pkt, ("127.0.0.1", port))
-                    if i % 500 == 0:
-                        await asyncio.sleep(0.001)  # 让事件循环有时间处理
+                    if i % 50 == 49:
+                        await asyncio.sleep(0.005)
 
-                await asyncio.sleep(0.5)  # 等待 dispatch loop 排空
+                last_received = -1
+                for _ in range(50):
+                    current = listener.received
+                    if current == last_received:
+                        break
+                    last_received = current
+                    await asyncio.sleep(0.1)
 
             finally:
                 sock.close()

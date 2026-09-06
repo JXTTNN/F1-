@@ -24,15 +24,18 @@
 
 | # | 切片 | 优化项 | 状态 | 验证 |
 |---|------|--------|------|------|
-| 001 | S1 | 新建 full-ci.yml：全量 pytest 套件云端运行（+workflow_dispatch 手动触发） | 🔄 | push 后看 Actions |
-| 002 | S1 | .gitignore 补 .deps/（本地免 pip 依赖目录），防污染 | 🔄 | 随本次提交 |
-| 003 | S2 | packets.parse_car_telemetry：提升 calcsize/字段数到模块常量（每包省 1 次 format 解析 + 1 次 dummy unpack） | 🔄 | 本地 test_packets + CI |
-| 004 | S2 | packets.parse_final_classification：同上消除每包 dummy unpack | 🔄 | 同上 |
-| 005 | S2 | packets.parse_car_damage：同上 | 🔄 | 同上 |
-| 006 | S2 | packets.parse_motion：g_force_idx 提升为模块常量，消除每包列表推导 | 🔄 | 同上 |
-| 007 | S1 | full-ci 矩阵化：10 组并行 + 详细日志，定位云端 76% 处无声消失 | 🔄 | push 后看 Actions |
-| 008 | S1 | root 组拆 8 步 + python -u + faulthandler（定位云端静默被杀的现场） | 🔄 | push 后看 Actions |
-| 009+ | — | 待各切片研究后填充（每轮至少推进 3-8 项） | ⬜ | — |
+| 001 | S1 | 新建 full-ci.yml：全量 pytest 套件云端运行（+workflow_dispatch 手动触发） | ✅ | run 34020170000 9/10 组首验 |
+| 002 | S1 | .gitignore 补 .deps/（本地免 pip 依赖目录），防污染 | ✅ | 已生效 |
+| 003 | S2 | packets.parse_car_telemetry：提升 calcsize/字段数到模块常量（每包省 1 次 format 解析 + 1 次 dummy unpack） | ✅ | 本地 531 包测试全过; -0.46µs/包 |
+| 004 | S2 | packets.parse_final_classification：同上消除每包 dummy unpack | ✅ | 同上 |
+| 005 | S2 | packets.parse_car_damage：同上 | ✅ | 同上 |
+| 006 | S2 | packets.parse_motion：g_force_idx 提升为模块常量，消除每包列表推导 | ✅ | 同上 |
+| 007 | S1 | full-ci 矩阵化：10 组并行 + 详细日志，定位云端 76% 处无声消失 | ✅ | run 34021380549 定位 root 组 |
+| 008 | S1 | root 组拆 8 步 + python -u + faulthandler（定位云端静默被杀的现场） | ✅ | 锁定 test_stress_comprehensive |
+| 009 | S1 | workflow_dispatch 加 groups 白名单，定点重跑不浪费 runner | ✅ | run 34022544099 定点生效 |
+| 010 | S1 | 每组 JUnit XML + artifact 上传，绕过日志流 ~132KB 截断 | ✅ | artifact 9986245483 精确定位失败用例 |
+| 011 | S10 | test_stress_comprehensive::test_listener_1000_packets_per_sec 改脉冲敬发+动态排空（云 runner 洪泛丢旧假失败） | 🔄 | 本地过；云端 dispatch 复核中 |
+| 012+ | — | 待各切片研究后填充（每轮至少推进 3-8 项） | ⬜ | — |
 
 ## 验证口径
 
