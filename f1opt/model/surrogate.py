@@ -203,6 +203,22 @@ _DRIVER_BASELINE_SHIFTS: tuple[tuple[int, tuple[float, float, float]], ...] = (
     (7, (0.0, 0.0, -0.08)),      # drs_eff: 最长直道快
 )
 
+# Opt-016: 交叉修正向量化预计算 —— 原实现每调用 16 次 Python 级
+# (tuple 拆包 + float(np标量) 转换 + dict.get), 现转 numpy 一次成型。
+_CROSS_DI = np.array([t[0] for t in _DRIVER_SETUP_CROSS_TERMS], dtype=np.int64)
+_CROSS_SI = np.array([t[1] for t in _DRIVER_SETUP_CROSS_TERMS], dtype=np.int64)
+_CROSS_SEC = np.array([t[2] for t in _DRIVER_SETUP_CROSS_TERMS], dtype=np.int64)
+_CROSS_GAIN = np.array([t[3] for t in _DRIVER_SETUP_CROSS_TERMS], dtype=np.float64)
+_CROSS_KEYS: tuple[str, ...] = tuple(t[4] for t in _DRIVER_SETUP_CROSS_TERMS)
+# Spec-扁平化: track_type -> 按 _CROSS_KEYS 顺序的 amp 向量
+_AMP_VEC_BY_TYPE: dict[str, np.ndarray] = {  # type: ignore[type-arg]
+    tt: np.array([amp.get(k, 1.0) for k in _CROSS_KEYS], dtype=np.float64)
+    for tt, amp in _TRACK_TYPE_AMP.items()
+}
+_AMP_DEFAULT_VEC = np.array([_DEFAULT_AMP.get(k, 1.0) for k in _CROSS_KEYS], dtype=np.float64)
+_BASE_DI = np.array([t[0] for t in _DRIVER_BASELINE_SHIFTS], dtype=np.int64)
+_BASE_GAINS = np.array([t[1] for t in _DRIVER_BASELINE_SHIFTS], dtype=np.float64)
+
 
 def _driver_sector_correction(
     driver_vec: np.ndarray, setup_vec: np.ndarray, track_id: str
@@ -212,19 +228,21 @@ def _driver_sector_correction(
     即使 DNN 输出头零初始化 (残差=0), 此修正保证预测对车手画像 + 调教
     交叉敏感, 使 :func:`search_setup` 能为不同驾驶风格推荐不同 setup.
     """
-    corr = np.zeros(N_SECTORS, dtype=np.float32)
+    # Opt-016: numpy 向量化 (原有 16 项交叉 + 4 项基线的 Python 逐项循环).
+    # 数值上按 float64 累加后转回 float32, 与原逐项 float32 累加差异 < 1e-7.
     track = _resolve_track(track_id)
-    amp = _TRACK_TYPE_AMP.get(track.track_type if track is not None else "", _DEFAULT_AMP)
-    for di, si, sec, gain, key in _DRIVER_SETUP_CROSS_TERMS:
-        d_dev = float(driver_vec[di]) - 0.5
-        s_dev = float(setup_vec[si]) - 0.5
-        corr[sec] += gain * d_dev * s_dev * amp.get(key, 1.0)
-    for di, sec_gains in _DRIVER_BASELINE_SHIFTS:
-        d_dev = float(driver_vec[di]) - 0.5
-        corr[0] += d_dev * sec_gains[0]
-        corr[1] += d_dev * sec_gains[1]
-        corr[2] += d_dev * sec_gains[2]
-    return corr
+    amp = _AMP_VEC_BY_TYPE.get(
+        track.track_type if track is not None else "", _AMP_DEFAULT_VEC
+    )
+    vals = (
+        _CROSS_GAIN
+        * (driver_vec[_CROSS_DI] - 0.5)
+        * (setup_vec[_CROSS_SI] - 0.5)
+        * amp
+    )
+    corr64 = np.bincount(_CROSS_SEC, weights=vals, minlength=N_SECTORS)
+    corr64 += (driver_vec[_BASE_DI] - 0.5) @ _BASE_GAINS
+    return corr64.astype(np.float32)
 
 
 # --- 特征工程 ---------------------------------------------------------------
@@ -331,6 +349,27 @@ def build_input_vector(
     tv = track_context(track_id)
     dv = _normalize_driver_vector(driver_profile)
     return np.concatenate([sv, tv, dv]).astype(np.float32)
+
+
+def _predict_parts(
+    setup: CarSetup,
+    track_id: str,
+    driver_profile: Any = None,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """预测所需静态件 (x, sector 先验, response 先验, driver 修正) 一次算齐.
+
+    Opt-018: 供 SurrogateModel / EnsembleSurrogateModel 复用 —— 集成模型各成员
+    本共享同一组 (x/priors/corr), 原实现每成员重复构建.
+    """
+    sv = np.asarray(setup.to_vector(), dtype=np.float32)
+    tv = track_context(track_id)
+    dv = _normalize_driver_vector(driver_profile)
+    # 与 build_input_vector 同序同 dtype
+    x_np = np.concatenate([sv, tv, dv]).astype(np.float32)
+    sec_prior = np.asarray(sector_priors(track_id, setup), dtype=np.float32)
+    resp_prior = np.asarray(response_priors(track_id, setup), dtype=np.float32)
+    driver_corr = _driver_sector_correction(dv, sv, track_id)
+    return x_np, sec_prior, resp_prior, driver_corr
 
 
 def track_prior(track_id: str, setup: CarSetup) -> float:
@@ -479,17 +518,22 @@ class SurrogateModel(nn.Module):
         车手向量归一化）。
         Opt-013: ``predict_with_confidence`` 复用 (x, sec_prior)，不再二次构建。
         """
-        sv = np.asarray(setup.to_vector(), dtype=np.float32)
-        tv = track_context(track_id)
-        dv = _normalize_driver_vector(driver_profile)
-        # 与 build_input_vector 完全同序同 dtype (行为不变式).
-        x_np = np.concatenate([sv, tv, dv]).astype(np.float32)
+        x_np, sec_prior, resp_prior, driver_corr = _predict_parts(
+            setup, track_id, driver_profile
+        )
+        return self._predict_from_parts(x_np, sec_prior, resp_prior, driver_corr), x_np, sec_prior
+
+    def _predict_from_parts(
+        self,
+        x_np: np.ndarray,
+        sec_prior: np.ndarray,
+        resp_prior: np.ndarray,
+        driver_corr: np.ndarray,
+    ) -> dict[str, Any]:
+        """由预算部件完成前向 + 组装 (Opt-018: 集成各成员共用这个一步),
+        物理成分 (Iter-11 driver 修正与先验) 与成员权重无关, 可安全共享."""
         x = torch.from_numpy(x_np).unsqueeze(0)
-        sec_prior = np.asarray(sector_priors(track_id, setup), dtype=np.float32)
-        resp_prior = np.asarray(response_priors(track_id, setup), dtype=np.float32)
         scales = np.asarray(RESPONSE_SCALES, dtype=np.float32)
-        # Driver × setup × track 物理修正 (Iter-11): 即使 DNN 未训练也生效.
-        driver_corr = _driver_sector_correction(dv, sv, track_id)
         self.eval()
         with torch.no_grad():
             sec_res_t, resp_res_t = self.forward(x)
@@ -500,13 +544,12 @@ class SurrogateModel(nn.Module):
         responses = {
             name: float(v) for name, v in zip(RESPONSE_NAMES, resp_res, strict=True)
         }
-        result: dict[str, Any] = {
+        return {
             "lap_time": lap_time,
             "sectors": sectors,
             "responses": responses,
             "model_version": MODEL_VERSION,
         }
-        return result, x_np, sec_prior
 
     def predict(
         self,
@@ -866,7 +909,14 @@ class EnsembleSurrogateModel(nn.Module):
         Opt-013: predict 与 predict_with_confidence 共享成员前向 —— 原实现
         confidence 路径在 predict 之外又把每个成员完整 predict 一遍求分歧。
         """
-        results = [m.predict(setup, track_id, driver_profile) for m in self._members]
+        # Opt-018: (x/priors/driver_corr) 与成员无关, 全部成员共享一套.
+        x_np, sec_prior, resp_prior, driver_corr = _predict_parts(
+            setup, track_id, driver_profile
+        )
+        results = [
+            m._predict_from_parts(x_np, sec_prior, resp_prior, driver_corr)
+            for m in self._members
+        ]
         member_laps = [float(r["lap_time"]) for r in results]
         avg_lap = float(np.mean(member_laps))
         avg_sectors = [
