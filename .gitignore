@@ -28,6 +28,9 @@ f1opt-release/
 # Runtime data
 data_store/
 
+# Local no-pip dependency dir (Opt-002 bootstrap)
+.deps/
+
 # IDE
 .idea/
 .vscode/

@@ -4,6 +4,20 @@
 
 ## 2026-09 优化迭代
 
+### 百项深度优化计划启动：全量云端 CI + 遥测解析热路径消冗 (Iter-299, Opt-001..006)
+- **Opt-001 全量云端 CI**: 新增 `.github/workflows/full-ci.yml` — push 到 main 或
+  手动 workflow_dispatch 即跑完整 `tests/` 套件（pytest-timeout 300s/用例，作业上限 45min）。
+  此前 ci.yml 只跑 5 个快测文件、全量验证仅靠本地；本项起每次推送都经云端全量回归背书。
+- **Opt-002**: `.gitignore` 补 `.deps/`（本地免 pip 引导的依赖目录，防污染仓库）。
+- **Opt-003..005 遥测解析热路径消冗**: `parse_car_telemetry` / `parse_final_classification` /
+  `parse_car_damage` 三处「每包 dummy unpack 数字段」消除 —— 模块级预计算
+  `_TELEM_FPC`/`_FC_FPC`/`_DMG_FPC`，每包省 1 次 `calcsize` + 1 次全量 dummy unpack
+  （packet id 6 为 60Hz 最高频遥测包）。
+- **Opt-006**: `parse_motion` 的 `g_force_idx` 提升为模块常量 `_MOTION_GFORCE_IDX`，
+  消除每包列表推导。
+- 语义零变更：仅提升不变式，不改任何解析输出；全量 `tests/` 套件本地 + 云端双重验证。
+- 跟踪文档：`docs/OPTIMIZATION_100.md`（10 切片 × 10 项 = 100 项总台账）。
+
 ### 真实 F1 26 遥测数据验证 + ERS 口径定案 (Iter-298, R4)
 - **真实数据最终裁判**: 使用用户实测 112,036 帧 F1 26 遥测数据包 (14 包类型) 全量逐包验证,
   解析 0 失败, 头部字段 20,000 帧 0 不匹配; 新增抽样脚本 + 抽样集 fixture 回归测试

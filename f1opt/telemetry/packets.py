@@ -217,6 +217,11 @@ _CAR_MOTION_NAMES = (
     "m_gForceLateral", "m_gForceLongitudinal", "m_gForceVertical",
     "m_yaw", "m_pitch", "m_roll",
 )
+# Opt-006: g-force 字段下标 (12,13,14) 模块级常量；原实现每个 60Hz Motion 包
+# 都在函数内重新列表推导。
+_MOTION_GFORCE_IDX = tuple(
+    i for i, n in enumerate(_CAR_MOTION_NAMES) if n.startswith("m_gForce")
+)
 _MOTION_BODY = struct.Struct("<" + _CAR_MOTION_FMT * NUM_CARS)
 
 
@@ -226,7 +231,7 @@ def parse_motion(data: bytes) -> dict[str, Any]:
     per = len(_CAR_MOTION_NAMES)
     # F1 26 g-force 为 int16 量化 (÷1000) → 转为 G 单位浮点，与全库消费者一致
     # (quality_score g_lat∈(-10,10)、analytics 阈值>3.0、surrogate g_lat_max=2.5)。
-    g_force_idx = [i for i, n in enumerate(_CAR_MOTION_NAMES) if n.startswith("m_gForce")]
+    g_force_idx = _MOTION_GFORCE_IDX
     if g_force_idx:
         vals_list = list(vals)
         for base in range(0, len(vals_list), per):
@@ -587,16 +592,15 @@ CONFIDENCE_CARTELEMETRY = (
 # tyresPressure/surfaceType 错位 1 字节。
 _TELEM_PER = "HfffBbHBBH4H4B4BB4f4B"
 _TELEM_BODY = struct.Struct("<" + _TELEM_PER * NUM_CARS + "BBB")
+# Opt-003: 每车字段数 (31) 模块级一次算好；原实现每包都 calcsize + dummy unpack，
+# 每个 60Hz 遥测包白付两次格式串解析。
+_TELEM_FPC = len(struct.unpack("<" + _TELEM_PER, b"\x00" * struct.calcsize("<" + _TELEM_PER)))
 
 
 def parse_car_telemetry(data: bytes) -> dict[str, Any]:
     """Parse PacketCarTelemetryData (packet id 6)."""
     v = _unpack_body(data, _TELEM_BODY)
-    per = struct.calcsize("<" + _TELEM_PER)
-    # number of scalar values per car = (per bytes) / 1 is wrong for mixed; compute via unpack
-    # Instead, unpack one car to count fields:
-    one = struct.unpack("<" + _TELEM_PER, b"\x00" * per)
-    fields_per_car = len(one)
+    fields_per_car = _TELEM_FPC
     cars = []
     base = 0
     for _ in range(NUM_CARS):
@@ -712,6 +716,8 @@ CONFIDENCE_FINALCLASS = (
 # numTyreStints, tyreStintsActual[8], tyreStintsVisual[8], tyreStintsEndLaps[8]
 _FC_PER = "BBBBBBB I d BBB 8B8B8B".replace(" ", "")
 _FC_BODY = struct.Struct("<B" + _FC_PER * NUM_CARS)
+# Opt-004: 同 Opt-003，dummy-unpack 计数提升为模块常量。
+_FC_FPC = len(struct.unpack("<" + _FC_PER, b"\x00" * struct.calcsize("<" + _FC_PER)))
 
 
 def parse_final_classification(data: bytes) -> dict[str, Any]:
@@ -719,7 +725,7 @@ def parse_final_classification(data: bytes) -> dict[str, Any]:
     v = _unpack_body(data, _FC_BODY)
     num_cars = v[0]
     rest = v[1:]
-    fields_per_car = len(struct.unpack("<" + _FC_PER, b"\x00" * struct.calcsize("<" + _FC_PER)))
+    fields_per_car = _FC_FPC
     cars = []
     base = 0
     for _ in range(NUM_CARS):
@@ -783,12 +789,14 @@ CONFIDENCE_CARDAMAGE = (
 # tyresDamage 起全部错位。
 _DMG_PER = "4f" + "B" * 30
 _DMG_BODY = struct.Struct("<" + _DMG_PER * NUM_CARS)
+# Opt-005: 同 Opt-003。
+_DMG_FPC = len(struct.unpack("<" + _DMG_PER, b"\x00" * struct.calcsize("<" + _DMG_PER)))
 
 
 def parse_car_damage(data: bytes) -> dict[str, Any]:
     """Parse PacketCarDamageData (packet id 10)."""
     v = _unpack_body(data, _DMG_BODY)
-    fpc = len(struct.unpack("<" + _DMG_PER, b"\x00" * struct.calcsize("<" + _DMG_PER)))
+    fpc = _DMG_FPC
     cars = []
     base = 0
     for _ in range(NUM_CARS):

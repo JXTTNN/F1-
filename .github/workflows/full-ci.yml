@@ -1,0 +1,30 @@
+name: Full CI
+
+# 全量测试套件云端验证（Opt-001）。ci.yml 只跑 5 个快测文件保反馈速度；
+# 本工作流跑完整 tests/ 树，保证每次推送都经过全量回归。
+# 历史：CI 曾因套件重（torch 物理仿真 ~3500 用例）只跑子集，全量仅本地执行。
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  full-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Test (full suite)
+        run: pytest tests -q --timeout=300
