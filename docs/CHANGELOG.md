@@ -4,6 +4,29 @@
 
 ## 2026-09 优化迭代
 
+### 代理模型推理路径三重去冗 + 测试鲁棒性与遥感可观测 (Iter-300, Opt-007..014)
+- **Opt-007..010 全量 CI 工程化**: full-ci 矩阵化 10 组并行；root 组拆 8 步定位云端报错；
+  workflow_dispatch 支持 `groups` 白名单定点重跑；每组 JUnit XML artifact（绕开
+  GitHub 日志 ~132KB 截断）——首次将云日志不可见失败转为精确定位（1 步→失败用例）。
+- **Opt-011 stress 洪泛云适配**: `test_listener_1000_packets_per_sec` 在 Ubuntu CI
+  慢调度下同步洪泛会打满 1024 深缓冲丢旧（received=912/3000），属调度特征非代码回归；
+  改 50 包脉冲 + 5ms 间隔 + 动态排空（≤5s 轮询稳定即退），语义/总量/90% 阈值不变，
+  与 Iter-298 flood-6000 loopback 适配同策。全量云十组首次全绿 (run 34027633752)。
+- **Opt-012 predict 单次计算**: `SurrogateModel.predict` 原 build_input_vector 内部
+  多算一遍 setup.to_vector()+driver 归一化（driver_corr 又各来一次）；抽出
+  `_predict_impl` 返回 (result, x, sec_prior)，sv/dv/tv 每调用只算一次。
+- **Opt-013 confidence 零重算**: 单模型 `predict_with_confidence` 原 predict + 
+  build_input_vector + sector_priors 三重构建 → 复用 impl 结果；集成模型原
+  predict(seed) + 成员逐个 predict_lap_time 求分歧再跑一遍全部前向 → 抽出
+  `_predict_members_impl` 供 predict/confidence 共享，成员前向次数减半。
+- **Opt-014 predict_batch 批内复用**: 按 track_id 缓存上下文向量，且各项 sv/dv
+  单次计算直接拼输入（不再经 build_input_vector 二次构建）。
+- **实测（未训练零头路径，300 次）**: predict 1.478→0.579ms (-61%)，
+  predict_with_confidence 1.131→0.519ms (-54%)，集成×3 predict 4.41→1.73ms (-61%)，
+  集成 confidence 5.11→1.74ms (-66%)。DE 搜索（每次 5k-20k 次预测）实测同源加速。
+- 语义零变更（输出数值不变，纯调度去重）；tests/model/test_surrogate.py 23 过、
+  test_optimizer+test_diagnostics 44 过，云端全量推后复核。
+
 ### 百项深度优化计划启动：全量云端 CI + 遥测解析热路径消冗 (Iter-299, Opt-001..006)
 - **Opt-001 全量云端 CI**: 新增 `.github/workflows/full-ci.yml` — push 到 main 或
   手动 workflow_dispatch 即跑完整 `tests/` 套件（pytest-timeout 300s/用例，作业上限 45min）。
