@@ -8,6 +8,11 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      groups:
+        description: '逗号分隔的分组白名单 (留空=全部): api,data,driver,e2e,feedback,model,observability,telemetry,ui,root'
+        required: false
+        default: ''
 
 jobs:
   full-test:
@@ -41,15 +46,15 @@ jobs:
           pip install -e ".[dev]"
 
       - name: Test group api
-        if: matrix.group == 'api'
+        if: matrix.group == 'api' && (github.event.inputs.groups == '' || contains(github.event.inputs.groups, matrix.group))
         run: pytest tests/api -v --timeout=240
 
       - name: Test group data
-        if: matrix.group == 'data'
+        if: matrix.group == 'data' && (github.event.inputs.groups == '' || contains(github.event.inputs.groups, matrix.group))
         run: pytest tests/data -v --timeout=240
 
       - name: Test group driver
-        if: matrix.group == 'driver'
+        if: matrix.group == 'driver' && (github.event.inputs.groups == '' || contains(github.event.inputs.groups, matrix.group))
         run: pytest tests/driver -v --timeout=240
 
       - name: Test group e2e
@@ -57,55 +62,55 @@ jobs:
         run: pytest tests/e2e -v --timeout=240
 
       - name: Test group feedback
-        if: matrix.group == 'feedback'
+        if: matrix.group == 'feedback' && (github.event.inputs.groups == '' || contains(github.event.inputs.groups, matrix.group))
         run: pytest tests/feedback -v --timeout=240
 
       - name: Test group model
-        if: matrix.group == 'model'
+        if: matrix.group == 'model' && (github.event.inputs.groups == '' || contains(github.event.inputs.groups, matrix.group))
         run: pytest tests/model -v --timeout=240
 
       - name: Test group observability
-        if: matrix.group == 'observability'
+        if: matrix.group == 'observability' && (github.event.inputs.groups == '' || contains(github.event.inputs.groups, matrix.group))
         run: pytest tests/observability -v --timeout=240
 
       - name: Test group telemetry
-        if: matrix.group == 'telemetry'
+        if: matrix.group == 'telemetry' && (github.event.inputs.groups == '' || contains(github.event.inputs.groups, matrix.group))
         run: pytest tests/telemetry -v --timeout=240
 
       - name: Test group ui
-        if: matrix.group == 'ui'
+        if: matrix.group == 'ui' && (github.event.inputs.groups == '' || contains(github.event.inputs.groups, matrix.group))
         run: pytest tests/ui -v --timeout=240
 
       # Opt-008: root 组分步直跑（python -u 关缓冲 + faulthandler 抓段错误），
       # 进程被杀时最后一条 -v 输出即现场（此前合并一步跑，被杀后尾部被缓冲吞掉无法定位）。
       - name: Test root -- cli
-        if: matrix.group == 'root'
+        if: matrix.group == 'root' && (github.event.inputs.groups == '' || contains(github.event.inputs.groups, matrix.group))
         run: python -u -X faulthandler -m pytest tests/test_cli.py -v --timeout=240
 
       - name: Test root -- e2e_scenarios
-        if: matrix.group == 'root'
+        if: matrix.group == 'root' && (github.event.inputs.groups == '' || contains(github.event.inputs.groups, matrix.group))
         run: python -u -X faulthandler -m pytest tests/test_e2e_scenarios.py -v --timeout=240
 
       - name: Test root -- full_pipeline_validation
-        if: matrix.group == 'root'
+        if: matrix.group == 'root' && (github.event.inputs.groups == '' || contains(github.event.inputs.groups, matrix.group))
         run: python -u -X faulthandler -m pytest tests/test_full_pipeline_validation.py -v --timeout=240
 
       - name: Test root -- input_pipeline_validation
-        if: matrix.group == 'root'
+        if: matrix.group == 'root' && (github.event.inputs.groups == '' || contains(github.event.inputs.groups, matrix.group))
         run: python -u -X faulthandler -m pytest tests/test_input_pipeline_validation.py -v --timeout=240
 
       - name: Test root -- robustness
-        if: matrix.group == 'root'
+        if: matrix.group == 'root' && (github.event.inputs.groups == '' || contains(github.event.inputs.groups, matrix.group))
         run: python -u -X faulthandler -m pytest tests/test_robustness.py -v --timeout=240
 
       - name: Test root -- robustness_validation
-        if: matrix.group == 'root'
+        if: matrix.group == 'root' && (github.event.inputs.groups == '' || contains(github.event.inputs.groups, matrix.group))
         run: python -u -X faulthandler -m pytest tests/test_robustness_validation.py -v --timeout=240
 
       - name: Test root -- smoke
-        if: matrix.group == 'root'
+        if: matrix.group == 'root' && (github.event.inputs.groups == '' || contains(github.event.inputs.groups, matrix.group))
         run: python -u -X faulthandler -m pytest tests/test_smoke.py -v --timeout=240
 
       - name: Test root -- stress_comprehensive
-        if: matrix.group == 'root'
+        if: matrix.group == 'root' && (github.event.inputs.groups == '' || contains(github.event.inputs.groups, matrix.group))
         run: python -u -X faulthandler -m pytest tests/test_stress_comprehensive.py -v --timeout=240
