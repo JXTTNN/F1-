@@ -76,6 +76,37 @@ jobs:
         if: matrix.group == 'ui'
         run: pytest tests/ui -v --timeout=240
 
-      - name: Test group root (top-level files)
+      # Opt-008: root 组分步直跑（python -u 关缓冲 + faulthandler 抓段错误），
+      # 进程被杀时最后一条 -v 输出即现场（此前合并一步跑，被杀后尾部被缓冲吞掉无法定位）。
+      - name: Test root: cli
         if: matrix.group == 'root'
-        run: pytest tests/test_cli.py tests/test_e2e_scenarios.py tests/test_full_pipeline_validation.py tests/test_input_pipeline_validation.py tests/test_robustness.py tests/test_robustness_validation.py tests/test_smoke.py tests/test_stress_comprehensive.py -v --timeout=240
+        run: python -u -X faulthandler -m pytest tests/test_cli.py -v --timeout=240
+
+      - name: Test root: e2e_scenarios
+        if: matrix.group == 'root'
+        run: python -u -X faulthandler -m pytest tests/test_e2e_scenarios.py -v --timeout=240
+
+      - name: Test root: full_pipeline_validation
+        if: matrix.group == 'root'
+        run: python -u -X faulthandler -m pytest tests/test_full_pipeline_validation.py -v --timeout=240
+
+      - name: Test root: input_pipeline_validation
+        if: matrix.group == 'root'
+        run: python -u -X faulthandler -m pytest tests/test_input_pipeline_validation.py -v --timeout=240
+
+      - name: Test root: robustness
+        if: matrix.group == 'root'
+        run: python -u -X faulthandler -m pytest tests/test_robustness.py -v --timeout=240
+
+      - name: Test root: robustness_validation
+        if: matrix.group == 'root'
+        run: python -u -X faulthandler -m pytest tests/test_robustness_validation.py -v --timeout=240
+
+      - name: Test root: smoke
+        if: matrix.group == 'root'
+        run: python -u -X faulthandler -m pytest tests/test_smoke.py -v --timeout=240
+
+      - name: Test root: stress_comprehensive
+        if: matrix.group == 'root'
+        run: python -u -X faulthandler -m pytest tests/test_stress_comprehensive.py -v --timeout=240
+

@@ -31,7 +31,8 @@
 | 005 | S2 | packets.parse_car_damage：同上 | 🔄 | 同上 |
 | 006 | S2 | packets.parse_motion：g_force_idx 提升为模块常量，消除每包列表推导 | 🔄 | 同上 |
 | 007 | S1 | full-ci 矩阵化：10 组并行 + 详细日志，定位云端 76% 处无声消失 | 🔄 | push 后看 Actions |
-| 008+ | — | 待各切片研究后填充（每轮至少推进 3-8 项） | ⬜ | — |
+| 008 | S1 | root 组拆 8 步 + python -u + faulthandler（定位云端静默被杀的现场） | 🔄 | push 后看 Actions |
+| 009+ | — | 待各切片研究后填充（每轮至少推进 3-8 项） | ⬜ | — |
 
 ## 验证口径
 
