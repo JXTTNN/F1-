@@ -466,22 +466,29 @@ class SurrogateModel(nn.Module):
         return self.forward(x)
 
     # --- 推理侧 -------------------------------------------------------------
-    def predict(
+    def _predict_impl(
         self,
         setup: CarSetup,
         track_id: str,
         driver_profile: Any = None,
-    ) -> dict[str, Any]:
-        """富预测: 返回圈速 / 三段 / 响应指标 / 模型版本."""
-        x = torch.from_numpy(
-            build_input_vector(setup, track_id, driver_profile)
-        ).unsqueeze(0)
+    ) -> tuple[dict[str, Any], np.ndarray, np.ndarray]:
+        """预测本体 + 置信度复用件 (输入向量 x, sector 先验).
+
+        Opt-012: sv/dv/tv 各算一次，同供输入向量与 driver 修正（原实现经
+        ``build_input_vector`` 内部多算一遍 ``setup.to_vector()`` 与
+        车手向量归一化）。
+        Opt-013: ``predict_with_confidence`` 复用 (x, sec_prior)，不再二次构建。
+        """
+        sv = np.asarray(setup.to_vector(), dtype=np.float32)
+        tv = track_context(track_id)
+        dv = _normalize_driver_vector(driver_profile)
+        # 与 build_input_vector 完全同序同 dtype (行为不变式).
+        x_np = np.concatenate([sv, tv, dv]).astype(np.float32)
+        x = torch.from_numpy(x_np).unsqueeze(0)
         sec_prior = np.asarray(sector_priors(track_id, setup), dtype=np.float32)
         resp_prior = np.asarray(response_priors(track_id, setup), dtype=np.float32)
         scales = np.asarray(RESPONSE_SCALES, dtype=np.float32)
         # Driver × setup × track 物理修正 (Iter-11): 即使 DNN 未训练也生效.
-        dv = _normalize_driver_vector(driver_profile)
-        sv = np.asarray(setup.to_vector(), dtype=np.float32)
         driver_corr = _driver_sector_correction(dv, sv, track_id)
         self.eval()
         with torch.no_grad():
@@ -493,12 +500,22 @@ class SurrogateModel(nn.Module):
         responses = {
             name: float(v) for name, v in zip(RESPONSE_NAMES, resp_res, strict=True)
         }
-        return {
+        result: dict[str, Any] = {
             "lap_time": lap_time,
             "sectors": sectors,
             "responses": responses,
             "model_version": MODEL_VERSION,
         }
+        return result, x_np, sec_prior
+
+    def predict(
+        self,
+        setup: CarSetup,
+        track_id: str,
+        driver_profile: Any = None,
+    ) -> dict[str, Any]:
+        """富预测: 返回圈速 / 三段 / 响应指标 / 模型版本."""
+        return self._predict_impl(setup, track_id, driver_profile)[0]
 
     def predict_lap_time(
         self,
@@ -547,8 +564,9 @@ class SurrogateModel(nn.Module):
 
         ``label`` 阈值: confidence >= 0.8 -> "high", >= 0.5 -> "medium", < 0.5 -> "low".
         """
-        result = self.predict(setup, track_id, driver_profile)
-        x = build_input_vector(setup, track_id, driver_profile)
+        # Opt-013: 复用 _predict_impl 的一次性计算，不再重建 x 与 sector 先验
+        # (原实现 predict + build_input_vector + sector_priors 三次重复构建)。
+        result, x, sec_prior = self._predict_impl(setup, track_id, driver_profile)
 
         # Factor 1: input-space OOD dims (count dims outside [0, 1]).
         ood_dims = int(np.sum((x < 0.0) | (x > 1.0)))
@@ -556,7 +574,6 @@ class SurrogateModel(nn.Module):
 
         # Factor 2: residual magnitude relative to sector prior.
         # Reconstruct the DNN residual (sec_res before prior addition).
-        sec_prior = np.asarray(sector_priors(track_id, setup), dtype=np.float32)
         sectors = np.asarray(result["sectors"], dtype=np.float32)
         # residual = predicted_sector - prior (the DNN's correction).
         sec_residual = sectors - sec_prior
@@ -597,17 +614,24 @@ class SurrogateModel(nn.Module):
         sec_priors: list[np.ndarray] = []
         resp_priors: list[np.ndarray] = []
         driver_corrs: list[np.ndarray] = []
+        # Opt-014: 批内按 track_id 缓存上下文向量（批量调用通常同赛道），
+        # 且 sv/dv 逐项只算一次并直拼输入（原 build_input_vector 内部多算一遍）。
+        _tv_cache: dict[str, np.ndarray] = {}
         for item in items:
             if len(item) == 3:
                 setup, track_id, drv = item  # type: ignore[misc]
             else:
                 setup, track_id = item  # type: ignore[misc]
                 drv = None
-            xs.append(build_input_vector(setup, track_id, drv))
+            sv = np.asarray(setup.to_vector(), dtype=np.float32)
+            dv = _normalize_driver_vector(drv)
+            tv = _tv_cache.get(track_id)
+            if tv is None:
+                tv = track_context(track_id)
+                _tv_cache[track_id] = tv
+            xs.append(np.concatenate([sv, tv, dv]).astype(np.float32))
             sec_priors.append(np.asarray(sector_priors(track_id, setup), dtype=np.float32))
             resp_priors.append(np.asarray(response_priors(track_id, setup), dtype=np.float32))
-            dv = _normalize_driver_vector(drv)
-            sv = np.asarray(setup.to_vector(), dtype=np.float32)
             driver_corrs.append(_driver_sector_correction(dv, sv, track_id))
         x_t = torch.from_numpy(np.stack(xs))
         sec_prior_arr = np.stack(sec_priors)
@@ -831,15 +855,20 @@ class EnsembleSurrogateModel(nn.Module):
     # ------------------------------------------------------------------ #
     # Inference (averaged final predictions)
     # ------------------------------------------------------------------ #
-    def predict(
+    def _predict_members_impl(
         self,
         setup: CarSetup,
         track_id: str,
         driver_profile: Any = None,
-    ) -> dict[str, Any]:
-        """Average :meth:`SurrogateModel.predict` across all members."""
+    ) -> tuple[dict[str, Any], list[float]]:
+        """全部成员 predict 一次, 返回 (平均结果, 各成员圈速列表).
+
+        Opt-013: predict 与 predict_with_confidence 共享成员前向 —— 原实现
+        confidence 路径在 predict 之外又把每个成员完整 predict 一遍求分歧。
+        """
         results = [m.predict(setup, track_id, driver_profile) for m in self._members]
-        avg_lap = float(np.mean([r["lap_time"] for r in results]))
+        member_laps = [float(r["lap_time"]) for r in results]
+        avg_lap = float(np.mean(member_laps))
         avg_sectors = [
             float(np.mean([r["sectors"][i] for r in results]))
             for i in range(N_SECTORS)
@@ -848,13 +877,23 @@ class EnsembleSurrogateModel(nn.Module):
             name: float(np.mean([r["responses"][name] for r in results]))
             for name in RESPONSE_NAMES
         }
-        return {
+        result: dict[str, Any] = {
             "lap_time": avg_lap,
             "sectors": avg_sectors,
             "responses": avg_responses,
             "model_version": f"{MODEL_VERSION}-ensemble-{self.n_members}",
             "n_members": self.n_members,
         }
+        return result, member_laps
+
+    def predict(
+        self,
+        setup: CarSetup,
+        track_id: str,
+        driver_profile: Any = None,
+    ) -> dict[str, Any]:
+        """Average :meth:`SurrogateModel.predict` across all members."""
+        return self._predict_members_impl(setup, track_id, driver_profile)[0]
 
     def predict_lap_time(
         self,
@@ -891,7 +930,7 @@ class EnsembleSurrogateModel(nn.Module):
         单成员 ensemble (n_members=1) 的 disagreement_penalty == 0.0 (无分歧),
         退化为 :meth:`SurrogateModel.predict_with_confidence`.
         """
-        result = self.predict(setup, track_id, driver_profile)
+        result, member_laps = self._predict_members_impl(setup, track_id, driver_profile)
         x = build_input_vector(setup, track_id, driver_profile)
 
         # Factor 1: input-space OOD dims.
@@ -908,8 +947,7 @@ class EnsembleSurrogateModel(nn.Module):
         residual_penalty = min(0.5, max(0.0, (max_ratio - 0.15) / 0.85) * 0.5)
 
         # Factor 3 (ensemble-only): member disagreement on lap_time.
-        member_laps = [m.predict_lap_time(setup, track_id, driver_profile)
-                       for m in self._members]
+        # Opt-013: 复用 _predict_members_impl 的各成员圈速, 不再逐个重预测.
         lap_std = float(np.std(member_laps)) if len(member_laps) > 1 else 0.0
         # 0.3s std -> max penalty 0.3; scale linearly.
         disagreement_penalty = min(0.3, lap_std / 0.3 * 0.3)
