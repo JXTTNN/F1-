@@ -30,7 +30,8 @@
 | 004 | S2 | packets.parse_final_classification：同上消除每包 dummy unpack | 🔄 | 同上 |
 | 005 | S2 | packets.parse_car_damage：同上 | 🔄 | 同上 |
 | 006 | S2 | packets.parse_motion：g_force_idx 提升为模块常量，消除每包列表推导 | 🔄 | 同上 |
-| 007+ | — | 待各切片研究后填充（每轮至少推进 3-8 项） | ⬜ | — |
+| 007 | S1 | full-ci 矩阵化：10 组并行 + 详细日志，定位云端 76% 处无声消失 | 🔄 | push 后看 Actions |
+| 008+ | — | 待各切片研究后填充（每轮至少推进 3-8 项） | ⬜ | — |
 
 ## 验证口径
 

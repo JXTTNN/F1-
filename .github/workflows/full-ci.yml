@@ -1,8 +1,8 @@
 name: Full CI
 
-# 全量测试套件云端验证（Opt-001）。ci.yml 只跑 5 个快测文件保反馈速度；
-# 本工作流跑完整 tests/ 树，保证每次推送都经过全量回归。
-# 历史：CI 曾因套件重（torch 物理仿真 ~3500 用例）只跑子集，全量仅本地执行。
+# 全量测试套件云端验证。ci.yml 只跑 5 个快测文件保反馈速度；本工作流跑完整 tests/ 树。
+# Opt-007: 按目录矩阵分片（此前单进程跑到 ~76% 进程消失，无 pytest 总结 —— 疑似 OOM/硬崩。
+#          分片后每个作业独立日志、独立内存上限；-v 打印用例名，硬崩时最后一条即现场。）
 
 on:
   push:
@@ -12,7 +12,21 @@ on:
 jobs:
   full-test:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        group:
+          - api
+          - data
+          - driver
+          - e2e
+          - feedback
+          - model
+          - observability
+          - telemetry
+          - ui
+          - root
     steps:
       - uses: actions/checkout@v4
 
@@ -26,5 +40,42 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
 
-      - name: Test (full suite)
-        run: pytest tests -q --timeout=300
+      - name: Test group api
+        if: matrix.group == 'api'
+        run: pytest tests/api -v --timeout=240
+
+      - name: Test group data
+        if: matrix.group == 'data'
+        run: pytest tests/data -v --timeout=240
+
+      - name: Test group driver
+        if: matrix.group == 'driver'
+        run: pytest tests/driver -v --timeout=240
+
+      - name: Test group e2e
+        if: matrix.group == 'e2e'
+        run: pytest tests/e2e -v --timeout=240
+
+      - name: Test group feedback
+        if: matrix.group == 'feedback'
+        run: pytest tests/feedback -v --timeout=240
+
+      - name: Test group model
+        if: matrix.group == 'model'
+        run: pytest tests/model -v --timeout=240
+
+      - name: Test group observability
+        if: matrix.group == 'observability'
+        run: pytest tests/observability -v --timeout=240
+
+      - name: Test group telemetry
+        if: matrix.group == 'telemetry'
+        run: pytest tests/telemetry -v --timeout=240
+
+      - name: Test group ui
+        if: matrix.group == 'ui'
+        run: pytest tests/ui -v --timeout=240
+
+      - name: Test group root (top-level files)
+        if: matrix.group == 'root'
+        run: pytest tests/test_cli.py tests/test_e2e_scenarios.py tests/test_full_pipeline_validation.py tests/test_input_pipeline_validation.py tests/test_robustness.py tests/test_robustness_validation.py tests/test_smoke.py tests/test_stress_comprehensive.py -v --timeout=240
