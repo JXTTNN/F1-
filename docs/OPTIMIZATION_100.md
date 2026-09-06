@@ -39,7 +39,11 @@
 | 013 | S5 | predict_with_confidence 与 predict 共享计算（单模+集成；集成成员前向减半） | ✅ | 集成 confidence 5.11→1.74ms (-66%) |
 | 014 | S5 | predict_batch 按 track_id 批内缓存上下文向量 + 逐项 sv/dv 去重 | ✅ | 本地过测，随模型组回归 |
 | 015 | S10 | 推送降级通道: git push 被账号邮箱验证栅栏挡时, 用 Git Data/Contents API（LF 归一化字节）写库 + 本地 soft-reset 对齐远端, 树哈希一致校验 | ✅ | 本轮实推 5 次成功(d4e75ca→029a67e) |
-| 016+ | — | push-first 正常时将之返回默认通道; 云端 Actions 恢复后切换回普通 git push | ⬜ | — |
+| 016 | S5 | 车手交叉修正向量化: 16 项交叉 + 4 项基线 Python 循环 → numpy 按数组预计算 (fuzz 4000 例 diff<5e-8) | ✅ | 11.1→7.9µs (-29%) |
+| 017 | S5 | setup_penalty_s 向量化: 22 次 getattr/SETFIELDS.step/dict.get → coef 表 + dot (fuzz 3000 例 diff<3e-15) | ✅ | 7.3→6.0µs (-17%) |
+| 018 | S5 | 集成成员共享预测零件: _predict_parts 一次, 成员只前向 (原每成员重算全套) | ✅ | ens.predict 4.41→1.25ms, ens.confidence 5.11→1.33ms |
+| 019 | S5 | predict 全链路 (R3+R4 累计): 1.478→0.474ms (-68%), ens.confidence 5.107→1.329 (-74%)｜预测型调用在所有 hot 路径直接受益 | ✅ | bench_surrogate (300 iters) |
+| 020+ | — | 待续（model 组反复回归与云复盘） | ⬜ | — |
 
 ## 全量基线（run 34027633752, 2026-09-06, ubuntu py3.11, 4065 用例全过）
 
