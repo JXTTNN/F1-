@@ -35,7 +35,10 @@
 | 009 | S1 | workflow_dispatch 加 groups 白名单，定点重跑不浪费 runner | ✅ | run 34022544099 定点生效 |
 | 010 | S1 | 每组 JUnit XML + artifact 上传，绕过日志流 ~132KB 截断 | ✅ | artifact 9986245483 精确定位失败用例 |
 | 011 | S10 | test_stress_comprehensive::test_listener_1000_packets_per_sec 改脉冲敬发+动态排空（云 runner 洪泛丢旧假失败） | ✅ | run 34027633752 全 10 组绿 |
-| 012+ | — | 待各切片研究后填充（每轮至少推进 3-8 项） | ⬜ | — |
+| 012 | S5 | SurrogateModel.predict 单次计算化（sv/dv/tv 各算一次供输入+driver修正两用） | ✅ | 1.478→0.579ms (-61%) |
+| 013 | S5 | predict_with_confidence 与 predict 共享计算（单模+集成；集成成员前向减半） | ✅ | 集成 confidence 5.11→1.74ms (-66%) |
+| 014 | S5 | predict_batch 按 track_id 批内缓存上下文向量 + 逐项 sv/dv 去重 | ✅ | 本地过测，随模型组回归 |
+| 015+ | — | 待各切片研究后填充（每轮至少推进 3-8 项） | ⬜ | — |
 
 ## 全量基线（run 34027633752, 2026-09-06, ubuntu py3.11, 4065 用例全过）
 
