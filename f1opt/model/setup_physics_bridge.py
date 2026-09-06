@@ -36,6 +36,8 @@ from __future__ import annotations
 
 from typing import Any
 
+import numpy as np
+
 from f1opt.data.ea_f1_2026_benchmark import canonical_track_id
 from f1opt.data.setup_schema import DEFAULT_SETUP, SETUP_FIELDS, CarSetup
 from f1opt.data.tracks import TRACKS_BY_ID, TrackType
@@ -374,6 +376,37 @@ def _track_engineering_adjusted_optima(
     return base
 
 
+# Opt-017: 惩罚向量化 —— track_type 级系数与逐权威最优值均表驱动化.
+# 原实现每调用做 22 次 (getattr + SETUP_FIELDS[name].step + dict.get),
+# 现 COEF_BY_TYPE (模块级常量) + 逐权威最优向量 (带缓存) + numpy dot.
+_BASE_NAMES_PEN: tuple[str, ...] = tuple(_BASE_SENSITIVITY_S_PER_CLICK.keys())
+_COEF_VEC_BY_TYPE: dict[TrackType, np.ndarray] = {  # type: ignore[type-arg]
+    tt: np.array(
+        [
+            _BASE_SENSITIVITY_S_PER_CLICK[n] * sc.get(n, 1.0) / SETUP_FIELDS[n].step
+            for n in _BASE_NAMES_PEN
+        ],
+        dtype=np.float64,
+    )
+    for tt, sc in _TRACK_TYPE_SCALE.items()
+}
+_OPT_VEC_CACHE: dict[str, np.ndarray] = {}
+
+
+def _opt_vec_for(track_key: str, track_type: TrackType) -> np.ndarray:
+    """返回该赛道的最优值向量 (按 _BASE_NAMES_PEN 顺序, 带缓存)."""
+    vec = _OPT_VEC_CACHE.get(track_key)
+    if vec is None:
+        opt = (
+            _track_engineering_adjusted_optima(track_key, track_type)
+            if track_key in TRACKS_BY_ID
+            else _TRACK_TYPE_OPTIMA[track_type]
+        )
+        vec = np.array([opt[n] for n in _BASE_NAMES_PEN], dtype=np.float64)
+        _OPT_VEC_CACHE[track_key] = vec
+    return vec
+
+
 def setup_penalty_s(setup: CarSetup, track_id: str) -> float:
     """计算 setup 偏离 *该赛道类型最优* 的总惩罚 (秒, 正=慢).
 
@@ -393,7 +426,10 @@ def setup_penalty_s(setup: CarSetup, track_id: str) -> float:
     Returns:
         setup 偏离最优的总秒数代价 (>= 0, <= _TOTAL_PENALTY_CAP_S).
     """
-    track = TRACKS_BY_ID.get(canonical_track_id(track_id))
+    # Opt-017: 向量化 — 数值与原逐项 float64 累加一致 (差 < 1e-12);
+    # 原实现每调用 22 次 (getattr + SETUP_FIELDS[name].step 查表 + dict.get).
+    cid = canonical_track_id(track_id)
+    track = TRACKS_BY_ID.get(cid)
     if track is None:
         # 未知赛道: 用 medium 缩放 (校准锚点), 不崩溃
         track_type: TrackType = "medium"
@@ -402,26 +438,15 @@ def setup_penalty_s(setup: CarSetup, track_id: str) -> float:
 
     # Iter-164.15: 用逐赛道工程参数感知的最优值 (而非裸 track_type 最优值),
     # 让同类型赛道 (silverstone/suzuka) 获得不同惩罚景观.
-    opt = _track_engineering_adjusted_optima(canonical_track_id(track_id), track_type) \
-        if track is not None else _TRACK_TYPE_OPTIMA[track_type]
-    scale = _TRACK_TYPE_SCALE[track_type]
-    total = 0.0
-    for name, base_s in _BASE_SENSITIVITY_S_PER_CLICK.items():
-        x = float(getattr(setup, name))
-        x_opt = opt[name]
-        # V 形惩罚: |x - x_opt| × base × scale (每档代价 × 档数偏离)
-        delta_clicks = abs(x - x_opt)
-        # 对 int 字段 (步长 1.0) delta_clicks 即档数;
-        # 对 float 字段 (步长 0.01 / 0.1) delta_clicks 是连续距离, base_s
-        # 已校准为 "每步长代价" -> 需除以 step 得到每连续单位代价.
-        # 实际: base_s 表是 *每档* 代价, float 字段的 "档" = step, 所以:
-        #   代价 = (delta_clicks / step) × base_s × scale
-        # 但 _BASE_SENSITIVITY 已经标定为 *步长单位* (例 camber 0.02 s/0.01°
-        # = 0.02 s/档), 所以直接用 delta_clicks / step × base_s.
-        # step 直接取 SETUP_FIELDS 的权威步长, 不再硬编码 0.01/0.1/1.0.
-        step = SETUP_FIELDS[name].step
-        clicks = delta_clicks / step
-        total += clicks * base_s * scale.get(name, 1.0)
+    opt_vec = _opt_vec_for(cid, track_type)
+    coef = _COEF_VEC_BY_TYPE[track_type]
+    raw = np.fromiter(
+        (float(getattr(setup, n)) for n in _BASE_NAMES_PEN),
+        dtype=np.float64,
+        count=len(_BASE_NAMES_PEN),
+    )
+    # V 形惩罚: 总合 = Σ |x - x_opt|/step × base_s × scale （后两项已折入 coef）.
+    total = float(np.dot(np.abs(raw - opt_vec), coef))
     # Iter-107: 全局 cap — 保留单维线性灵敏度, 仅极端总惩罚封顶到 EA F1 2026
     # 权威上限 (6s). 消除线性叠加导致的极端 setup 惩罚过高 (10-13s → 6s).
     return float(min(total, _TOTAL_PENALTY_CAP_S))
