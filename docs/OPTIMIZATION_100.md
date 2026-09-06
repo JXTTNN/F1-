@@ -34,8 +34,13 @@
 | 008 | S1 | root 组拆 8 步 + python -u + faulthandler（定位云端静默被杀的现场） | ✅ | 锁定 test_stress_comprehensive |
 | 009 | S1 | workflow_dispatch 加 groups 白名单，定点重跑不浪费 runner | ✅ | run 34022544099 定点生效 |
 | 010 | S1 | 每组 JUnit XML + artifact 上传，绕过日志流 ~132KB 截断 | ✅ | artifact 9986245483 精确定位失败用例 |
-| 011 | S10 | test_stress_comprehensive::test_listener_1000_packets_per_sec 改脉冲敬发+动态排空（云 runner 洪泛丢旧假失败） | 🔄 | 本地过；云端 dispatch 复核中 |
+| 011 | S10 | test_stress_comprehensive::test_listener_1000_packets_per_sec 改脉冲敬发+动态排空（云 runner 洪泛丢旧假失败） | ✅ | run 34027633752 全 10 组绿 |
 | 012+ | — | 待各切片研究后填充（每轮至少推进 3-8 项） | ⬜ | — |
+
+## 全量基线（run 34027633752, 2026-09-06, ubuntu py3.11, 4065 用例全过）
+
+model 8.9min · root 3.9 · api 3.2 · telemetry 2.4 · e2e 2.3 · data 2.1 · driver 2.0 · feedback 1.7 · ui 1.7 · observability 1.6（其余为 install~1min）
+模型组最重，后续 perf 优化以此为回归对照基准。
 
 ## 验证口径
 
