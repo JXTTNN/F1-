@@ -27,6 +27,21 @@
 - 语义零变更（输出数值不变，纯调度去重）；tests/model/test_surrogate.py 23 过、
   test_optimizer+test_diagnostics 44 过，云端全量推后复核。
 
+### 预测链路全击向量化与零件共享 (Iter-301, Opt-016..019)
+- **Opt-016**: `_driver_sector_correction` 16+4 项 Python 逐项循环 → numpy 预设数组
+  (`_CROSS_DI/SI/SEC/GAIN/KEYS` + track_type 预展开 amp 向量 + bincount/matmul);
+  fuzz 4000 例 |Δ|max=4.5e-8; 11.1→7.9µs/call.
+- **Opt-017**: `setup_penalty_s` 22 次 (getattr + `SETUP_FIELDS[name].step` + scale dict)
+  → `{track_type: coef向量}`模块常量 + 逐赛道最优向量缓存 + `np.dot`. fuzz 3000 例
+  |Δ|max=2.7e-15; 7.3→6.0µs/call.
+- **Opt-018**: 集成模型出入共预——`_predict_parts` 把 (x, 双种先验, driver 修正)
+  抽为与成员解耦的纯函数, `EnsembleSurrogateModel` 各成员只跑 `_predict_from_parts`
+  的 torch 前向（原实现每个成员重复构建全套物理/输入向量）。
+- **累计效果 (R3+R4, 基准同环境)**: predict 1.478→0.474ms (-68%);
+  predict_with_confidence 1.131→0.435 (-62%); 集成×3 predict 4.41→1.25 (-72%);
+  集成 confidence 5.11→1.33 (-74%). DE 搜索 (5k-20k 次预测/次) 直接受益.
+- 语义不变式: 数值近位一致 (fuzz max diff ≤ 5e-8), 测试集 model 组 1713 过作代理回归.
+
 ### 百项深度优化计划启动：全量云端 CI + 遥测解析热路径消冗 (Iter-299, Opt-001..006)
 - **Opt-001 全量云端 CI**: 新增 `.github/workflows/full-ci.yml` — push 到 main 或
   手动 workflow_dispatch 即跑完整 `tests/` 套件（pytest-timeout 300s/用例，作业上限 45min）。
