@@ -53,3 +53,5 @@ Thumbs.db
 # Temp helper scripts
 _tmp_*.ps1
 _tmp_*.py
+# pytest 冒烟缓目录 (本地sandbox创建, 递交时被扫描警告)
+pytest-cache-files-*/

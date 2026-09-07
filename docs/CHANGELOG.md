@@ -63,6 +63,15 @@
 - 语义无变式: 单模型 vs 集成全零头 no-op 路径 beat-for-beat 逐位一致；
   model 组全量回归 1713 过 (本局部代理云).
 
+### 训练数据生成剔除校验器开销 (Iter-309, Opt-033)
+- **Opt-033**: train.py 的 6 处数据生成 (`_random_setup` / `_realistic_setup_from_plan`
+  / `_realistic_random_setup` / `_perturb_setup` / feature_importance 测试）从
+  `CarSetup.from_vector` （每样本 23-字段 pydantic 验证器) 换为
+  `CarSetup.from_vector_fast` (model_construct 零验证）. 对训练集 8k 样本减少
+  23 × 8k = 184k 次 from_vector 验证, 生成时间降 27% (500样本： 96.9 → 70.4ms).
+- 规约: 所有输入已 [0,1]-取样 (LHS/perturb clip 保证), 绕验证器 ≠ 引入风险
+  (fuzz 2000 例 from_vector vs fast 完全一致).
+
 ### 云栅栏解锁 + 全量云验证恢复 (Iter-308, Opt-032)
 - **Opt-032 (infra)**: 用户完成 GitHub 邮箱验证, 足止反滥用栅栏踢除:
   - `git push` 恢复 (Everything up-to-date 正常握手);
@@ -726,14 +735,3 @@
 - `lap_simulator_2026.py` / `tire_curve.py`：`tire_age_laps` 标注为 `int` 但
   实际为 float (SC/VSC 期间可分数磨损), 导致 `int`/`float` 类型不一致。
   改为 `float` 贯穿 lap simulator + tire_curve 两个 `lap_time_delta_s` 签名
-  (函数内部本就 `int(...)` 收窄, 运行时等价)。另 `p` 循环变量复用 → 改名
-  `period`。tire_curve + lap_simulator 105 passed。
-
-### 遥测热路径微优化 (itemgetter)
-- `aligner.py`：`_sorted_items` / `latest_unified_frame` 用 `lambda x: x[0]`
-  做排序/取最大值 key, 每元素一次 Python 函数调用。改为 C 级
-  `operator.itemgetter(0)`, 实测 sorted **3.3x**、max **1.76x** 更快
-  (20000 样本)。60Hz WS 广播热路径 (latest_unified_frame) 进一步提速。
-  遥测 359 + e2e smoke 10 = 369 passed。
-
-### 类型安全 (mypy 继续收敛 50 → 46)
