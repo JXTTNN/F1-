@@ -452,6 +452,36 @@ def setup_penalty_s(setup: CarSetup, track_id: str) -> float:
     return float(min(total, _TOTAL_PENALTY_CAP_S))
 
 
+def setup_penalties_batch(
+    setups: list[CarSetup], track_ids: list[str]
+) -> np.ndarray:
+    """向量化批量惩罚 (Opt-024): 逐赛道按 track_type 分组做一次 numpy dot.
+
+    与 setup_penalty_s 单点数值一致 (共用的 COEF/OPT 向量 + cap).
+    供 surrogate.predict_batch 的批预处理使用.
+    """
+    n = len(setups)
+    raw = np.empty((n, len(_BASE_NAMES_PEN)), dtype=np.float64)
+    for j, nm in enumerate(_BASE_NAMES_PEN):
+        raw[:, j] = np.fromiter(
+            (float(getattr(s, nm)) for s in setups), dtype=np.float64, count=n
+        )
+    out = np.empty(n, dtype=np.float64)
+    # 按 canonical track 分组
+    groups: dict[str, list[int]] = {}
+    for i, tid in enumerate(track_ids):
+        groups.setdefault(canonical_track_id(tid), []).append(i)
+    for cid, rows in groups.items():
+        track = TRACKS_BY_ID.get(cid)
+        track_type: TrackType = track.track_type if track is not None else "medium"
+        coef = _COEF_VEC_BY_TYPE[track_type]
+        opt_vec = _opt_vec_for(cid, track_type)
+        idx = np.array(rows, dtype=np.int64)
+        tot = np.abs(raw[idx] - opt_vec) @ coef
+        out[idx] = np.minimum(tot, _TOTAL_PENALTY_CAP_S)
+    return out
+
+
 # --------------------------------------------------------------------------- #
 # 桥接: setup -> LapConfig2026
 # --------------------------------------------------------------------------- #
