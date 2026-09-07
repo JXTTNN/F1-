@@ -421,7 +421,7 @@ def _search(
         key = tuple(np.round(snapped, 6))
         if key in cache:
             return cache[key]
-        setup = CarSetup.from_vector(snapped.tolist())
+        setup = CarSetup.from_vector_fast(snapped)  # Opt-027: snapped 已量化
         if stint_aware:
             # Iter-164.18: stint_aware 模式 — 用 stint 总时间作为目标.
             from f1opt.model.tire_stint import stint_total_time
@@ -493,7 +493,7 @@ def _search(
         if enable_constraints:
             snapped = _snap_vec(vec)
             snapped[_FUEL_LOAD_IDX] = _base_fuel_norm
-            setup = CarSetup.from_vector(snapped.tolist())
+            setup = CarSetup.from_vector_fast(snapped)  # Opt-027
             constraint_pen = _setup_constraint_penalty(setup)
         else:
             constraint_pen = 0.0
@@ -558,15 +558,19 @@ def _search(
             for i in range(N):
                 key = tuple(np.round(snapped[i], 6))
                 cached = cache.get(key)
-                setup = CarSetup.from_vector(snapped[i].tolist())
+                # Opt-027/028: 惰性 + 零验证快构造 (snapped 已量化 — from_vector 等价)
+                # 命中 cache 且不需要约束惩罚时, 完全跳过 CarSetup 构造.
                 if cached is not None:
                     lap_c, proxy_c = cached
                     # Iter-186: 约束惩罚 (仅当 enable_constraints=True)
-                    constraint_pen = _setup_constraint_penalty(setup) if enable_constraints else 0.0
+                    constraint_pen = (
+                        _setup_constraint_penalty(CarSetup.from_vector_fast(snapped[i]))
+                        if enable_constraints else 0.0
+                    )
                     results[i] = lap_c + weight * proxy_c + constraint_pen
                 else:
                     uncached_idxs.append(i)
-                    uncached_setups.append(setup)
+                    uncached_setups.append(CarSetup.from_vector_fast(snapped[i]))
             # 批量预测未缓存项
             if uncached_setups:
                 items = [(s, track_id, driver_profile) for s in uncached_setups]
@@ -621,7 +625,10 @@ def _search(
     # recommended_lap (用 baseline fuel 评估) 不一致, 导致 "永不推荐比基线更差"
     # 保障失效 (lap 对但 setup 错).
     best_vec[_FUEL_LOAD_IDX] = _base_fuel_norm
-    recommended_setup = CarSetup.from_vector(best_vec.tolist())
+    # Opt-027: best_vec 出自 _snap_vec_batch (DE 网格), from_vector_fast 等价
+    recommended_setup = CarSetup.from_vector_fast(
+        _snap_vec(best_vec) if best_vec is not None else best_vec
+    )
     recommended_lap, recommended_proxy = evaluate(best_vec)
     baseline_lap, baseline_proxy = evaluate(base_vec)
 
