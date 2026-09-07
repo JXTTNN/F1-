@@ -116,13 +116,26 @@ def _step_decimals(step: float) -> int:
     return max(0, -int(math.floor(math.log10(step))))
 
 
+# Opt-028: step -> decimals 查询缓存 (step 只是 5 种常量, 之前 _step_decimals
+# 每调用都跑 log10 — DE 内环字段级 snap 计数达 10^5 级).
+_STEP_DECIMALS_CACHE: dict[float, int] = {}
+
+
+def _step_decimals_cached(step: float) -> int:
+    d = _STEP_DECIMALS_CACHE.get(step)
+    if d is None:
+        d = _step_decimals(step)
+        _STEP_DECIMALS_CACHE[step] = d
+    return d
+
+
 def _snap_to_step(value: float, spec: SetupField) -> float:
     """将 ``value`` 对齐到最近的合法档位并消除浮点噪声。"""
     steps = round((value - spec.min) / spec.step)
     snapped = spec.min + steps * spec.step
     if spec.kind == "int":
         return float(int(round(snapped)))
-    return round(snapped, _step_decimals(spec.step))
+    return round(snapped, _step_decimals_cached(spec.step))
 
 
 def _check_value(name: str, spec: SetupField, value: float) -> None:
@@ -192,6 +205,25 @@ class CarSetup(BaseModel):
             (float(getattr(self, spec.name)) - spec.min) / (spec.max - spec.min)
             for spec in ALL_SETUP_FIELDS()
         ]
+
+    @classmethod
+    def from_vector_fast(cls, vec: Sequence[float]) -> CarSetup:
+        """快构造 (Opt-027): 与 from_vector 数学等价, 零验证.
+
+        预条件: vec 已由调用方量化/钳位到 [0,1] (例如 DE 内环的 _snap_vec).
+        model_construct 跳过 pydantic model_validator (23 x _check_value +
+        round + _step_decimals), 使每代几十候选的构造开销降一个量级.
+        """
+        if len(vec) != len(SETUP_FIELDS):
+            raise ValueError(
+                f"向量长度 {len(vec)} 与调教参数数量 {len(SETUP_FIELDS)} 不一致"
+            )
+        kwargs: dict[str, int | float] = {}
+        for spec, v in zip(ALL_SETUP_FIELDS(), vec, strict=True):
+            denorm = spec.min + float(v) * (spec.max - spec.min)
+            snapped = _snap_to_step(denorm, spec)
+            kwargs[spec.name] = int(snapped) if spec.kind == "int" else snapped
+        return cls.model_construct(**kwargs)
 
     @classmethod
     def from_vector(cls, vec: Sequence[float]) -> CarSetup:
