@@ -442,3 +442,26 @@ def test_iter164_tire_wear_proxy_in_unit_range() -> None:
         assert 0.0 <= result.tire_wear <= 1.0, (
             f"tire_wear for {track} should be in [0,1], got {result.tire_wear}"
         )
+
+
+def test_search_setup_from_vecs_equivalence() -> None:
+    """Opt-037 撤回保护: from_vecs 路径与 from_vector_fast 数值等效."""
+    import numpy as np
+    from f1opt.model.surrogate import SurrogateModel
+    from f1opt.model.optimizer import _snap_vec
+
+    m = SurrogateModel()
+    vecs = np.array([np.random.default_rng(i).random(23) for i in range(200)], dtype=np.float64)
+    snapped = np.stack([_snap_vec(v) for v in vecs])
+    legacy = m.predict_batch([(CarSetup.from_vector(v), "suzuka", None) for v in snapped])
+    modern = m.predict_batch_from_vecs(snapped, "suzuka", None)
+    assert len(legacy) == len(modern) == len(snapped)
+    for a, b in zip(legacy, modern):
+        assert abs(a["lap_time"] - b["lap_time"]) < 1e-9
+        assert abs(a["responses"]["speed_avg"] - b["responses"]["speed_avg"]) < 1e-7
+
+    # seed 局部稳定性回到 search_setup
+    r1 = search_setup("suzuka", iterations=50, seed=5)
+    r2 = search_setup("suzuka", iterations=50, seed=5)
+    assert r1.recommended_lap_time == r2.recommended_lap_time
+    assert all(x >= y - 1e-12 for x, y in zip(r1.search_trace, r1.search_trace[1:]))
