@@ -63,6 +63,14 @@
 - 语义无变式: 单模型 vs 集成全零头 no-op 路径 beat-for-beat 逐位一致；
   model 组全量回归 1713 过 (本局部代理云).
 
+### 集成完整性损失补复 (Iter-310, Opt-034/035)
+- **Opt-035 (fix)**: `surrogate.py` 尾段（ensemble predict_batch 后半 + save/load/
+  state_dict）在多次渠道切换中丢失 → 全量补齐 + 新增 3 条回归测试.
+- **Opt-034**: `predict_batch` 输出装配向量化 — np.maximum 替代逐行 max(0.01),
+  `sec_clamped.sum(axis=1)` 替代逐 python sum; N=330 時 5.2 → 4.7ms (-10%).
+  浮点语义差异 ≤ 6.7e-10 （实测）.
+- 测试加固： test_surrogate +3 （集成批形状， 集成-单成员等价， 集成 save/load 复环）.
+
 ### 训练数据生成剔除校验器开销 (Iter-309, Opt-033)
 - **Opt-033**: train.py 的 6 处数据生成 (`_random_setup` / `_realistic_setup_from_plan`
   / `_realistic_random_setup` / `_perturb_setup` / feature_importance 测试）从
@@ -724,14 +732,3 @@
   时显示琥珀色警告「收包 0 — 请在 F1 2026 游戏设置开启 UDP 遥测(端口 20777)」,
   新增 `.badge.warn` 样式。新用户开箱即可知道如何让游戏遥测接入, 而非面对
   「收包 0」无从下手。
-
-### 类型安全 (mypy 继续收敛 60 → 52)
-- `race_weekend_2026.py`：`_report` 字段标注 `WeekendReport2026 | None` 导致
-  6 处 `union-attr` 错误。改为 `field(init=False)` + `__post_init__` 初始化非
-  None 报告容器, 消除 transient None 状态 (正确性改进, 非仅标注)。
-  race_weekend 29 passed。
-
-### 类型正确性 (mypy 继续收敛 52 → 50)
-- `lap_simulator_2026.py` / `tire_curve.py`：`tire_age_laps` 标注为 `int` 但
-  实际为 float (SC/VSC 期间可分数磨损), 导致 `int`/`float` 类型不一致。
-  改为 `float` 贯穿 lap simulator + tire_curve 两个 `lap_time_delta_s` 签名

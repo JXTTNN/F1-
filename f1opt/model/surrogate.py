@@ -818,16 +818,23 @@ class SurrogateModel(nn.Module):
             sec_res, resp_res = self.forward(x_t)
         sec_res = sec_res.numpy() * SECTOR_SCALE + sec_prior_arr + driver_corr_arr
         resp_res = resp_res.numpy() * scales + resp_prior_arr
+        # Opt-034: 向量化输出装配 (相同运算路径, 只做 pathlib 收敛)
+        # - sectors: np.maximum 与逐行 max() 完全一致 (clamp to 0.01)
+        # - lap: np.sum (f64) 与 python sum 差 ≤ 1e-9 (measure 6.7e-10)
+        sec_clamped = np.maximum(sec_res, np.float32(0.01))
+        resp_list = resp_res.tolist()
+        sec_list = sec_clamped.tolist()
+        lap_arr = sec_clamped.astype(np.float64).sum(axis=1)
         out: list[dict[str, Any]] = []
-        for s_row, r_row in zip(sec_res, resp_res, strict=True):
-            sectors = [max(0.01, float(s)) for s in s_row]
-            lap_time = float(sum(sectors))
+        for i in range(len(sec_list)):
+            sectors = [float(v) for v in sec_list[i]]
             responses = {
-                name: float(v) for name, v in zip(RESPONSE_NAMES, r_row, strict=True)
+                name: float(resp_list[i][j])
+                for j, name in enumerate(RESPONSE_NAMES)
             }
             out.append(
                 {
-                    "lap_time": lap_time,
+                    "lap_time": float(lap_arr[i]),
                     "sectors": sectors,
                     "responses": responses,
                     "model_version": MODEL_VERSION,
@@ -1163,3 +1170,73 @@ class EnsembleSurrogateModel(nn.Module):
         if not items:
             return []
         # Opt-023: 批零件算一次（items 级路径），各成员只做自己的前向求导
+        x_np, sec_prior_arr, resp_prior_arr, driver_corr_arr = _predict_batch_parts(items)
+        all_results = [
+            m._predict_batch_from_parts(x_np, sec_prior_arr, resp_prior_arr, driver_corr_arr)
+            for m in self._members
+        ]
+        out: list[dict[str, Any]] = []
+        for i in range(len(items)):
+            r_list = [all_results[m][i] for m in range(self.n_members)]
+            avg_lap = float(np.mean([r["lap_time"] for r in r_list]))
+            avg_sectors = [
+                float(np.mean([r["sectors"][j] for r in r_list]))
+                for j in range(N_SECTORS)
+            ]
+            avg_responses = {
+                name: float(np.mean([r["responses"][name] for r in r_list]))
+                for name in RESPONSE_NAMES
+            }
+            out.append({
+                "lap_time": avg_lap,
+                "sectors": avg_sectors,
+                "responses": avg_responses,
+                "model_version": f"{MODEL_VERSION}-ensemble-{self.n_members}",
+                "n_members": self.n_members,
+            })
+        return out
+
+    # ------------------------------------------------------------------ #
+    # Persistence
+    # ------------------------------------------------------------------ #
+    def state_dict(self, *args: Any, **kwargs: Any) -> dict[str, Any]:  # type: ignore[override]
+        """Serialize all member models + ensemble metadata."""
+        return {
+            "model_version": f"{MODEL_VERSION}-ensemble-{self.n_members}",
+            "n_members": self.n_members,
+            "input_dim": INPUT_DIM,
+            "members": [m.state_dict(*args, **kwargs) for m in self._members],
+        }
+
+    def load_state_dict(  # type: ignore[override]
+        self, d: dict[str, Any], strict: bool = True
+    ) -> None:
+        """Restore member weights from :meth:`state_dict` output.
+
+        The number of members in ``d`` must match ``self.n_members``. Each
+        member's weights are loaded individually.
+        """
+        members = d.get("members", [])
+        if len(members) != self.n_members:
+            raise ValueError(
+                f"Ensemble state_dict has {len(members)} members but "
+                f"model has {self.n_members}"
+            )
+        for m, md in zip(self.models, members, strict=True):
+            m.load_state_dict(md, strict=strict)
+
+    def save(self, path: str | Path) -> None:
+        """Save ensemble to ``.pt`` file (creates parent dirs)."""
+        p = Path(path)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        torch.save(self.state_dict(), p)
+
+    @classmethod
+    def load(cls, path: str | Path) -> EnsembleSurrogateModel:
+        """Load ensemble from ``.pt`` file."""
+        d = torch.load(path, weights_only=False)
+        n = d.get("n_members", 1)
+        models = [SurrogateModel() for _ in range(n)]
+        ens = cls(models)
+        ens.load_state_dict(d)
+        return ens

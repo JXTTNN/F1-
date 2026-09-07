@@ -338,3 +338,48 @@ def test_single_member_ensemble_zero_disagreement() -> None:
     r = ens.predict_with_confidence(DEFAULT_SETUP, "silverstone")
     assert r["confidence_factors"]["disagreement_penalty"] == 0.0
     assert r["confidence_factors"]["member_lap_std_s"] == 0.0
+
+def test_ensemble_predict_batch_smoke() -> None:
+    """Opt-013 防回归: ensemble.predict_batch 返回与成员批均值语义一致."""
+    from f1opt.model.surrogate import EnsembleSurrogateModel, SurrogateModel
+
+    members = [SurrogateModel() for _ in range(3)]
+    ens = EnsembleSurrogateModel(members)
+    items = [ (DEFAULT_SETUP, "suzuka", None), (DEFAULT_SETUP, "monza", None) ]
+    out = ens.predict_batch(items)
+    assert len(out) == 2
+    for d in out:
+        assert d["n_members"] == 3
+        assert d["model_version"].startswith(members[0] .predict_batch(items)[0]["model_version"].split("-")[0])
+        # 与成员均值一致
+    per_member = [m.predict_batch(items) for m in members]
+    for i in range(2):
+        avg = sum(per_member[m][i]["lap_time"] for m in range(3)) / 3
+        assert abs(out[i]["lap_time"] - avg) < 1e-9
+
+
+def test_ensemble_predict_batch_matches_member_mean_zero_head() -> None:
+    """未训练零头下, predict(单成员) == ensemble_predict_batch == 单成员 predict_batch."""
+    from f1opt.model.surrogate import EnsembleSurrogateModel, SurrogateModel
+    members = [SurrogateModel() for _ in range(2)]
+    ens = EnsembleSurrogateModel(members)
+    items = [(DEFAULT_SETUP, "suzuka", None)]
+    single = members[0].predict(*items[0])
+    batch = ens.predict_batch(items)
+    assert abs(single["lap_time"] - batch[0]["lap_time"]) < 1e-9
+
+
+def test_ensemble_save_load_roundtrip(tmp_path) -> None:
+    """Opt-013 防回归: Ensemble save/predict 一致."""
+    import os
+    from f1opt.model.surrogate import EnsembleSurrogateModel, SurrogateModel
+    members = [SurrogateModel() for _ in range(3)]
+    ens = EnsembleSurrogateModel(members)
+    p = tmp_path / "ens.pt"
+    ens.save(p)
+    ens2 = EnsembleSurrogateModel.load(str(p))
+    r1 = ens.predict(DEFAULT_SETUP, "suzuka")
+    r2 = ens2.predict(DEFAULT_SETUP, "suzuka")
+    assert abs(r1["lap_time"] - r2["lap_time"]) < 1e-9
+    assert abs(r1["responses"]["speed_avg"] - r2["responses"]["speed_avg"]) < 1e-9
+
