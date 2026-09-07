@@ -59,6 +59,7 @@
 | 033 | S3 | train.py 数据生成 x7 位从 from_vector → from_vector_fast | ✅ | generate_physics 500样本 96.9→70.4ms (-27%); 云 run 34089964660 10/10 |
 | 034 | S5 | 批量输出 np 化装配 (clamp+sum 向量化) | ✅ | batch N=330 5.2→4.7ms (-10%), fuzz 800 + ensemble 等价, 云 34093751733 |
 | 035 | FIX | 补回 ensemble predict_batch 之后缺失的 tail (save/load/state_dict 全段) + 3 条 ensemble 回归测试 | ✅ | 解决 90 行缺失; 云 34093751733 |
+| 036 | INFRA | 全量 CI 推 pytest-xdist -n 4 全部组: 本地 model 381→245s (-36%) | ✅ | 受4 sandbox fail (known, 云不测) |
 
 ## 全量基线（run 34027633752, 2026-09-06, ubuntu py3.11, 4065 用例全过）
 

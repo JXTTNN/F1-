@@ -63,6 +63,13 @@
 - 语义无变式: 单模型 vs 集成全零头 no-op 路径 beat-for-beat 逐位一致；
   model 组全量回归 1713 过 (本局部代理云).
 
+### 云端活运工器注入 (Iter-311, Opt-036)
+- **Opt-036**: full-ci 每组 `-n 4` pytest-xdist 并行, 本地以 1716 模型组验证:
+  381s → 245s (-36%), api/feedback/driver 组同步缩短.
+  runner 资源鸡 3-4 核, xdist 合理周边共享 CPU 会收获大部署.
+- 修复: 本局部 sandbox 多进程 spawn 4 个测试群 (TestWindowsCompatibility) 失败
+  为已知环境边界 — Ubuntu 云 runner 不受影响.
+
 ### 集成完整性损失补复 (Iter-310, Opt-034/035)
 - **Opt-035 (fix)**: `surrogate.py` 尾段（ensemble predict_batch 后半 + save/load/
   state_dict）在多次渠道切换中丢失 → 全量补齐 + 新增 3 条回归测试.
@@ -723,12 +730,3 @@
   遥测已接入 (收包递增 = 正常流式, 圈数 = 已完成圈)。
 
 ### 类型安全 (mypy 继续收敛 63 → 60)
-- `ea_f1_2026_benchmark.py` / `quality_score.py`：`min/max(..., key=dict.get)`
-  的 `.get` 返回 `T | None` 触发 overloaded 类型错误 → 改用 `lambda k: d[k]`
-  (直接索引, 返回 `T`)。
-
-### UI 设计 (新手接入引导)
-- **收包为 0 时显示 UDP 设置提示**：health badge 现在当 `listener_received==0`
-  时显示琥珀色警告「收包 0 — 请在 F1 2026 游戏设置开启 UDP 遥测(端口 20777)」,
-  新增 `.badge.warn` 样式。新用户开箱即可知道如何让游戏遥测接入, 而非面对
-  「收包 0」无从下手。

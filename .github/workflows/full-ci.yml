@@ -43,77 +43,77 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+          pip install -e ".[dev]" pytest-xdist
 
       - name: Test group api
         if: matrix.group == 'api' && (github.event.inputs.groups == '' || contains(github.event.inputs.groups, matrix.group))
-        run: pytest tests/api -v --timeout=240 -o junit_family=xunit2 --junitxml=reports/tests/api.xml
+        run: pytest -n 4 tests/api -v --timeout=240 -o junit_family=xunit2 --junitxml=reports/tests/api.xml
 
       - name: Test group data
         if: matrix.group == 'data' && (github.event.inputs.groups == '' || contains(github.event.inputs.groups, matrix.group))
-        run: pytest tests/data -v --timeout=240 -o junit_family=xunit2 --junitxml=reports/tests/data.xml
+        run: pytest -n 4 tests/data -v --timeout=240 -o junit_family=xunit2 --junitxml=reports/tests/data.xml
 
       - name: Test group driver
         if: matrix.group == 'driver' && (github.event.inputs.groups == '' || contains(github.event.inputs.groups, matrix.group))
-        run: pytest tests/driver -v --timeout=240 -o junit_family=xunit2 --junitxml=reports/tests/driver.xml
+        run: pytest -n 4 tests/driver -v --timeout=240 -o junit_family=xunit2 --junitxml=reports/tests/driver.xml
 
       - name: Test group e2e
         if: matrix.group == 'e2e'
-        run: pytest tests/e2e -v --timeout=240
+        run: pytest -n 4 tests/e2e -v --timeout=240
 
       - name: Test group feedback
         if: matrix.group == 'feedback' && (github.event.inputs.groups == '' || contains(github.event.inputs.groups, matrix.group))
-        run: pytest tests/feedback -v --timeout=240 -o junit_family=xunit2 --junitxml=reports/tests/feedback.xml
+        run: pytest -n 4 tests/feedback -v --timeout=240 -o junit_family=xunit2 --junitxml=reports/tests/feedback.xml
 
       - name: Test group model
         if: matrix.group == 'model' && (github.event.inputs.groups == '' || contains(github.event.inputs.groups, matrix.group))
-        run: pytest tests/model -v --timeout=240 -o junit_family=xunit2 --junitxml=reports/tests/model.xml
+        run: pytest -n 4 tests/model -v --timeout=240 -o junit_family=xunit2 --junitxml=reports/tests/model.xml
 
       - name: Test group observability
         if: matrix.group == 'observability' && (github.event.inputs.groups == '' || contains(github.event.inputs.groups, matrix.group))
-        run: pytest tests/observability -v --timeout=240 -o junit_family=xunit2 --junitxml=reports/tests/observability.xml
+        run: pytest -n 4 tests/observability -v --timeout=240 -o junit_family=xunit2 --junitxml=reports/tests/observability.xml
 
       - name: Test group telemetry
         if: matrix.group == 'telemetry' && (github.event.inputs.groups == '' || contains(github.event.inputs.groups, matrix.group))
-        run: pytest tests/telemetry -v --timeout=240 -o junit_family=xunit2 --junitxml=reports/tests/telemetry.xml
+        run: pytest -n 4 tests/telemetry -v --timeout=240 -o junit_family=xunit2 --junitxml=reports/tests/telemetry.xml
 
       - name: Test group ui
         if: matrix.group == 'ui' && (github.event.inputs.groups == '' || contains(github.event.inputs.groups, matrix.group))
-        run: pytest tests/ui -v --timeout=240 -o junit_family=xunit2 --junitxml=reports/tests/ui.xml
+        run: pytest -n 4 tests/ui -v --timeout=240 -o junit_family=xunit2 --junitxml=reports/tests/ui.xml
 
       # Opt-008: root 组分步直跑（python -u 关缓冲 + faulthandler 抓段错误），
       # 进程被杀时最后一条 -v 输出即现场（此前合并一步跑，被杀后尾部被缓冲吞掉无法定位）。
       - name: Test root -- cli
         if: matrix.group == 'root' && (github.event.inputs.groups == '' || contains(github.event.inputs.groups, matrix.group))
-        run: python -u -X faulthandler -m pytest tests/test_cli.py -v --timeout=240 -o junit_family=xunit2 --junitxml=reports/root_cli.xml
+        run: python -u -X faulthandler -m pytest -n 4 tests/test_cli.py -v --timeout=240 -o junit_family=xunit2 --junitxml=reports/root_cli.xml
 
       - name: Test root -- e2e_scenarios
         if: matrix.group == 'root' && (github.event.inputs.groups == '' || contains(github.event.inputs.groups, matrix.group))
-        run: python -u -X faulthandler -m pytest tests/test_e2e_scenarios.py -v --timeout=240
+        run: python -u -X faulthandler -m pytest -n 4 tests/test_e2e_scenarios.py -v --timeout=240
 
       - name: Test root -- full_pipeline_validation
         if: matrix.group == 'root' && (github.event.inputs.groups == '' || contains(github.event.inputs.groups, matrix.group))
-        run: python -u -X faulthandler -m pytest tests/test_full_pipeline_validation.py -v --timeout=240 -o junit_family=xunit2 --junitxml=reports/root_full_pipeline_validation.xml
+        run: python -u -X faulthandler -m pytest -n 4 tests/test_full_pipeline_validation.py -v --timeout=240 -o junit_family=xunit2 --junitxml=reports/root_full_pipeline_validation.xml
 
       - name: Test root -- input_pipeline_validation
         if: matrix.group == 'root' && (github.event.inputs.groups == '' || contains(github.event.inputs.groups, matrix.group))
-        run: python -u -X faulthandler -m pytest tests/test_input_pipeline_validation.py -v --timeout=240 -o junit_family=xunit2 --junitxml=reports/root_input_pipeline_validation.xml
+        run: python -u -X faulthandler -m pytest -n 4 tests/test_input_pipeline_validation.py -v --timeout=240 -o junit_family=xunit2 --junitxml=reports/root_input_pipeline_validation.xml
 
       - name: Test root -- robustness
         if: matrix.group == 'root' && (github.event.inputs.groups == '' || contains(github.event.inputs.groups, matrix.group))
-        run: python -u -X faulthandler -m pytest tests/test_robustness.py -v --timeout=240 -o junit_family=xunit2 --junitxml=reports/root_robustness.xml
+        run: python -u -X faulthandler -m pytest -n 4 tests/test_robustness.py -v --timeout=240 -o junit_family=xunit2 --junitxml=reports/root_robustness.xml
 
       - name: Test root -- robustness_validation
         if: matrix.group == 'root' && (github.event.inputs.groups == '' || contains(github.event.inputs.groups, matrix.group))
-        run: python -u -X faulthandler -m pytest tests/test_robustness_validation.py -v --timeout=240 -o junit_family=xunit2 --junitxml=reports/root_robustness_validation.xml
+        run: python -u -X faulthandler -m pytest -n 4 tests/test_robustness_validation.py -v --timeout=240 -o junit_family=xunit2 --junitxml=reports/root_robustness_validation.xml
 
       - name: Test root -- smoke
         if: matrix.group == 'root' && (github.event.inputs.groups == '' || contains(github.event.inputs.groups, matrix.group))
-        run: python -u -X faulthandler -m pytest tests/test_smoke.py -v --timeout=240 -o junit_family=xunit2 --junitxml=reports/root_smoke.xml
+        run: python -u -X faulthandler -m pytest -n 4 tests/test_smoke.py -v --timeout=240 -o junit_family=xunit2 --junitxml=reports/root_smoke.xml
 
       - name: Test root -- stress_comprehensive
         if: matrix.group == 'root' && (github.event.inputs.groups == '' || contains(github.event.inputs.groups, matrix.group))
-        run: python -u -X faulthandler -m pytest tests/test_stress_comprehensive.py -v --timeout=240 -o junit_family=xunit2 --junitxml=reports/root_stress_comprehensive.xml
+        run: python -u -X faulthandler -m pytest -n 4 tests/test_stress_comprehensive.py -v --timeout=240 -o junit_family=xunit2 --junitxml=reports/root_stress_comprehensive.xml
 
       # Opt-010: JUnit XML 全量上传为 artifact —— 日志服务截断时仍能拿到确切失败清单。
       - name: Upload test reports
