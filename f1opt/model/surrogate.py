@@ -887,7 +887,10 @@ class SurrogateModel(nn.Module):
         sec_prior_arr: np.ndarray,
         resp_prior_arr: np.ndarray,
         driver_corr_arr: np.ndarray,
-    ) -> list[dict[str, Any]]:
+        *,
+        raw: bool = False,
+    ) -> list[dict[str, Any]] | tuple[np.ndarray, np.ndarray]:
+        """raw=True 时返回 (laps (N,), responses (N, 7)), 不入 dict 装配 (Opt-039)."""
         x_t = torch.from_numpy(x_np)  # (N, 41) f32
         scales = np.asarray(RESPONSE_SCALES, dtype=np.float32)
         self.eval()
@@ -899,6 +902,10 @@ class SurrogateModel(nn.Module):
         # - sectors: np.maximum 与逐行 max() 完全一致 (clamp to 0.01)
         # - lap: np.sum (f64) 与 python sum 差 ≤ 1e-9 (measure 6.7e-10)
         sec_clamped = np.maximum(sec_res, np.float32(0.01))
+        if raw:
+            lap_arr = sec_clamped.astype(np.float64).sum(axis=1)
+            resp_mat64 = resp_res.astype(np.float64)
+            return lap_arr, resp_mat64
         resp_list = resp_res.tolist()
         sec_list = sec_clamped.tolist()
         lap_arr = sec_clamped.astype(np.float64).sum(axis=1)
@@ -924,16 +931,18 @@ class SurrogateModel(nn.Module):
         sv_norm: np.ndarray,
         track_id: str,
         driver_profile: Any = None,
-    ) -> list[dict[str, Any]]:
-        """来自归一化向量的批预测 (Opt-037): 跳过 CarSetup 构造/校验."""
+        *,
+        raw: bool = False,
+    ) -> list[dict[str, Any]] | tuple[np.ndarray, np.ndarray]:
+        """来自归一化向量的批预测 (Opt-037); raw=True 返回 numpy 对 (laps, responses)."""
         sv = np.asarray(sv_norm, dtype=np.float64)
         if sv.size == 0:
-            return []
+            return [] if not raw else (np.zeros(0), np.zeros((0, N_RESPONSES)))
         if sv.ndim != 2 or sv.shape[1] != SETUP_DIM:
             raise ValueError(f"predict_batch_from_vecs 需要 (N, {SETUP_DIM}) 归一化矩阵")
         n = sv.shape[0]
         parts = _predict_batch_parts_from_vecs(sv, [track_id] * n, [driver_profile] * n)
-        return self._predict_batch_from_parts(*parts)
+        return self._predict_batch_from_parts(*parts, raw=raw)
 
     # --- 存取 ---------------------------------------------------------------
     def state_dict(self, *args: Any, **kwargs: Any) -> dict[str, Any]:  # type: ignore[override]  # type: ignore[override]
@@ -1305,15 +1314,28 @@ class EnsembleSurrogateModel(nn.Module):
         sv_norm: np.ndarray,
         track_id: str,
         driver_profile: Any = None,
-    ) -> list[dict[str, Any]]:
-        """集成各成员的归一化向量批预测 (Opt-037): 共享零件, 均值."""
+        *,
+        raw: bool = False,
+    ) -> list[dict[str, Any]] | tuple[np.ndarray, np.ndarray]:
+        """集成各成员的归一化向量批预测 (Opt-037); raw=True 返回 (laps, responses)."""
         sv = np.asarray(sv_norm, dtype=np.float64)
         if sv.size == 0:
-            return []
+            return [] if not raw else (np.zeros(0), np.zeros((0, N_RESPONSES)))
         if sv.ndim != 2 or sv.shape[1] != SETUP_DIM:
             raise ValueError(f"predict_batch_from_vecs 需要 (N, {SETUP_DIM}) 归一化矩阵")
         n = sv.shape[0]
         parts = _predict_batch_parts_from_vecs(sv, [track_id] * n, [driver_profile] * n)
+        if raw:
+            laps_rows = []
+            resp_rows = []
+            for m in self._members:
+                l, r = m._predict_batch_from_parts(*parts, raw=True)
+                laps_rows.append(l)
+                resp_rows.append(r)
+            return (
+                np.stack(laps_rows).mean(axis=0),
+                np.stack(resp_rows).mean(axis=0),
+            )
         all_results = [m._predict_batch_from_parts(*parts) for m in self._members]
         return _average_member_results(all_results, self.n_members)
 

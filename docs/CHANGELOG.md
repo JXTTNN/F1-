@@ -70,6 +70,12 @@
   * 超过 240s timeout 的则源自 xdist 时云 CPU 资源竞争, 而非代码:
     solution = model 组串行 （其余 9 组保留 -n 4).
 
+### 从 landmark 到 numpy 对 (Iter-315, Opt-039)
+- SurrogateModel/Ensemble.predict_batch_from_vecs 提供 `raw=True`, 直接拿 
+  `(laps (N,), responses (N, 7))` 步矩阵 — 整瓣 DE 里轮 ~100ms; 
+  `objective_vec` 用 raw 计算 proxy_arr, 整批写入 cache.
+- 搜索繁度 326→307ms, 不可儿化 battle/bench 闭法可 Map.
+
 ### DE cache 键的代码成本归一 (Iter-314, Opt-038)
 - `search_setup` 键看板从 `tuple(np.round(vec, 6))` 改为 `np.round(vec, 6).tobytes()` —
   每代 DE 缓存 lookup 的 round 调用从 ~19.4k → 1 (-63% 串行开销 total); 搜索 558→326ms.
@@ -721,6 +727,3 @@
 - **engine.py 轮胎分析段 mypy 错误 12 → 0**：`wears`/`temps`/`inner_temps`/
   `outer_temps` 列表此前混入 `None` (`list[float | None]`), 触发 ~12 处
   `float | None` 类型错误。改为「仅追加 float + 用 `len(list)==N` 判断」的
-  类型收窄写法, 移除全部 `# type: ignore` 注释。feedback 315 passed。
-- **cli.py mypy 错误 10 → 0**：`cmd_search` 复用了 `result` 变量承载两种返回
-  类型 (bayesian dict vs SearchResult), 改为独立变量 `bayesian_result`/

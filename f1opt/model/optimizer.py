@@ -624,28 +624,51 @@ def _search(
             # cache 命中行
             for i, (lap_c, proxy_c) in cached_vals:
                 results[i] = lap_c + weight * proxy_c + float(cons_arr[i])
-            # 批量预测未缓存 (Opt-037: from_vecs 直接由 snapped 归一化矩阵)
+            # 批量预测未缓存 (Opt-039: raw=True, 反拿 numpy 对 — 免 dict 装配)
             if need_build:
                 rows = np.asarray(snapped[need_build], dtype=np.float64)
                 call_from_vecs = getattr(model, "predict_batch_from_vecs", None)
+                preds_laps: np.ndarray
+                preds_resp: np.ndarray
                 if callable(call_from_vecs):
-                    preds = call_from_vecs(rows, track_id, driver_profile)
+                    try:
+                        preds_laps, preds_resp = call_from_vecs(rows, track_id, driver_profile, raw=True)
+                    except TypeError:
+                        # 老 surrogate api (无 raw)
+                        preds = call_from_vecs(rows, track_id, driver_profile)
+                        preds_laps = np.array([p["lap_time"] for p in preds], dtype=np.float64)
+                        preds_resp = np.array(
+                            [[float(p["responses"][n]) for n in (
+                                "tyre_temp", "slip_angle", "tyre_load_spread"
+                            )
+                              ] for p in preds],
+                            dtype=np.float64,
+                        )
                 else:
-                    # 兼容旧 model 接口
                     built = CarSetup.from_vectors_fast(rows)
                     items = [(s, track_id, driver_profile) for s in built]
                     preds = model.predict_batch(items)
-                for idx, pred in zip(uncached_idxs, preds, strict=True):
-                    lap = float(pred["lap_time"])
-                    resp = pred["responses"]
-                    proxy = (
-                        (float(resp["tyre_temp"]) - _TYRE_TEMP_REF) / _TYRE_TEMP_SPAN
-                        + float(resp["slip_angle"]) / _SLIP_REF
-                        + float(resp["tyre_load_spread"])
+                    preds_laps = np.array([p["lap_time"] for p in preds], dtype=np.float64)
+                    preds_resp = np.array(
+                        [[float(p["responses"][n]) for n in (
+                            "tyre_temp", "slip_angle", "tyre_load_spread"
+                        )
+                          ] for p in preds],
+                        dtype=np.float64,
                     )
+                # proxy = (tyre_temp - ref) / temp_span + slip / slip_ref + spread — 全 numpy
+                # 列序 RESPONSE_NAMES: 0=speed_avg 1=speed_max 2=slip_angle 3=tyre_load_spread 4=rake 5=tyre_temp 6=g_lat_max
+                # -> 对应 tyre_temp=5 slip=2 spread=3 (原代码 dict 访问 dict-key 实插入游支持错列)  
+                proxy_arr = (
+                    (preds_resp[:, 5] - _TYRE_TEMP_REF) / _TYRE_TEMP_SPAN
+                    + preds_resp[:, 2] / _SLIP_REF
+                    + preds_resp[:, 3]
+                )
+                for k, idx in enumerate(need_build):
+                    lap = float(preds_laps[k])
+                    proxy = float(proxy_arr[k])
                     results[idx] = lap + weight * proxy + float(cons_arr[idx])
-                    sv_key = rnd[idx].tobytes()
-                    cache[sv_key] = (lap, proxy)
+                    cache[rnd[idx].tobytes()] = (lap, proxy)
             return results
 
         best_vec, trace, algorithm, elite_survival = _vectorized_differential_evolution(
