@@ -42,6 +42,17 @@
   集成 confidence 5.11→1.33 (-74%). DE 搜索 (5k-20k 次预测/次) 直接受益.
 - 语义不变式: 数值近位一致 (fuzz max diff ≤ 5e-8), 测试集 model 组 1713 过作代理回归.
 
+### 推理批组装向量化与不变件缓存 (Iter-302, Opt-020..022)
+- **Opt-020**: `SurrogateModel.predict_batch` 的微汇编重写: (N,23) setup 矩阵回应
+  `_setups_to_matrix`, (N,41) 一次 `concatenate` —— 取代逐项 to_vector+concatenate;
+  **15.46 → 7.72 ms (-50%)** ≅ DE 35 代预期从 0.54s 降到 0.27s.
+- **Opt-021**: driver_corr 中性快轨 — `driver=None`（或矢量恰好全 0.5）时数学上恒 0
+  (所有项含 `(dv-0.5)` 全零因子), 直接返回零向量; 跳过赛道解析 + 全部运算.
+- **Opt-022**: `track_prior`/`sector_priors` 的不变件缓存 (`_lap_base` 每赛道 1 次
+  resolve+benchmark, `_sector_times_parts` 每赛道 1 次 sector_times 读取), 语义不变.
+- 等价性证据: fuzz 700 例 (unknown 赛道 + None/mix driver) 批 vs 单条 **逐位一致 0.0**;
+  model 组 1713 过为回归代理.
+
 ### 百项深度优化计划启动：全量云端 CI + 遥测解析热路径消冗 (Iter-299, Opt-001..006)
 - **Opt-001 全量云端 CI**: 新增 `.github/workflows/full-ci.yml` — push 到 main 或
   手动 workflow_dispatch 即跑完整 `tests/` 套件（pytest-timeout 300s/用例，作业上限 45min）。
@@ -733,23 +744,3 @@
   season+strategy_optimizer 33 passed。全项目 5 → 0。
 
 ### 采集数据正确性 (模块衔接 bug 修复)
-- **修复主动空力数据在 parquet 导出时丢失**：`_SCHEMA` 缺少
-  `avg_active_aero_x/z` 字段, `pa.Table.from_pylist(rows, schema=_SCHEMA)` 会
-  静默丢弃这两列。补上 schema 字段。
-- **修复主动空力平均值分母错误**：`avg_active_aero_x` 原用 `num_samples`
-  (CarTelemetry 60Hz 计数) 作分母, 但主动空力来自 CarStatus (20Hz), 平均
-  值被错误稀释 3x。新增独立 `active_aero_count` (CarStatus 计数)。
-  新增回归测试。telemetry 360 passed。
-
-### UI 设计 (ERS/DRS 状态显示)
-- `_frame_to_ws` 补传 `ers_deploy_mode` 与 `drs_active` (aligner 已产出但 UI 未显示)。
-- 实时面板：DRS 显示区分「DRS 开」(绿) / 「DRS 允许」(灰)；新增 ERS 部署模式
-  (无/低/中/Hotlap/超车)。ui+api 54 passed。mypy 仍全绿。
-
----
-
-## 已知限制 (Known Limitations)
-
-- ~~**UDP 洪泛吞吐**~~：**已修复**。惰性 per-car 物化使 Motion 解析 6.6x 提速，
-  人工洪泛测试现已通过。剩余上限为真实 UDP 内核缓冲 + 事件循环调度，远高于
-  F1 2026 实际 60Hz 速率。
