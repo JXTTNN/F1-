@@ -513,6 +513,56 @@ def _clamp_lap_time(value: float) -> float:
     return float(min(max(value, _MIN_LAP_TIME), _MAX_LAP_TIME))
 
 
+def _predict_batch_parts(
+    items: list[tuple[CarSetup, str]] | list[tuple[CarSetup, str, Any]],
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Opt-023: 一次产出一批 (x, 段先验, 响应先验, driver 修正) 零件，
+    供单/集成模型共享（原实现集成每成员各跑一遍全预处理）.
+    返回: (x (N,41) f32, sec_prior (N,3) f32, resp_prior (N,7) f32, corr (N,3) f32).
+    各零件与逐条 predict 输入逐位一致.
+    """
+    n_items = len(items)
+    setups: list[CarSetup] = [None] * n_items  # type: ignore[list-item]
+    tids: list[str] = [""] * n_items
+    drvs: list[Any] = [None] * n_items
+    for i, item in enumerate(items):
+        if len(item) == 3:
+            setups[i], tids[i], drvs[i] = item  # type: ignore[misc]
+        else:
+            setups[i], tids[i] = item  # type: ignore[misc]
+
+    # Opt-020: 批量 assembly 一次性拼接
+    svf = _setups_to_matrix(setups).astype(np.float32)          # (N, 23) f32
+    tv_map: dict[str, np.ndarray] = {}
+    tvs: list[np.ndarray] = [None] * n_items  # type: ignore[list-item]
+    for i, tid in enumerate(tids):
+        tv = tv_map.get(tid)
+        if tv is None:
+            tv = track_context(tid)
+            tv_map[tid] = tv
+        tvs[i] = tv
+    tvf = np.stack(tvs).astype(np.float32)                       # (N, 10) f32
+
+    if all(d is None for d in drvs):
+        # Opt-021 批快轨: 全 neutral → 修正整批恒零, 不必归一化逐项
+        dvf = _NEUTRAL_DRIVER_VEC[None, :].repeat(n_items, axis=0)  # (N, 8) f32
+        driver_corr_arr = np.zeros((n_items, N_SECTORS), dtype=np.float32)
+    else:
+        dvs = np.stack([_normalize_driver_vector(d) for d in drvs]).astype(np.float32)
+        dvf = dvs
+        driver_corr_arr = np.empty((n_items, N_SECTORS), dtype=np.float32)
+        for i in range(n_items):
+            driver_corr_arr[i] = _driver_sector_correction(dvs[i], svf[i], tids[i])
+
+    x_np = np.concatenate([svf, tvf, dvf], axis=1)  # (N, 41) f32
+    sec_prior_arr = np.empty((n_items, N_SECTORS), dtype=np.float32)
+    resp_prior_arr = np.empty((n_items, N_RESPONSES), dtype=np.float32)
+    for i in range(n_items):
+        sec_prior_arr[i] = sector_priors(tids[i], setups[i])
+        resp_prior_arr[i] = response_priors(tids[i], setups[i])
+    return x_np, sec_prior_arr, resp_prior_arr, driver_corr_arr
+
+
 # --- 模型 -------------------------------------------------------------------
 class SurrogateModel(nn.Module):
     """分段多任务代理模型: (setup, track, driver) -> (3 sectors, 7 responses).
@@ -716,51 +766,18 @@ class SurrogateModel(nn.Module):
         """批量富预测; 与逐条 :meth:`predict` 在容差内一致."""
         if not items:
             return []
-        # 先拆解 items (1 次循环, 避免逐项 tuple 长度判断拆自)
-        n_items = len(items)
-        setups: list[CarSetup] = [None] * n_items  # type: ignore[list-item]
-        tids: list[str] = [""] * n_items
-        drvs: list[Any] = [None] * n_items
-        for i, item in enumerate(items):
-            if len(item) == 3:
-                setups[i], tids[i], drvs[i] = item  # type: ignore[misc]
-            else:
-                setups[i], tids[i] = item  # type: ignore[misc]
+        # Opt-023: 批零件剥离为模块级 — 供集成成员共享 (原实现每成员重复一遍).
+        x_np, sec_prior_arr, resp_prior_arr, driver_corr_arr = _predict_batch_parts(items)
+        return self._predict_batch_from_parts(x_np, sec_prior_arr, resp_prior_arr, driver_corr_arr)
 
-        # Opt-020: x 组装整体向量化 — (N,41) 一次拼接,
-        # 取代逐项 (to_vector() 列表化 + concatenate + astype). 数值相同.
-        svf = _setups_to_matrix(setups).astype(np.float32)          # (N, 23) f32
-        tv_map: dict[str, np.ndarray] = {}
-        tvs: list[np.ndarray] = [None] * n_items  # type: ignore[list-item]
-        for i, tid in enumerate(tids):
-            tv = tv_map.get(tid)
-            if tv is None:
-                tv = track_context(tid)
-                tv_map[tid] = tv
-            tvs[i] = tv
-        tvf = np.stack(tvs).astype(np.float32)                       # (N, 10) f32
-
-        all_neutral = all(d is None for d in drvs)
-        if all_neutral:
-            # Opt-021 批快轨: 全 neutral → 修正整批恒零, 不必归一化逐项
-            dvf = _NEUTRAL_DRIVER_VEC[None, :].repeat(n_items, axis=0)  # (N, 8) f32
-            driver_corrs_arr = np.zeros((n_items, N_SECTORS), dtype=np.float32)
-        else:
-            dvs = np.stack([_normalize_driver_vector(d) for d in drvs]).astype(np.float32)
-            dvf = dvs
-            driver_corrs_arr = np.empty((n_items, N_SECTORS), dtype=np.float32)
-            for i in range(n_items):
-                driver_corrs_arr[i] = _driver_sector_correction(dvs[i], svf[i], tids[i])
-
-        x_t = torch.from_numpy(np.concatenate([svf, tvf, dvf], axis=1))  # (N, 41) f32
-        sec_priors_np = np.empty((n_items, N_SECTORS), dtype=np.float32)
-        resp_priors_np = np.empty((n_items, N_RESPONSES), dtype=np.float32)
-        for i in range(n_items):
-            sec_priors_np[i] = sector_priors(tids[i], setups[i])
-            resp_priors_np[i] = response_priors(tids[i], setups[i])
-        sec_prior_arr = sec_priors_np
-        resp_prior_arr = resp_priors_np
-        driver_corr_arr = driver_corrs_arr
+    def _predict_batch_from_parts(
+        self,
+        x_np: np.ndarray,
+        sec_prior_arr: np.ndarray,
+        resp_prior_arr: np.ndarray,
+        driver_corr_arr: np.ndarray,
+    ) -> list[dict[str, Any]]:
+        x_t = torch.from_numpy(x_np)  # (N, 41) f32
         scales = np.asarray(RESPONSE_SCALES, dtype=np.float32)
         self.eval()
         with torch.no_grad():
@@ -1111,7 +1128,12 @@ class EnsembleSurrogateModel(nn.Module):
         """Average :meth:`SurrogateModel.predict_batch` across all members."""
         if not items:
             return []
-        all_results = [m.predict_batch(items) for m in self._members]
+        # Opt-023: 批零件算一次（items 级路径），各成员只做自己的前向求导
+        x_np, sec_prior_arr, resp_prior_arr, driver_corr_arr = _predict_batch_parts(items)
+        all_results = [
+            m._predict_batch_from_parts(x_np, sec_prior_arr, resp_prior_arr, driver_corr_arr)
+            for m in self._members
+        ]
         out: list[dict[str, Any]] = []
         for i in range(len(items)):
             r_list = [all_results[m][i] for m in range(self.n_members)]
