@@ -67,7 +67,7 @@ jobs:
 
       - name: Test group model
         if: matrix.group == 'model' && (github.event.inputs.groups == '' || contains(github.event.inputs.groups, matrix.group))
-        run: pytest -n 4 tests/model -v --timeout=240 -o junit_family=xunit2 --junitxml=reports/tests/model.xml
+        run: pytest tests/model -v --timeout=240 -o junit_family=xunit2 --junitxml=reports/tests/model.xml
 
       - name: Test group observability
         if: matrix.group == 'observability' && (github.event.inputs.groups == '' || contains(github.event.inputs.groups, matrix.group))

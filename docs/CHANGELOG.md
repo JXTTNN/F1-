@@ -63,6 +63,13 @@
 - 语义无变式: 单模型 vs 集成全零头 no-op 路径 beat-for-beat 逐位一致；
   model 组全量回归 1713 过 (本局部代理云).
 
+### xdist 并参后 model 组的修复 (Iter-312, Opt-036b)
+- run 34096535967 调查结论：
+  * `test_sensitivity_nonnegative` 依赖 test_train 留下的 trained default model 状态
+    — 修为此测试自训练 (`train(200, 400, seed=42)`) + monkeypatch `_get_default_model`.
+  * 超过 240s timeout 的则源自 xdist 时云 CPU 资源竞争, 而非代码:
+    solution = model 组串行 （其余 9 组保留 -n 4).
+
 ### 云端活运工器注入 (Iter-311, Opt-036)
 - **Opt-036**: full-ci 每组 `-n 4` pytest-xdist 并行, 本地以 1716 模型组验证:
   381s → 245s (-36%), api/feedback/driver 组同步缩短.
@@ -722,11 +729,3 @@
   独立变量 `entry`。
 - `setup_schema.py` / `setup_physics_bridge.py`：`CarSetup(**dict)` 动态拆包
   无法被 mypy 验证字段类型 → 加 `# type: ignore[arg-type]`。全项目 66 → 63。
-
-### UI 设计 (实时遥测状态可见性)
-- **health badge 显示实时遥测统计**：`index.html` 的 health badge 此前只显示
-  "UDP 监听中/未监听", 无法判断游戏是否真的在流式传输。现每 5s 额外拉取
-  `/api/telemetry/stats`, 显示「收包 N · 圈 M」, 用户一眼确认 F1 2026 游戏
-  遥测已接入 (收包递增 = 正常流式, 圈数 = 已完成圈)。
-
-### 类型安全 (mypy 继续收敛 63 → 60)

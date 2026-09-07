@@ -41,12 +41,18 @@ def test_contributions_sorted_by_sensitivity_desc() -> None:
         assert contribs[i].sensitivity >= contribs[i + 1].sensitivity
 
 
-def test_sensitivity_nonnegative() -> None:
-    """所有参数 sensitivity >= 0 (|delta| 之和)."""
+def test_sensitivity_nonnegative(monkeypatch) -> None:
+    """所有参数 sensitivity >= 0 (|delta| 之和). 自己训练模型避免顺序依赖."""
+    from f1opt.model import surrogate as sur_mod
+    from f1opt.model.train import train
+
+    model = train(iterations=200, n_samples=400, seed=42, log=False, save=False)
+    monkeypatch.setattr(sur_mod, "_get_default_model", lambda: model)
     contribs = analyze_setup_contributions(DEFAULT_SETUP, "monza", None)
     for c in contribs:
         assert c.sensitivity >= 0.0
         assert c.delta_plus != 0.0 or c.delta_minus != 0.0  # 至少一个方向有响应
+
 
 
 def test_optimal_direction_values() -> None:
