@@ -316,7 +316,7 @@ def prediction_uncertainty(
 
     if isinstance(model, EnsembleSurrogateModel):
         model.eval()
-        with _torch.no_grad():
+        with _torch.inference_mode():
             for member in model.models:
                 member.eval()
                 sectors, _ = member(xt)
@@ -324,7 +324,7 @@ def prediction_uncertainty(
                 all_preds.append(lap)
     else:
         model.eval()
-        with _torch.no_grad():
+        with _torch.inference_mode():
             for _ in range(n_samples):
                 noise = _torch.randn_like(xt) * noise_std
                 sectors, _ = model(xt + noise)
@@ -344,7 +344,7 @@ def _predict_lap(model: SurrogateModel, x: _np.ndarray) -> _np.ndarray:
     """Helper: predict lap time from input features."""
     xt = _torch.as_tensor(x, dtype=_torch.float32)
     model.eval()
-    with _torch.no_grad():
+    with _torch.inference_mode():
         sectors, _ = model(xt)
     return _np.asarray(sectors.sum(dim=1))
 
@@ -831,4 +831,3 @@ def compare_models(
         confidence=float(confidence),
         seed=int(seed),
     )
-
