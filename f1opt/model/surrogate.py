@@ -555,11 +555,45 @@ def _predict_batch_parts(
             driver_corr_arr[i] = _driver_sector_correction(dvs[i], svf[i], tids[i])
 
     x_np = np.concatenate([svf, tvf, dvf], axis=1)  # (N, 41) f32
-    sec_prior_arr = np.empty((n_items, N_SECTORS), dtype=np.float32)
-    resp_prior_arr = np.empty((n_items, N_RESPONSES), dtype=np.float32)
-    for i in range(n_items):
-        sec_prior_arr[i] = sector_priors(tids[i], setups[i])
-        resp_prior_arr[i] = response_priors(tids[i], setups[i])
+
+    # Opt-024: 先验全批向量化; 数值路径与逐条 predict 一致性 (测于 fuzz20).
+    # 延迟导入避免 setup_physics_bridge -> lap_simulator_2026 -> ... 循环.
+    from f1opt.model.setup_physics_bridge import setup_penalties_batch
+
+    # lap = 基座(_lap_base) + fuel 加价 + 惩罚 (同一道: 单项二级缓存已生效)
+    laps = np.fromiter((_lap_base(t) for t in tids), dtype=np.float64, count=n_items)
+    laps += np.array([s.fuel_load for s in setups], dtype=np.float64) * _FUEL_PENALTY_PER_KG
+    laps += setup_penalties_batch(setups, tids)
+
+    # 分段: 每赛道缓存 (s1, s2, s3, total) — unknown 道用权重+total=1.0 保持
+    # 与逐条代码完全等同的浮点顺序 (lap * s_i / total).
+    uni_parts: dict[str, tuple[float, float, float, float]] = {}
+    smat = np.empty((n_items, 4), dtype=np.float64)
+    for i, tid in enumerate(tids):
+        p = uni_parts.get(tid)
+        if p is None:
+            parts = _sector_times_parts(tid)
+            p = parts if parts is not None else (*_SECTOR_PRIOR_WEIGHTS, 1.0)
+            uni_parts[tid] = p
+        smat[i] = p
+    sec_f64 = laps[:, None] * smat[:, :3] / smat[:, 3:4]
+    sec_prior_arr = sec_f64.astype(np.float32)
+
+    # 响应先验: 前两项由 track_avg_speed 决定 (按道缓存), 其余 5 个全局常量.
+    u_spd: dict[str, float] = {}
+    spd = np.empty(n_items, dtype=np.float64)
+    for i, tid in enumerate(tids):
+        v = u_spd.get(tid)
+        if v is None:
+            v = track_avg_speed(tid)
+            u_spd[tid] = v
+        spd[i] = v
+    resp = np.empty((n_items, N_RESPONSES), dtype=np.float64)
+    resp[:, 0] = spd
+    resp[:, 1] = spd * 1.4
+    resp[:, 2:] = np.asarray(RESPONSE_PRIORS[2:], dtype=np.float64)
+    resp_prior_arr = resp.astype(np.float32)
+
     return x_np, sec_prior_arr, resp_prior_arr, driver_corr_arr
 
 
@@ -648,7 +682,7 @@ class SurrogateModel(nn.Module):
         x = torch.from_numpy(x_np).unsqueeze(0)
         scales = np.asarray(RESPONSE_SCALES, dtype=np.float32)
         self.eval()
-        with torch.no_grad():
+        with torch.inference_mode():
             sec_res_t, resp_res_t = self.forward(x)
         sec_res = sec_res_t.squeeze(0).numpy() * SECTOR_SCALE + sec_prior + driver_corr
         resp_res = resp_res_t.squeeze(0).numpy() * scales + resp_prior
@@ -780,7 +814,7 @@ class SurrogateModel(nn.Module):
         x_t = torch.from_numpy(x_np)  # (N, 41) f32
         scales = np.asarray(RESPONSE_SCALES, dtype=np.float32)
         self.eval()
-        with torch.no_grad():
+        with torch.inference_mode():
             sec_res, resp_res = self.forward(x_t)
         sec_res = sec_res.numpy() * SECTOR_SCALE + sec_prior_arr + driver_corr_arr
         resp_res = resp_res.numpy() * scales + resp_prior_arr
@@ -1129,73 +1163,3 @@ class EnsembleSurrogateModel(nn.Module):
         if not items:
             return []
         # Opt-023: 批零件算一次（items 级路径），各成员只做自己的前向求导
-        x_np, sec_prior_arr, resp_prior_arr, driver_corr_arr = _predict_batch_parts(items)
-        all_results = [
-            m._predict_batch_from_parts(x_np, sec_prior_arr, resp_prior_arr, driver_corr_arr)
-            for m in self._members
-        ]
-        out: list[dict[str, Any]] = []
-        for i in range(len(items)):
-            r_list = [all_results[m][i] for m in range(self.n_members)]
-            avg_lap = float(np.mean([r["lap_time"] for r in r_list]))
-            avg_sectors = [
-                float(np.mean([r["sectors"][j] for r in r_list]))
-                for j in range(N_SECTORS)
-            ]
-            avg_responses = {
-                name: float(np.mean([r["responses"][name] for r in r_list]))
-                for name in RESPONSE_NAMES
-            }
-            out.append({
-                "lap_time": avg_lap,
-                "sectors": avg_sectors,
-                "responses": avg_responses,
-                "model_version": f"{MODEL_VERSION}-ensemble-{self.n_members}",
-                "n_members": self.n_members,
-            })
-        return out
-
-    # ------------------------------------------------------------------ #
-    # Persistence
-    # ------------------------------------------------------------------ #
-    def state_dict(self, *args: Any, **kwargs: Any) -> dict[str, Any]:  # type: ignore[override]
-        """Serialize all member models + ensemble metadata."""
-        return {
-            "model_version": f"{MODEL_VERSION}-ensemble-{self.n_members}",
-            "n_members": self.n_members,
-            "input_dim": INPUT_DIM,
-            "members": [m.state_dict(*args, **kwargs) for m in self._members],
-        }
-
-    def load_state_dict(  # type: ignore[override]
-        self, d: dict[str, Any], strict: bool = True
-    ) -> None:
-        """Restore member weights from :meth:`state_dict` output.
-
-        The number of members in ``d`` must match ``self.n_members``. Each
-        member's weights are loaded individually.
-        """
-        members = d.get("members", [])
-        if len(members) != self.n_members:
-            raise ValueError(
-                f"Ensemble state_dict has {len(members)} members but "
-                f"model has {self.n_members}"
-            )
-        for m, md in zip(self.models, members, strict=True):
-            m.load_state_dict(md, strict=strict)
-
-    def save(self, path: str | Path) -> None:
-        """Save ensemble to ``.pt`` file (creates parent dirs)."""
-        p = Path(path)
-        p.parent.mkdir(parents=True, exist_ok=True)
-        torch.save(self.state_dict(), p)
-
-    @classmethod
-    def load(cls, path: str | Path) -> EnsembleSurrogateModel:
-        """Load ensemble from ``.pt`` file."""
-        d = torch.load(path, weights_only=False)
-        n = d.get("n_members", 1)
-        models = [SurrogateModel() for _ in range(n)]
-        ens = cls(models)
-        ens.load_state_dict(d)
-        return ens
