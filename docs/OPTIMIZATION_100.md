@@ -50,6 +50,13 @@
 | 024 | S5 | 预测批先验全向量化：lap×源比+fuel/penalty 批化（bridge 加 setup_penalties_batch 批 API） | ✅ | batch 15.46→**5.22** (-66%累); ēns-batch 20.61→**19.09** (-7%) |
 | 025 | S5 | 㶓复：_predict_parts 的 4 元件现在是三代码块公共原子（predict/confidence/批/集成） | ✅ | 整理完结 |
 | 026 | S5 | 推理路径 no_grad→inference_mode ×6 处 | ✅ | 噪音水平; 语义正确性 |
+| 027 | S5 | `CarSetup.from_vector_fast`: model_construct 绕验证器; DE cache-miss 专用 | ✅ | search_setup(100) 1031.6→473.5ms; 函数调用数 -72% |
+| 028 | S9 | `_step_decimals` 按 step 缓存 (log10→dict get) | ✅ | 随 027 合入; snap 链再减 ms |
+| 029 | S10 | 删 半成品/R10_迭代训练/ 老历史工件 (11 文件) | ✅ | git rm -r 已推送 |
+| 030 | S2 | `CarSetup.from_vectors_fast` 批量构造 (23 列 SIMD); DE 内环采用 | ✅ | 微基准 5.73→2.30ms/200行 |
+| 031 | S3 | (否决) _build_tensors 走 _predict_batch_parts: 数值等价无增益 —— 回拨留记录 | ❌回拨 | 实测 16.9ms vs 16.2ms 无收益 |
+| 032 | INFRA | 云栅栏解锁 (账户 JXTTNN 邮箱验证) → push/Actions 恢复 | ✅ | run 34087044389 全 10组 success |
+| 033 | S3 | train.py 数据生成 x7 位从 from_vector → from_vector_fast | ✅ | generate_physics 500样本 96.9→70.4ms (-27%); 云 run 34089964660 10/10 |
 
 ## 全量基线（run 34027633752, 2026-09-06, ubuntu py3.11, 4065 用例全过）
 
@@ -68,7 +75,7 @@ https://github.com/settings/emails 验证任意邮箱后，云中辩自恢复（
 
 - **本地**：`python -m pytest`（PYTHONPATH=.deps;. 引导环境，免 pip 沙箱限制）
 - **云端**：push 后 `gh run watch`，ci.yml（快测 5 文件）+ full-ci.yml（全量 ~3500 用例）双绿为通过
-## Cloud-fence 恢复指引 (Iter-307, Opt-033)
+## Cloud-fence 恢复指引 (Iter-307, Opt-032)
 
 **症状**: 全部 Actions run 为 `completed/startup_failure` (0 秒); `git push` 403 "You must verify your email address."
 
