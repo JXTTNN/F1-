@@ -63,6 +63,31 @@
 - 语义无变式: 单模型 vs 集成全零头 no-op 路径 beat-for-beat 逐位一致；
   model 组全量回归 1713 过 (本局部代理云).
 
+### DE 搜索熵挤压 + 仓库卫生 (Iter-305, Opt-026..029)
+- **Opt-026**: 推理句子 `no_grad` → `inference_mode` x 6 (surrogate / diagnostics /
+  feature_importance) — 语义更适合只推理的环境; 数值/行为音同.
+- **Opt-027**: `CarSetup.from_vector_fast` —— model_construct 绕过 model_validator
+  (23 x _check_value); DE 批量 objective_vec 每行从 always-construct 改为 cache-miss
+  时才构造. search_setup(100) 1031.6 → 473.5ms (-54%); 总函数调用 436万 → 123万.
+- **Opt-028**: `_step_decimals` 按 step 缓存 (log10 从 19671 次 → 一次);
+  配套内部去重. search_setup(100) 473.5 → 460.6ms.
+- **Opt-029**: 仓库清理 — 删除 半成品/R10_迭代训练/ (11 个历史迭代的 add-hoc
+  patch/log/zip 工件, 开发脉络以 docs/OPTIMIZATION_100.md + 压箱记录为准).
+- fuzz 行为等价: `from_vector` vs `_fast` 2000 随机向完全一致;
+  search_setup 结果 (10/35/100 iter) 保持原数值 (seed 静态断言).
+
+### 批预测“乘法双线” —— 逐条数字缝纫剔除 (Iter-304, Opt-024)
+- **Opt-024**: `predict_batch` 的 prior 路线从逐项循环改为全批向量化, 新增
+  `setup_penalties_batch` bridge API （按 canonical track 分组的 numpy dot, 与
+  单函数同分子分母/bit 级一致）+ `_lap_base`/`_sector_times_parts` 不变件缓存
+  复用; response 先验的「avg_speed/task_type双决定于性 + 常量尾」一并常量化.
+  **N=330 批量从 7.72 → 5.22 ms (-32%)** (R5 累计 15.46 → 5.22, -66%);
+  ensemble batch 小降 (20.61 → 19.09ms, -7%).
+- 结构清整 (Opt-025): `_predict_parts` 唯一供 predict/confidence/_batch_parts/ensemble
+  四方复用，消除批斗(各种拷贝变体)的分散重复.
+- 言义等价（fuzz 800 例混合 driver/赛道/未知道批 vs 单条 max|Δ| = 0.0）——
+  数字路径完全一致，不改任何输出.
+
 ### 百项深度优化计划启动：全量云端 CI + 遥测解析热路径消冗 (Iter-299, Opt-001..006)
 - **Opt-001 全量云端 CI**: 新增 `.github/workflows/full-ci.yml` — push 到 main 或
   手动 workflow_dispatch 即跑完整 `tests/` 套件（pytest-timeout 300s/用例，作业上限 45min）。
@@ -719,26 +744,3 @@
 
 ### 打包/插件 (安装技能)
 - `pyproject.toml` 补全可选依赖：dev 加 `pytest-timeout` (支持测试超时保护,
-  防止未来压测挂起), 新增 `build` extra (含 `pyinstaller`, 一键 EXE 构建)。
-
-### 类型安全 (mypy 继续收敛 33 → 32)
-- `train.py`：`_held_out_mae` 的 `model` 参数标注放宽为 `SurrogateModel |
-  EnsembleSurrogateModel` (实际两种模型均接受, 且均有 `predict` 方法)。
-  train 26 passed。
-- `surrogate.py`：`EnsembleSurrogateModel` 新增类型化 `_members` 并行列表
-  (`list[SurrogateModel]`), 循环改用 `self._members` 替代 `nn.ModuleList` 迭代
-  (mypy 把 ModuleList 元素推断为 Tensor, 导致 `m.predict()` 报 "Tensor not
-  callable")。surrogate 23 passed。全项目 32 → 29。
-- `bayesian.py`：`predict` / `log_marginal_likelihood` / `_optimize_hyperparams`
-  的 `neg_lml` 闭包改用局部 `X`/`y`/`L`/`alpha`/`V`/`w` 变量 (替代可选属性),
-  彻底消除 `ndarray | None` 收窄问题。bayesian 24 passed。全项目 29 → 22。
-
-### 类型正确性 (mypy 继续收敛 22 → 18)
-- `app.py`：`_emit_lap` 的 `track_id` 注解 `str | None` (current_track_id 可为 None)。
-- `race_simulator.py`：`_compute_lap_time` 捕获局部 `sim` + None 兜底。
-- `season_simulator.py`：`position`/`driver_id` 显式 `int()`/`str()` 转换。
-  race+season+api 65 passed。
-- `pareto.py`：`_mutate` 的 `mask` 改用 `np.asarray(..., dtype=bool)`
-  (显式产出 ndarray, 规避 mypy 把 `Generator.random(n) < prob` 误判为 bool)。
-- `strategy_optimizer.py`：`candidates`/`out` 组合列表注解 `list[tuple[int/str, ...]]`
-  (消除变长元组长度不一致错误)。pareto+strategy_optimizer 50 passed。全项目 18 → 12。
