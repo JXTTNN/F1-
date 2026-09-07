@@ -228,7 +228,7 @@ def permutation_feature_importance(
     rng = np.random.default_rng(seed)
     xt = torch.as_tensor(x, dtype=torch.float32, device=next(m.parameters()).device)
 
-    @torch.no_grad()
+    @torch.inference_mode()
     def _mae(batch: torch.Tensor) -> float:
         sec, _resp = m(batch)
         lap = sec.sum(dim=1).cpu().numpy()
