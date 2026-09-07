@@ -555,22 +555,29 @@ def _search(
             results = np.empty(N, dtype=np.float64)
             uncached_idxs: list[int] = []
             uncached_setups: list[CarSetup] = []
+            # Opt-030: 批构造 — 第一遍只做 cache 拆分区 (命中行跳过构造),
+            # 未命中行由 from_vectors_fast 一次 SIMD 多列构造完成.
+            need_build: list[int] = []
+            cached_vals: list[tuple[int, tuple[float, float]]] = []
             for i in range(N):
                 key = tuple(np.round(snapped[i], 6))
                 cached = cache.get(key)
-                # Opt-027/028: 惰性 + 零验证快构造 (snapped 已量化 — from_vector 等价)
-                # 命中 cache 且不需要约束惩罚时, 完全跳过 CarSetup 构造.
                 if cached is not None:
-                    lap_c, proxy_c = cached
-                    # Iter-186: 约束惩罚 (仅当 enable_constraints=True)
-                    constraint_pen = (
-                        _setup_constraint_penalty(CarSetup.from_vector_fast(snapped[i]))
-                        if enable_constraints else 0.0
-                    )
-                    results[i] = lap_c + weight * proxy_c + constraint_pen
+                    cached_vals.append((i, cached))
                 else:
                     uncached_idxs.append(i)
-                    uncached_setups.append(CarSetup.from_vector_fast(snapped[i]))
+                    need_build.append(i)
+            if need_build:
+                built = CarSetup.from_vectors_fast(snapped[need_build])
+                uncached_setups.extend(built)
+            # cache 命中行的惩罚 (不需重构造 setup)
+            for i, (lap_c, proxy_c) in cached_vals:
+                # Iter-186: 约束惩罚 (仅当 enable_constraints=True)
+                constraint_pen = (
+                    _setup_constraint_penalty(CarSetup.from_vector_fast(snapped[i]))
+                    if enable_constraints else 0.0
+                )
+                results[i] = lap_c + weight * proxy_c + constraint_pen
             # 批量预测未缓存项
             if uncached_setups:
                 items = [(s, track_id, driver_profile) for s in uncached_setups]
