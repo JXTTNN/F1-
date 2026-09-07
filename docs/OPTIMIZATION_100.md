@@ -47,7 +47,9 @@
 | 021 | S5 | driver_corr 中性快轨: driver=None/全0.5 时修正恒零 (解析引理), 跳过 track 解析+全部计算 | ✅ | 随 020 一起验证 |
 | 022 | S5 | track_prior/sector_priors 不变件缓存 (每赛道仅 1 次 benchmark/sector_times 查表) | ✅ | 批路径项均 ∼30% 下降 |
 | 023 | S5 | 集成模型批零件共享: `_predict_batch_parts` 抽出，成员批只跑前向 (原各成员重复全链路) | ✅ | 28.41→20.61 ms/200 项 (-27.4%) |
-| 024+ | — | 待续 (S6 feedback 热区审场后填充) | ⬜ | — |
+| 024 | S5 | 预测批先验全向量化：lap×源比+fuel/penalty 批化（bridge 加 setup_penalties_batch 批 API） | ✅ | batch 15.46→**5.22** (-66%累); ēns-batch 20.61→**19.09** (-7%) |
+| 025 | S5 | 㶓复：_predict_parts 的 4 元件现在是三代码块公共原子（predict/confidence/批/集成） | ✅ | 整理完结 |
+| 026 | S5 | 推理路径 no_grad→inference_mode ×6 处 | ✅ | 噪音水平; 语义正确性 |
 
 ## 全量基线（run 34027633752, 2026-09-06, ubuntu py3.11, 4065 用例全过）
 
