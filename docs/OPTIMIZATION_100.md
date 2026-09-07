@@ -68,3 +68,22 @@ https://github.com/settings/emails 验证任意邮箱后，云中辩自恢复（
 
 - **本地**：`python -m pytest`（PYTHONPATH=.deps;. 引导环境，免 pip 沙箱限制）
 - **云端**：push 后 `gh run watch`，ci.yml（快测 5 文件）+ full-ci.yml（全量 ~3500 用例）双绿为通过
+## Cloud-fence 恢复指引 (Iter-307, Opt-033)
+
+**症状**: 全部 Actions run 为 `completed/startup_failure` (0 秒); `git push` 403 "You must verify your email address."
+
+**根因**: 账号 `JXTTNN` (GitHub id 136769079, 2023-06-16 创建) 在 https://github.com/settings/emails 没有任何验证过的邮箱地址——GitHub 对这种账号反滥用执行：
+- API 读 (GET) 允许
+- Contents API 写允许
+- **`git push` (smart-HTTP write)、工作流转反式运行全拒**
+
+**修复 (用户一次性, 30 秒)**:
+1. 浏览器进 https://github.com/settings/emails
+2. Add email address → 填邮箱 → GitHub 自动寄出确认邮件
+3. 点邮件中 Verify email 链接 (optional check account)
+
+**验证方法**: 完成后叫我一句, 我会:
+1. 重新逃跑 so 你嗯项全量 work done, intraphase-committed
+2. 用正规 git push 推全部本地阶段积压 commit 上去
+3. 手动 `gh workflow run` 触发 full-ci 三组量级基准重跑 (api/driver/model + 全部 10 组)
+4. 台账补上云过条记录
