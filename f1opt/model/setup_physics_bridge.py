@@ -39,7 +39,13 @@ from typing import Any
 import numpy as np
 
 from f1opt.data.ea_f1_2026_benchmark import canonical_track_id
-from f1opt.data.setup_schema import DEFAULT_SETUP, SETUP_FIELDS, CarSetup
+from f1opt.data.setup_schema import (
+    ALL_SETUP_FIELDS,
+    DEFAULT_SETUP,
+    SETUP_FIELDS,
+    CarSetup,
+    _step_decimals_cached,
+)
 from f1opt.data.tracks import TRACKS_BY_ID, TrackType
 from f1opt.model.lap_simulator_2026 import (
     _REF_AMBIENT_TEMP_C,
@@ -392,6 +398,21 @@ _COEF_VEC_BY_TYPE: dict[TrackType, np.ndarray] = {  # type: ignore[type-arg]
 }
 _OPT_VEC_CACHE: dict[str, np.ndarray] = {}
 
+# Opt-037: 从 _BASE_NAMES_PEN 提取列下标与 denorm 常数 (批量 norm 模式 penalty)
+_SETUP_NAME_ORDER: list[str] = [s.name for s in ALL_SETUP_FIELDS()]
+_PEN_COL_POS: np.ndarray = np.array(
+    [_SETUP_NAME_ORDER.index(n) for n in _BASE_NAMES_PEN], dtype=np.int64
+)
+_BASE_MIN_VEC: np.ndarray = np.array(
+    [SETUP_FIELDS[n].min for n in _BASE_NAMES_PEN], dtype=np.float64
+)
+_BASE_SPAN_VEC: np.ndarray = np.array(
+    [SETUP_FIELDS[n].max - SETUP_FIELDS[n].min for n in _BASE_NAMES_PEN], dtype=np.float64
+)
+_BASE_DECIMALS_ARR: np.ndarray = np.array(
+    [_step_decimals_cached(SETUP_FIELDS[n].step) for n in _BASE_NAMES_PEN], dtype=np.int64
+)
+
 
 def _opt_vec_for(track_key: str, track_type: TrackType) -> np.ndarray:
     """返回该赛道的最优值向量 (按 _BASE_NAMES_PEN 顺序, 带缓存)."""
@@ -468,6 +489,42 @@ def setup_penalties_batch(
         )
     out = np.empty(n, dtype=np.float64)
     # 按 canonical track 分组
+    groups: dict[str, list[int]] = {}
+    for i, tid in enumerate(track_ids):
+        groups.setdefault(canonical_track_id(tid), []).append(i)
+    for cid, rows in groups.items():
+        track = TRACKS_BY_ID.get(cid)
+        track_type: TrackType = track.track_type if track is not None else "medium"
+        coef = _COEF_VEC_BY_TYPE[track_type]
+        opt_vec = _opt_vec_for(cid, track_type)
+        idx = np.array(rows, dtype=np.int64)
+        tot = np.abs(raw[idx] - opt_vec) @ coef
+        out[idx] = np.minimum(tot, _TOTAL_PENALTY_CAP_S)
+    return out
+
+
+def setup_penalties_from_full_mat(
+    mat_norm: np.ndarray,
+    track_ids: list[str],
+) -> np.ndarray:
+    """从归一化 23 维 setup 矩阵 (N, 23) 直接算批量惩罚 (Opt-037).
+
+    供 optimizer 的 DE 内环: 跳过 CarSetup 构造振动 mass, 直接从
+    DE 代理模型的已 snap 规范化矩阵中取 6+ 列以及计算.
+    数值与 setup_penalties_batch (batch per CarSetup) 一致 (同到 decimal snap).
+    """
+    m = np.asarray(mat_norm, dtype=np.float64)
+    if m.ndim != 2 or m.shape[1] != len(SETUP_FIELDS):
+        raise ValueError("setup_penalties_from_full_mat 需要 (N, 23) 归一化矩阵")
+    cols = m[:, _PEN_COL_POS]  # (N, lenPEN)
+    raw = _BASE_MIN_VEC + cols * _BASE_SPAN_VEC
+    # 行内每列用对应 decimals 清洁 (与 _snap_to_step + round(decimals) 同形)
+    dec = _BASE_DECIMALS_ARR
+    for j in range(raw.shape[1]):
+        d = int(dec[j])
+        if d > 0:
+            raw[:, j] = np.round(raw[:, j], decimals=d)
+    out = np.empty(raw.shape[0], dtype=np.float64)
     groups: dict[str, list[int]] = {}
     for i, tid in enumerate(track_ids):
         groups.setdefault(canonical_track_id(tid), []).append(i)

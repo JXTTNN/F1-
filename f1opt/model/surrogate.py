@@ -597,6 +597,83 @@ def _predict_batch_parts(
     return x_np, sec_prior_arr, resp_prior_arr, driver_corr_arr
 
 
+def _predict_batch_parts_from_vecs(
+    sv_norm: np.ndarray,
+    tids: list[str],
+    drvs: list[Any],
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """从归一化 setup 矩阵 (N, 23) 直接组装零件 (Opt-037).
+
+    跳过 CarSetup 构造 + _setups_to_matrix 反归一化 -> 只用数值等价路径.
+    与 _predict_batch_parts ([(from_vector_fast(v), tid, drv)]+) 完全一致 (差异 ≤ 1e-9).
+    """
+    n = sv_norm.shape[0]
+    svf = sv_norm.astype(np.float32)
+    # driver 修饰同 _predict_batch_parts
+    if all(d is None for d in drvs):
+        dvf = _NEUTRAL_DRIVER_VEC[None, :].repeat(n, axis=0)
+        driver_corr_arr = np.zeros((n, N_SECTORS), dtype=np.float32)
+    else:
+        dvs = np.stack([_normalize_driver_vector(d) for d in drvs]).astype(np.float32)
+        dvf = dvs
+        driver_corr_arr = np.empty((n, N_SECTORS), dtype=np.float32)
+        for i in range(n):
+            driver_corr_arr[i] = _driver_sector_correction(dvs[i], svf[i], tids[i])
+
+    # tv: 按赛道一次性 group
+    tv_map: dict[str, np.ndarray] = {}
+    tv_list: list[np.ndarray] = []
+    for tid in tids:
+        tv = tv_map.get(tid)
+        if tv is None:
+            tv = track_context(tid)
+            tv_map[tid] = tv
+        tv_list.append(tv)
+    tvf = np.stack(tv_list).astype(np.float32)
+
+    # lap base: 已有缓存
+    laps = np.fromiter((_lap_base(t) for t in tids), dtype=np.float64, count=n)
+
+    # fuel: norm 列 → 物理 (与 _setups_to_matrix 反吃回 path 等同)
+    fuel = sv_norm[:, _FUEL_IDX] * _SETUP_SPAN_ARR[_FUEL_IDX] + _SETUP_MIN_ARR[_FUEL_IDX]
+    laps += fuel.astype(np.float64) * _FUEL_PENALTY_PER_KG
+
+    # penalty: 走 bridge 的 norm-columns API
+    from f1opt.model.setup_physics_bridge import setup_penalties_from_full_mat
+    laps += setup_penalties_from_full_mat(sv_norm, tids)
+
+    # 分段 + 响应先验: 同 _predict_batch_parts (按道缓存)
+    uni_parts: dict[str, tuple[float, float, float, float]] = {}
+    smat = np.empty((n, 4), dtype=np.float64)
+    for i, tid in enumerate(tids):
+        p = uni_parts.get(tid)
+        if p is None:
+            p = _sector_times_parts(tid)
+            if p is None:
+                p = (*_SECTOR_PRIOR_WEIGHTS, 1.0)
+            uni_parts[tid] = p
+        smat[i] = p
+    sec_f64 = laps[:, None] * smat[:, :3] / smat[:, 3:4]
+    sec_prior_arr = sec_f64.astype(np.float32)
+
+    u_spd: dict[str, float] = {}
+    spd = np.empty(n, dtype=np.float64)
+    for i, tid in enumerate(tids):
+        v = u_spd.get(tid)
+        if v is None:
+            v = track_avg_speed(tid)
+            u_spd[tid] = v
+        spd[i] = v
+    resp = np.empty((n, N_RESPONSES), dtype=np.float64)
+    resp[:, 0] = spd
+    resp[:, 1] = spd * 1.4
+    resp[:, 2:] = np.asarray(RESPONSE_PRIORS[2:], dtype=np.float64)
+    resp_prior_arr = resp.astype(np.float32)
+
+    x_np = np.concatenate([svf, tvf, dvf], axis=1)
+    return x_np, sec_prior_arr, resp_prior_arr, driver_corr_arr
+
+
 # --- 模型 -------------------------------------------------------------------
 class SurrogateModel(nn.Module):
     """分段多任务代理模型: (setup, track, driver) -> (3 sectors, 7 responses).
@@ -842,6 +919,22 @@ class SurrogateModel(nn.Module):
             )
         return out
 
+    def predict_batch_from_vecs(
+        self,
+        sv_norm: np.ndarray,
+        track_id: str,
+        driver_profile: Any = None,
+    ) -> list[dict[str, Any]]:
+        """来自归一化向量的批预测 (Opt-037): 跳过 CarSetup 构造/校验."""
+        sv = np.asarray(sv_norm, dtype=np.float64)
+        if sv.size == 0:
+            return []
+        if sv.ndim != 2 or sv.shape[1] != SETUP_DIM:
+            raise ValueError(f"predict_batch_from_vecs 需要 (N, {SETUP_DIM}) 归一化矩阵")
+        n = sv.shape[0]
+        parts = _predict_batch_parts_from_vecs(sv, [track_id] * n, [driver_profile] * n)
+        return self._predict_batch_from_parts(*parts)
+
     # --- 存取 ---------------------------------------------------------------
     def state_dict(self, *args: Any, **kwargs: Any) -> dict[str, Any]:  # type: ignore[override]  # type: ignore[override]
         """返回可序列化的模型状态 (含版本号与 torch state_dict)."""
@@ -979,6 +1072,36 @@ def clear_predict_cache() -> None:
     _predict_cache.clear()
     _PREDICT_CACHE_STATS["hits"] = 0
     _PREDICT_CACHE_STATS["misses"] = 0
+
+
+# ---------------------------------------------------------------------------
+# Opt-037: ensemble 批共享 —— 成员结果均值 (与 predict_batch 内联逻辑一致)
+# ---------------------------------------------------------------------------
+def _average_member_results(
+    all_results: list[list[dict[str, Any]]],
+    n_members: int,
+) -> list[dict[str, Any]]:
+    """对成员 list[per-result] 做均值 (与 EnsembleSurrogateModel.predict_batch 一致)."""
+    out: list[dict[str, Any]] = []
+    for i in range(len(all_results[0])):
+        r_list = [all_results[m][i] for m in range(n_members)]
+        avg_lap = float(np.mean([r["lap_time"] for r in r_list]))
+        avg_sectors = [
+            float(np.mean([r["sectors"][j] for r in r_list]))
+            for j in range(N_SECTORS)
+        ]
+        avg_responses = {
+            name: float(np.mean([r["responses"][name] for r in r_list]))
+            for name in RESPONSE_NAMES
+        }
+        out.append({
+            "lap_time": avg_lap,
+            "sectors": avg_sectors,
+            "responses": avg_responses,
+            "model_version": f"{MODEL_VERSION}-ensemble-{n_members}",
+            "n_members": n_members,
+        })
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -1175,26 +1298,24 @@ class EnsembleSurrogateModel(nn.Module):
             m._predict_batch_from_parts(x_np, sec_prior_arr, resp_prior_arr, driver_corr_arr)
             for m in self._members
         ]
-        out: list[dict[str, Any]] = []
-        for i in range(len(items)):
-            r_list = [all_results[m][i] for m in range(self.n_members)]
-            avg_lap = float(np.mean([r["lap_time"] for r in r_list]))
-            avg_sectors = [
-                float(np.mean([r["sectors"][j] for r in r_list]))
-                for j in range(N_SECTORS)
-            ]
-            avg_responses = {
-                name: float(np.mean([r["responses"][name] for r in r_list]))
-                for name in RESPONSE_NAMES
-            }
-            out.append({
-                "lap_time": avg_lap,
-                "sectors": avg_sectors,
-                "responses": avg_responses,
-                "model_version": f"{MODEL_VERSION}-ensemble-{self.n_members}",
-                "n_members": self.n_members,
-            })
-        return out
+        return _average_member_results(all_results, self.n_members)
+
+    def predict_batch_from_vecs(
+        self,
+        sv_norm: np.ndarray,
+        track_id: str,
+        driver_profile: Any = None,
+    ) -> list[dict[str, Any]]:
+        """集成各成员的归一化向量批预测 (Opt-037): 共享零件, 均值."""
+        sv = np.asarray(sv_norm, dtype=np.float64)
+        if sv.size == 0:
+            return []
+        if sv.ndim != 2 or sv.shape[1] != SETUP_DIM:
+            raise ValueError(f"predict_batch_from_vecs 需要 (N, {SETUP_DIM}) 归一化矩阵")
+        n = sv.shape[0]
+        parts = _predict_batch_parts_from_vecs(sv, [track_id] * n, [driver_profile] * n)
+        all_results = [m._predict_batch_from_parts(*parts) for m in self._members]
+        return _average_member_results(all_results, self.n_members)
 
     # ------------------------------------------------------------------ #
     # Persistence

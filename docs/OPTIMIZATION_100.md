@@ -60,6 +60,7 @@
 | 034 | S5 | 批量输出 np 化装配 (clamp+sum 向量化) | ✅ | batch N=330 5.2→4.7ms (-10%), fuzz 800 + ensemble 等价, 云 34093751733 |
 | 035 | FIX | 补回 ensemble predict_batch 之后缺失的 tail (save/load/state_dict 全段) + 3 条 ensemble 回归测试 | ✅ | 解决 90 行缺失; 云 34093751733 |
 | 036 | INFRA | 全量 CI 推 pytest-xdist -n 4, model 组回退到串行 (云 2 vCPU × 4 工作器会鲁棒错判 timeout; 其余 9 组保留) | ✅ | run 34096535967 调查: model=修复 |
+| 037 | S2 | `predict_batch_from_vecs` / `setup_penalties_from_full_mat` / `_constraint_penalty_vec`: 全部 DE 内环不再 CarSetup 构 (4139 calls消失) | ✅ | 89.65 一致; search 889→558ms (-37%), `_predict_batch_parts_from_vecs` 加进 surrogate/ensemble |
 
 ## 全量基线（run 34027633752, 2026-09-06, ubuntu py3.11, 4065 用例全过）
 

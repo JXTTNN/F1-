@@ -28,7 +28,12 @@ from typing import Any
 import numpy as np
 from pydantic import BaseModel
 
-from f1opt.data.setup_schema import ALL_SETUP_FIELDS, DEFAULT_SETUP, CarSetup
+from f1opt.data.setup_schema import (
+    ALL_SETUP_FIELDS,
+    DEFAULT_SETUP,
+    CarSetup,
+    _step_decimals_cached,
+)
 from f1opt.driver.profile import DriverProfile
 from f1opt.model.surrogate import MODEL_VERSION, predict_full
 
@@ -172,6 +177,51 @@ def _snap_vec(vec: np.ndarray) -> np.ndarray:
     """把归一化向量对齐到游戏档位网格 (与 ``CarSetup.from_vector`` 等价)."""
     steps = np.round(np.asarray(vec, dtype=np.float64) / _NORM_STEPS)
     return np.clip(steps * _NORM_STEPS, 0.0, 1.0)
+
+
+# Opt-037: DE 内环矢量惩罚 (去 CarSetup 重构, 接受 N×23 norm 矩阵直接产出)
+# 列位置 / 规格 / decimals (从 schema 一次性摊平)
+_FIELD_NAMES_LIST: list[str] = [s.name for s in ALL_SETUP_FIELDS()]
+_NAME_TO_COL: dict[str, int] = {n: i for i, n in enumerate(_FIELD_NAMES_LIST)}
+
+# 6 个物理字段 (IDEAL 法): 前/后 ride, 前/后 camber, 前/后 胎压
+_CONST_NAMES: tuple[str, ...] = (
+    "front_ride_height", "rear_ride_height",
+    "front_camber", "rear_camber",
+    "front_tyre_pressure", "rear_tyre_pressure",
+)
+_CONST_POS = np.array([_NAME_TO_COL[n] for n in _CONST_NAMES], dtype=np.int64)
+_CONST_SPEC = tuple(next(s for s in ALL_SETUP_FIELDS() if s.name == n) for n in _CONST_NAMES)
+_CONST_MIN_ARR = np.array([s.min for s in _CONST_SPEC], dtype=np.float64)
+_CONST_SPAN_ARR = np.array([s.max - s.min for s in _CONST_SPEC], dtype=np.float64)
+_CONST_DECIMALS_ARR = np.array(
+    [0 if s.kind == "int" else _step_decimals_cached(s.step) for s in _CONST_SPEC],
+    dtype=np.int64,
+)
+
+
+def _constraint_penalty_vec(snapped_mat: np.ndarray) -> np.ndarray:
+    """从已 snap 的 (N, 23) norm 矩阵直接产出每行的约束惩罚 (Opt-037).
+
+    与逐条 `_setup_constraint_penalty(CarSetup.from_vector_fast(v))` 数值一致
+    (列上 decimal snap 后比较). 仅在被 ```enable_constraints` 为真时使用."""
+    if snapped_mat.size == 0:
+        return np.zeros(0, dtype=np.float64)
+    cols = snapped_mat[:, _CONST_POS]        # (N, 6)
+    raw = _CONST_MIN_ARR + cols * _CONST_SPAN_ARR
+    # float 列 round 到各自 decimals; int 列本身即整数, 不用动
+    for j in range(len(_CONST_SPEC)):
+        d = int(_CONST_DECIMALS_ARR[j])
+        if d > 0:
+            raw[:, j] = np.round(raw[:, j], decimals=d)
+    penalty = np.zeros(snapped_mat.shape[0], dtype=np.float64)
+    # 约束 1: 前 ride_height < 后 ride_height
+    penalty[raw[:, 0] >= raw[:, 1]] += _SETUP_CONSTRAINT_PENALTY_S
+    # 约束 2: 前 camber <= 后 camber (前 camber 更负是合法)
+    penalty[raw[:, 2] > raw[:, 3]] += _SETUP_CONSTRAINT_PENALTY_S
+    # 约束 3: 前后胎压差 < 4 psi
+    penalty[np.abs(raw[:, 4] - raw[:, 5]) > 4.0] += _SETUP_CONSTRAINT_PENALTY_S
+    return penalty
 
 
 def _coerce_baseline(baseline: CarSetup | dict | None) -> CarSetup:
@@ -554,9 +604,7 @@ def _search(
             # 逐行查 cache, 收集未缓存项. cache 存 (lap, proxy) 二元组.
             results = np.empty(N, dtype=np.float64)
             uncached_idxs: list[int] = []
-            uncached_setups: list[CarSetup] = []
-            # Opt-030: 批构造 — 第一遍只做 cache 拆分区 (命中行跳过构造),
-            # 未命中行由 from_vectors_fast 一次 SIMD 多列构造完成.
+            # Opt-037: 全程用归一化矩阵 — 不再 Per-row 构 CarSetup 于 DE 内环.
             need_build: list[int] = []
             cached_vals: list[tuple[int, tuple[float, float]]] = []
             for i in range(N):
@@ -567,38 +615,34 @@ def _search(
                 else:
                     uncached_idxs.append(i)
                     need_build.append(i)
-            if need_build:
-                built = CarSetup.from_vectors_fast(snapped[need_build])
-                uncached_setups.extend(built)
-            # cache 命中行的惩罚 (不需重构造 setup)
+            # 约束惩罚: 矢量 (一次性对全部行); cache 命中/未命中走同一数学.
+            if enable_constraints:
+                cons_arr = _constraint_penalty_vec(snapped)
+            else:
+                cons_arr = np.zeros(N, dtype=np.float64)
+            # cache 命中行
             for i, (lap_c, proxy_c) in cached_vals:
-                # Iter-186: 约束惩罚 (仅当 enable_constraints=True)
-                constraint_pen = (
-                    _setup_constraint_penalty(CarSetup.from_vector_fast(snapped[i]))
-                    if enable_constraints else 0.0
-                )
-                results[i] = lap_c + weight * proxy_c + constraint_pen
-            # 批量预测未缓存项
-            if uncached_setups:
-                items = [(s, track_id, driver_profile) for s in uncached_setups]
-                preds = model.predict_batch(items)
-                for idx, setup, pred in zip(
-                    uncached_idxs, uncached_setups, preds, strict=True,
-                ):
+                results[i] = lap_c + weight * proxy_c + float(cons_arr[i])
+            # 批量预测未缓存 (Opt-037: from_vecs 直接由 snapped 归一化矩阵)
+            if need_build:
+                rows = np.asarray(snapped[need_build], dtype=np.float64)
+                call_from_vecs = getattr(model, "predict_batch_from_vecs", None)
+                if callable(call_from_vecs):
+                    preds = call_from_vecs(rows, track_id, driver_profile)
+                else:
+                    # 兼容旧 model 接口
+                    built = CarSetup.from_vectors_fast(rows)
+                    items = [(s, track_id, driver_profile) for s in built]
+                    preds = model.predict_batch(items)
+                for idx, pred in zip(uncached_idxs, preds, strict=True):
                     lap = float(pred["lap_time"])
-                    # Iter-164.03: 始终从 batched responses 计算 proxy
-                    # (即使 weight==0), 让 SearchResult 报告真实胎耗画像.
-                    # 与 evaluate() 顺序路径数值一致.
                     resp = pred["responses"]
                     proxy = (
                         (float(resp["tyre_temp"]) - _TYRE_TEMP_REF) / _TYRE_TEMP_SPAN
                         + float(resp["slip_angle"]) / _SLIP_REF
                         + float(resp["tyre_load_spread"])
                     )
-                    # Iter-186: 约束惩罚 (仅当 enable_constraints=True)
-                    constraint_pen = _setup_constraint_penalty(setup) if enable_constraints else 0.0
-                    results[idx] = lap + weight * proxy + constraint_pen
-                    # cache key 与 evaluate() 一致: tuple(round(snapped, 6))
+                    results[idx] = lap + weight * proxy + float(cons_arr[idx])
                     sv_key = tuple(np.round(snapped[idx], 6))
                     cache[sv_key] = (lap, proxy)
             return results

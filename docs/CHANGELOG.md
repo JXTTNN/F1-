@@ -70,6 +70,15 @@
   * 超过 240s timeout 的则源自 xdist 时云 CPU 资源竞争, 而非代码:
     solution = model 组串行 （其余 9 组保留 -n 4).
 
+### 深 kernel 合并 Opt-037 (Iter-313)
+- 强化学习运动堆栈: DE 内环不再 CarSetup 重构. 创业及其从 `snapped` 归一化矩阵
+  直接以 `predict_batch_from_vecs` 喂给 surrogate / 集成, 跳过 `model_construct`,
+  `_setups_to_matrix` 与 `from_vectors_fast` 构造 — 路线移除 4,139 次 pydantic 模型次调用.
+- `setup_penalties_from_full_mat`: 惩罚也从 norm 矩阵直接算 (再不从 CarSetup dict).
+  约束 ``_constraint_penalty_vec`` 把前后 ride/camber/胎压判定推向 numpy.
+  fuzzy 2000 行列 max|Δ| = 0 (lap / sector / response 均一致).
+- 结果: `search_setup(100 iter)` 889→558ms (-37%), profile 函数调用数 826k→309k.
+
 ### 云端活运工器注入 (Iter-311, Opt-036)
 - **Opt-036**: full-ci 每组 `-n 4` pytest-xdist 并行, 本地以 1716 模型组验证:
   381s → 245s (-36%), api/feedback/driver 组同步缩短.
@@ -723,9 +732,3 @@
 
 ### 类型安全 (mypy 继续收敛 70 → 66)
 - `config.py`：`udp_port`/`api_port` 的 `_env` 返回 str 却标注 int → lambda 内
-  `int(_env(...))` 显式转换。
-- `pareto.py`：`MultiObjectiveOptimizer.bounds` 标注放宽为 array-like。
-- `aligner.py`：`latest_unified_frame` 复用 `it` 变量 (tuple vs Optional) → 改
-  独立变量 `entry`。
-- `setup_schema.py` / `setup_physics_bridge.py`：`CarSetup(**dict)` 动态拆包
-  无法被 mypy 验证字段类型 → 加 `# type: ignore[arg-type]`。全项目 66 → 63。
