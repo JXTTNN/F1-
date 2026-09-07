@@ -63,6 +63,14 @@
 - 语义无变式: 单模型 vs 集成全零头 no-op 路径 beat-for-beat 逐位一致；
   model 组全量回归 1713 过 (本局部代理云).
 
+### 云栅栏解锁 + 全量云验证恢复 (Iter-308, Opt-032)
+- **Opt-032 (infra)**: 用户完成 GitHub 邮箱验证, 足止反滥用栅栏踢除:
+  - `git push` 恢复 (Everything up-to-date 正常握手);
+  - `workflow_dispatch` 足出 run → `queued` → 全 10 组并行运行, 8.7 分钟完成;
+  - 验证: run 34087044389 — api/driver/observability/e2e/data/telemetry/feedback/model/ui/root 全 success.
+  - 结论: 前几轮 fuzz-优化在真实云端 3376 测试中全合格式 (Opt-001..030 全净过).
+- **增量**: push 切换回 su git push (Contents API 回退路径保留于台账).
+
 ### DE 内环批构造 + 源代码结构清理 (Iter-306, Opt-030)
 - **Opt-030**: `CarSetup.from_vectors_fast` 一次构造 N 行 (mat (N,23) np 运算),
   objective_vec 的 cache-miss 行不需要零循环地 model_construct-单份.
@@ -729,9 +737,3 @@
   遥测 359 + e2e smoke 10 = 369 passed。
 
 ### 类型安全 (mypy 继续收敛 50 → 46)
-- `gap_filler.py`：线性插值前补 `assert prev_val/curr_val 非 None` (帮助
-  mypy 收窄 4 种 None 组合)。
-- `nlg.py` / `deep_profile.py`：`float(after)` / `float(min(lts))` 的
-  `Any | None` 误报加定向 `type: ignore`。gap/nlg/deep_profile 91 passed。
-- `strategy.py`：燃油节约策略循环 `mode[...]` 返回 `object` → 显式 `float()/int()`
-  转换 + 定向 `type: ignore`。strategy 21 passed。全项目 46 → 43。
