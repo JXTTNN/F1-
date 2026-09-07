@@ -63,6 +63,12 @@
 - 语义无变式: 单模型 vs 集成全零头 no-op 路径 beat-for-beat 逐位一致；
   model 组全量回归 1713 过 (本局部代理云).
 
+### DE 内环批构造 + 源代码结构清理 (Iter-306, Opt-030)
+- **Opt-030**: `CarSetup.from_vectors_fast` 一次构造 N 行 (mat (N,23) np 运算),
+  objective_vec 的 cache-miss 行不需要零循环地 model_construct-单份.
+  micro 基准 200 行: 5.73 → 2.30 ms (-60%); DE 全搜索内累积呼出数再降.
+- 取向: 某路径「逐创建」改为「数据驱动批生成」, 与所有其他批优化 (20/24/27) 一致.
+
 ### DE 搜索熵挤压 + 仓库卫生 (Iter-305, Opt-026..029)
 - **Opt-026**: 推理句子 `no_grad` → `inference_mode` x 6 (surrogate / diagnostics /
   feature_importance) — 语义更适合只推理的环境; 数值/行为音同.
@@ -729,18 +735,3 @@
   `Any | None` 误报加定向 `type: ignore`。gap/nlg/deep_profile 91 passed。
 - `strategy.py`：燃油节约策略循环 `mode[...]` 返回 `object` → 显式 `float()/int()`
   转换 + 定向 `type: ignore`。strategy 21 passed。全项目 46 → 43。
-- `analytics.py`：`high_g / max(low_g, 1)` 中 `np.int64` 与 int 混合类型触发
-  overloaded 错误 → 显式 `float(high_g) / max(float(low_g), 1.0)`。
-  analytics 31 passed。全项目 43 → 41。
-
-### 类型/死代码修复 (mypy 继续收敛 41 → 35)
-- `pareto.py`：`_mutate` 的 `mask` 加 `np.ndarray` 显式注解 (mypy 误判为 bool)。
-- `diagnostics.py`：**移除重复定义的 `_predict_lap`** (第一个无 `model.eval()`,
-  被第二个遮蔽, 是死代码)。
-- `strategy_optimizer.py`：`compounds_pool` 注解 `tuple[str, ...]` (干地 3 元素
-  vs 湿地 2 元素长度不一致)。pareto+diagnostics+strategy_optimizer 69 passed。
-- `bayesian.py`：`_compute_factor` 用局部 `X`/`y`/`L` 变量替代 `self._X`/`_y`/`_L`
-  (帮助 mypy 收窄 None), 语义等价。bayesian 24 passed。全项目 35 → 33。
-
-### 打包/插件 (安装技能)
-- `pyproject.toml` 补全可选依赖：dev 加 `pytest-timeout` (支持测试超时保护,
