@@ -43,7 +43,10 @@
 | 017 | S5 | setup_penalty_s 向量化: 22 次 getattr/SETFIELDS.step/dict.get → coef 表 + dot (fuzz 3000 例 diff<3e-15) | ✅ | 7.3→6.0µs (-17%) |
 | 018 | S5 | 集成成员共享预测零件: _predict_parts 一次, 成员只前向 (原每成员重算全套) | ✅ | ens.predict 4.41→1.25ms, ens.confidence 5.11→1.33ms |
 | 019 | S5 | predict 全链路 (R3+R4 累计): 1.478→0.474ms (-68%), ens.confidence 5.107→1.329 (-74%)｜预测型调用在所有 hot 路径直接受益 | ✅ | bench_surrogate (300 iters) |
-| 020+ | — | 待续（model 组反复回归与云复盘） | ⬜ | — |
+| 020 | S5 | predict_batch 组装整体向量化：(N×41) 一次拼接，sv 批矩阵 + tv 映射 + dv 中性批送 | ✅ | 15.46→7.72ms (-50%), fuzz 700 例逐位等价 |
+| 021 | S5 | driver_corr 中性快轨: driver=None/全0.5 时修正恒零 (解析引理), 跳过 track 解析+全部计算 | ✅ | 随 020 一起验证 |
+| 022 | S5 | track_prior/sector_priors 不变件缓存 (每赛道仅 1 次 benchmark/sector_times 查表) | ✅ | 批路径项均 ∼30% 下降 |
+| 023+ | — | 待续 (全量重构审计 + 云复发 + 其他切片) | ⬜ | — |
 
 ## 全量基线（run 34027633752, 2026-09-06, ubuntu py3.11, 4065 用例全过）
 
