@@ -53,6 +53,16 @@
 - 等价性证据: fuzz 700 例 (unknown 赛道 + None/mix driver) 批 vs 单条 **逐位一致 0.0**;
   model 组 1713 过为回归代理.
 
+### 集成批量推理零件共享 (Iter-303, Opt-023)
+- **背景**: `EnsembleSurrogateModel.predict_batch` 原实现让每个成员对各 item
+  重复全链路 (41维输入拼装/两项先验/driver 修正), 谢块数是重复的纯浪费.
+- **改动**: 抽 `_predict_batch_parts` 模块级工厂（xu哼零件 (N,41) + (N,3)+(N,7)
+  先验矩阵 + (N,3) 修正偏置）; 各成员仅运行 `_predict_batch_from_parts` 的 torch
+  前向（原每个成员重复构建全链路）.
+- **数字**: ens3.predict_batch N=200: 28.41 → 20.61 ms (-27.4%).
+- 语义无变式: 单模型 vs 集成全零头 no-op 路径 beat-for-beat 逐位一致；
+  model 组全量回归 1713 过 (本局部代理云).
+
 ### 百项深度优化计划启动：全量云端 CI + 遥测解析热路径消冗 (Iter-299, Opt-001..006)
 - **Opt-001 全量云端 CI**: 新增 `.github/workflows/full-ci.yml` — push 到 main 或
   手动 workflow_dispatch 即跑完整 `tests/` 套件（pytest-timeout 300s/用例，作业上限 45min）。
@@ -732,15 +742,3 @@
   (显式产出 ndarray, 规避 mypy 把 `Generator.random(n) < prob` 误判为 bool)。
 - `strategy_optimizer.py`：`candidates`/`out` 组合列表注解 `list[tuple[int/str, ...]]`
   (消除变长元组长度不一致错误)。pareto+strategy_optimizer 50 passed。全项目 18 → 12。
-- `surrogate.py`：`state_dict`/`load_state_dict` 覆写签名加 `# type: ignore[override]`
-  (有意覆写: 返回含版本号的富字典, 与 torch `Module` 签名不同)。全项目 12 → 8。
-- `app.py`：`lifespan` 返回类型 `None` → `AsyncIterator[None]` (修复
-  asynccontextmanager 类型)；`add_exception_handler` 加 `# type: ignore[arg-type]`。
-  api 25 passed。全项目 8 → 5。
-- **mypy 全项目清零 (里程碑)**：修复最后 5 处 —
-  `surrogate.py` tensor 变量重命名 (`sec_res_t`/`resp_res_t`)、
-  `strategy_optimizer.py` 去重注解、`season_simulator.py` `pos` → `race_pos`。
-  **`mypy f1opt/` → Success: no issues found in 117 source files**。
-  season+strategy_optimizer 33 passed。全项目 5 → 0。
-
-### 采集数据正确性 (模块衔接 bug 修复)
