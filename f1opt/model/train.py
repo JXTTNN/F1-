@@ -833,17 +833,11 @@ def _build_tensors(
     setups = data["setups"]
     track_ids = data["track_ids"]
     driver_vecs = data["driver_vecs"]
-    x = np.stack(
-        [
-            build_input_vector(s, t, driver_vecs[i])
-            for i, (s, t) in enumerate(zip(setups, track_ids, strict=True))
-        ]
-    )
-    sec_priors = np.stack(
-        [sector_priors(t, s) for s, t in zip(setups, track_ids, strict=True)]
-    )
-    resp_priors = np.stack(
-        [response_priors(t, s) for s, t in zip(setups, track_ids, strict=True)]
+    # Opt-040: reuse predict-pipeline part assembly (Opt-037 batch); fuzz-verified
+    from f1opt.model.surrogate import _predict_batch_parts_from_vecs, _setups_to_matrix
+    sv = _setups_to_matrix(setups)  # (N, 23) float64, equivalent to CarSetup.to_vector each
+    x, sec_priors, resp_priors, _dc = _predict_batch_parts_from_vecs(
+        sv, list(track_ids), [driver_vecs[i] for i in range(len(setups))]
     )
     scales = np.asarray(RESPONSE_SCALES, dtype=np.float32)
     sector_targets = data["sector_targets"]

@@ -63,6 +63,7 @@
 | 037 | S2 | `predict_batch_from_vecs` / `setup_penalties_from_full_mat` / `_constraint_penalty_vec`: 全部 DE 内环不再 CarSetup 构 (4139 calls消失) | ✅ | 89.65 一致 (seed-42 两复立体), search 889→558ms (-37%), 云 run 34104876847 全 10/10 |
 | 038 | S2 | DE cache-key (tuple(rounded) → bytes + 一次 round) | ✅ | search 889→558→**326ms** (累加 -63%), 本地 102 pass, 云 run 34108526012 10/10 |
 | 039 | S2 | predict_from_vecs raw=raw: 返回 (laps, responses) numpy 对, DE 游环免 dict 装配 | ✅ | search →307ms (累加 -65%), 云待发 |
+| 040 | S3 | train `_build_tensors` 用 `_predict_batch_parts_from_vecs` 一次性组装 (Opt-037 零件) | ✅ | x/priors 位等价 (512 例); 修复 train.py 丢失 750 行事故 |
 
 ## 全量基线（run 34027633752, 2026-09-06, ubuntu py3.11, 4065 用例全过）
 
