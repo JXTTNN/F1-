@@ -57,7 +57,8 @@
 | 031 | S3 | (否决) _build_tensors 走 _predict_batch_parts: 数值等价无增益 —— 回拨留记录 | ❌回拨 | 实测 16.9ms vs 16.2ms 无收益 |
 | 032 | INFRA | 云栅栏解锁 (账户 JXTTNN 邮箱验证) → push/Actions 恢复 | ✅ | run 34087044389 全 10组 success |
 | 033 | S3 | train.py 数据生成 x7 位从 from_vector → from_vector_fast | ✅ | generate_physics 500样本 96.9→70.4ms (-27%); 云 run 34089964660 10/10 |
-| 034 | S5 | 批量输出 np 化装配 (clamp+sum 向量化) | ✅ | batch N=330 5.2→4.7ms (-10%), fuzz 800 + ensemble 等价 |
+| 034 | S5 | 批量输出 np 化装配 (clamp+sum 向量化) | ✅ | batch N=330 5.2→4.7ms (-10%), fuzz 800 + ensemble 等价, 云 34093751733 |
+| 035 | FIX | 补回 ensemble predict_batch 之后缺失的 tail (save/load/state_dict 全段) + 3 条 ensemble 回归测试 | ✅ | 解决 90 行缺失; 云 34093751733 |
 
 ## 全量基线（run 34027633752, 2026-09-06, ubuntu py3.11, 4065 用例全过）
 
