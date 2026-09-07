@@ -70,6 +70,10 @@
   * 超过 240s timeout 的则源自 xdist 时云 CPU 资源竞争, 而非代码:
     solution = model 组串行 （其余 9 组保留 -n 4).
 
+### DE cache 键的代码成本归一 (Iter-314, Opt-038)
+- `search_setup` 键看板从 `tuple(np.round(vec, 6))` 改为 `np.round(vec, 6).tobytes()` —
+  每代 DE 缓存 lookup 的 round 调用从 ~19.4k → 1 (-63% 串行开销 total); 搜索 558→326ms.
+
 ### 深 kernel 合并 Opt-037 (Iter-313)
 - 强化学习运动堆栈: DE 内环不再 CarSetup 重构. 创业及其从 `snapped` 归一化矩阵
   直接以 `predict_batch_from_vecs` 喂给 surrogate / 集成, 跳过 `model_construct`,
@@ -720,15 +724,3 @@
   类型收窄写法, 移除全部 `# type: ignore` 注释。feedback 315 passed。
 - **cli.py mypy 错误 10 → 0**：`cmd_search` 复用了 `result` 变量承载两种返回
   类型 (bayesian dict vs SearchResult), 改为独立变量 `bayesian_result`/
-  `search_result`; `grouped` 字典补上 `dict[str, list[dict[str, Any]]]` 注解。
-  全项目 mypy 80 → 70 错误。test_cli 25 passed。
-
-### 内置 LLM 状态准确性
-- **`preload_llm` 对 local (Ollama) 后端做可达性检查**：此前 preload 在未验证
-  Ollama 是否运行的情况下直接返回 `loaded=True`, 用户以为 LLM 已就绪, 实际每次
-  反馈请求都 10s 超时后静默回退。现在对 `http://localhost:11434/api/tags` 做
-  2s 健康探测, 不可达时返回 `loaded=False` + 明确 reason。
-  新增 `test_preload_llm_local_backend_unreachable` 回归测试。
-
-### 类型安全 (mypy 继续收敛 70 → 66)
-- `config.py`：`udp_port`/`api_port` 的 `_env` 返回 str 却标注 int → lambda 内
