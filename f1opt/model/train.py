@@ -362,7 +362,7 @@ def _random_driver(rng: np.random.Generator, exemplars: list[np.ndarray]) -> np.
 def _random_setup(rng: np.random.Generator) -> CarSetup:
     """在归一化空间均匀采样, 经 from_vector 对齐到合法档位."""
     vec = rng.random(SETUP_DIM).tolist()
-    return CarSetup.from_vector(vec)
+    return CarSetup.from_vector_fast(vec)  # Opt-033: 输入∈[0,1], 快通道
 
 
 def _latin_hypercube_sample(
@@ -474,19 +474,19 @@ def _realistic_setup_from_plan(
 
     stratum, vec = plan
     if stratum == "uniform":
-        return CarSetup.from_vector(vec.tolist())
+        return CarSetup.from_vector_fast(vec.tolist())  # Opt-033
 
     # tight / practice: 叠加到 per-track baseline
     track = TRACKS_BY_ID.get(track_id)
     if track is None:
         # 未知赛道: 把 [-1,1] 扰动映射回 [0,1] 作为回退 (避免负值)
         vec_norm = (np.asarray(vec) + 1.0) * 0.5
-        return CarSetup.from_vector(np.clip(vec_norm, 0.0, 1.0).tolist())
+        return CarSetup.from_vector_fast(np.clip(vec_norm, 0.0, 1.0).tolist())  # Opt-033
     base = optimal_setup_for_track_type(track.track_type)
     base_vec = np.array(base.to_vector(), dtype=np.float64)
     sigma = 0.03 if stratum == "tight" else 0.08
     perturbed = np.clip(base_vec + vec * (3.0 * sigma), 0.0, 1.0)
-    return CarSetup.from_vector(perturbed.tolist())
+    return CarSetup.from_vector_fast(perturbed.tolist())  # Opt-033
 
 
 def _realistic_random_setup(rng: np.random.Generator, track_id: str) -> CarSetup:
@@ -532,7 +532,7 @@ def _realistic_random_setup(rng: np.random.Generator, track_id: str) -> CarSetup
         base_vec + rng.normal(0.0, sigma, size=SETUP_DIM),
         0.0, 1.0,
     )
-    return CarSetup.from_vector(perturbed.tolist())
+    return CarSetup.from_vector_fast(perturbed.tolist())  # Opt-033
 
 
 def generate_synthetic_dataset(
@@ -1041,7 +1041,7 @@ def _evaluate_ood(
     per_setup_n: dict[str, int] = {name: 0 for name, _ in extreme_setups}
 
     for setup_name, vec in extreme_setups:
-        setup = CarSetup.from_vector(vec.tolist())
+        setup = CarSetup.from_vector_fast(vec.tolist())  # Opt-033
         for track in ALL_TRACKS:
             for drv in exemplars:
                 # 物理真值 (与训练集一致)
@@ -1939,7 +1939,7 @@ def _perturb_setup(base: CarSetup, rng: np.random.Generator) -> CarSetup:
         step_norm = spec.step / (spec.max - spec.min)
         direction = 1.0 if rng.random() < 0.5 else -1.0
         vec[i] = max(0.0, min(1.0, vec[i] + direction * step_norm))
-    return CarSetup.from_vector(vec)
+    return CarSetup.from_vector_fast(vec)  # Opt-033
 
 
 def setup_sensitivity(
