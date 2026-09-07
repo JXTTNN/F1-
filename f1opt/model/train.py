@@ -1185,3 +1185,784 @@ class _EMAWeights:
 
     @torch.no_grad()
     def apply_to(self, model: torch.nn.Module) -> None:
+        """Load EMA weights into model; backup originals for :meth:`restore`."""
+        self._backup = {}
+        for name, param in model.named_parameters():
+            self._backup[name] = param.detach().clone()
+            shadow = self._shadow_params.get(name)
+            if shadow is not None:
+                param.copy_(shadow)
+        for name, buf in model.named_buffers():
+            self._backup[name] = buf.detach().clone()
+            if not buf.is_floating_point():
+                continue
+            shadow = self._shadow_buffers.get(name)
+            if shadow is not None:
+                buf.copy_(shadow)
+
+    @torch.no_grad()
+    def restore(self, model: torch.nn.Module) -> None:
+        """Restore original weights (undo :meth:`apply_to`)."""
+        if self._backup is None:
+            return
+        for name, param in model.named_parameters():
+            orig = self._backup.get(name)
+            if orig is not None:
+                param.copy_(orig)
+        for name, buf in model.named_buffers():
+            orig = self._backup.get(name)
+            if orig is not None:
+                buf.copy_(orig)
+        self._backup = None
+
+
+class _SWAWeights:
+    """Iter-156: Stochastic Weight Averaging.
+
+    Maintains a running equal-weight average of model parameters collected
+    every ``swa_freq`` steps after ``swa_start``. Unlike EMA (exponential
+    decay), SWA uses a simple arithmetic mean, which corresponds to averaging
+    points along the SGD trajectory in the later phase of training. This
+    typically finds wider optima and improves generalization, especially on
+    small datasets.
+
+    Usage::
+
+        swa = _SWAWeights(model, swa_start=100, swa_freq=10)
+        for step in range(max_steps):
+            ...  # train
+            if swa.should_collect(step):
+                swa.collect(model)
+        swa.apply_to(model)  # use averaged weights for eval
+
+    Only floating-point parameters and buffers are averaged; integer buffers
+    (e.g. ``num_batches_tracked``) are left unchanged.
+    """
+
+    def __init__(self, model: torch.nn.Module, swa_start: int, swa_freq: int) -> None:
+        self.swa_start = int(swa_start)
+        self.swa_freq = int(swa_freq)
+        self._n_collected: int = 0
+        # Initialize running sum to zeros (same shape as params)
+        self._sum_params: dict[str, torch.Tensor] = {
+            n: torch.zeros_like(p.detach()) for n, p in model.named_parameters()
+        }
+        self._sum_buffers: dict[str, torch.Tensor] = {
+            n: torch.zeros_like(b.detach())
+            for n, b in model.named_buffers()
+            if b.is_floating_point()
+        }
+        self._backup: dict[str, torch.Tensor] | None = None
+
+    def should_collect(self, step: int) -> bool:
+        """Return True if the current step should be collected into the SWA average."""
+        return step >= self.swa_start and (step - self.swa_start) % self.swa_freq == 0
+
+    @torch.no_grad()
+    def collect(self, model: torch.nn.Module) -> None:
+        """Add current model weights to the SWA running average."""
+        for name, param in model.named_parameters():
+            self._sum_params[name].add_(param.detach())
+        for name, buf in model.named_buffers():
+            if not buf.is_floating_point():
+                continue
+            self._sum_buffers[name].add_(buf.detach())
+        self._n_collected += 1
+
+    @property
+    def n_collected(self) -> int:
+        """Number of checkpoints collected so far."""
+        return self._n_collected
+
+    @torch.no_grad()
+    def apply_to(self, model: torch.nn.Module) -> None:
+        """Load SWA-averaged weights into model; backup originals for :meth:`restore`.
+
+        If no checkpoints were collected, this is a no-op.
+        """
+        if self._n_collected == 0:
+            return
+        self._backup = {}
+        n = self._n_collected
+        for name, param in model.named_parameters():
+            self._backup[name] = param.detach().clone()
+            avg = self._sum_params.get(name)
+            if avg is not None:
+                param.copy_(avg / n)
+        for name, buf in model.named_buffers():
+            self._backup[name] = buf.detach().clone()
+            if not buf.is_floating_point():
+                continue
+            avg = self._sum_buffers.get(name)
+            if avg is not None:
+                buf.copy_(avg / n)
+
+    @torch.no_grad()
+    def restore(self, model: torch.nn.Module) -> None:
+        """Restore original weights (undo :meth:`apply_to`)."""
+        if self._backup is None:
+            return
+        for name, param in model.named_parameters():
+            orig = self._backup.get(name)
+            if orig is not None:
+                param.copy_(orig)
+        for name, buf in model.named_buffers():
+            orig = self._backup.get(name)
+            if orig is not None:
+                buf.copy_(orig)
+        self._backup = None
+
+
+def _mixup_batch(
+    x: torch.Tensor,
+    sec_y: torch.Tensor,
+    resp_y: torch.Tensor,
+    alpha: float,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, float]:
+    """Apply mixup augmentation — Iter-136.
+
+    Creates virtual training examples by linear interpolation of random
+    input/target pairs:
+
+        x_mixed   = lam * x + (1 - lam) * x[perm]
+        sec_y_m   = lam * sec_y + (1 - lam) * sec_y[perm]
+        resp_y_m  = lam * resp_y + (1 - lam) * resp_y[perm]
+
+    where ``lam ~ Beta(alpha, alpha)``. Improves generalisation and acts as
+    a regulariser by encouraging the model to learn smooth interpolation
+    behaviour between nearby setups.
+
+    Args:
+        x:      Input batch ``(N, INPUT_DIM)``.
+        sec_y:  Sector targets ``(N, 3)``.
+        resp_y: Response targets ``(N, 7)``.
+        alpha:  Beta distribution parameter. ``<= 0`` disables mixup (returns
+                inputs unchanged with ``lam = 1.0``).
+
+    Returns:
+        ``(x_mixed, sec_y_mixed, resp_y_mixed, lam)``.
+    """
+    if alpha <= 0.0:
+        return x, sec_y, resp_y, 1.0
+    lam = float(torch.distributions.Beta(alpha, alpha).sample().item())
+    # Clamp to [0.5, 1.0] so the original sample dominates — prevents
+    # degenerate near-0 lambda that effectively swaps the pair (no signal).
+    lam = max(0.5, lam)
+    perm = torch.randperm(x.shape[0], device=x.device)
+    x_mixed = lam * x + (1.0 - lam) * x[perm]
+    sec_y_m = lam * sec_y + (1.0 - lam) * sec_y[perm]
+    resp_y_m = lam * resp_y + (1.0 - lam) * resp_y[perm]
+    return x_mixed, sec_y_m, resp_y_m, lam
+
+
+def _train_minibatch(
+    model: SurrogateModel,
+    optimizer: torch.optim.Optimizer,
+    scheduler: torch.optim.lr_scheduler.LRScheduler,
+    loss_fn: torch.nn.Module,
+    x: torch.Tensor,
+    sec_y: torch.Tensor,
+    resp_y: torch.Tensor,
+    max_steps: int,
+    batch_size: int,
+    patience: int,
+    log: bool,
+    physics_exemplars: tuple[torch.Tensor, torch.Tensor] | None = None,
+    physics_consistency_weight: float = 0.0,
+    grad_clip_norm: float = 1.0,
+    ema: _EMAWeights | None = None,
+    mixup_alpha: float = 0.0,
+    grad_accumulation_steps: int = 1,
+    val_smoothing: float = 0.0,
+    gradient_noise: float = 0.0,
+) -> None:
+    """Iter-68: mini-batch SGD + early stopping (原地训练 model).
+
+    90/10 train/val split, 每 epoch shuffle + mini-batch, 每 epoch 评估 val loss,
+    保存最优模型, patience 轮无改善则早停. 防止全批量 GD 在高迭代数下过拟合.
+
+    ``max_steps`` 为梯度步上限 (跨 epoch 累计); 每 epoch = ceil(n_train/batch_size)
+    步. scheduler 按梯度步衰减 (与全批量路径一致).
+
+    Iter-123: ``physics_exemplars`` + ``physics_consistency_weight`` 启用
+    物理一致性 loss (driver 方向约束), 在每个 mini-batch 上额外计算.
+
+    Iter-126: ``grad_clip_norm`` 使梯度裁剪阈值可配置 (默认 1.0 向后兼容).
+    同时在 val 评估中跟踪 sector MAE (更直接关联目标指标), 供日志监控.
+
+    Iter-132: ``ema`` (Exponential Moving Average) 在每个 optimizer.step()
+    后更新 shadow weights. EMA 不参与 val 评估 (val 仍用当前权重做早停判断);
+    训练结束后由 :func:`train` 将 EMA 权重写入 model (覆盖 best_state).
+    """
+    import copy
+
+    n_total = x.shape[0]
+    n_val = max(1, n_total // 10)
+    n_train = n_total - n_val
+    x_train, x_val = x[:n_train], x[n_train:]
+    sy_train, sy_val = sec_y[:n_train], sec_y[n_train:]
+    ry_train, ry_val = resp_y[:n_train], resp_y[n_train:]
+
+    best_val_loss = float("inf")
+    best_state: dict | None = None
+    stall = 0
+    step = 0
+    epoch = 0
+
+    while step < max_steps:
+        epoch += 1
+        model.train()
+        perm = torch.randperm(n_train)
+        for i in range(0, n_train, batch_size):
+            if step >= max_steps:
+                break
+            idx = perm[i : i + batch_size]
+            xb = x_train[idx]
+            syb = sy_train[idx]
+            ryb = ry_train[idx]
+            # Iter-136: mixup augmentation (disabled when alpha <= 0).
+            xb_m, syb_m, ryb_m, _lam = _mixup_batch(xb, syb, ryb, mixup_alpha)
+            optimizer.zero_grad()
+            sr, rr = model(xb_m)
+            lap_pred = sr.sum(dim=1)
+            lap_tgt = syb_m.sum(dim=1)
+            loss = (
+                loss_fn(sr, syb_m)
+                + 0.3 * loss_fn(rr, ryb_m)
+                + 0.1 * loss_fn(lap_pred, lap_tgt)
+            )
+            # Iter-123: 物理一致性 loss (driver 方向约束).
+            if physics_exemplars is not None and physics_consistency_weight > 0.0:
+                aggr_vec, cons_vec = physics_exemplars
+                phys_loss = _physics_consistency_loss(
+                    model, xb_m, aggr_vec, cons_vec, margin=0.02,
+                )
+                loss = loss + physics_consistency_weight * phys_loss
+            loss.backward()
+            step += 1
+            # Iter-140: gradient accumulation — only step when enough
+            # mini-batches have been accumulated.
+            if step % grad_accumulation_steps == 0 or step >= max_steps:
+                # Iter-126: configurable grad clip norm.
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=grad_clip_norm)
+                # Iter-152: add Gaussian noise to gradients for better generalization.
+                if gradient_noise > 0.0:
+                    _add_gradient_noise(model, gradient_noise)
+                optimizer.step()
+                scheduler.step()
+                # Iter-132: advance EMA shadow after each gradient step.
+                if ema is not None:
+                    ema.update(model)
+                optimizer.zero_grad()
+
+        # Val evaluation: track both loss (for early stopping) and sector MAE
+        # (Iter-126: for monitoring — MAE directly correlates with held-out metric).
+        model.eval()
+        with torch.no_grad():
+            sr_v, rr_v = model(x_val)
+            val_loss = float(loss_fn(sr_v, sy_val) + 0.3 * loss_fn(rr_v, ry_val))
+            # Iter-126: sector MAE on val set (monitoring only).
+            val_sector_mae = float((sr_v - sy_val).abs().mean())
+
+        if val_loss < best_val_loss - 1e-7:
+            best_val_loss = val_loss
+            best_state = copy.deepcopy(model.state_dict())
+            stall = 0
+        else:
+            stall += 1
+            if stall >= patience:
+                if log:
+                    print(
+                        f"[surrogate] early-stop epoch={epoch} step={step} "
+                        f"val_loss={best_val_loss:.6f} (patience={patience})"
+                    )
+                break
+
+        if log and (epoch % 20 == 0 or step >= max_steps):
+            print(
+                f"[surrogate] epoch {epoch:3d} step={step:5d} "
+                f"val_loss={val_loss:.6f} best={best_val_loss:.6f} "
+                f"val_sec_MAE={val_sector_mae:.4f}s"
+            )
+
+    # Restore best model
+    if best_state is not None:
+        model.load_state_dict(best_state)
+    model.eval()
+
+
+def train(
+    iterations: int = 3000,
+    n_samples: int = 8000,
+    seed: int = 0,
+    log: bool = True,
+    save: bool = True,
+    model: SurrogateModel | None = None,
+    label_source: str = "physics",
+    noise_std: float = 0.05,
+    batch_size: int = 0,
+    early_stopping_patience: int = 0,
+    use_lhs: bool = True,
+    physics_consistency_weight: float = 0.05,
+    lr_warmup_fraction: float = 0.0,
+    grad_clip_norm: float = 1.0,
+    loss_type: str = "mse",
+    huber_beta: float = 1.0,
+    ema_decay: float = 0.0,
+    mixup_alpha: float = 0.0,
+    one_cycle: bool = False,
+    grad_accumulation_steps: int = 1,
+    val_smoothing: float = 0.0,
+    gradient_noise: float = 0.0,
+    swa_start: int = 0,
+    swa_freq: int = 10,
+    label_smoothing: float = 0.0,
+) -> SurrogateModel:
+    """训练分段代理模型并 (可选) 保存权重, 返回训练后的模型.
+
+    多任务损失::
+
+        loss = MSE(sectors) + 0.3 * MSE(responses)
+               + 0.1 * MSE(lap_from_sectors_sum, target_lap)
+
+    Iter-68 训练参数调优:
+    - **noise_std=0.05** (from 0.10): EA F1 2026 圈速是确定性的 (给定 setup/track/
+      driver), 0.1s 噪声过高 (模拟人类车手不一致性, 但已由 driver_profile 捕获).
+      降到 0.05s 更贴近游戏引擎噪声, held-out sector MAE 改善 21%.
+    - **AdamW** (weight_decay=1e-5): L2 正则化.
+    - **Cosine LR schedule** (1e-3 -> 1e-5): 前期高 lr 探索, 后期低 lr 精细收敛.
+    - **Gradient clipping** (max_norm=1.0): BatchNorm + GELU 训练稳定性.
+    - **n_samples=8000** (from 5000): 更好覆盖 41 维输入空间.
+    - **Mini-batch + early stopping** (batch_size>0, early_stopping_patience>0):
+      90/10 train/val split, 每 epoch 评估 val loss, 保存最优模型, patience
+      轮无改善则早停. 防止全批量 GD 在高迭代数下过拟合 (3000 iter 比 1500 iter
+      MAE 更差). ``batch_size=0`` (默认) 退化为全批量 (向后兼容).
+
+    Iter-126 增强:
+    - **lr_warmup_fraction**: 前 ``fraction * iterations`` 步线性 warmup LR 从
+      0 到 1e-3, 再切到 CosineAnnealing 衰减到 1e-5. BatchNorm + GELU 在初始
+      阶段对高 LR 敏感 (大梯度 → BN 统计量不稳), warmup 让 BN running stats
+      先稳定再加速. ``0.0`` (默认) = 纯 CosineAnnealing (向后兼容). 使用
+      ``SequentialLR`` 组合 ``LinearLR`` + ``CosineAnnealingLR``.
+    - **grad_clip_norm**: 可配置梯度裁剪阈值 (默认 1.0 向后兼容). 更激进的
+      裁剪 (0.5) 在噪声数据上更稳定; 更宽松 (5.0) 在干净数据上收敛更快.
+    - mini-batch 路径额外跟踪 val sector MAE (日志监控).
+
+    Iter-128 增强:
+    - **loss_type**: ``"mse"`` (默认, 向后兼容) 或 ``"huber"``. Huber loss
+      (SmoothL1) 在残差 < ``huber_beta`` 时用二次 loss (如 MSE), 在残差 >
+      ``huber_beta`` 时用线性 loss (如 L1). 对 OOD / 噪声标签更鲁棒: 大残差
+      (outlier) 的梯度不再平方放大, 防止模型过拟合到极端样本. 对 F1 数据特别
+      有用 — 物理模拟器在极端 setup 组合下偶尔产生大残差, Huber 抑制这些
+      outlier 对训练的支配.
+    - **huber_beta**: Huber loss 的过渡阈值 (默认 1.0). 对 sector 残差 (秒),
+      1.0s 意味着 > 1s 的残差用线性 loss; 对 response 残差 (归一化 O(1)),
+      1.0 也合理.
+
+    Iter-132 增强:
+    - **ema_decay**: Exponential Moving Average of model weights (Polyak
+      averaging). ``0.0`` (默认) = 禁用, 向后兼容. 典型值 ``0.999`` (长记忆)
+      或 ``0.99`` (短记忆). 每个 ``optimizer.step()`` 后更新 shadow weights:
+      ``shadow <- decay * shadow + (1 - decay) * current``. 训练结束后将
+      EMA 权重写入 model (覆盖当前/best 权重), held-out 评估 + 保存均用
+      EMA 权重. EMA 平滑训练轨迹, 在小数据集 (n_samples=8000) 上通常改善
+      泛化 (减少 last-epoch 噪声的影响). BatchNorm running_mean/var 也被
+      EMA 平均 (等价于平滑 BN 统计量估计, 标准做法). 与 mini-batch + 早停
+      兼容: 早停仍基于当前权重 val_loss, 训练结束后 EMA 覆盖 best_state.
+
+    Iter-136 增强:
+    - **mixup_alpha**: Mixup 数据增强的 Beta 分布参数 (``> 0`` 启用). 对每个
+      mini-batch 采样 ``lam ~ Beta(alpha, alpha)`` (clamp 到 [0.5, 1.0] 防止
+      退化), 用 ``x_mixed = lam*x + (1-lam)*x[perm]`` 与对应 target 同样线性
+      插值, 生成虚拟训练样本. 作为正则化手段提升泛化 (鼓励模型在相近 setup
+      之间平滑插值), 在小数据集 + 高维输入 (41 维) 上减少过拟合. ``0.0``
+      (默认) = 禁用, 向后兼容. 仅在 mini-batch 路径生效 (batch_size > 0).
+
+    - ``save=True`` 时写入 ``{data_dir}/models/segment_surrogate.pt`` 并刷新缓存.
+    - ``save=False`` 用于测试隔离 (不写盘, 不影响模块级默认模型).
+    - 训练后打印 held-out sector/lap MAE (``log=True`` 时).
+
+    Iter-67: ``label_source`` 默认 ``"physics"`` — 用 EA F1 2026 lap_simulator
+    生成 *物理真值* 圈速标签 (含 setup 物理惩罚 + 燃油 + PU + 轮温), 替代
+    Iter-02~65 的纯启发式标签. 传 ``"heuristic"`` 回退到原行为 (向后兼容).
+    """
+    # Iter-94: 固定 torch RNG 种子, 让模型初始化 + mini-batch shuffle 完全确定.
+    # 旧版仅 np.random.default_rng(seed) 固定数据生成, 但 SurrogateModel() 的
+    # 随机权重初始化 + AdamW 的 mini-batch shuffle 用 torch RNG (未固定), 导致
+    # 同一 seed 多次训练产生不同模型 — test_setup_sensitivity_hungaroring_otd
+    # 在 OOD 区域 (otd 60/100) 预测方向不稳定 (有时 PASS delta=-0.20s, 有时 FAIL
+    # delta=+0.20s). 现固定 torch RNG, 训练完全可复现.
+    torch.manual_seed(seed)
+
+    data = generate_dataset(n_samples=n_samples, seed=seed,
+                            noise_std=noise_std, label_source=label_source,
+                            use_lhs=use_lhs)
+    x, sec_y, resp_y, _sec_priors, _resp_priors = _build_tensors(data)
+
+    # Iter-123: 准备物理一致性 loss 的 driver exemplar 张量.
+    # AGGR exemplar: 激进车手 (应更快); CONS exemplar: 保守车手 (应更慢).
+    _physics_exemplars: tuple[torch.Tensor, torch.Tensor] | None = None
+    if physics_consistency_weight > 0.0:
+        exemplars = _driver_exemplars()
+        if len(exemplars) >= 2:
+            # exemplars[0] = AGGR, exemplars[1] = CONS (from _driver_exemplars)
+            _physics_exemplars = (
+                torch.from_numpy(exemplars[0].astype(np.float32)),
+                torch.from_numpy(exemplars[1].astype(np.float32)),
+            )
+
+    if model is None:
+        model = SurrogateModel()
+    # Iter-68: 训练参数调优 — AdamW (L2 正则化) + cosine LR schedule + gradient clipping.
+    optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3, weight_decay=1e-5)
+    # Iter-126: LR warmup via SequentialLR (LinearLR + CosineAnnealingLR).
+    # lr_warmup_fraction > 0 时, 前 fraction*iterations 步线性 warmup LR 从
+    # ~1e-5 (start_factor=0.01 * 1e-3) 到 1e-3, 再切到 Cosine 衰减到 eta_min.
+    # 0.0 = 纯 Cosine (向后兼容).
+    _eta_min = 1e-5
+    if lr_warmup_fraction > 0.0:
+        warmup_steps = max(1, int(iterations * lr_warmup_fraction))
+        cosine_steps = max(1, iterations - warmup_steps)
+        warmup_scheduler = torch.optim.lr_scheduler.LinearLR(
+            optimizer, start_factor=0.01, end_factor=1.0, total_iters=warmup_steps,
+        )
+        cosine_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer, T_max=cosine_steps, eta_min=_eta_min,
+        )
+        scheduler: torch.optim.lr_scheduler.LRScheduler = (
+            torch.optim.lr_scheduler.SequentialLR(
+                optimizer,
+                schedulers=[warmup_scheduler, cosine_scheduler],
+                milestones=[warmup_steps],
+            )
+        )
+    elif one_cycle:
+        scheduler = torch.optim.lr_scheduler.OneCycleLR(
+            optimizer, max_lr=1e-3, total_steps=max(1, iterations),
+            pct_start=0.3, div_factor=25.0, final_div_factor=1e4,
+        )
+    else:
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer, T_max=max(1, iterations), eta_min=_eta_min,
+        )
+    # Iter-128: configurable loss type (MSE default, Huber for outlier robustness).
+    # Iter-160: label_smoothing blends targets with batch mean for regularization.
+    if loss_type == "huber":
+        loss_fn: torch.nn.Module = torch.nn.HuberLoss(delta=huber_beta)
+    elif loss_type == "mse":
+        if label_smoothing > 0.0:
+            loss_fn = _LabelSmoothedMSELoss(alpha=label_smoothing)
+        else:
+            loss_fn = torch.nn.MSELoss()
+    else:
+        raise ValueError(
+            f"Unknown loss_type={loss_type!r}; expected 'mse' or 'huber'"
+        )
+
+    model.eval()
+    with torch.no_grad():
+        sec_res0, resp_res0 = model(x)
+        init_loss = float(loss_fn(sec_res0, sec_y) + 0.3 * loss_fn(resp_res0, resp_y))
+    if log:
+        print(
+            f"[surrogate] iter     0  mse={init_loss:.4f}  "
+            f"(label_source={label_source}, noise={noise_std})"
+        )
+
+    # Iter-132: initialize EMA shadow weights (disabled when ema_decay == 0.0).
+    ema: _EMAWeights | None = (
+        _EMAWeights(model, ema_decay) if ema_decay > 0.0 else None
+    )
+    if log and ema is not None:
+        print(f"[surrogate] EMA enabled (decay={ema_decay})")
+
+    # Iter-156: initialize SWA weights (disabled when swa_start <= 0).
+    swa: _SWAWeights | None = (
+        _SWAWeights(model, swa_start, swa_freq) if swa_start > 0 else None
+    )
+    if log and swa is not None:
+        print(f"[surrogate] SWA enabled (start={swa_start}, freq={swa_freq})")
+
+    # Iter-68: mini-batch + early stopping (batch_size > 0 时启用)
+    use_minibatch = batch_size > 0 and early_stopping_patience > 0
+    if use_minibatch:
+        _train_minibatch(
+            model, optimizer, scheduler, loss_fn,
+            x, sec_y, resp_y,
+            iterations, batch_size, early_stopping_patience, log,
+            physics_exemplars=_physics_exemplars,
+            physics_consistency_weight=physics_consistency_weight,
+            grad_clip_norm=grad_clip_norm,
+            ema=ema,
+            mixup_alpha=mixup_alpha,
+            grad_accumulation_steps=grad_accumulation_steps,
+            val_smoothing=val_smoothing,
+            gradient_noise=gradient_noise,
+        )
+    else:
+        model.train()
+        for it in range(1, iterations + 1):
+            optimizer.zero_grad()
+            sec_res, resp_res = model(x)
+            lap_pred = sec_res.sum(dim=1)
+            lap_target = sec_y.sum(dim=1)
+            loss = (
+                loss_fn(sec_res, sec_y)
+                + 0.3 * loss_fn(resp_res, resp_y)
+                + 0.1 * loss_fn(lap_pred, lap_target)
+            )
+            # Iter-123: 物理一致性 loss — driver 方向约束 (AGGR 应快于 CONS).
+            if _physics_exemplars is not None:
+                aggr_vec, cons_vec = _physics_exemplars
+                phys_loss = _physics_consistency_loss(
+                    model, x, aggr_vec, cons_vec, margin=0.02,
+                )
+                loss = loss + physics_consistency_weight * phys_loss
+            loss.backward()
+            # Iter-126: configurable grad clip norm (was hardcoded 1.0).
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=grad_clip_norm)
+            # Iter-152: add Gaussian noise to gradients for better generalization.
+            if gradient_noise > 0.0:
+                _add_gradient_noise(model, gradient_noise)
+            optimizer.step()
+            scheduler.step()
+            # Iter-132: advance EMA shadow after each gradient step.
+            if ema is not None:
+                ema.update(model)
+            # Iter-156: collect SWA checkpoint after swa_start, every swa_freq.
+            if swa is not None and swa.should_collect(it):
+                swa.collect(model)
+            if log and (it % 200 == 0 or it == iterations):
+                lr = scheduler.get_last_lr()[0]
+                print(f"[surrogate] iter {it:5d}  mse={loss.item():.4f}  lr={lr:.2e}")
+        model.eval()
+
+    # Iter-132: apply EMA weights to model (overwrites current / best_state).
+    # Held-out evaluation and save now use the EMA-smoothed weights.
+    if ema is not None:
+        ema.apply_to(model)
+        if log:
+            print("[surrogate] EMA weights applied to model for eval + save")
+
+    # Iter-156: apply SWA weights to model (overwrites EMA / current / best).
+    # SWA takes precedence over EMA when both are enabled, as it represents
+    # a more aggressive averaging of the later training trajectory.
+    if swa is not None and swa.n_collected > 0:
+        swa.apply_to(model)
+        if log:
+            print(f"[surrogate] SWA weights applied ({swa.n_collected} checkpoints)")
+
+    if log:
+        sec_mae, lap_mae = _held_out_mae(model, seed=99_999, n=100,
+                                         label_source=label_source)
+        print(f"[surrogate] held-out sector MAE={sec_mae:.4f}s  lap MAE={lap_mae:.4f}s")
+        # Iter-118: 详细 MAE 分解 (per-track / per-sector / per-driver) + OOD + 持久化.
+        breakdown = _detailed_mae_breakdown(model, seed=99_999, n=200,
+                                            label_source=label_source)
+        print(f"[surrogate] detailed breakdown (n={breakdown['n']}):")
+        print(f"  overall  sector MAE={breakdown['sector_mae']:.4f}s  "
+              f"lap MAE={breakdown['lap_mae']:.4f}s")
+        ps = breakdown["per_sector"]
+        print(f"  per-sector  S1={ps['s1']:.4f}s  S2={ps['s2']:.4f}s  S3={ps['s3']:.4f}s")
+        print("  per-driver:")
+        for d, m in sorted(breakdown["per_driver"].items()):
+            print(f"    {d:<6}  sector MAE={m['sector_mae']:.4f}s  "
+                  f"lap MAE={m['lap_mae']:.4f}s  n={m['n']}")
+        # per-track 按 lap MAE 倒序 (worst first), 仅打印 top 5 + bottom 5.
+        sorted_tracks = sorted(breakdown["per_track"].items(),
+                               key=lambda x: -x[1]["lap_mae"])
+        print("  per-track (top 5 worst):")
+        for t, m in sorted_tracks[:5]:
+            print(f"    {t:<14}  sector MAE={m['sector_mae']:.4f}s  "
+                  f"lap MAE={m['lap_mae']:.4f}s  n={m['n']}")
+        if len(sorted_tracks) > 5:
+            print("  per-track (top 5 best):")
+            for t, m in sorted_tracks[-5:]:
+                print(f"    {t:<14}  sector MAE={m['sector_mae']:.4f}s  "
+                      f"lap MAE={m['lap_mae']:.4f}s  n={m['n']}")
+        # OOD 评估 (288 样本, ~8s): 检测模型外推稳定性.
+        ood = _evaluate_ood(model)
+        print(f"[surrogate] OOD (n={ood['n']}):  "
+              f"sector MAE={ood['sector_mae']:.4f}s  lap MAE={ood['lap_mae']:.4f}s")
+        for s_name, m in ood["per_setup_type"].items():
+            print(f"    {s_name:<10}  sector MAE={m['sector_mae']:.4f}s  "
+                  f"lap MAE={m['lap_mae']:.4f}s  n={m['n']}")
+        # 持久化到 JSONL (追加模式, 一行一条记录).
+        record = {
+            "label_source": label_source,
+            "n_samples": n_samples,
+            "iterations": iterations,
+            "noise_std": noise_std,
+            "seed": seed,
+            "ema_decay": ema_decay,
+            "held_out_n100": {"sector_mae": sec_mae, "lap_mae": lap_mae},
+            "breakdown_n200": breakdown,
+            "ood": ood,
+        }
+        log_path = _persist_training_metrics(record)
+        print(f"[surrogate] metrics appended -> {log_path}")
+
+    if save:
+        path = default_model_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        model.save(path)
+        reset_default_model_cache()
+        if log:
+            print(f"[surrogate] saved -> {path}  (version={MODEL_VERSION})")
+
+    return model
+
+
+def train_ensemble(
+    n_members: int = 3,
+    base_seed: int = 0,
+    *,
+    iterations: int = 3000,
+    n_samples: int = 8000,
+    log: bool = True,
+    save: bool = False,
+    label_source: str = "physics",
+    noise_std: float = 0.05,
+    batch_size: int = 0,
+    early_stopping_patience: int = 0,
+    use_lhs: bool = True,
+    physics_consistency_weight: float = 0.05,
+    lr_warmup_fraction: float = 0.0,
+    grad_clip_norm: float = 1.0,
+    loss_type: str = "mse",
+    huber_beta: float = 1.0,
+    mixup_alpha: float = 0.0,
+    _cycle: bool = False,
+    grad_accumulation_steps: int = 1,
+    val_smoothing: float = 0.0,
+    gradient_noise: float = 0.0,
+    swa_start: int = 0,
+    swa_freq: int = 10,
+    label_smoothing: float = 0.0,
+) -> EnsembleSurrogateModel:
+    """Train an ensemble of N :class:`SurrogateModel` instances (Iter-127).
+
+    Each member is trained with a different seed (``base_seed + i`` for
+    member ``i``), so weight initialisation + mini-batch shuffling differ,
+    producing decorrelated residual errors that average out. Returns an
+    :class:`EnsembleSurrogateModel` that averages predictions across members.
+
+    Variance reduction is most visible in OOD / extrapolation regions where
+    individual models disagree. In well-covered regions the ensemble matches
+    a single model's bias but with lower variance.
+
+    Args:
+        n_members: Number of ensemble members (default 3).
+        base_seed: Seed for the first member; member ``i`` uses ``base_seed + i``.
+        log: If True, print per-member training progress + ensemble held-out MAE.
+        save: If True, save ensemble to ``{data_dir}/models/segment_surrogate_ensemble.pt``.
+            Default False (ensemble is for evaluation; single model remains the
+            production default).
+        **train_kwargs: Forwarded to :func:`train` for each member (iterations,
+            n_samples, label_source, noise_std, batch_size, etc.).
+
+    Returns:
+        Trained :class:`EnsembleSurrogateModel`.
+    """
+    if n_members < 1:
+        raise ValueError(f"n_members must be >= 1, got {n_members}")
+    models: list[SurrogateModel] = []
+    for i in range(n_members):
+        member_seed = base_seed + i
+        if log:
+            print(f"[ensemble] training member {i + 1}/{n_members} (seed={member_seed})")
+        m = train(
+            iterations=iterations,
+            n_samples=n_samples,
+            seed=member_seed,
+            log=False,
+            save=False,
+            label_source=label_source,
+            noise_std=noise_std,
+            batch_size=batch_size,
+            early_stopping_patience=early_stopping_patience,
+            use_lhs=use_lhs,
+            physics_consistency_weight=physics_consistency_weight,
+            lr_warmup_fraction=lr_warmup_fraction,
+            grad_clip_norm=grad_clip_norm,
+            loss_type=loss_type,
+            huber_beta=huber_beta,
+            mixup_alpha=mixup_alpha,
+            grad_accumulation_steps=grad_accumulation_steps,
+            val_smoothing=val_smoothing,
+            gradient_noise=gradient_noise,
+            swa_start=swa_start,
+            swa_freq=swa_freq,
+            label_smoothing=label_smoothing,
+        )
+        models.append(m)
+
+    ensemble = EnsembleSurrogateModel(models)
+
+    if log:
+        sec_mae, lap_mae = _held_out_mae(ensemble, seed=99_999, n=100,
+                                         label_source=label_source)
+        print(f"[ensemble] held-out sector MAE={sec_mae:.4f}s  "
+              f"lap MAE={lap_mae:.4f}s  (n_members={n_members})")
+
+    if save:
+        from pathlib import Path
+
+        from f1opt.config import get_settings
+        ens_path = (
+            Path(get_settings().data_dir)
+            / "models"
+            / "segment_surrogate_ensemble.pt"
+        )
+        ens_path.parent.mkdir(parents=True, exist_ok=True)
+        ensemble.save(ens_path)
+        if log:
+            print(f"[ensemble] saved -> {ens_path}")
+
+    return ensemble
+
+
+# --- setup 敏感度量化 -------------------------------------------------------
+def _perturb_setup(base: CarSetup, rng: np.random.Generator) -> CarSetup:
+    """随机选 1-3 个 SETUP_FIELDS 各 ±1 档扰动, 返回新 ``CarSetup``.
+
+    在归一化空间 (``to_vector``) 内移动一个档位 (``step / (max - min)``),
+    钳位到 [0, 1] 后用 ``from_vector`` 反归一化, 自动对齐到合法档位.
+    """
+    vec = list(base.to_vector())
+    specs = list(SETUP_FIELDS.values())
+    n_perturb = int(rng.integers(1, 4))  # 1-3 个参数
+    chosen_idx = rng.choice(len(specs), size=n_perturb, replace=False)
+    for idx in chosen_idx:
+        i = int(idx)
+        spec = specs[i]
+        step_norm = spec.step / (spec.max - spec.min)
+        direction = 1.0 if rng.random() < 0.5 else -1.0
+        vec[i] = max(0.0, min(1.0, vec[i] + direction * step_norm))
+    return CarSetup.from_vector(vec)
+
+
+def setup_sensitivity(
+    model: SurrogateModel,
+    track_id: str,
+    n_perturb: int = 20,
+    seed: int = 42,
+) -> float:
+    """量化模型对 setup 变化的敏感度.
+
+    随机扰动 setup 各参数 ±1 档, 测量 lap_time 变化标准差.
+    值越大说明模型对 setup 越敏感 (好); 接近 0 说明模型退化到 track_prior (坏).
+    """
+    rng = np.random.default_rng(seed)
+    base = DEFAULT_SETUP
+    base_lap = model.predict_lap_time(base, track_id)
+    deltas: list[float] = []
+    for _ in range(n_perturb):
+        perturbed = _perturb_setup(base, rng)
+        lap = model.predict_lap_time(perturbed, track_id)
+        deltas.append(lap - base_lap)
+    return float(np.std(deltas))
+
+
+if __name__ == "__main__":
+    train()
