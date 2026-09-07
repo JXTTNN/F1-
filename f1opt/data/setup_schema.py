@@ -20,6 +20,7 @@ import math
 from collections.abc import Sequence
 from typing import Literal
 
+import numpy as np
 from pydantic import BaseModel, Field, model_validator
 
 GroupName = Literal[
@@ -129,6 +130,18 @@ def _step_decimals_cached(step: float) -> int:
     return d
 
 
+# Opt-030: 向量化批量构造所需的列常量 (一次构建, 全体积算件复用).
+_SETUP_SPECS: list[SetupField] = ALL_SETUP_FIELDS()
+_SETUP_NAME_LIST: list[str] = [s.name for s in _SETUP_SPECS]
+_SETUP_MIN_ARR = np.array([s.min for s in _SETUP_SPECS], dtype=np.float64)
+_SETUP_SPAN_ARR = np.array([s.max - s.min for s in _SETUP_SPECS], dtype=np.float64)
+_SETUP_STEP_ARR = np.array([s.step for s in _SETUP_SPECS], dtype=np.float64)
+_SETUP_DECIMALS_ARR = np.array([
+    0 if s.kind == "int" else _step_decimals(s.step) for s in _SETUP_SPECS
+], dtype=np.int64)
+_SETUP_KIND_INT_MASK = np.array([s.kind == "int" for s in _SETUP_SPECS], dtype=np.bool_)
+
+
 def _snap_to_step(value: float, spec: SetupField) -> float:
     """将 ``value`` 对齐到最近的合法档位并消除浮点噪声。"""
     steps = round((value - spec.min) / spec.step)
@@ -224,6 +237,46 @@ class CarSetup(BaseModel):
             snapped = _snap_to_step(denorm, spec)
             kwargs[spec.name] = int(snapped) if spec.kind == "int" else snapped
         return cls.model_construct(**kwargs)
+
+    @classmethod
+    def from_vectors_fast(cls, mat: np.ndarray) -> list["CarSetup"]:
+        """批量零验证构造 (Opt-030): (N, 23) 归一化矩阵 → N 份 CarSetup.
+
+        每列的数值路径与(from_vector_fast 单行)完全一致 (同序 float64); NP
+        借 SIMD 一次完成 23 列 × N 行的 denorm/snap. 仍假设输入已 snap 到
+        归一化档位网格 (即调用方先 _snap_vec_batch), 否则结果丢验证网眼。
+        """
+        v = np.asarray(mat, dtype=np.float64)
+        if v.ndim != 2 or v.shape[1] != len(SETUP_FIELDS):
+            raise ValueError("from_vectors_fast 需要 (N, 23) 矩阵")
+        n = v.shape[0]
+        # 预存列常量 (模块载入时一次)
+        mins = _SETUP_MIN_ARR
+        span = _SETUP_SPAN_ARR
+        step = _SETUP_STEP_ARR
+        denorm = mins + v * span                       # (N, 23) f64
+        steps = np.round((denorm - mins) / step)       # round-half-even 同 Python
+        snapped = mins + steps * step                  # f64, 沿轴同序
+        # 浮点型字段: round(x, decimals) 精确度匹配 (同样走 ties-to-ever);
+        # 这里直接调 np.round(decimals=...) 得到已 snaps 的值.
+        dec = _SETUP_DECIMALS_ARR
+        # 逐列处理小数位: decimals 按列取 int (0 的列直接取 snapped)
+        for j in range(len(SETUP_FIELDS)):
+            d = int(dec[j])
+            if d > 0:
+                snapped[:, j] = np.round(snapped[:, j], decimals=d)
+        # 组装: 每行一构造
+        names = _SETUP_NAME_LIST
+        via_int = _SETUP_KIND_INT_MASK
+        out: list[CarSetup] = []
+        for i in range(n):
+            row = snapped[i]
+            kw: dict[str, int | float] = {}
+            for j, name in enumerate(names):
+                val = row[j]
+                kw[name] = int(val) if via_int[j] else float(val)
+            out.append(cls.model_construct(**kw))
+        return out
 
     @classmethod
     def from_vector(cls, vec: Sequence[float]) -> CarSetup:
