@@ -47,7 +47,7 @@ torch.set_num_threads(1)
 from f1opt.config import get_settings
 from f1opt.data.ea_f1_2026_benchmark import EA_F1_2026_LAP_TIME_BENCHMARK
 from f1opt.data.sector_times import sector_times_for
-from f1opt.data.setup_schema import CarSetup
+from f1opt.data.setup_schema import SETUP_FIELDS, CarSetup, SetupField
 from f1opt.data.tracks import TRACKS_BY_ID, Track
 
 # --- 维度常量 ---------------------------------------------------------------
@@ -228,6 +228,11 @@ def _driver_sector_correction(
     即使 DNN 输出头零初始化 (残差=0), 此修正保证预测对车手画像 + 调教
     交叉敏感, 使 :func:`search_setup` 能为不同驾驶风格推荐不同 setup.
     """
+    # Opt-021: 中性车手 (driver=None → 全 0.5 向量) 快轨恒零 —— 交叉项与
+    # 基线项均含 (dv-0.5) 全零因子, 逐位为 0; 跳过 track 解析与全部计算.
+    if np.array_equal(driver_vec, _NEUTRAL_DRIVER_VEC):
+        return _ZERO_CORR.copy()
+
     # Opt-016: numpy 向量化 (原有 16 项交叉 + 4 项基线的 Python 逐项循环).
     # 数值上按 float64 累加后转回 float32, 与原逐项 float32 累加差异 < 1e-7.
     track = _resolve_track(track_id)
@@ -351,6 +356,28 @@ def build_input_vector(
     return np.concatenate([sv, tv, dv]).astype(np.float32)
 
 
+# --- Opt-020/021/022: 批量组装与快轨 -------------------------------------------------
+_NEUTRAL_DRIVER_VEC = np.full(DRIVER_DIM, 0.5, dtype=np.float32)  # =driver None
+_ZERO_CORR = np.zeros(N_SECTORS, dtype=np.float32)
+
+# setup 字段规格预展平 (与 CarSetup.to_vector 同一顺序: SETUP_FIELDS dict 序)
+_SETUP_NAMES_ARR: tuple[str, ...] = tuple(SETUP_FIELDS.keys())
+_SETUP_MIN_ARR = np.array([SETUP_FIELDS[n].min for n in _SETUP_NAMES_ARR], dtype=np.float64)
+_SETUP_SPAN_ARR = np.array(
+    [SETUP_FIELDS[n].max - SETUP_FIELDS[n].min for n in _SETUP_NAMES_ARR], dtype=np.float64
+)
+_FUEL_IDX: int = _SETUP_NAMES_ARR.index("fuel_load")
+
+
+def _setups_to_matrix(setups: list[CarSetup]) -> np.ndarray:
+    """批量归一化 setup 向量 (N, SETUP_DIM), 等价逐项 to_vector (float64)."""
+    n = len(setups)
+    raw = np.empty((n, SETUP_DIM), dtype=np.float64)
+    for j, name in enumerate(_SETUP_NAMES_ARR):
+        raw[:, j] = [float(getattr(s, name)) for s in setups]
+    return (raw - _SETUP_MIN_ARR) / _SETUP_SPAN_ARR
+
+
 def _predict_parts(
     setup: CarSetup,
     track_id: str,
@@ -372,6 +399,53 @@ def _predict_parts(
     return x_np, sec_prior, resp_prior, driver_corr
 
 
+# Opt-022: 每赛道不变件缓存 (含燃油的固定基座 + 段比分母), 消第 2/3 次
+# (canonical/resolve/dict-get) 查表。键为原始 track_id 入参, 保留全链语义。
+_LAP_BASE_CACHE: dict[str, float] = {}
+_SECTOR_TIME_CACHE: dict[str, tuple[float, float, float, float] | None] = {}
+
+
+def _lap_base(track_id: str) -> float:
+    """每赛道不变件: benchmark (或 length/speed 启发) + 系统物理增益."""
+    b = _LAP_BASE_CACHE.get(track_id)
+    if b is None:
+        # 延迟导入避免循环依赖 (setup_physics_bridge -> lap_simulator_2026 -> ...)
+        from f1opt.data.ea_f1_2026_benchmark import (
+            EA_F1_2026_LAP_TIME_BENCHMARK,
+            resolve_track_id,
+        )
+
+        bench = EA_F1_2026_LAP_TIME_BENCHMARK.get(resolve_track_id(track_id))
+        if bench is not None:
+            b = bench + _PHYSICS_SYSTEM_OFFSET_S
+        else:
+            track = _resolve_track(track_id)
+            if track is not None:
+                speed = AVG_SPEED.get(track.track_type, _DEFAULT_AVG_SPEED)
+                b = track.length_m / speed + _PHYSICS_SYSTEM_OFFSET_S
+            else:
+                b = _DEFAULT_LENGTH_M / _DEFAULT_AVG_SPEED + _PHYSICS_SYSTEM_OFFSET_S
+        _LAP_BASE_CACHE[track_id] = b
+    return b
+
+
+def _sector_times_parts(track_id: str) -> tuple[float, float, float, float] | None:
+    """每赛道不变件: 真实三段+总时间 (s1, s2, s3, total); 未知赛道 None（回退）."""
+    v = _SECTOR_TIME_CACHE.get(track_id, None)
+    if track_id not in _SECTOR_TIME_CACHE:
+        try:
+            sd = sector_times_for(track_id)
+            v = (
+                (sd.s1_s, sd.s2_s, sd.s3_s, sd.total_lap_time_s)
+                if sd.total_lap_time_s > 0.0
+                else None
+            )
+        except ValueError:
+            v = None
+        _SECTOR_TIME_CACHE[track_id] = v
+    return v
+
+
 def track_prior(track_id: str, setup: CarSetup) -> float:
     """物理先验圈速 (Iter-67: setup-aware, EA F1 2026 benchmark + setup 物理惩罚).
 
@@ -384,21 +458,15 @@ def track_prior(track_id: str, setup: CarSetup) -> float:
     的 held-out MAE 从 2.5s 降到 < 0.3s.
     """
     # 延迟导入避免循环依赖 (setup_physics_bridge -> lap_simulator_2026 -> ...)
-    from f1opt.data.ea_f1_2026_benchmark import resolve_track_id
     from f1opt.model.setup_physics_bridge import setup_penalty_s
 
-    bench = EA_F1_2026_LAP_TIME_BENCHMARK.get(resolve_track_id(track_id))
-    if bench is not None:
-        base = bench + setup.fuel_load * _FUEL_PENALTY_PER_KG
-    else:
-        track = _resolve_track(track_id)
-        if track is not None:
-            speed = AVG_SPEED.get(track.track_type, _DEFAULT_AVG_SPEED)
-            base = track.length_m / speed + setup.fuel_load * _FUEL_PENALTY_PER_KG
-        else:
-            base = _DEFAULT_LENGTH_M / _DEFAULT_AVG_SPEED + setup.fuel_load * _FUEL_PENALTY_PER_KG
-    # Iter-67: + 系统物理增益 (ERS/主动空动/DRS) + setup 偏离最优的物理代价
-    return float(base + _PHYSICS_SYSTEM_OFFSET_S + setup_penalty_s(setup, track_id))
+    # Opt-022: benchmark/启发式 + 系统增益已折入 _lap_base 缓存, 同 track 仅 1 次
+    # resolve+查表; 每调用仅剩 fuel 加法与 setup 惩罚.
+    return float(
+        _lap_base(track_id)
+        + setup.fuel_load * _FUEL_PENALTY_PER_KG
+        + setup_penalty_s(setup, track_id)
+    )
 
 
 def track_avg_speed(track_id: str) -> float:
@@ -415,17 +483,12 @@ def sector_priors(track_id: str, setup: CarSetup) -> list[float]:
     EA F1 2026: 24 赛道有真实 S1/S2/S3 比例; 未知赛道回退到 34/33/33 等分.
     """
     lap = track_prior(track_id, setup)
-    try:
-        sd = sector_times_for(track_id)
-        total = sd.total_lap_time_s
-        if total > 0.0:
-            return [
-                lap * sd.s1_s / total,
-                lap * sd.s2_s / total,
-                lap * sd.s3_s / total,
-            ]
-    except ValueError:
-        pass
+    # Opt-022: 三段真实时间从缓存走 (消重复 sector_times_for 调用), 算术顺序
+    # lap * s_i / total 与原实现逐位一致.
+    parts = _sector_times_parts(track_id)
+    if parts is not None:
+        # total 直接用数据集的 total_lap_time_s (与原实现一致)
+        return [lap * parts[0] / parts[3], lap * parts[1] / parts[3], lap * parts[2] / parts[3]]
     return [lap * w for w in _SECTOR_PRIOR_WEIGHTS]
 
 
@@ -653,33 +716,51 @@ class SurrogateModel(nn.Module):
         """批量富预测; 与逐条 :meth:`predict` 在容差内一致."""
         if not items:
             return []
-        xs: list[np.ndarray] = []
-        sec_priors: list[np.ndarray] = []
-        resp_priors: list[np.ndarray] = []
-        driver_corrs: list[np.ndarray] = []
-        # Opt-014: 批内按 track_id 缓存上下文向量（批量调用通常同赛道），
-        # 且 sv/dv 逐项只算一次并直拼输入（原 build_input_vector 内部多算一遍）。
-        _tv_cache: dict[str, np.ndarray] = {}
-        for item in items:
+        # 先拆解 items (1 次循环, 避免逐项 tuple 长度判断拆自)
+        n_items = len(items)
+        setups: list[CarSetup] = [None] * n_items  # type: ignore[list-item]
+        tids: list[str] = [""] * n_items
+        drvs: list[Any] = [None] * n_items
+        for i, item in enumerate(items):
             if len(item) == 3:
-                setup, track_id, drv = item  # type: ignore[misc]
+                setups[i], tids[i], drvs[i] = item  # type: ignore[misc]
             else:
-                setup, track_id = item  # type: ignore[misc]
-                drv = None
-            sv = np.asarray(setup.to_vector(), dtype=np.float32)
-            dv = _normalize_driver_vector(drv)
-            tv = _tv_cache.get(track_id)
+                setups[i], tids[i] = item  # type: ignore[misc]
+
+        # Opt-020: x 组装整体向量化 — (N,41) 一次拼接,
+        # 取代逐项 (to_vector() 列表化 + concatenate + astype). 数值相同.
+        svf = _setups_to_matrix(setups).astype(np.float32)          # (N, 23) f32
+        tv_map: dict[str, np.ndarray] = {}
+        tvs: list[np.ndarray] = [None] * n_items  # type: ignore[list-item]
+        for i, tid in enumerate(tids):
+            tv = tv_map.get(tid)
             if tv is None:
-                tv = track_context(track_id)
-                _tv_cache[track_id] = tv
-            xs.append(np.concatenate([sv, tv, dv]).astype(np.float32))
-            sec_priors.append(np.asarray(sector_priors(track_id, setup), dtype=np.float32))
-            resp_priors.append(np.asarray(response_priors(track_id, setup), dtype=np.float32))
-            driver_corrs.append(_driver_sector_correction(dv, sv, track_id))
-        x_t = torch.from_numpy(np.stack(xs))
-        sec_prior_arr = np.stack(sec_priors)
-        resp_prior_arr = np.stack(resp_priors)
-        driver_corr_arr = np.stack(driver_corrs)
+                tv = track_context(tid)
+                tv_map[tid] = tv
+            tvs[i] = tv
+        tvf = np.stack(tvs).astype(np.float32)                       # (N, 10) f32
+
+        all_neutral = all(d is None for d in drvs)
+        if all_neutral:
+            # Opt-021 批快轨: 全 neutral → 修正整批恒零, 不必归一化逐项
+            dvf = _NEUTRAL_DRIVER_VEC[None, :].repeat(n_items, axis=0)  # (N, 8) f32
+            driver_corrs_arr = np.zeros((n_items, N_SECTORS), dtype=np.float32)
+        else:
+            dvs = np.stack([_normalize_driver_vector(d) for d in drvs]).astype(np.float32)
+            dvf = dvs
+            driver_corrs_arr = np.empty((n_items, N_SECTORS), dtype=np.float32)
+            for i in range(n_items):
+                driver_corrs_arr[i] = _driver_sector_correction(dvs[i], svf[i], tids[i])
+
+        x_t = torch.from_numpy(np.concatenate([svf, tvf, dvf], axis=1))  # (N, 41) f32
+        sec_priors_np = np.empty((n_items, N_SECTORS), dtype=np.float32)
+        resp_priors_np = np.empty((n_items, N_RESPONSES), dtype=np.float32)
+        for i in range(n_items):
+            sec_priors_np[i] = sector_priors(tids[i], setups[i])
+            resp_priors_np[i] = response_priors(tids[i], setups[i])
+        sec_prior_arr = sec_priors_np
+        resp_prior_arr = resp_priors_np
+        driver_corr_arr = driver_corrs_arr
         scales = np.asarray(RESPONSE_SCALES, dtype=np.float32)
         self.eval()
         with torch.no_grad():
