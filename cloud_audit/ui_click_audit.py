@@ -17,6 +17,15 @@ import subprocess
 import sys
 import time
 
+# Opt-EXE-AUDIT: Windows 控制台默认 cp1252, 中文 print 直接 UnicodeEncodeError
+# (曾掩盖整个审计明细)。强制 UTF-8 输出。
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        try:
+            _stream.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:  # noqa: BLE001
+            pass
+
 from playwright.sync_api import TimeoutError as PWTimeout
 from playwright.sync_api import sync_playwright
 

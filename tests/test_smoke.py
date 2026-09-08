@@ -80,7 +80,7 @@ class TestCoreImports:
         """验证顶层包可导入且版本正确."""
         import f1opt
         assert isinstance(f1opt.__version__, str)
-        assert f1opt.__version__ == "1.3.0"
+        assert f1opt.__version__ == "1.3.1"
 
     def test_config_module_imports(self):
         """验证配置模块可导入."""
@@ -258,7 +258,7 @@ class TestAPIApp:
         data = r.json()
         assert data["status"] == "ok"
         pass  # version covered by TestCoreImports
-        assert data["version"] == "1.3.0"
+        assert data["version"] == "1.3.1"
 
     def test_livez_endpoint(self):
         """验证 /api/livez 端点."""
