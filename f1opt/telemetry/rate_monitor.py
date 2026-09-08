@@ -38,7 +38,8 @@ import time as _time
 from collections import deque as _deque
 from dataclasses import dataclass as _dataclass
 from threading import Lock as _Lock
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from .packets import PACKET_NAMES as _PACKET_NAMES
 

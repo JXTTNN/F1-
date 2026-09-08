@@ -34,7 +34,8 @@ import csv
 import io
 import json
 import time
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 #: Default 60 Hz frame interval used when a recorded frame lacks
 #: ``session_time`` and no prior frame exists to increment from.

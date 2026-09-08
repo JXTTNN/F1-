@@ -239,7 +239,7 @@ class CarSetup(BaseModel):
         return cls.model_construct(**kwargs)
 
     @classmethod
-    def from_vectors_fast(cls, mat: np.ndarray) -> list["CarSetup"]:
+    def from_vectors_fast(cls, mat: np.ndarray) -> list[CarSetup]:
         """批量零验证构造 (Opt-030): (N, 23) 归一化矩阵 → N 份 CarSetup.
 
         每列的数值路径与(from_vector_fast 单行)完全一致 (同序 float64); NP

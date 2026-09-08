@@ -50,12 +50,9 @@ from f1opt.model.surrogate import (
     TRACK_CONTEXT_DIM,
     EnsembleSurrogateModel,
     SurrogateModel,
-    build_input_vector,
     default_model_path,
     driver_vector,
     reset_default_model_cache,
-    response_priors,
-    sector_priors,
 )
 
 # --- 分段结构 ---------------------------------------------------------------

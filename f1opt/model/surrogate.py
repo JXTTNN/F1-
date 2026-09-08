@@ -46,9 +46,8 @@ from torch import nn
 torch.set_num_threads(1)
 
 from f1opt.config import get_settings
-from f1opt.data.ea_f1_2026_benchmark import EA_F1_2026_LAP_TIME_BENCHMARK
 from f1opt.data.sector_times import sector_times_for
-from f1opt.data.setup_schema import SETUP_FIELDS, CarSetup, SetupField
+from f1opt.data.setup_schema import SETUP_FIELDS, CarSetup
 from f1opt.data.tracks import TRACKS_BY_ID, Track
 
 # --- 维度常量 ---------------------------------------------------------------
@@ -1332,9 +1331,9 @@ class EnsembleSurrogateModel(nn.Module):
             laps_rows = []
             resp_rows = []
             for m in self._members:
-                l, r = m._predict_batch_from_parts(*parts, raw=True)
-                laps_rows.append(l)
-                resp_rows.append(r)
+                lap_row, resp_row = m._predict_batch_from_parts(*parts, raw=True)
+                laps_rows.append(lap_row)
+                resp_rows.append(resp_row)
             return (
                 np.stack(laps_rows).mean(axis=0),
                 np.stack(resp_rows).mean(axis=0),
