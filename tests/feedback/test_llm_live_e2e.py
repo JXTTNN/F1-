@@ -185,6 +185,65 @@ class TestLlmStreamLive:
         assert deltas == []
 
 
+class TestLlmChainDiagnosis:
+    """Opt-LLM-01: 逐段复现 llm_enhance 内部步骤, 失败时精确定位故障段。
+
+    llm_enhance 的静默降级会吞掉异常; 本测试把每一步拆开断言,
+    云端失败时可直接读出是 哪一环 (配置 / 端点解析 / HTTP / 解析)。
+    """
+
+    def test_stepwise_chain(self, local_endpoint) -> None:
+        srv, url = local_endpoint
+        cfg = _local_settings()
+        # 1. 配置
+        assert cfg.llm_backend == "local", f"backend={cfg.llm_backend!r}"
+        assert cfg.llm_model == "mock-llm"
+        # 2. 端点解析 (与 llm_enhance 同一来源)
+        endpoint = fb_engine._LLM_ENDPOINTS.get(cfg.llm_backend)
+        assert endpoint == url, f"endpoint={endpoint!r}"
+        # 3. 原始 HTTP POST (与 llm_enhance 同构)
+        import httpx
+
+        payload = {
+            "model": cfg.llm_model,
+            "messages": [
+                {"role": "system", "content": "sys"},
+                {"role": "user", "content": "u"},
+            ],
+            "temperature": 0.3,
+        }
+        try:
+            with httpx.Client(timeout=10.0) as client:
+                r = client.post(
+                    endpoint,
+                    headers={
+                        "Authorization": f"Bearer {cfg.llm_api_key}",
+                        "Content-Type": "application/json",
+                    },
+                    json=payload,
+                )
+        except Exception as exc:  # noqa: BLE001
+            pytest.fail(f"STEP3 httpx POST raised {type(exc).__name__}: {exc}")
+        assert r.status_code == 200, f"STEP3 http {r.status_code}: {r.text[:200]}"
+        # 4. 响应解析
+        try:
+            data = r.json()
+            content = data["choices"][0]["message"]["content"]
+        except Exception as exc:  # noqa: BLE001
+            pytest.fail(f"STEP4 parse raised {type(exc).__name__}: {exc}")
+        assert content.startswith(MARKER), f"STEP4 content={content[:80]!r}"
+        # 5. tracker 记账
+        tk = TokenUsageTracker()
+        tk.record(cfg.llm_backend, cfg.llm_model, fb_engine._extract_usage(data), success=True, streamed=False)
+        assert tk.per_backend().get("local", {}).get("successful_calls") == 1
+        assert srv.requests >= 1
+        # 6. 完整 llm_enhance (若前 5 步全过而它仍回退, 逐行读 engine 源码)
+        out = llm_enhance(_base_feedback(), "q", cfg, tracker=TokenUsageTracker())
+        assert out["summary"].startswith(MARKER), (
+            f"STEP6 llm_enhance 未生效: summary={out['summary'][:80]!r}"
+        )
+
+
 class TestEngineIntegrationLive:
     def test_preload_then_run_uses_llm(self, local_endpoint) -> None:
         """preload → run() 全链路: 摘要被 LLM 改写, 门控真实生效。"""

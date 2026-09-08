@@ -49,7 +49,20 @@ class Handler(BaseHTTPRequestHandler):
         pass
 
     def do_GET(self) -> None:  # noqa: N802
-        if self.path == "/healthz":
+        if self.path in ("/healthz", "/api/tags", "/v1/models"):
+            # /api/tags (Ollama 原生) 与 /v1/models (OpenAI 兼容) 供
+            # preload_llm 可达性探测; 返回 llama3.1 模型列表。
+            if self.path != "/healthz":
+                body = json.dumps(
+                    {
+                        "object": "list",
+                        "data": [
+                            {"id": "llama3.1", "object": "model", "owned_by": "mock"}
+                        ],
+                    }
+                ).encode()
+                self._send(200, body, ctype="application/json")
+                return
             self._send(200, b"ok")
             return
         self._send(404, b"not found")

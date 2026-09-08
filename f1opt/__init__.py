@@ -12,4 +12,4 @@ Sub-packages by responsibility:
 - ``pipeline``: Training / inference orchestration
 """
 
-__version__ = "1.2.0"
+__version__ = "1.2.2"

@@ -2777,9 +2777,14 @@ def llm_enhance(
         text = (content or "").strip()
         if text:
             feedback = {**feedback, "summary": text}
-    except Exception:
-        # Fall back silently to the rule-based summary. Iter-138: log the
-        # failed call (zero tokens) for call-count accuracy.
+    except Exception as exc:  # noqa: BLE001
+        # Fall back to the rule-based summary. Opt-LLM-01: 不再完全静默 ——
+        # 记 warning 留痕 (真实用户排障 + 云端审计定位), 但不中断请求。
+        _logger.warning(
+            "llm_enhance: LLM call failed (%s: %s), falling back to "
+            "rule-based summary",
+            type(exc).__name__, exc,
+        )
         tk.record(backend, model_name, None, success=False, streamed=False)
     return feedback
 
@@ -3355,20 +3360,36 @@ class FeedbackEngine:
         # Iter-254: for the local (Ollama) backend, verify reachability before
         # claiming loaded — otherwise preload reports success while every
         # feedback call then times out (10s) before silently falling back.
+        # Opt-LLM-02: 探测 URL 从 _LLM_ENDPOINTS 推导 (原先硬编码
+        # http://localhost:11434/api/tags, 端口/路径与实际后端配置脱钩,
+        # 换端口或代理场景下 preload 永远失败); 探测路径兼容 Ollama 原生
+        # /api/tags 与 OpenAI 兼容 /v1/models。
         if backend == "local":
+            base = endpoint
+            if "/v1/" in base:
+                base = base.rsplit("/v1/", 1)[0]
+            probe_err: str | None = None
             try:
                 import httpx
                 with httpx.Client(timeout=2.0) as client:
-                    r = client.get("http://localhost:11434/api/tags")
-                    r.raise_for_status()
-            except Exception as exc:
+                    for probe_path in ("/api/tags", "/v1/models"):
+                        try:
+                            r = client.get(base + probe_path)
+                            if r.status_code < 400:
+                                probe_err = None
+                                break
+                            probe_err = f"HTTP {r.status_code} on {probe_path}"
+                        except Exception as exc:  # noqa: BLE001
+                            probe_err = f"{type(exc).__name__} on {probe_path}"
+            except Exception as exc:  # noqa: BLE001
+                probe_err = f"{type(exc).__name__}: {exc}"
+            if probe_err is not None:
                 self._llm_loaded = False
                 return {
                     "loaded": False,
                     "backend": backend,
                     "reason": (
-                        "Ollama not reachable at http://localhost:11434 "
-                        f"({type(exc).__name__})"
+                        f"Ollama not reachable at {base} ({probe_err})"
                     ),
                     "memory_before_bytes": mem_before,
                     "memory_after_bytes": mem_before,
