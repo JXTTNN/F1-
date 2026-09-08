@@ -11,6 +11,7 @@ import json
 import os
 import pathlib
 import re
+import signal
 import socket
 import subprocess
 import sys
@@ -74,6 +75,7 @@ def err_count() -> int:
 # 仍然只点击 UI / 在输入框输入。
 # --------------------------------------------------------------------------
 _MOCK_PROC: subprocess.Popen | None = None
+_MOCK_EXTERNAL = False  # mock 由工作流提前拉起 (非本脚本子进程)
 
 
 def _port_open(port: int) -> bool:
@@ -83,8 +85,16 @@ def _port_open(port: int) -> bool:
 
 
 def start_mock_llm() -> subprocess.Popen | None:
-    """拉起 mock Ollama, 最多等 15s 探活; 失败返回 None (LLM 检查将 SKIP)。"""
-    global _MOCK_PROC
+    """确保 mock Ollama 在 127.0.0.1:11434 可用。
+
+    优先复用工作流已拉起的实例 (preload 时序需要 mock 先于 API server
+    启动); 仅当端口无人监听时才由本脚本拉起子进程。
+    """
+    global _MOCK_PROC, _MOCK_EXTERNAL
+    if _port_open(11434):
+        _MOCK_EXTERNAL = True
+        print("[mock-llm] already running (workflow-started), reusing", flush=True)
+        return None
     try:
         _MOCK_PROC = subprocess.Popen(
             [sys.executable, str(ROOT / "cloud_audit" / "mock_ollama.py")],
@@ -108,15 +118,30 @@ def start_mock_llm() -> subprocess.Popen | None:
 
 
 def stop_mock_llm() -> None:
-    """终止 mock Ollama (模拟 LLM 服务掉线)。"""
-    global _MOCK_PROC
+    """终止 mock Ollama (模拟 LLM 服务掉线)。
+
+    外部实例 (工作流拉起) 通过 pid 文件精准终止; 本脚本的子进程直接
+    terminate。终止后等待端口真正关闭, 保证后续回退检查时序正确。
+    """
+    global _MOCK_PROC, _MOCK_EXTERNAL
     if _MOCK_PROC is not None and _MOCK_PROC.poll() is None:
         _MOCK_PROC.terminate()
         try:
             _MOCK_PROC.wait(timeout=5)
         except subprocess.TimeoutExpired:
             _MOCK_PROC.kill()
+    elif _MOCK_EXTERNAL:
+        pid_file = ROOT / "reports" / "mock_ollama.pid"
+        try:
+            pid = int(pid_file.read_text(encoding="ascii").strip())
+            os.kill(pid, signal.SIGTERM)
+        except (OSError, ValueError) as exc:
+            print(f"[mock-llm] external stop failed: {exc}", flush=True)
     _MOCK_PROC = None
+    _MOCK_EXTERNAL = False
+    deadline = time.time() + 5.0
+    while time.time() < deadline and _port_open(11434):
+        time.sleep(0.2)
 
 
 LAPS_PAYLOAD = {
@@ -312,7 +337,10 @@ def audit_index(page) -> None:
         前置: 工作流已以 F1OPT_LLM_BACKEND=local 启动服务并调用
         /api/llm/preload (引擎 _llm_loaded=True), 且 mock Ollama 在线。
         """
-        if _MOCK_PROC is None or _MOCK_PROC.poll() is not None:
+        mock_up = _MOCK_EXTERNAL or (
+            _MOCK_PROC is not None and _MOCK_PROC.poll() is None
+        )
+        if not mock_up:
             return "SKIP mock Ollama 不可用"
         page.fill("#feedback-input", "弯中推头，请给一句话建议")
         page.click("#feedback-btn")
