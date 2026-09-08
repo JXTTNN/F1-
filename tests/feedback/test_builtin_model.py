@@ -105,6 +105,11 @@ class TestEngineIntegration:
         pre = engine.preload_llm()
         assert pre["loaded"] is True
         assert pre["backend"] == "builtin"
+        # 首次反馈即收集样本 (统计在收集前, 首轮为 0); 第二次同类反馈
+        # 应体现学习闭环: 同类经验样本 >= 1。
+        engine.run(
+            [], DEFAULT_SETUP.model_dump(), "shanghai", question="高速弯推头怎么调？"
+        )
         out = engine.run(
             [], DEFAULT_SETUP.model_dump(), "shanghai", question="高速弯推头怎么调？"
         )
