@@ -30,6 +30,7 @@ Response head 输出单位 (自然单位, 残差经 ``RESPONSE_SCALES`` 反归�
 
 from __future__ import annotations
 
+import pickle
 from collections import OrderedDict
 from functools import lru_cache
 from pathlib import Path
@@ -970,7 +971,9 @@ class SurrogateModel(nn.Module):
     def load(cls, path: str | Path) -> SurrogateModel:
         """从 ``.pt`` 文件加载; 文件损坏抛出对应异常."""
         model = cls()
-        d = torch.load(path, weights_only=False)
+        # 安全: 载荷只含 str/int/tensor dict, 无需任意 pickle; 拒绝不可信全局
+        # (weights_only=True 阻止构造文件触发 RCE).
+        d = torch.load(path, weights_only=True)
         model.load_state_dict(d)
         return model
 
@@ -992,10 +995,10 @@ def _get_default_model() -> SurrogateModel:
     path = default_model_path()
     if path.exists():
         try:
-            d = torch.load(path, weights_only=False)
+            d = torch.load(path, weights_only=True)
             model.load_state_dict(d)
-        except (OSError, RuntimeError, ValueError, KeyError):
-            # 权限/格式/键不匹配 -> 回退到未训练先验, 不阻断推理
+        except (OSError, RuntimeError, ValueError, KeyError, pickle.UnpicklingError):
+            # 权限/格式/键不匹配/不可信载荷 -> 回退到未训练先验, 不阻断推理
             model = SurrogateModel()
     return model
 
@@ -1377,7 +1380,8 @@ class EnsembleSurrogateModel(nn.Module):
     @classmethod
     def load(cls, path: str | Path) -> EnsembleSurrogateModel:
         """Load ensemble from ``.pt`` file."""
-        d = torch.load(path, weights_only=False)
+        # 安全: 与单模型一致, 载荷仅含 str/int/tensor dict (weights_only=True).
+        d = torch.load(path, weights_only=True)
         n = d.get("n_members", 1)
         models = [SurrogateModel() for _ in range(n)]
         ens = cls(models)
