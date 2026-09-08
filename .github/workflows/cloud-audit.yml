@@ -93,6 +93,7 @@ jobs:
         run: |
           mkdir -p data_store
           F1OPT_API_HOST=127.0.0.1 F1OPT_API_PORT=8000 F1OPT_UDP_PORT=20777 \
+            F1OPT_LLM_BACKEND=local F1OPT_LLM_MODEL=llama3.1 F1OPT_LLM_REFLECTION=false \
             nohup python -u -m f1opt.api.runner > server.log 2>&1 &
           for i in $(seq 1 120); do
             if curl -sf http://127.0.0.1:8000/api/health >/dev/null 2>&1; then
@@ -102,6 +103,10 @@ jobs:
           done
           echo '--- /api/health ---'
           curl -s http://127.0.0.1:8000/api/health || echo 'HEALTH UNAVAILABLE'
+          # 内置 LLM 审计: 停表后显式预加载 (启用 _llm_loaded, 与游戏内
+          # 「跑圈只走规则引擎、停表后再启用 LLM」的产品语义一致)。
+          echo '--- POST /api/llm/preload ---'
+          curl -s -X POST http://127.0.0.1:8000/api/llm/preload || echo 'LLM PRELOAD FAILED'
 
       - name: Run UI click audit
         continue-on-error: true

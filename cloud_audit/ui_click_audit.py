@@ -11,6 +11,10 @@ import json
 import os
 import pathlib
 import re
+import socket
+import subprocess
+import sys
+import time
 
 from playwright.sync_api import TimeoutError as PWTimeout
 from playwright.sync_api import sync_playwright
@@ -21,6 +25,9 @@ REPORTS = ROOT / "reports"
 SHOTS = ROOT / "shots"
 REPORTS.mkdir(parents=True, exist_ok=True)
 SHOTS.mkdir(parents=True, exist_ok=True)
+
+#: 内置 LLM 审计: mock Ollama 返回内容的标记 (见 cloud_audit/mock_ollama.py)。
+LLM_MARKER = "[MOCK-LLM]"
 
 RESULTS: list[dict] = []
 CONSOLE_ERR: list[str] = []
@@ -59,6 +66,57 @@ def guard(name: str, fn):
 
 def err_count() -> int:
     return len(CONSOLE_ERR) + len(PAGE_ERR)
+
+
+# --------------------------------------------------------------------------
+# 内置 LLM 审计夹具: mock Ollama 子进程 (OpenAI 兼容端点 127.0.0.1:11434)。
+# 夹具生命周期属于测试环境管理, 不属于「对被测应用的操作」——审计本身
+# 仍然只点击 UI / 在输入框输入。
+# --------------------------------------------------------------------------
+_MOCK_PROC: subprocess.Popen | None = None
+
+
+def _port_open(port: int) -> bool:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.settimeout(0.5)
+        return s.connect_ex(("127.0.0.1", port)) == 0
+
+
+def start_mock_llm() -> subprocess.Popen | None:
+    """拉起 mock Ollama, 最多等 15s 探活; 失败返回 None (LLM 检查将 SKIP)。"""
+    global _MOCK_PROC
+    try:
+        _MOCK_PROC = subprocess.Popen(
+            [sys.executable, str(ROOT / "cloud_audit" / "mock_ollama.py")],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except Exception as exc:  # noqa: BLE001
+        print(f"[mock-llm] start failed: {exc}", flush=True)
+        return None
+    deadline = time.time() + 15.0
+    while time.time() < deadline:
+        if _port_open(11434):
+            print("[mock-llm] ready on 127.0.0.1:11434", flush=True)
+            return _MOCK_PROC
+        if _MOCK_PROC.poll() is not None:
+            print("[mock-llm] process exited early", flush=True)
+            return None
+        time.sleep(0.3)
+    print("[mock-llm] not ready in 15s", flush=True)
+    return None
+
+
+def stop_mock_llm() -> None:
+    """终止 mock Ollama (模拟 LLM 服务掉线)。"""
+    global _MOCK_PROC
+    if _MOCK_PROC is not None and _MOCK_PROC.poll() is None:
+        _MOCK_PROC.terminate()
+        try:
+            _MOCK_PROC.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            _MOCK_PROC.kill()
+    _MOCK_PROC = None
 
 
 LAPS_PAYLOAD = {
@@ -247,6 +305,47 @@ def audit_index(page) -> None:
         return f"下载文件 {dl.value.suggested_filename}"
 
     guard("点击「导出样本 (Parquet)」→ 触发下载", export_samples)
+
+    def llm_enhanced():
+        """内置 LLM 增强生效: 点击「获取反馈」, 摘要应被 LLM 改写 (含标记)。
+
+        前置: 工作流已以 F1OPT_LLM_BACKEND=local 启动服务并调用
+        /api/llm/preload (引擎 _llm_loaded=True), 且 mock Ollama 在线。
+        """
+        if _MOCK_PROC is None or _MOCK_PROC.poll() is not None:
+            return "SKIP mock Ollama 不可用"
+        page.fill("#feedback-input", "弯中推头，请给一句话建议")
+        page.click("#feedback-btn")
+        page.wait_for_function(
+            "() => { const e = document.getElementById('fb-summary');"
+            " return e && e.textContent && !e.textContent.startsWith('点击'); }",
+            timeout=180000,
+        )
+        txt = page.inner_text("#fb-summary").strip()
+        assert txt, "反馈摘要为空"
+        assert LLM_MARKER in txt, f"LLM 增强未生效, 摘要无标记: {txt[:120]}"
+        return txt[:140]
+
+    guard("内置 LLM 增强：点击「获取反馈」→ 摘要含 LLM 改写", llm_enhanced)
+
+    def llm_fallback():
+        """LLM 服务掉线: 应静默回退规则引擎, 摘要非空且无标记、无前端异常。"""
+        before_err = err_count()
+        stop_mock_llm()
+        page.fill("#feedback-input", "LLM 掉线后还能用吗？")
+        page.click("#feedback-btn")
+        page.wait_for_function(
+            "() => { const e = document.getElementById('fb-summary');"
+            " return e && e.textContent && !e.textContent.startsWith('点击'); }",
+            timeout=180000,
+        )
+        txt = page.inner_text("#fb-summary").strip()
+        assert txt, "回退后摘要为空"
+        assert LLM_MARKER not in txt, "LLM 已掉线但仍返回了 LLM 内容"
+        assert err_count() == before_err, "LLM 掉线触发前端异常"
+        return f"回退规则引擎 / 摘要 {txt[:100]}"
+
+    guard("LLM 服务中断 → 静默回退规则引擎（健壮性）", llm_fallback)
     snap(page, "index-final")
 
 
@@ -373,6 +472,7 @@ def audit_dashboard(page) -> None:
 
 
 def main() -> None:
+    start_mock_llm()
     with sync_playwright() as p:
         browser = p.chromium.launch(args=["--no-sandbox"])
         ctx = browser.new_context(viewport={"width": 1600, "height": 1100}, accept_downloads=True)
@@ -410,6 +510,7 @@ def main() -> None:
             snap(page, "final-state")
             ctx.close()
             browser.close()
+            stop_mock_llm()
 
     rec("无未捕获 JS 异常", not PAGE_ERR, "; ".join(PAGE_ERR[:5]))
     rec("无 console.error", not CONSOLE_ERR, "; ".join(CONSOLE_ERR[:5]))
