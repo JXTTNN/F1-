@@ -92,7 +92,8 @@ class TestHv3dParity:
         for _ in range(30):
             pf.add_sample([rng.uniform(0, 10) for _ in range(3)])
         ref = [rng.uniform(9, 12) for _ in range(3)]
-        # 最小化空间变换后走参考实现。
+        # 最小化空间变换后走参考实现 (与 hypervolume() 相同的过滤口径:
+        # 仅保留全维 <= 参考点、即对参考点有贡献的点)。
         pts = [
             [
                 -v[0] if pf.maximize[0] else v[0],
@@ -106,6 +107,10 @@ class TestHv3dParity:
             -ref[1] if pf.maximize[1] else ref[1],
             -ref[2] if pf.maximize[2] else ref[2],
         ]
+        pts = [p for p in pts if all(p[k] <= ref_min[k] for k in range(3))]
+        if not pts:
+            assert pf.hypervolume(ref) == 0.0
+            return
         assert pf.hypervolume(ref) == pytest.approx(
             _hv_3d_reference(pts, ref_min), rel=1e-12, abs=1e-12
         )
