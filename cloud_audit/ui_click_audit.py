@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import os
 import pathlib
+import re
 
 from playwright.sync_api import TimeoutError as PWTimeout
 from playwright.sync_api import sync_playwright
@@ -315,7 +316,8 @@ def audit_dashboard(page) -> None:
         strength = page.inner_text("#cmp-strength").strip()
         assert rows == len(LAPS_PAYLOAD["laps"]), f"对比行 {rows}"
         assert bars == 3, f"扇区柱状图应 3 根柱, 实际 {bars}"
-        assert "S0" not in strength, f"扇区下标未 +1: {strength}"
+        # 后端 strength/weakness 已是 1-based, 展示必须在 S1..S3 内
+        assert re.search(r"强 S[1-3] / 弱 S[1-3]", strength), f"强弱扇区越界: {strength}"
         return f"行 {rows} / 扇区柱 {bars} / {strength}"
 
     guard("仪表盘-圈速对比：扇区 Δ 图与强弱扇区", compare)

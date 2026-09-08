@@ -1002,11 +1002,12 @@
     }
     renderBars(el("cmp-sector-chart"), bars, {});
     el("cmp-best").textContent = r.best_lap_index!=null ? ("#"+(r.best_lap_index+1)) : "—";
-    // strength_sector / weakness_sector 为 0-based 下标, 展示需 +1;
-    // 且 0 是合法值, 不能用 `||` 兜底 (否则 S1 被显示成 "—")。
+    // 后端 strength_sector / weakness_sector 已是 1-based (argmin/argmax + 1),
+    // 直接展示; 仅当 0 (无参考圈) 时显示 "—"。此前一度在此再 +1 造成
+    // "强 S4" 越界 (前端回归), 现与后端契约对齐。
     var refIdx = (r.best_lap_index!=null && comparisons[r.best_lap_index]) ? r.best_lap_index : 0;
     var refC = comparisons[refIdx]||{};
-    function secName(v){ return (v===0 || v) ? ("S"+(Number(v)+1)) : "—"; }
+    function secName(v){ return (v>0 && v<=3) ? ("S"+v) : "—"; }
     el("cmp-strength").textContent = "强 "+secName(refC.strength_sector)+" / 弱 "+secName(refC.weakness_sector);
   }
 

@@ -145,6 +145,20 @@ def main() -> None:
             lines.append("```")
             lines.append("")
 
+    # ruff 静态快照（若存在）
+    ruff_txt = ROOT / "reports" / "ruff.txt"
+    if ruff_txt.exists():
+        content = ruff_txt.read_text(encoding="utf-8", errors="replace").splitlines()
+        if content:
+            lines.append("## ruff 静态检查（f1opt + cloud_audit）")
+            lines.append("")
+            lines.append("```")
+            lines.extend(content[:120])
+            if len(content) > 120:
+                lines.append(f"…（另有 {len(content) - 120} 行，完整见日志）")
+            lines.append("```")
+            lines.append("")
+
     (REPORTS / "AUDIT_REPORT.md").write_text("\n".join(lines), encoding="utf-8")
 
     failures = t_fail + t_err + (ui_json["failed"] if ui_json else 0)

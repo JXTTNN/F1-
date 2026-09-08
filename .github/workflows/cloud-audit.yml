@@ -143,6 +143,16 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Ruff static snapshot
+        if: always()
+        continue-on-error: true
+        run: |
+          python -m pip install -q ruff
+          mkdir -p reports
+          ruff check f1opt cloud_audit --output-format concise > reports/ruff.txt 2>&1 || true
+          echo "ruff lines: $(wc -l < reports/ruff.txt)"
+          head -n 60 reports/ruff.txt
+
       - name: Build report
         run: |
           python -u cloud_audit/build_report.py
