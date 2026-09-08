@@ -38,6 +38,20 @@ class _MockHandler(BaseHTTPRequestHandler):
     def log_message(self, *args) -> None:  # 静默
         pass
 
+    def do_GET(self) -> None:  # noqa: N802
+        # preload_llm 可达性探测 (Opt-LLM-02): Ollama 原生 /api/tags 与
+        # OpenAI 兼容 /v1/models 均须可用。
+        if self.path in ("/api/tags", "/v1/models"):
+            self._send(
+                200,
+                {
+                    "object": "list",
+                    "data": [{"id": "mock-llm", "object": "model", "owned_by": "mock"}],
+                },
+            )
+            return
+        self._send(404, {"error": "not found"})
+
     def do_POST(self) -> None:  # noqa: N802
         if self.path != "/v1/chat/completions":
             self._send(404, {"error": "not found"})
@@ -185,6 +199,22 @@ class TestLlmStreamLive:
         assert deltas == []
 
 
+class TestLlmHeaders:
+    """Opt-LLM-03 回归: 空 key 不得产生 ``Bearer `` (httpx 拒收的非法头)。"""
+
+    def test_empty_key_omits_authorization(self) -> None:
+        h = fb_engine._llm_headers("")
+        assert "Authorization" not in h
+        assert h["Content-Type"] == "application/json"
+
+    def test_whitespace_key_omits_authorization(self) -> None:
+        assert "Authorization" not in fb_engine._llm_headers("   ")
+
+    def test_nonempty_key_sends_bearer(self) -> None:
+        h = fb_engine._llm_headers("sk-test")
+        assert h["Authorization"] == "Bearer sk-test"
+
+
 class TestLlmChainDiagnosis:
     """Opt-LLM-01: 逐段复现 llm_enhance 内部步骤, 失败时精确定位故障段。
 
@@ -216,10 +246,8 @@ class TestLlmChainDiagnosis:
             with httpx.Client(timeout=10.0) as client:
                 r = client.post(
                     endpoint,
-                    headers={
-                        "Authorization": f"Bearer {cfg.llm_api_key}",
-                        "Content-Type": "application/json",
-                    },
+                    # 与生产一致: 走 _llm_headers (Opt-LLM-03 修复点)。
+                    headers=fb_engine._llm_headers(cfg.llm_api_key),
                     json=payload,
                 )
         except Exception as exc:  # noqa: BLE001

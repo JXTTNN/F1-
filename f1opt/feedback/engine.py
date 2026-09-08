@@ -137,6 +137,22 @@ _LLM_DEFAULT_MODEL: dict[str, str] = {
 }
 
 
+def _llm_headers(api_key: str) -> dict[str, str]:
+    """Build OpenAI-compatible request headers.
+
+    Opt-LLM-03 (P0): api_key 为空时不得拼 ``"Bearer "`` (尾随空格) —— httpx
+    会以 ``LocalProtocolError: Illegal header value b'Bearer '`` 拒绝该请求
+    头, 导致 local (Ollama) 后端自上线以来从未真正可用 (每次调用在发出
+    HTTP 请求前就异常并静默回退)。无 key 时省略 Authorization
+    (Ollama / 本地网关无需鉴权)。
+    """
+    headers = {"Content-Type": "application/json"}
+    key = (api_key or "").strip()
+    if key:
+        headers["Authorization"] = f"Bearer {key}"
+    return headers
+
+
 # --------------------------------------------------------------------------- #
 # Iter-138: LLM token usage tracking
 # --------------------------------------------------------------------------- #
@@ -2733,10 +2749,7 @@ def llm_enhance(
             "messages": messages,
             "temperature": 0.3,
         }
-        headers = {
-            "Authorization": f"Bearer {config.llm_api_key}",
-            "Content-Type": "application/json",
-        }
+        headers = _llm_headers(config.llm_api_key)
         with httpx.Client(timeout=10.0) as client:
             r = client.post(endpoint, headers=headers, json=payload)
             r.raise_for_status()
@@ -2870,10 +2883,7 @@ async def llm_enhance_async(
             "messages": messages,
             "temperature": 0.3,
         }
-        headers = {
-            "Authorization": f"Bearer {config.llm_api_key}",
-            "Content-Type": "application/json",
-        }
+        headers = _llm_headers(config.llm_api_key)
         # Iter-122: AsyncClient + await — non-blocking I/O.
         async with httpx.AsyncClient(timeout=10.0) as client:
             r = await client.post(endpoint, headers=headers, json=payload)
@@ -3096,10 +3106,7 @@ def llm_enhance_stream(
             with client.stream(
                 "POST",
                 endpoint,
-                headers={
-                    "Authorization": f"Bearer {config.llm_api_key}",
-                    "Content-Type": "application/json",
-                },
+                headers=_llm_headers(config.llm_api_key),
                 json=payload,
             ) as resp:
                 resp.raise_for_status()
@@ -3177,10 +3184,7 @@ async def llm_enhance_stream_async(
             async with client.stream(
                 "POST",
                 endpoint,
-                headers={
-                    "Authorization": f"Bearer {config.llm_api_key}",
-                    "Content-Type": "application/json",
-                },
+                headers=_llm_headers(config.llm_api_key),
                 json=payload,
             ) as resp:
                 resp.raise_for_status()
