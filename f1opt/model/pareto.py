@@ -19,6 +19,7 @@ The tire-wear proxy mirrors :mod:`f1opt.model.optimizer`:
 from __future__ import annotations
 
 import math
+from bisect import bisect_left, bisect_right
 from typing import Any
 
 import numpy as np
@@ -38,6 +39,10 @@ __all__ = [
 _TYRE_TEMP_REF = 90.0
 _TYRE_TEMP_SPAN = 30.0
 _SLIP_REF = 5.0
+
+# Opt-042: 支配矩阵启用的样本数上限 (n²·d 布尔内存, n=2000/d=8 约 256 MB 峰值
+# 偏高但本仓库实际调用规模 <= 10³; 超限自动回退纯 Python 循环, 结果一致)。
+_DOMINANCE_MATRIX_MAX = 2000
 
 
 # --------------------------------------------------------------------------- #
@@ -106,8 +111,27 @@ class ParetoFront:
         return better_all and strict
 
     # ------------------------------------------------------------------ #
-    def compute_front(self) -> list[int]:
-        """Return indices of non-dominated samples."""
+    def _dominance_matrix(self) -> np.ndarray | None:
+        """Opt-042: numpy 向量化的支配关系矩阵 ``dom[i, j] = i 支配 j``。
+
+        仅在 ``n <= _DOMINANCE_MATRIX_MAX`` 时启用 (n²·d 布尔内存上限),
+        超限时返回 ``None`` 由调用方走纯 Python 回退路径。语义与
+        :meth:`_dominates` 逐项一致 (先转最小化空间再逐维比较)。
+        """
+        n = len(self._samples)
+        if n == 0 or n > _DOMINANCE_MATRIX_MAX:
+            return None
+        vals = np.asarray([s[0] for s in self._samples], dtype=np.float64)  # (n, d)
+        sign = np.where(np.asarray(self.maximize, dtype=bool), -1.0, 1.0)
+        V = vals * sign[None, :]  # 统一转最小化空间
+        le = V[:, None, :] <= V[None, :, :]  # le[i, j, k]: V[i,k] <= V[j,k]
+        lt = V[:, None, :] < V[None, :, :]
+        # dom[i, j] = i 全维 <= j 且至少一维 < j (对角线恒 False)。
+        return le.all(axis=2) & lt.any(axis=2)
+
+    # ------------------------------------------------------------------ #
+    def _compute_front_loop(self) -> list[int]:
+        """纯 Python 回退路径 (Opt-042 前的原始实现, 大 n 时启用)。"""
         n = len(self._samples)
         front: list[int] = []
         for i in range(n):
@@ -123,24 +147,45 @@ class ParetoFront:
         return front
 
     # ------------------------------------------------------------------ #
+    def compute_front(self) -> list[int]:
+        """Return indices of non-dominated samples."""
+        dom = self._dominance_matrix()
+        if dom is None:
+            return self._compute_front_loop()
+        dominated = dom.any(axis=0)
+        return [i for i in range(len(self._samples)) if not bool(dominated[i])]
+
+    # ------------------------------------------------------------------ #
     def compute_front_with_metadata(self) -> list[dict]:
         """Return front members enriched with ``dominated_by_count`` + metadata."""
-        front = self.compute_front()
-        out: list[dict] = []
-        for i in front:
-            dominated_by = 0
-            for j in range(len(self._samples)):
-                if j != i and self._dominates(j, i):
-                    dominated_by += 1
-            out.append(
-                {
-                    "index": i,
-                    "values": list(self._samples[i][0]),
-                    "metadata": self._samples[i][1],
-                    "dominated_by_count": dominated_by,
-                }
-            )
-        return out
+        dom = self._dominance_matrix()
+        if dom is None:
+            front = self._compute_front_loop()
+            out: list[dict] = []
+            for i in front:
+                dominated_by = 0
+                for j in range(len(self._samples)):
+                    if j != i and self._dominates(j, i):
+                        dominated_by += 1
+                out.append(
+                    {
+                        "index": i,
+                        "values": list(self._samples[i][0]),
+                        "metadata": self._samples[i][1],
+                        "dominated_by_count": dominated_by,
+                    }
+                )
+            return out
+        front = [i for i in range(len(self._samples)) if not bool(dom[:, i].any())]
+        return [
+            {
+                "index": i,
+                "values": list(self._samples[i][0]),
+                "metadata": self._samples[i][1],
+                "dominated_by_count": int(dom[:, i].sum()),
+            }
+            for i in front
+        ]
 
     # ------------------------------------------------------------------ #
     def hypervolume(self, reference_point: list[float]) -> float:
@@ -441,18 +486,63 @@ def _hv_2d(points: list[list[float]], ref: list[float]) -> float:
 
 
 def _hv_3d(points: list[list[float]], ref: list[float]) -> float:
-    """3D hypervolume (minimization) via z-sweep with 2D slices."""
+    """3D hypervolume (minimization) via z-sweep with an incremental 2D skyline.
+
+    Opt-041: 原实现每前进一个 z 片都对整个累积点集重新 sort + 全量
+    ``_hv_2d`` 扫描 (O(n²·log n))。改为只维护 2D skyline (x 严格升序 /
+    y 严格降序的平行数组) 并增量更新联合面积:
+
+    - 插入点若被既有 skyline 支配 → 联合面积不变, 直接跳过;
+    - 否则删除被新点支配的连续段后插入, 并按新 skyline 重算面积
+      (单次 O(k), k = skyline 大小, 随机数据约 O(log n))。
+
+    总体约 O(n·k), 数值结果与旧实现完全一致
+    (fuzz parity 见 tests/model/test_pareto_hv_parity.py, 云端全量验证)。
+    """
+    if not points:
+        return 0.0
     pts = sorted(points, key=lambda p: (p[2], p[0], p[1]))
-    ref2d = [ref[0], ref[1]]
+    ref_x, ref_y, ref_z = ref[0], ref[1], ref[2]
+
+    # 平行数组 skyline: sky_x 严格升序, sky_y 严格降序 (联合矩形 [p, ref2d]
+    # 的并集面积只由 skyline 决定, 被 2D 支配的点贡献为 0)。
+    sky_x: list[float] = []
+    sky_y: list[float] = []
+    area = 0.0
+
+    def _skyline_area() -> float:
+        # 段 i 覆盖 x ∈ [sky_x[i], sky_x[i+1]) (末段到 ref_x),
+        # 高度 = ref_y - sky_y[i] (该 x 区间内活跃点中 y 最小者)。
+        a = 0.0
+        for i in range(len(sky_x)):
+            x_end = sky_x[i + 1] if i + 1 < len(sky_x) else ref_x
+            a += (x_end - sky_x[i]) * (ref_y - sky_y[i])
+        return a
+
     hv = 0.0
     prev_z = pts[0][2]
-    front2d: list[list[float]] = [[pts[0][0], pts[0][1]]]
-    for i in range(1, len(pts)):
-        z_i = pts[i][2]
-        hv += _hv_2d(front2d, ref2d) * (z_i - prev_z)
-        front2d.append([pts[i][0], pts[i][1]])
-        prev_z = z_i
-    hv += _hv_2d(front2d, ref2d) * (ref[2] - prev_z)
+    for p in pts:
+        z = p[2]
+        hv += area * (z - prev_z)
+        prev_z = z
+        x, y = p[0], p[1]
+        # 被既有 skyline 点支配 (存在 x_j <= x 且 y_j <= y)? → 贡献 0。
+        j = bisect_right(sky_x, x) - 1
+        if j >= 0 and sky_y[j] <= y:
+            continue
+        # 删除被 p 支配的连续段 (x_j >= x 且 y_j >= y): x >= x 的点从
+        # bisect_left 起, 其中 y 降序故 y_j >= y 为其前缀。
+        lo = bisect_left(sky_x, x)
+        hi = lo
+        while hi < len(sky_y) and sky_y[hi] >= y:
+            hi += 1
+        if hi > lo:
+            del sky_x[lo:hi]
+            del sky_y[lo:hi]
+        sky_x.insert(lo, x)
+        sky_y.insert(lo, y)
+        area = _skyline_area()
+    hv += area * (ref_z - prev_z)
     return float(hv)
 
 

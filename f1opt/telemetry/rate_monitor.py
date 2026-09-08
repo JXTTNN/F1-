@@ -36,9 +36,9 @@ from __future__ import annotations
 
 import time as _time
 from collections import deque as _deque
+from collections.abc import Callable
 from dataclasses import dataclass as _dataclass
 from threading import Lock as _Lock
-from collections.abc import Callable
 from typing import Any
 
 from .packets import PACKET_NAMES as _PACKET_NAMES
