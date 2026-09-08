@@ -255,7 +255,7 @@
     <h2>实时遥测</h2>
 
     <div class="gauge-row">
-      <div class="speed-box">
+      <div class="speed-box" id="speed-box">
         <span id="evidence-marker"></span>
         <span id="speed" class="speed-val mono">0</span>
         <span class="speed-unit">km/h</span>
@@ -553,6 +553,9 @@
     ws:null, wsBackoff:1000, wsClosedByUser:false,
     tracks:[], currentTrackId:"melbourne",
     setup:{}, frames:[], lastFrame:null,
+    // 调教参数元数据 (name -> {min,max,step,kind,unit,description}), 由
+    // GET /api/setup/schema 下发; 缺失时退化为不约束 (与旧行为一致).
+    setupSchema:{},
     bestLap:null, lastLap:null, lapCount:0,
     healthTimer:null,
     // Iter-07: stable per-page-load session id for multi-turn feedback memory.
@@ -754,12 +757,31 @@
 
   // ---------- setup ----------
   async function loadSetup(){
+    // 先取参数元数据 (可选端点), 再取默认调教 —— 顺序保证 renderSetup 时
+    // min/max/step 已就绪。schema 失败不阻断主流程 (退化为无约束输入)。
+    try{
+      var sc = await fetchJSON("/api/setup/schema");
+      var map = {};
+      (sc.fields||[]).forEach(function(f){ map[f.name]=f; });
+      state.setupSchema = map;
+    }catch(e){ state.setupSchema = {}; }
     try{
       state.setup = await fetchJSON("/api/setup/default");
       renderSetup();
     }catch(e){
       el("setup-container").innerHTML='<div class="empty-msg">默认调教不可用</div>';
     }
+  }
+  // 输入侧约束: 返回 [min,max,step] 属性串 (schema 缺失时为空串).
+  function setupRangeAttrs(name){
+    var sp = state.setupSchema[name];
+    if(!sp) return "";
+    return ' min="'+esc(String(sp.min))+'" max="'+esc(String(sp.max))+'" step="'+esc(String(sp.step))+'"';
+  }
+  function setupRangeTitle(f){
+    var sp = state.setupSchema[f.name];
+    if(!sp) return f.label;
+    return f.label+"：允许范围 "+sp.min+" ~ "+sp.max+" "+f.unit+"（步长 "+sp.step+"）";
   }
   function renderSetup(){
     var c=el("setup-container"); c.innerHTML="";
@@ -771,19 +793,34 @@
         var row=document.createElement("div"); row.className="row";
         var valStr=(v===undefined||v===null)?"":String(v);
         row.innerHTML='<span class="name">'+f.label+'</span>'+
-          '<input class="val mono" type="number" step="any" data-field="'+f.name+'" value="'+esc(valStr)+'" '+
+          '<input class="val mono" type="number"'+setupRangeAttrs(f.name)+' data-field="'+f.name+'" value="'+esc(valStr)+'" '+
+          'title="'+esc(setupRangeTitle(f))+'" '+
           'style="width:62px;background:var(--bg);border:1px solid var(--line);color:var(--txt);font-size:12px;text-align:right;padding:1px 4px;border-radius:2px">'+
           '<span class="u">'+f.unit+'</span>';
         div.appendChild(row);
       });
       c.appendChild(div);
     });
-    // 绑定修改事件: 用户编辑后自动更新 state.setup
+    // 绑定修改事件: 用户编辑后钳制到合法范围并更新 state.setup。
+    // 此前越界值 (如前翼 9999) 会原样打给后端 -> 400 Bad Request, 页面只丢
+    // 一句 "预测不可用" 且浏览器记一条 console.error; 现在就地钳制并提示。
     c.querySelectorAll('input[data-field]').forEach(function(inp){
       inp.addEventListener('change', function(){
         var fname = this.getAttribute('data-field');
-        var val = parseFloat(this.value);
-        if(!isNaN(val)) state.setup[fname] = val;
+        var raw = this.value;
+        var val = parseFloat(raw);
+        if(raw==="" || isNaN(val)){ renderSetup(); return; }
+        var sp = state.setupSchema[fname];
+        if(sp){
+          var lo=Number(sp.min), hi=Number(sp.max);
+          if(val<lo || val>hi){
+            var cv = val<lo?lo:hi;
+            showToast(fname+" 超出范围 ["+lo+", "+hi+"]，已钳制为 "+cv);
+            val = cv;
+            this.value = String(cv);
+          }
+        }
+        state.setup[fname] = val;
       });
     });
   }

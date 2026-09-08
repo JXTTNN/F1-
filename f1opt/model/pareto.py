@@ -687,11 +687,54 @@ class MultiObjectiveOptimizer:
                 clipped[self._fuel_load_idx] = self._base_fuel_norm
             return CarSetup.from_vector(clipped.tolist())
 
+        # ---- 目标值回传 ----------------------------------------------------
+        # 云端全量审计发现: 此前 search() 只回传调教向量, 调用方拿不到任何
+        # 目标值, 前端 /api/pareto-search 消费方被迫用硬编码假坐标
+        # (x=90+i*0.05) 画散点、"最佳/拐点" 表两列恒显示 "—"。这里补回
+        # 前沿/全体样本的目标值以及 best/knee 的标量目标值。
+        front_set = set(front_idx)
+        best_lap_i = min(front_idx, key=lambda i: values_list[i][0]) if front_idx else 0
+        best_wear_i = min(front_idx, key=lambda i: values_list[i][1]) if front_idx else 0
+        knee_safe = knee if 0 <= knee < len(values_list) else 0
+
+        def _pt(i: int, role: str) -> dict[str, Any]:
+            return {
+                "lap_time": float(values_list[i][0]),
+                "tire_wear": float(values_list[i][1]),
+                "role": role,
+            }
+
+        front_points: list[dict[str, Any]] = []
+        for i in front_idx:
+            if i == best_lap_i:
+                role = "best"
+            elif i == best_wear_i:
+                role = "wear"
+            elif i == knee_safe:
+                role = "knee"
+            else:
+                role = "front"
+            front_points.append(_pt(i, role))
+
+        sample_points = [
+            _pt(i, "front" if i in front_set else "normal")
+            for i in range(len(values_list))
+        ]
+
         return {
             "pareto_front": final_front,
             "best_lap_time_setup": to_setup(best_lap_vec),
             "best_tire_wear_setup": to_setup(best_wear_vec),
             "knee_setup": to_setup(knee_vec),
+            "objectives": list(self.objectives),
+            "best_lap_time": float(best_lap_val),
+            "best_tire_wear": float(best_wear_val),
+            "knee_objectives": [
+                float(values_list[knee_safe][0]),
+                float(values_list[knee_safe][1]),
+            ],
+            "front_points": front_points,
+            "sample_points": sample_points,
             "history": history,
             "iterations": self.n_iterations,
             "diversity": final_front.diversity_report(),  # Iter-200

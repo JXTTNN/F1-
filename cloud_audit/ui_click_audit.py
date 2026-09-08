@@ -1,7 +1,8 @@
 """云端真人式 UI 审计。
 
-约束: 只做「人能做的事」——点击页面元素、在输入框里打字。
-不直接调用任何 HTTP API，不读服务端日志；结论只依据页面呈现的内容与前端抛出的异常。
+约束: 只做「人能做的事」——点击页面元素、在输入框/下拉里输入。
+不直接调用任何 HTTP API，不读服务端日志；结论只依据页面呈现的内容与前端异常。
+HTTP 状态码仅作旁证收集（不参与交互）。
 """
 
 from __future__ import annotations
@@ -24,6 +25,7 @@ RESULTS: list[dict] = []
 CONSOLE_ERR: list[str] = []
 PAGE_ERR: list[str] = []
 NET_FAIL: list[str] = []
+HTTP_BAD: list[str] = []
 
 
 def rec(name: str, ok: bool, detail: str = "") -> None:
@@ -48,6 +50,8 @@ def guard(name: str, fn):
         rec(name, True, detail if isinstance(detail, str) else "")
     except PWTimeout as exc:
         rec(name, False, "TIMEOUT " + str(exc)[:250])
+    except AssertionError as exc:
+        rec(name, False, "ASSERT " + str(exc)[:250])
     except Exception as exc:  # noqa: BLE001
         rec(name, False, f"{type(exc).__name__}: {str(exc)[:250]}")
 
@@ -56,20 +60,38 @@ def err_count() -> int:
     return len(CONSOLE_ERR) + len(PAGE_ERR)
 
 
+LAPS_PAYLOAD = {
+    "reference_lap": {"lap_time": 90.0, "sector_times": [30.0, 30.0, 30.0]},
+    "laps": [
+        {"lap_time": 89.5, "sector_times": [29.8, 30.0, 29.7]},
+        {"lap_time": 90.4, "sector_times": [30.2, 30.1, 30.1]},
+        {"lap_time": 89.9, "sector_times": [29.9, 30.0, 30.0]},
+    ],
+}
+DRIVER_LAPS = [
+    {"lap_time": 90.0, "sector_times": [30.0, 30.0, 30.0]},
+    {"lap_time": 90.3, "sector_times": [30.1, 30.1, 30.1]},
+]
+TEAMMATE_LAPS = [
+    {"lap_time": 90.2, "sector_times": [30.1, 30.0, 30.1]},
+    {"lap_time": 90.1, "sector_times": [30.0, 30.0, 30.1]},
+]
+
+
 # --------------------------------------------------------------------------
-# 审计步骤
+# 首页（实时面板）
 # --------------------------------------------------------------------------
 def audit_index(page) -> None:
-    # --- 1. 首屏加载 ---
     def load():
         page.goto(BASE + "/", wait_until="domcontentloaded", timeout=60000)
-        page.wait_for_selector("#track-select option", timeout=60000)
+        # <option> 在折叠的 <select> 内没有可见盒模型，必须用 attached 等。
+        page.wait_for_selector("#track-select option", state="attached", timeout=60000)
         opts = page.eval_on_selector_all("#track-select option", "els => els.length")
+        assert opts > 1, f"赛道下拉仅 {opts} 项"
         return f"赛道下拉 {opts} 项"
 
     guard("首页加载 / 赛道下拉填充", load)
 
-    # --- 2. 健康检查徽标 ---
     def health():
         page.wait_for_function(
             "() => { const b = document.getElementById('health-badge');"
@@ -80,7 +102,6 @@ def audit_index(page) -> None:
 
     guard("健康检查徽标显示 API 状态", health)
 
-    # --- 3. 切换赛道 ---
     def pick_track():
         page.select_option("#track-select", index=1)
         page.wait_for_timeout(300)
@@ -88,7 +109,6 @@ def audit_index(page) -> None:
 
     guard("切换赛道 → 赛道信息更新", pick_track)
 
-    # --- 4. 预测圈速 ---
     def predict():
         page.click("#predict-btn")
         page.wait_for_function(
@@ -103,7 +123,6 @@ def audit_index(page) -> None:
 
     guard("点击「预测圈速」", predict)
 
-    # --- 5. 车手反馈（输入框提问） ---
     def feedback():
         page.fill("#feedback-input", "T1 入弯总推头怎么办？")
         page.click("#feedback-btn")
@@ -119,7 +138,6 @@ def audit_index(page) -> None:
 
     guard("输入框提问 → 点击「获取反馈」", feedback)
 
-    # --- 6. 调教搜索 ---
     def search():
         page.select_option("#driver-style-select", "aggressive")
         page.select_option("#tire-wear-select", "2")
@@ -131,7 +149,6 @@ def audit_index(page) -> None:
 
     guard("点击「调教搜索」→ 结果面板出现", search)
 
-    # --- 7. 应用推荐调教 ---
     def apply_rec():
         page.click("#apply-recommended-btn")
         page.wait_for_function(
@@ -145,7 +162,6 @@ def audit_index(page) -> None:
 
     guard("点击「应用推荐调教」", apply_rec)
 
-    # --- 8. 对话（输入框 + 发送） ---
     def chat():
         page.fill("#chat-input", "为什么推头？")
         page.click("#chat-send")
@@ -165,7 +181,6 @@ def audit_index(page) -> None:
 
     guard("对话输入框提问 → 点击「发送」", chat)
 
-    # --- 9. 空输入点击发送（不应崩溃） ---
     def empty_chat():
         before = err_count()
         page.fill("#chat-input", "")
@@ -176,7 +191,6 @@ def audit_index(page) -> None:
 
     guard("空输入点击发送（健壮性）", empty_chat)
 
-    # --- 10. 迭代历史面板 ---
     def iters():
         page.click("#iter-link")
         page.wait_for_selector("#iter-panel:not(.hidden)", timeout=30000)
@@ -194,14 +208,17 @@ def audit_index(page) -> None:
     page.click("#iter-link")
     page.wait_for_timeout(300)
 
-    # --- 11. 极端输入：越界调教值 ---
     def extreme():
-        before = err_count()
+        """越界输入：应被输入侧钳制，不再打出 400。"""
+        before_bad = len(HTTP_BAD)
         inp = page.query_selector('#setup-container input[data-field="front_wing"]')
         if inp is None:
             return "SKIP 未找到调教输入框"
+        max_attr = inp.get_attribute("max")
         inp.fill("9999")
         inp.dispatch_event("change")
+        page.wait_for_timeout(300)
+        clamped = inp.input_value()
         page.click("#predict-btn")
         page.wait_for_function(
             "() => { const e = document.getElementById('predict-out');"
@@ -209,101 +226,147 @@ def audit_index(page) -> None:
             timeout=180000,
         )
         txt = page.inner_text("#predict-out").strip()
-        inp.fill("5")
-        inp.dispatch_event("change")
-        assert err_count() == before, "越界输入触发前端异常"
-        return f"越界输入响应: {txt[:120]}"
+        new_bad = [b for b in HTTP_BAD[before_bad:] if "predict" in b]
+        assert not new_bad, f"越界输入仍触发 4xx: {new_bad}"
+        assert "预测不可用" not in txt, f"预测失败: {txt}"
+        return f"max={max_attr} 钳制后={clamped} / {txt[:100]}"
 
-    guard("越界调教值（9999）→ 预测（健壮性）", extreme)
+    guard("越界调教值（9999）→ 输入钳制 + 预测", extreme)
 
-    # --- 12. 导出当前调教（下载） ---
     def export_setup():
         with page.expect_download(timeout=30000) as dl:
             page.click("#export-setup-btn")
-        d = dl.value
-        return f"下载文件 {d.suggested_filename}"
+        return f"下载文件 {dl.value.suggested_filename}"
 
     guard("点击「导出调教」→ 触发下载", export_setup)
 
-    # --- 13. 导出样本 ---
     def export_samples():
         with page.expect_download(timeout=60000) as dl:
             page.click("#export-samples-btn")
-        d = dl.value
-        return f"下载文件 {d.suggested_filename}"
+        return f"下载文件 {dl.value.suggested_filename}"
 
     guard("点击「导出样本 (Parquet)」→ 触发下载", export_samples)
-
     snap(page, "index-final")
 
 
+# --------------------------------------------------------------------------
+# 仪表盘（智能分析中心）—— 逐页签真人操作
+# --------------------------------------------------------------------------
 def audit_dashboard(page) -> None:
     def load():
         page.goto(BASE + "/dashboard.html", wait_until="domcontentloaded", timeout=60000)
-        page.wait_for_timeout(2500)
+        page.wait_for_selector("#str-track option", state="attached", timeout=60000)
         return page.title()
 
     guard("仪表盘页面加载", load)
 
-    # 通用扫描：逐个点击可见按钮，逐个切换下拉框，捕获前端异常
-    def sweep():
+    def strategy():
+        page.fill("#str-laps", "58")
+        page.fill("#str-fuel", "105.5")
+        page.click("#str-run")
+        page.wait_for_selector("#str-result-panel:not(.hidden)", timeout=120000)
+        txt = page.inner_text("#str-result-panel").strip()
+        assert "失败" not in txt[:200], txt[:200]
+        return (
+            f"策略 {page.inner_text('#str-type')} / 停 {page.inner_text('#str-stops-count')}"
+            f" / 总时 {page.inner_text('#str-total')}"
+        )
+
+    guard("仪表盘-赛道策略：填表 → 生成策略", strategy)
+
+    def bayes():
+        page.click('.tab[data-tab="search"]')
+        page.wait_for_timeout(300)
+        page.click("#bayes-run")
+        page.wait_for_selector("#bayes-result-panel:not(.hidden)", timeout=240000)
+        rows = page.eval_on_selector_all("#bayes-setup-table tbody tr", "els => els.length")
+        assert rows > 0, "贝叶斯推荐调教表为空"
+        return f"收益 {page.inner_text('#bayes-gain')} / 调教行 {rows}"
+
+    guard("仪表盘-调教搜索：贝叶斯", bayes)
+
+    def pareto():
+        page.click('.subtab[data-subtab="pareto"]')
+        page.wait_for_timeout(300)
+        page.click("#pareto-run")
+        page.wait_for_selector("#pareto-result-panel:not(.hidden)", timeout=240000)
+        dots = page.eval_on_selector_all("#pareto-scatter circle", "els => els.length")
+        first_row = page.eval_on_selector(
+            "#pareto-setups-table tbody tr",
+            "el => el.textContent.replace(/\\s+/g,' ').trim()",
+        )
+        # 真实数据校验: 散点不应为空, 且「圈速」列不再是恒定的 "—"
+        assert dots > 0, "Pareto 散点图无点"
+        assert "—" not in first_row.split("关键")[0][:24], f"目标值列仍为空: {first_row}"
+        return (
+            f"前沿 {page.inner_text('#pareto-front-size')} / 散点 {dots} / 首行 {first_row[:80]}"
+        )
+
+    guard("仪表盘-调教搜索：Pareto 真实前沿", pareto)
+
+    def compare():
+        page.click('.tab[data-tab="compare"]')
+        page.wait_for_timeout(300)
+        page.fill("#cmp-input", json.dumps(LAPS_PAYLOAD, ensure_ascii=False))
+        page.click("#cmp-run")
+        page.wait_for_selector("#cmp-result-panel:not(.hidden)", timeout=120000)
+        rows = page.eval_on_selector_all("#cmp-table tbody tr", "els => els.length")
+        bars = page.eval_on_selector_all("#cmp-sector-chart rect", "els => els.length")
+        strength = page.inner_text("#cmp-strength").strip()
+        assert rows == len(LAPS_PAYLOAD["laps"]), f"对比行 {rows}"
+        assert bars == 3, f"扇区柱状图应 3 根柱, 实际 {bars}"
+        assert "S0" not in strength, f"扇区下标未 +1: {strength}"
+        return f"行 {rows} / 扇区柱 {bars} / {strength}"
+
+    guard("仪表盘-圈速对比：扇区 Δ 图与强弱扇区", compare)
+
+    def bad_json():
         before = err_count()
-        clicked = 0
-        buttons = page.query_selector_all("button")
-        for i, btn in enumerate(buttons):
-            try:
-                if not btn.is_visible():
-                    continue
-                label = (btn.inner_text() or "").strip()[:40] or f"button#{i}"
-                btn.click(timeout=5000)
-                page.wait_for_timeout(400)
-                clicked += 1
-            except PWTimeout:
-                RESULTS.append(
-                    {"name": f"仪表盘按钮[{i}] 点击超时", "ok": False, "detail": "TIMEOUT"}
-                )
-                print(f"[FAIL] 仪表盘按钮[{i}] 点击超时", flush=True)
-            except Exception as exc:  # noqa: BLE001
-                RESULTS.append(
-                    {"name": f"仪表盘按钮[{i}] 点击异常", "ok": False, "detail": str(exc)[:200]}
-                )
-                print(f"[FAIL] 仪表盘按钮[{i}] 点击异常 :: {exc}", flush=True)
-        selects = page.query_selector_all("select")
-        for sel in selects:
-            try:
-                if not sel.is_visible():
-                    continue
-                opts = sel.query_selector_all("option")
-                if len(opts) > 1:
-                    values = [o.get_attribute("value") for o in opts]
-                    sel.select_option(value=values[-1], timeout=5000)
-                    page.wait_for_timeout(300)
-            except Exception:  # noqa: BLE001
-                pass
-        new = err_count() - before
-        return f"点击 {clicked} 个按钮 / 切换 {len(selects)} 个下拉，新增前端异常 {new} 条"
+        page.fill("#cmp-input", "{ 这不是 JSON")
+        page.click("#cmp-run")
+        page.wait_for_timeout(1200)
+        toast = page.inner_text("#toast").strip()
+        assert err_count() == before, "非法 JSON 触发前端异常"
+        assert "JSON" in toast, f"未给出可读提示: {toast}"
+        return f"提示: {toast[:80]}"
 
-    guard("仪表盘 全按钮点击扫描", sweep)
+    guard("仪表盘-圈速对比：非法 JSON 输入提示", bad_json)
 
-    def inputs_sweep():
-        before = err_count()
-        n = 0
-        for inp in page.query_selector_all("input"):
-            try:
-                if not inp.is_visible():
-                    continue
-                itype = (inp.get_attribute("type") or "text").lower()
-                if itype in ("checkbox", "radio", "button", "submit", "file"):
-                    continue
-                inp.fill("1", timeout=5000)
-                inp.dispatch_event("change")
-                n += 1
-            except Exception:  # noqa: BLE001
-                pass
-        page.wait_for_timeout(800)
-        return f"填充 {n} 个输入框，新增前端异常 {err_count() - before} 条"
+    def teammates():
+        page.fill("#tm-driver", json.dumps(DRIVER_LAPS))
+        page.fill("#tm-teammate", json.dumps(TEAMMATE_LAPS))
+        page.click("#tm-run")
+        page.wait_for_selector("#tm-result-panel:not(.hidden)", timeout=120000)
+        verdict = page.inner_text("#tm-verdict").strip()
+        assert verdict and verdict != "—", "队友对比无裁决"
+        return f"裁决 {verdict[:90]}"
 
-    guard("仪表盘 输入框填充扫描", inputs_sweep)
+    guard("仪表盘-队友对比", teammates)
+
+    def weather():
+        page.click('.tab[data-tab="weather"]')
+        page.wait_for_timeout(300)
+        page.click("#w-run")
+        page.wait_for_selector("#w-result-panel:not(.hidden)", timeout=120000)
+        grip = page.inner_text("#w-grip").strip()
+        assert grip and grip != "—", "抓地力无结果"
+        return (
+            f"抓地 {grip} / Δ {page.inner_text('#w-delta')} / 配方 {page.inner_text('#w-compound')}"
+        )
+
+    guard("仪表盘-天气影响", weather)
+
+    def health():
+        page.click('.tab[data-tab="health"]')
+        page.wait_for_timeout(300)
+        page.click("#h-refresh")
+        page.wait_for_selector("#h-result-panel:not(.hidden)", timeout=60000)
+        st = page.inner_text("#h-status-val").strip()
+        assert st == "ok", f"健康状态异常: {st}"
+        mods = page.eval_on_selector_all("#h-modules .chip", "els => els.length")
+        return f"状态 {st} / 模型 {page.inner_text('#h-model')} / 模块 {mods}"
+
+    guard("仪表盘-系统健康（扩展接口连通性）", health)
     snap(page, "dashboard-final")
 
 
@@ -326,9 +389,17 @@ def main() -> None:
             except Exception:  # noqa: BLE001
                 NET_FAIL.append(req.url)
 
+        def on_response(resp):
+            try:
+                if resp.status >= 400:
+                    HTTP_BAD.append(f"{resp.request.method} {resp.url} -> {resp.status}")
+            except Exception:  # noqa: BLE001
+                pass
+
         page.on("console", on_console)
         page.on("pageerror", on_pageerror)
         page.on("requestfailed", on_requestfailed)
+        page.on("response", on_response)
 
         try:
             audit_index(page)
@@ -338,9 +409,13 @@ def main() -> None:
             ctx.close()
             browser.close()
 
-    # 前端异常汇总
     rec("无未捕获 JS 异常", not PAGE_ERR, "; ".join(PAGE_ERR[:5]))
     rec("无 console.error", not CONSOLE_ERR, "; ".join(CONSOLE_ERR[:5]))
+    rec(
+        "无 4xx/5xx 响应",
+        not HTTP_BAD,
+        "; ".join(sorted(set(HTTP_BAD))[:8]),
+    )
 
     payload = {
         "base": BASE,
@@ -351,6 +426,7 @@ def main() -> None:
         "console_errors": CONSOLE_ERR[:60],
         "page_errors": PAGE_ERR[:60],
         "request_failed": NET_FAIL[:60],
+        "http_bad": sorted(set(HTTP_BAD))[:60],
     }
     (REPORTS / "ui_audit.json").write_text(
         json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"

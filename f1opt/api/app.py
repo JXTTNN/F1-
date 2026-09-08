@@ -842,6 +842,32 @@ def create_app(start_listener: bool = True) -> FastAPI:
     async def default_setup() -> dict[str, Any]:
         return DEFAULT_SETUP.model_dump()
 
+    @app.get("/api/setup/schema")
+    async def setup_schema() -> dict[str, Any]:
+        """23 项调教参数元数据（范围/步长/单位/分组）。
+
+        前端「当前调教」输入框此前无任何取值约束，真人输入越界值（如前翼
+        9999）会直接打到后端并收到 400，页面只丢出一句 "预测不可用: 400
+        Bad Request"。暴露本端点后前端可下发 min/max/step 做输入侧约束与钳制。
+        """
+        from f1opt.data.setup_schema import ALL_SETUP_FIELDS
+
+        return {
+            "fields": [
+                {
+                    "name": spec.name,
+                    "group": spec.group,
+                    "kind": spec.kind,
+                    "min": spec.min,
+                    "max": spec.max,
+                    "step": spec.step,
+                    "unit": spec.unit,
+                    "description": spec.description,
+                }
+                for spec in ALL_SETUP_FIELDS()
+            ]
+        }
+
     @app.post("/api/predict")
     @limiter.limit("30/minute")
     async def predict(body: PredictRequest, request: Request) -> dict[str, Any]:
@@ -2061,6 +2087,44 @@ def push_frame(app: FastAPI, frame: dict[str, Any]) -> None:
 
 
 app = create_app()
+
+
+def _mount_extended_router(target: FastAPI) -> None:
+    """把 :mod:`f1opt.api.extended` 的扩展路由挂到既有 app 上。
+
+    背景（云端全量审计发现）：历史上 ``f1opt.api.app:app`` 只含核心路由，而
+    CLI 的 ``serve`` / 双击 GUI 走 :func:`f1opt.api.extended_app.create_extended_app`。
+    于是同一份代码存在两套路由表——以 ``uvicorn f1opt.api.app:app``（含
+    ``python -m f1opt.api.runner``）启动时，``/api/bayesian-search``、
+    ``/api/pareto-search``、``/api/compare/laps``、``/api/compare/teammates``、
+    ``/api/weather/impact``、``/api/narrate``、``/api/health/extended``
+    全部 404，"智能分析中心"仪表盘形同虚设，而测试因走 factory 从未暴露。
+
+    静态挂载（``name="static"``）必须保持在最后，否则会遮蔽 ``/api`` 路由
+    （POST -> 405 / GET -> 404），故沿用「抬起 -> include -> 放回」的顺序。
+    """
+    try:
+        from f1opt.api.extended import router as extended_router
+    except Exception as exc:  # pragma: no cover - 扩展依赖缺失时降级为核心路由
+        import logging
+
+        logging.getLogger(__name__).warning(
+            "extended router unavailable, API degraded to core routes: %s", exc
+        )
+        return
+
+    routes = target.router.routes
+    static_mounts = [r for r in routes if getattr(r, "name", None) == "static"]
+    for mount in static_mounts:
+        routes.remove(mount)
+    try:
+        target.include_router(extended_router)
+    finally:
+        routes.extend(static_mounts)
+
+
+# 模块级 app 与 create_extended_app() 行为对齐，保证任何入口路由集一致。
+_mount_extended_router(app)
 
 
 __all__ = ["app", "create_app", "push_frame"]

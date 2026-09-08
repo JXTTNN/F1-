@@ -357,7 +357,7 @@
         <tbody></tbody>
       </table>
       <div class="grid cols-2">
-        <div class="result-card"><span class="lbl">排位赛预测差距 (s)</span><span id="tm-pole" class="val">—</span></div>
+        <div class="result-card"><span class="lbl">最佳圈速差距 (s)</span><span id="tm-pole" class="val">—</span></div>
         <div class="result-card"><span class="lbl">置信度</span><span id="tm-conf" class="val amber">—</span></div>
       </div>
       <div class="result-card"><span class="lbl">裁决</span><div id="tm-verdict" class="sub" style="color:var(--txt);font-size:13px">—</div></div>
@@ -883,29 +883,33 @@
     el("pareto-front-size").textContent=String(r.pareto_front_size||0);
 
     var hist=r.history||[];
-    var bestLap=hist.length?hist[hist.length-1].best_lap:null;
-    var bestWear=hist.length?hist[hist.length-1].best_wear:null;
+    // 后端现回传真实标量目标值 (best_lap_time / best_tire_wear); 老后端缺失时
+    // 回退到 history 末帧, 不再使用硬编码假坐标。
+    var bestLap = (r.best_lap_time!=null) ? r.best_lap_time
+      : (hist.length?hist[hist.length-1].best_lap:null);
+    var bestWear = (r.best_tire_wear!=null) ? r.best_tire_wear
+      : (hist.length?hist[hist.length-1].best_wear:null);
     el("pareto-best-lap").textContent=fmtTime(bestLap);
     el("pareto-best-wear").textContent=num(bestWear,3);
 
-    // build scatter points from history (synthesized x=lap,y=wear).
-    // Backend currently exposes summary history; we render a synthetic front
-    // using best_lap_time_setup / best_tire_wear_setup / knee_setup as anchors.
+    // 散点: 优先用后端真实前沿/样本点; 全部缺失才回退 history。
     var pts=[];
-    var anchors=[
-      {setup:r.best_lap_time_setup, role:"best"},
-      {setup:r.best_tire_wear_setup, role:"wear"},
-      {setup:r.knee_setup, role:"knee"}
-    ];
-    anchors.forEach(function(a,i){
-      if(a && a.setup){
-        pts.push({x: 90+i*0.05, y: 0.5+i*0.05, role:a.role});
-      }
-    });
-    // also dump history as ordinary points.
-    hist.forEach(function(h,i){
-      pts.push({x: h.best_lap, y: h.best_wear, role:"normal"});
-    });
+    function pushPts(list){
+      (list||[]).forEach(function(p){
+        if(p && isFinite(p.lap_time) && isFinite(p.tire_wear)){
+          pts.push({x:p.lap_time, y:p.tire_wear, role:p.role||"normal"});
+        }
+      });
+    }
+    pushPts(r.sample_points);
+    if(!pts.length) pushPts(r.front_points);
+    if(!pts.length){
+      hist.forEach(function(h){
+        if(isFinite(h.best_lap) && isFinite(h.best_wear)){
+          pts.push({x:h.best_lap, y:h.best_wear, role:"normal"});
+        }
+      });
+    }
     renderScatter(el("pareto-scatter"), pts, {xLabel:"圈速 (s) ↓", yLabel:"胎耗代理 ↓"});
 
     el("pareto-explain").querySelector("div").textContent =
@@ -913,15 +917,29 @@
       "琥珀色为拐点（knee）调教，是最均衡的折中点。";
 
     var tb=el("pareto-setups-table").querySelector("tbody"); tb.innerHTML="";
+    // 按 role 取出真实目标值, 填「圈速 / 胎耗」两列 (此前恒为 "—")。
+    var byRole={};
+    (r.front_points||[]).forEach(function(p){
+      if(p && p.role && p.role!=="front" && p.role!=="normal") byRole[p.role]=p;
+    });
+    function objLap(o, fallback){ return (o && o.lap_time!=null)?o.lap_time:fallback; }
+    function objWear(o, fallback){ return (o && o.tire_wear!=null)?o.tire_wear:fallback; }
     [
-      {label:"最快圈速", setup:r.best_lap_time_setup},
-      {label:"最低胎耗", setup:r.best_tire_wear_setup},
-      {label:"拐点 (Knee)", setup:r.knee_setup}
+      {label:"最快圈速", setup:r.best_lap_time_setup, obj:byRole.best, lap:r.best_lap_time, wear:null},
+      {label:"最低胎耗", setup:r.best_tire_wear_setup, obj:byRole.wear, lap:null, wear:r.best_tire_wear},
+      {label:"拐点 (Knee)", setup:r.knee_setup, obj:byRole.knee,
+       lap:(r.knee_objectives?r.knee_objectives[0]:null),
+       wear:(r.knee_objectives?r.knee_objectives[1]:null)}
     ].forEach(function(row){
       if(!row.setup) return;
+      var lap=objLap(row.obj, row.lap);
+      var wear=objWear(row.obj, row.wear);
       var keys=Object.keys(row.setup).slice(0,4).map(function(k){return setupLabel(k)+"="+fmtVal(row.setup[k]);}).join(", ");
       var tr=document.createElement("tr");
-      tr.innerHTML='<td class="name">'+row.label+'</td><td class="ba">'+(row.setup.fuel_load!==undefined?'—':'—')+'</td><td class="ba">—</td><td style="font-size:11px">'+esc(keys)+'</td>';
+      tr.innerHTML='<td class="name">'+row.label+'</td>'+
+        '<td class="ba">'+(lap!=null?fmtTime(lap):"—")+'</td>'+
+        '<td class="ba">'+(wear!=null?num(wear,3):"—")+'</td>'+
+        '<td style="font-size:11px">'+esc(keys)+'</td>';
       tb.appendChild(tr);
     });
   }
@@ -956,8 +974,14 @@
     el("cmp-result-panel").classList.remove("hidden");
     var tb=el("cmp-table").querySelector("tbody"); tb.innerHTML="";
     var bars=[];
+    var secSum=[0,0,0], secCnt=0;
     var comparisons=r.comparisons||[];
     comparisons.forEach(function(c,i){
+      var sd=c.sector_deltas||[];
+      if(sd.length){
+        for(var k=0;k<3;k++){ if(isFinite(sd[k])) secSum[k]+=Number(sd[k]); }
+        secCnt++;
+      }
       var tr=document.createElement("tr");
       var lt=laps[i]?laps[i].lap_time:null;
       var verdict=c.verdict||"—";
@@ -970,12 +994,20 @@
         '<td class="ba">'+fmtVal((c.sector_deltas||[])[2])+'</td>'+
         '<td class="'+cls+'">'+esc(verdict)+'</td>';
       tb.appendChild(tr);
-      bars.push({label:"S"+(i+1), v:Number(c.lap_time_delta||0)});
     });
+    // 扇区 Δ 柱状图: 统计各扇区平均 Δ。此前把「每圈的 lap_time_delta」当作
+    // 扇区 Δ 画出来并标成 S1/S2/S3, 语义完全错位 (横轴其实是圈序)。
+    if(secCnt){
+      for(var k=0;k<3;k++) bars.push({label:"S"+(k+1), v:secSum[k]/secCnt});
+    }
     renderBars(el("cmp-sector-chart"), bars, {});
     el("cmp-best").textContent = r.best_lap_index!=null ? ("#"+(r.best_lap_index+1)) : "—";
-    var firstC = comparisons[0]||{};
-    el("cmp-strength").textContent = "强 S"+(firstC.strength_sector||"—")+" / 弱 S"+(firstC.weakness_sector||"—");
+    // strength_sector / weakness_sector 为 0-based 下标, 展示需 +1;
+    // 且 0 是合法值, 不能用 `||` 兜底 (否则 S1 被显示成 "—")。
+    var refIdx = (r.best_lap_index!=null && comparisons[r.best_lap_index]) ? r.best_lap_index : 0;
+    var refC = comparisons[refIdx]||{};
+    function secName(v){ return (v===0 || v) ? ("S"+(Number(v)+1)) : "—"; }
+    el("cmp-strength").textContent = "强 "+secName(refC.strength_sector)+" / 弱 "+secName(refC.weakness_sector);
   }
 
   // ============ Compare teammates ============

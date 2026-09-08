@@ -152,6 +152,15 @@ async def pareto_search(body: ParetoSearchRequest) -> dict[str, Any]:
         "best_lap_time_setup": _setup_to_dict(res["best_lap_time_setup"]),
         "best_tire_wear_setup": _setup_to_dict(res["best_tire_wear_setup"]),
         "knee_setup": _setup_to_dict(res["knee_setup"]),
+        # 目标值 / 前沿点: 前端此前只拿到调教向量, 散点图只能用硬编码假坐标、
+        # 「最佳/拐点」表的圈速与胎耗两列恒为 "—"。后端补回真实目标值。
+        "objectives": res.get("objectives", ["lap_time", "tire_wear"]),
+        "best_lap_time": res.get("best_lap_time"),
+        "best_tire_wear": res.get("best_tire_wear"),
+        "knee_objectives": res.get("knee_objectives"),
+        "front_points": res.get("front_points", []),
+        "sample_points": res.get("sample_points", []),
+        "diversity": res.get("diversity"),
         "history": res["history"],
     }
 
