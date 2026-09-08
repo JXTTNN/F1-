@@ -29,6 +29,9 @@ SHOTS.mkdir(parents=True, exist_ok=True)
 
 #: 内置 LLM 审计: mock Ollama 返回内容的标记 (见 cloud_audit/mock_ollama.py)。
 LLM_MARKER = "[MOCK-LLM]"
+#: 内置小模型 (builtin) 输出标记 + 审计后端选择 (local=外部 LLM+mock, builtin=内置)。
+BUILTIN_MARKER = "【内置小模型】"
+AUDIT_LLM_BACKEND = os.environ.get("AUDIT_LLM_BACKEND", "local")
 
 RESULTS: list[dict] = []
 CONSOLE_ERR: list[str] = []
@@ -332,10 +335,9 @@ def audit_index(page) -> None:
     guard("点击「导出样本 (Parquet)」→ 触发下载", export_samples)
 
     def llm_enhanced():
-        """内置 LLM 增强生效: 点击「获取反馈」, 摘要应被 LLM 改写 (含标记)。
+        """外部 LLM (local) 增强: 点击「获取反馈」, 摘要应含 mock 标记。
 
-        前置: 工作流已以 F1OPT_LLM_BACKEND=local 启动服务并调用
-        /api/llm/preload (引擎 _llm_loaded=True), 且 mock Ollama 在线。
+        前置: 服务以 F1OPT_LLM_BACKEND=local 启动并已 preload, mock 在线。
         """
         mock_up = _MOCK_EXTERNAL or (
             _MOCK_PROC is not None and _MOCK_PROC.poll() is None
@@ -354,7 +356,41 @@ def audit_index(page) -> None:
         assert LLM_MARKER in txt, f"LLM 增强未生效, 摘要无标记: {txt[:120]}"
         return txt[:140]
 
-    guard("内置 LLM 增强：点击「获取反馈」→ 摘要含 LLM 改写", llm_enhanced)
+    def llm_builtin_basic():
+        """内置小模型: 点击「获取反馈」→ 摘要含针对性调教修正。"""
+        page.fill("#feedback-input", "T2 连续弯推头，怎么针对性调整？")
+        page.click("#feedback-btn")
+        page.wait_for_function(
+            "() => { const e = document.getElementById('fb-summary');"
+            " return e && e.textContent && !e.textContent.startsWith('点击'); }",
+            timeout=180000,
+        )
+        txt = page.inner_text("#fb-summary").strip()
+        assert txt.startswith(BUILTIN_MARKER), f"内置小模型未生效: {txt[:120]}"
+        assert "修正" in txt or "调整" in txt, f"缺少调教修正内容: {txt[:200]}"
+        return txt[:160]
+
+    def llm_builtin_learning():
+        """内置小模型: 再次反馈同类问题 → 经验样本数应累积 (收集→改进闭环)。"""
+        page.fill("#feedback-input", "T2 又推头了，继续调")
+        page.click("#feedback-btn")
+        page.wait_for_function(
+            "() => { const e = document.getElementById('fb-summary');"
+            " return e && e.textContent && !e.textContent.startsWith('点击'); }",
+            timeout=180000,
+        )
+        txt = page.inner_text("#fb-summary").strip()
+        assert txt.startswith(BUILTIN_MARKER), f"内置小模型未生效: {txt[:120]}"
+        m = re.search(r"(\d+) 条同类反馈", txt)
+        assert m, f"摘要未包含经验样本数: {txt[:200]}"
+        assert int(m.group(1)) >= 1, f"同类反馈样本未累积: {m.group(1)}"
+        return f"同类经验 {m.group(1)} 条 / {txt[:120]}"
+
+    if AUDIT_LLM_BACKEND == "builtin":
+        guard("内置小模型：点击「获取反馈」→ 针对性调教建议", llm_builtin_basic)
+        guard("内置小模型：反馈学习闭环 → 同类经验累积", llm_builtin_learning)
+    else:
+        guard("内置 LLM 增强：点击「获取反馈」→ 摘要含 LLM 改写", llm_enhanced)
 
     def llm_fallback():
         """LLM 服务掉线: 应静默回退规则引擎, 摘要非空且无标记、无前端异常。"""
@@ -373,7 +409,8 @@ def audit_index(page) -> None:
         assert err_count() == before_err, "LLM 掉线触发前端异常"
         return f"回退规则引擎 / 摘要 {txt[:100]}"
 
-    guard("LLM 服务中断 → 静默回退规则引擎（健壮性）", llm_fallback)
+    if AUDIT_LLM_BACKEND != "builtin":
+        guard("LLM 服务中断 → 静默回退规则引擎（健壮性）", llm_fallback)
     snap(page, "index-final")
 
 
@@ -500,7 +537,8 @@ def audit_dashboard(page) -> None:
 
 
 def main() -> None:
-    start_mock_llm()
+    if AUDIT_LLM_BACKEND == "local":
+        start_mock_llm()
     with sync_playwright() as p:
         browser = p.chromium.launch(args=["--no-sandbox"])
         ctx = browser.new_context(viewport={"width": 1600, "height": 1100}, accept_downloads=True)

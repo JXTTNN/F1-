@@ -2677,6 +2677,43 @@ def _assess_quality(
     }
 
 
+def _builtin_enhance(
+    feedback: dict[str, Any],
+    question: str | None,
+    config: Settings,
+    track_id: str,
+    tracker: TokenUsageTracker | None,
+    streamed: bool,
+) -> dict[str, Any]:
+    """内置小模型增强 (Opt-BUILTIN-01): 无网络、零依赖、随反馈在线学习。
+
+    反馈驱动的调教闭环: 意图识别 → 针对性字段修正 (min/max/step 钳制)
+    → 样本收集持久化。仅改写 summary 并附加结构化修正, 不触碰
+    dimensions / sources。纯 CPU、毫秒级, sync/async 共用。
+    """
+    from f1opt.feedback.builtin_model import BUILTIN_MODEL_VERSION, get_builtin_model
+
+    model = get_builtin_model(config.data_dir)
+    result = model.suggest(question, track_id or "unknown")
+    tk = tracker if tracker is not None else get_default_token_tracker()
+    tk.record(
+        "builtin", BUILTIN_MODEL_VERSION,
+        {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+        success=True, streamed=streamed,
+    )
+    return {
+        **feedback,
+        "summary": result["summary"],
+        "builtin_adjustments": result["adjustments"],
+        "builtin_meta": {
+            "sub_intent": result["sub_intent"],
+            "samples_same_context": result["samples_same_context"],
+            "samples_total": result["samples_total"],
+            "confidence": result["confidence"],
+        },
+    }
+
+
 def llm_enhance(
     feedback: dict[str, Any],
     question: str | None,
@@ -2684,6 +2721,7 @@ def llm_enhance(
     driver_profile: DriverProfile | None = None,
     conversation_history: list[dict[str, str]] | None = None,
     tracker: TokenUsageTracker | None = None,
+    track_id: str = "",
 ) -> dict[str, Any]:
     """Optionally rewrite the summary into natural prose via an LLM.
 
@@ -2712,6 +2750,11 @@ def llm_enhance(
     backend = config.llm_backend
     if backend == "none" or (backend == "openai" and not config.llm_api_key):
         return feedback
+    if backend == "builtin":
+        # Opt-BUILTIN-01: 内置小模型 —— 无网络, 不走 HTTP 端点。
+        return _builtin_enhance(
+            feedback, question, config, track_id, tracker, streamed=False
+        )
     endpoint = _LLM_ENDPOINTS.get(backend)
     if endpoint is None:
         return feedback
@@ -2809,6 +2852,7 @@ async def llm_enhance_async(
     driver_profile: DriverProfile | None = None,
     conversation_history: list[dict[str, str]] | None = None,
     tracker: TokenUsageTracker | None = None,
+    track_id: str = "",
 ) -> dict[str, Any]:
     """Async version of :func:`llm_enhance` — Iter-122.
 
@@ -2846,6 +2890,11 @@ async def llm_enhance_async(
     backend = config.llm_backend
     if backend == "none" or (backend == "openai" and not config.llm_api_key):
         return feedback
+    if backend == "builtin":
+        # Opt-BUILTIN-01: 内置小模型 —— 无网络, 不走 HTTP 端点。
+        return _builtin_enhance(
+            feedback, question, config, track_id, tracker, streamed=False
+        )
     endpoint = _LLM_ENDPOINTS.get(backend)
     if endpoint is None:
         return feedback
@@ -3059,6 +3108,7 @@ def llm_enhance_stream(
     driver_profile: DriverProfile | None = None,
     conversation_history: list[dict[str, str]] | None = None,
     tracker: TokenUsageTracker | None = None,
+    track_id: str = "",
 ):
     """Streaming version of :func:`llm_enhance` — Iter-134.
 
@@ -3086,6 +3136,15 @@ def llm_enhance_stream(
 
     backend = config.llm_backend
     if backend == "none" or (backend == "openai" and not config.llm_api_key):
+        return
+    if backend == "builtin":
+        # Opt-BUILTIN-01: 内置小模型 —— 摘要按片 yield, 行为与流式一致。
+        enhanced = _builtin_enhance(
+            feedback, question, config, track_id, tracker, streamed=True
+        )
+        summary = enhanced["summary"]
+        for i in range(0, len(summary), 24):
+            yield summary[i:i + 24]
         return
     endpoint = _LLM_ENDPOINTS.get(backend)
     if endpoint is None:
@@ -3146,6 +3205,7 @@ async def llm_enhance_stream_async(
     driver_profile: DriverProfile | None = None,
     conversation_history: list[dict[str, str]] | None = None,
     tracker: TokenUsageTracker | None = None,
+    track_id: str = "",
 ):
     """Async streaming version of :func:`llm_enhance` — Iter-134.
 
@@ -3165,6 +3225,15 @@ async def llm_enhance_stream_async(
 
     backend = config.llm_backend
     if backend == "none" or (backend == "openai" and not config.llm_api_key):
+        return
+    if backend == "builtin":
+        # Opt-BUILTIN-01: 内置小模型 —— 摘要按片 yield, 行为与流式一致。
+        enhanced = _builtin_enhance(
+            feedback, question, config, track_id, tracker, streamed=True
+        )
+        summary = enhanced["summary"]
+        for i in range(0, len(summary), 24):
+            yield summary[i:i + 24]
         return
     endpoint = _LLM_ENDPOINTS.get(backend)
     if endpoint is None:
@@ -3346,6 +3415,30 @@ class FeedbackEngine:
                 "memory_after_bytes": mem_before,
             }
 
+        if backend == "builtin":
+            # Opt-BUILTIN-01: 内置小模型 —— 随包离线, 探测 = 状态文件可读。
+            from f1opt.feedback.builtin_model import (
+                BUILTIN_MODEL_VERSION,
+                get_builtin_model,
+            )
+
+            model = get_builtin_model(self.config.data_dir)
+            st = model.stats()
+            self._llm_loaded = True
+            mem_after = self._get_memory_usage_bytes()
+            _logger.info(
+                "preload_llm: builtin model ready (version=%s samples=%s)",
+                BUILTIN_MODEL_VERSION, st["samples_total"],
+            )
+            return {
+                "loaded": True,
+                "backend": "builtin",
+                "model": BUILTIN_MODEL_VERSION,
+                "samples_total": st["samples_total"],
+                "memory_before_bytes": mem_before,
+                "memory_after_bytes": mem_after,
+            }
+
         endpoint = _LLM_ENDPOINTS.get(backend)
         model_name = self.config.llm_model or _LLM_DEFAULT_MODEL.get(backend)
         if endpoint is None:
@@ -3510,6 +3603,7 @@ class FeedbackEngine:
                 driver_profile=profile,
                 conversation_history=prior_history,
                 tracker=self.token_tracker,
+                track_id=track_id,
             )
         # Iter-146: attach quality assessment to every feedback response.
         feedback["_quality"] = _assess_quality(
@@ -3574,6 +3668,7 @@ class FeedbackEngine:
                 driver_profile=profile,
                 conversation_history=prior_history,
                 tracker=self.token_tracker,
+                track_id=track_id,
             )
         # Iter-146: attach quality assessment.
         feedback["_quality"] = _assess_quality(feedback, metrics.get("sources", []))
@@ -3639,6 +3734,7 @@ class FeedbackEngine:
                 driver_profile=profile,
                 conversation_history=prior_history,
                 tracker=self.token_tracker,
+                track_id=track_id,
             ):
                 accumulated.append(delta)
                 yield {"type": "chunk", "text": delta}
@@ -3698,6 +3794,7 @@ class FeedbackEngine:
                 driver_profile=profile,
                 conversation_history=prior_history,
                 tracker=self.token_tracker,
+                track_id=track_id,
             ):
                 accumulated.append(delta)
                 yield {"type": "chunk", "text": delta}

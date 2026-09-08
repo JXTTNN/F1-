@@ -64,8 +64,8 @@ class Settings(BaseModel):
 
     # --- LLM 反馈引擎 ---
     llm_backend: str = Field(
-        default_factory=lambda: _env("LLM_BACKEND", "none"),
-        description="LLM 后端: none|openai|local",
+        default_factory=lambda: _env("LLM_BACKEND", "builtin"),
+        description="LLM 后端: builtin(内置小模型,默认)|none|openai|local",
     )
     llm_api_key: str = Field(
         default_factory=lambda: _env("LLM_API_KEY", ""),

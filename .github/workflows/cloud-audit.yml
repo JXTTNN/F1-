@@ -88,27 +88,12 @@ jobs:
           pip install playwright
           playwright install --with-deps chromium
 
-      - name: Start mock Ollama (LLM audit fixture)
-        shell: bash
-        run: |
-          # 必须先于 API server 启动: preload_llm 的可达性探测在此之后执行。
-          mkdir -p reports
-          nohup python -u cloud_audit/mock_ollama.py > mock_ollama.log 2>&1 &
-          for i in $(seq 1 30); do
-            if (echo > /dev/tcp/127.0.0.1/11434) 2>/dev/null; then
-              echo "mock ollama up after ${i}s"; break
-            fi
-            sleep 1
-          done
-          curl -sf http://127.0.0.1:11434/healthz && echo ' (healthz ok)' \
-            || echo 'MOCK LLM UNAVAILABLE'
-
       - name: Boot API server
         shell: bash
         run: |
           mkdir -p data_store
           F1OPT_API_HOST=127.0.0.1 F1OPT_API_PORT=8000 F1OPT_UDP_PORT=20777 \
-            F1OPT_LLM_BACKEND=local F1OPT_LLM_MODEL=llama3.1 F1OPT_LLM_REFLECTION=false \
+            F1OPT_LLM_BACKEND=builtin \
             nohup python -u -m f1opt.api.runner > server.log 2>&1 &
           for i in $(seq 1 120); do
             if curl -sf http://127.0.0.1:8000/api/health >/dev/null 2>&1; then
@@ -118,15 +103,14 @@ jobs:
           done
           echo '--- /api/health ---'
           curl -s http://127.0.0.1:8000/api/health || echo 'HEALTH UNAVAILABLE'
-          # 内置 LLM 审计: 停表后显式预加载 (启用 _llm_loaded, 与游戏内
+          # 内置小模型审计: 停表后显式预加载 (启用 _llm_loaded, 与游戏内
           # 「跑圈只走规则引擎、停表后再启用 LLM」的产品语义一致)。
-          # 此时 mock Ollama 已在线 (上一 step), 探测应成功。
           echo '--- POST /api/llm/preload ---'
           curl -s -X POST http://127.0.0.1:8000/api/llm/preload || echo 'LLM PRELOAD FAILED'
 
       - name: Run UI click audit
         continue-on-error: true
-        run: python -u cloud_audit/ui_click_audit.py
+        run: AUDIT_LLM_BACKEND=builtin python -u cloud_audit/ui_click_audit.py
 
       - name: Dump server log tail
         if: always()

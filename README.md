@@ -9,18 +9,18 @@
 
 ## 下载即用（单文件 EXE）
 
-> **最新版 v1.2.2** — Windows 单文件，无需安装 Python，**双击即可用**。云端构建（Actions），EXE 内置 LLM 增强链路已通过端到端审计。
+> **最新版 v1.3.0** — Windows 单文件，无需安装 Python，**双击即可用**。云端构建（Actions），**内置小模型开箱即用**：收集车手反馈 → 针对性改进调教，离线运行、随反馈在线学习；EXE 本体已通过全量真人式点击审计。
 
 | 版本 | 平台 | 下载 |
 |------|------|------|
-| **v1.2.2**（最新，推荐） | Windows | [⬇️ 下载 f1opt.exe](https://github.com/JXTTNN/F1-/releases/download/v1.2.2/f1opt.exe) |
+| **v1.3.0**（最新，推荐） | Windows | [⬇️ 下载 f1opt.exe](https://github.com/JXTTNN/F1-/releases/download/v1.3.0/f1opt.exe) |
 | 全部历史版本 | 跨平台 | [GitHub Releases](https://github.com/JXTTNN/F1-/releases) |
 
-**v1.2.2 校验**：SHA256 与文件大小见 [Release 页说明](https://github.com/JXTTNN/F1-/releases/tag/v1.2.2)（随云端构建自动生成）。
+**v1.3.0 校验**：SHA256 与文件大小见 [Release 页说明](https://github.com/JXTTNN/F1-/releases/tag/v1.3.0)（随云端构建自动生成）。
 
 > 双击 `f1opt.exe` 会看到启动横幅，随后自动在默认浏览器打开实时面板（首次解压约几秒）。实时遥测 + 车手反馈 + 调教编辑 + 最优搜索全部在一个页面。关闭控制台窗口或按 Ctrl+C 即退出。
 >
-> **内置 LLM 增强（可选）**：`F1OPT_LLM_BACKEND=local`（配合 Ollama）或 `F1OPT_LLM_BACKEND=openai` + API Key，写在 EXE 同目录 `.env` 即可。跑圈实时反馈始终走规则引擎（零延迟），停表后分析自动启用 LLM 改写；LLM 不可用时静默回退，不影响使用。
+> **内置小模型（默认启用，开箱即用）**：`F1OPT_LLM_BACKEND=builtin`（默认）。跑完停车后在反馈框描述问题（推头/甩尾/打滑/锁死…），内置模型即时给出带数值的针对性调教修正，并把反馈样本持久化到本地、随使用不断学习；跑圈实时反馈始终走规则引擎（零延迟），停表后分析自动启用。也可切换 `local`（Ollama）/ `openai` 后端获得自由文本增强。
 
 ---
 
