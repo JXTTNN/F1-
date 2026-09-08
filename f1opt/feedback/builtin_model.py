@@ -91,6 +91,36 @@ _SUB_INTENT_LABELS: dict[str, str] = {
     "balance": "前后平衡", "general": "整体表现",
 }
 
+#: Opt-BUILTIN-02: 问题关键词直判 (优先于 classify_sub_intent)。
+#: classify_sub_intent 按 intent 类别过滤模式 —— "怎么调" 触发 setup_advice
+#: 时 understeer 等问题模式不参与匹配, 车手最典型的 "推头怎么调" 会被判
+#: 成 general 而丢失针对性修正。直判层不受 intent 类别限制。
+_PROBLEM_KEYWORDS: list[tuple[str, re.Pattern[str]]] = [
+    ("understeer", re.compile(r"推头|转向不足|understeer|under.?steer", re.I)),
+    ("oversteer", re.compile(r"甩尾|转向过度|车尾不稳|oversteer|over.?steer", re.I)),
+    ("brake", re.compile(r"锁死|抱死|刹不住|制动距离|brake|lock.?up", re.I)),
+    ("tyre_wear", re.compile(r"磨胎|磨损|胎耗|掉胎|tyre.?wear|tire.?wear|degradation", re.I)),
+    ("traction", re.compile(r"打滑|牵引力|驱动轮|wheelspin|traction", re.I)),
+    ("ers", re.compile(r"\bers\b|能量管理|电量|deploy", re.I)),
+    ("balance", re.compile(r"前后平衡|整体平衡|balance", re.I)),
+]
+
+
+def _detect_sub_intent(question: str | None) -> str:
+    """问题 → 子意图: 关键词直判优先, classify_sub_intent 兜底。"""
+    q = question or ""
+    for name, pat in _PROBLEM_KEYWORDS:
+        if pat.search(q):
+            return name
+    try:
+        intent = classify_intent(q)
+        sub = classify_sub_intent(q, intent.intent)
+        if sub.confidence >= 0.5:
+            return sub.sub_intent
+    except Exception:  # noqa: BLE001
+        pass
+    return "general"
+
 
 def _field_spec(field: str) -> Any:
     for spec in ALL_SETUP_FIELDS():
@@ -214,12 +244,7 @@ class BuiltinTinyModel:
         driver_style: str | None = None,
     ) -> dict[str, Any]:
         """生成针对性调教建议 (自然语言 + 结构化修正列表)。"""
-        try:
-            intent = classify_intent(question or "")
-            sub = classify_sub_intent(question or "", intent.intent)
-            sub_intent = sub.sub_intent if sub.confidence >= 0.5 else "general"
-        except Exception:  # noqa: BLE001
-            sub_intent = "general"
+        sub_intent = _detect_sub_intent(question)
 
         table = _ADJUSTMENT_TABLE.get(sub_intent, [])
         key = f"{track_id}|{sub_intent}"

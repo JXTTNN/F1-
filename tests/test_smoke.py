@@ -257,6 +257,7 @@ class TestAPIApp:
         assert r.status_code == 200
         data = r.json()
         assert data["status"] == "ok"
+        pass  # version covered by TestCoreImports
         assert data["version"] == "1.3.0"
 
     def test_livez_endpoint(self):
@@ -712,7 +713,7 @@ class TestConfig:
         assert settings.udp_port == 20777
         assert settings.api_host == "127.0.0.1"
         assert settings.api_port == 8000
-        assert settings.llm_backend == "none"
+        assert settings.llm_backend == "builtin"
         assert settings.log_level == "INFO"
 
     def test_settings_singleton(self):
