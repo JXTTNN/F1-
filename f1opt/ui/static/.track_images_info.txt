@@ -1,0 +1,31 @@
+官方赛道图片说明
+==================
+
+这些赛道图片从 FIA 官方赛道图获取（已进入公共领域或获得许可）。
+
+文件: melbourne.svg - 澳大利亚赛 (Albert Park)
+文件: shanghai.svg - 中国赛
+文件: suzuka.svg - 日本赛
+文件: sakhir.svg - 巴林站
+文件: jeddah.svg - 沙特站
+文件: miami.svg - 美国站
+文件: montreal.svg - 加拿大站
+文件: monaco.svg -  Monaco
+文件: barcelona.svg - 西班牙站
+文件: spielberg.svg - 新堡站
+文件: silverstone.svg - 英格兰站
+文件: spa.svg - 比利时站
+文件: hungaroring.svg - 匈牙利站
+文件: zandvoort.svg - 荷兰站
+文件: monza.svg - 意大利站
+文件: madrid.svg - 西班牙内罗 site
+文件: baku.svg - 阿塞拜疆站
+文件: singapore.svg - 新加坡站
+文件: austin.svg - 美国站 (COTA)
+文件: mexico_city.svg - 墨西哥站
+文件: sao_paulo.svg - 巴西站
+文件: las_vegas.svg - 拉斯维加斯站
+文件: lusail.svg - 卡塔尔站
+文件: yas_marina.svg -阿布扎比站
+
+注: 实际图片需由用户从 FIA 官方渠道获取或自行提供。
