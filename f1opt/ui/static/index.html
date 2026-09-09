@@ -9,6 +9,7 @@
     --bg:#08090b; --panel:#111317; --panel2:#16191f; --line:#262a32;
     --txt:#e6e8ec; --muted:#8a909c; --dim:#5b616e;
     --red:#ff2d2d; --cyan:#00e5ff; --green:#22c55e; --amber:#f59e0b; --purple:#a78bfa;
+    --yellow:#eab308; --pink:#ec4899; --orange:#f97316; --gray:#94a3b8; --slate:#334155;
   }
   *{box-sizing:border-box}
   html,body{margin:0;padding:0}
@@ -364,9 +365,10 @@
     <!-- Interactive track map with corner-click feedback (Opt-Map) -->
     <div id="track-map-wrap" class="hidden" style="position:relative;border:1px solid var(--line);border-radius:8px;overflow:hidden;margin-bottom:10px;background:var(--panel2)">
       <div id="track-map-canvas"></div>
-      <div id="corner-feedback" class="hidden" style="position:absolute;background:var(--panel);border:1px solid var(--cyan);border-radius:8px;padding:8px;z-index:20;box-shadow:0 4px 20px rgba(0,0,0,.5);min-width:200px">
+      <div id="corner-feedback" class="hidden" style="position:absolute;background:var(--panel);border:1px solid var(--cyan);border-radius:8px;padding:8px;z-index:20;box-shadow:0 4px 20px rgba(0,0,0,.5);min-width:250px;max-width:300px">
         <div id="cf-title" style="font-size:12px;font-weight:700;margin-bottom:6px;color:var(--cyan)">弯道反馈</div>
-        <div id="cf-tags" style="display:flex;flex-wrap:wrap;gap:4px;max-width:220px"></div>
+        <div id="cf-tabs" style="display:flex;flex-wrap:wrap;gap:3px;margin-bottom:6px;padding:3px;background:rgba(0,0,0,0.3);border-radius:4px"></div>
+        <div id="cf-tags" style="display:flex;flex-wrap:wrap;gap:4px;max-width:280px"></div>
         <div style="display:flex;gap:6px;margin-top:8px">
           <button id="cf-submit" class="btn cyan" style="flex:1;padding:4px 8px;font-size:11px">提交反馈</button>
           <button id="cf-cancel" class="btn" style="padding:4px 8px;font-size:11px">取消</button>
@@ -1317,19 +1319,79 @@
   // ---------- interactive track map (Opt-Map) ----------
   state.trackMap = null;
   state.selectedCorner = null;
-  var FEEDBACK_TAGS = [
-    {id:"understeer_in", label:"入弯推头", color:"var(--red)"},
-    {id:"oversteer_in", label:"入弯打滑", color:"var(--amber)"},
-    {id:"understeer_out", label:"出弯推头", color:"var(--red)"},
-    {id:"oversteer_out", label:"出弯打滑", color:"var(--amber)"},
-    {id:"brake_instability", label:"刹车不稳", color:"var(--red)"},
-    {id:"traction_loss", label:"油门不足", color:"var(--amber)"},
-    {id:"overheat", label:"轮胎过热", color:"var(--red)"},
-    {id:"overcool", label:"轮胎过冷", color:"var(--cyan)"},
-    {id:"steer_delay", label:"转向迟钝", color:"var(--amber)"},
-    {id:"corner_slow", label:"过弯速度不足", color:"var(--red)"},
-    {id:"straight_slow", label:"直道速度不足", color:"var(--amber)"},
+  state.selectedTagIds = {}; // Maps tagId -> {label, categoryId} for cross-tab persistence
+
+  // Feedback tags organized by corner phase
+  var CORNER_FEEDBACK_CATEGORIES = [
+    {
+      id: "turn-in",
+      label: "入弯",
+      color: "var(--cyan)",
+      tags: [
+        {id: "understeer_in", label: "转向不足", color: "var(--red)"},
+        {id: "oversteer_in", label: "转向过度", color: "var(--amber)"},
+        {id: "brake_lock", label: "刹车刹不住", color: "var(--red)"},
+        {id: "brake_lift", label: "刹车收油", color: "var(--amber)"},
+        {id: "steer_delay", label: "转向迟钝", color: "var(--amber)"},
+        {id: "steer_sharp", label: "转向过于灵敏", color: "var(--amber)"},
+      ]
+    },
+    {
+      id: "apex",
+      label: "弯中",
+      color: "var(--green)",
+      tags: [
+        {id: "rear_slip", label: "车尾易打滑", color: "var(--red)"},
+        {id: "steer_delay_apex", label: "转向迟钝", color: "var(--amber)"},
+        {id: "steer_sharp_apex", label: "转向过于灵敏", color: "var(--amber)"},
+        {id: "understeer_apex", label: "转向不足", color: "var(--red)"},
+        {id: "oversteer_apex", label: "转向过度", color: "var(--amber)"},
+      ]
+    },
+    {
+      id: "turn-out",
+      label: "出弯",
+      color: "var(--purple)",
+      tags: [
+        {id: "acceleration", label: "加速不足", color: "var(--amber)"},
+        {id: "rear_slip_out", label: "车尾易打滑", color: "var(--red)"},
+        {id: "understeer_out", label: "转向不足", color: "var(--red)"},
+        {id: "oversteer_out", label: "转向过度", color: "var(--amber)"},
+        {id: "steer_delay_out", label: "转向迟钝", color: "var(--amber)"},
+        {id: "steer_sharp_out", label: "转向过于灵敏", color: "var(--amber)"},
+      ]
+    },
+    {
+      id: "straight",
+      label: "直道",
+      color: "var(--yellow)",
+      tags: [
+        {id: "straight_slow", label: "速度弱", color: "var(--red)"},
+        {id: "lap_slow", label: "单圈慢", color: "var(--amber)"},
+      ]
+    },
+    {
+      id: "global",
+      label: "全局",
+      color: "var(--gray)",
+      tags: [
+        {id: "tire_wear", label: "胎耗", color: "var(--pink)"},
+        {id: "fuel_wear", label: "油耗", color: "var(--orange)"},
+      ]
+    }
   ];
+
+  // Flattened tags for backward compatibility and quick lookup
+  var FEEDBACK_TAGS = [];
+  CORNER_FEEDBACK_CATEGORIES.forEach(cat => {
+    FEEDBACK_TAGS.push(...cat.tags);
+  });
+
+  // Build lookup map (id -> category)
+  var TAG_TO_CATEGORY = {};
+  CORNER_FEEDBACK_CATEGORIES.forEach(cat => {
+    cat.tags.forEach(tag => TAG_TO_CATEGORY[tag.id] = cat.id);
+  });
 
   async function loadTrackMap(trackId){
     try{
@@ -1435,16 +1497,70 @@
 
   function showCornerFeedback(corner){
     state.selectedCorner = corner;
+    state.selectedTagIds = {}; // Reset cross-tab selections for new corner
     el("cf-title").textContent = "弯道 "+corner.corner_id+" — "+corner.name;
     el("cf-title").style.color = "var(--cyan)";
+
+    // Build tabs for phase selection
+    var tabsDiv = el("cf-tabs");
+    tabsDiv.innerHTML = "";
+    CORNER_FEEDBACK_CATEGORIES.forEach(function(cat, idx){
+      var btn = document.createElement("button");
+      btn.className = "btn";
+      btn.style.cssText = "font-size:10px;padding:3px 6px;margin:2px;border-color:rgba(255,255,255,0.3);background:rgba(255,255,255,0.05)";
+      btn.textContent = cat.label;
+      btn.dataset.tabId = cat.id;
+      btn.dataset.tabIdx = idx;
+      btn.addEventListener("click", function(){
+        var active = tabsDiv.querySelector(".tab-active");
+        if(active) { active.classList.remove("tab-active"); active.style.borderColor = "rgba(255,255,255,0.3)"; active.style.color = ""; }
+        this.classList.add("tab-active");
+        var c = CORNER_FEEDBACK_CATEGORIES.find(function(c){ return c.id === this.dataset.tabId; });
+        if(c){
+          this.style.borderColor = c.color;
+          this.style.color = c.color;
+        }
+        renderTagsForCategory(cat);
+      });
+      tabsDiv.appendChild(btn);
+    });
+
+    // Render tags for default (first) category
+    renderTagsForCategory(CORNER_FEEDBACK_CATEGORIES[0]);
+
+    // Set first tab as active
+    if(CORNER_FEEDBACK_CATEGORIES.length > 0){
+      var firstBtn = tabsDiv.querySelector("button");
+      firstBtn.classList.add("tab-active");
+      firstBtn.style.borderColor = CORNER_FEEDBACK_CATEGORIES[0].color;
+      firstBtn.style.color = CORNER_FEEDBACK_CATEGORIES[0].color;
+    }
+
+    var fbPanel = el("corner-feedback");
+    fbPanel.classList.remove("hidden");
+
+    // Position near the corner marker in the SVG
+    var svgEl = el("track-map-canvas").querySelector("svg");
+    if(svgEl){
+      var rect = svgEl.getBoundingClientRect();
+      var scaleX = rect.width / (state.trackMap ? state.trackMap.canvas_width : 800);
+      var scaleY = rect.height / (state.trackMap ? state.trackMap.canvas_height : 600);
+      fbPanel.style.left = Math.min(corner.x_px * scaleX + 15, rect.width - 250) + "px";
+      fbPanel.style.top = Math.min(corner.y_px * scaleY - 20, rect.height - 140) + "px";
+    }
+  }
+
+  function renderTagsForCategory(cat){
     var tagsDiv = el("cf-tags");
     tagsDiv.innerHTML = "";
-    FEEDBACK_TAGS.forEach(function(tag){
+    cat.tags.forEach(function(tag){
       var btn = document.createElement("button");
       btn.className = "btn";
       btn.style.cssText = "font-size:10px;padding:3px 7px;border-color:rgba(255,255,255,0.1);transition:.12s";
       btn.textContent = tag.label;
       btn.dataset.tagId = tag.id;
+      btn.style.borderColor = "rgba(255,255,255,0.1)";
+      btn.style.color = "var(--txt)";
       btn.addEventListener("click", function(){
         if(this.classList.contains("selected")){
           this.classList.remove("selected");
@@ -1458,17 +1574,6 @@
       });
       tagsDiv.appendChild(btn);
     });
-    var fbPanel = el("corner-feedback");
-    fbPanel.classList.remove("hidden");
-    // Position near the corner marker in the SVG
-    var svgEl = el("track-map-canvas").querySelector("svg");
-    if(svgEl){
-      var rect = svgEl.getBoundingClientRect();
-      var scaleX = rect.width / (state.trackMap ? state.trackMap.canvas_width : 800);
-      var scaleY = rect.height / (state.trackMap ? state.trackMap.canvas_height : 600);
-      fbPanel.style.left = Math.min(corner.x_px * scaleX + 15, rect.width - 230) + "px";
-      fbPanel.style.top = Math.min(corner.y_px * scaleY - 20, rect.height - 120) + "px";
-    }
   }
 
   async function submitCornerFeedback(){

@@ -2553,15 +2553,24 @@ def rule_based_feedback(
     if feedback_text:
         # Extract feedback issue IDs from text for consistency check
         _FEEDBACK_KEYWORD_MAP = {
-            "推头": "understeer_in", "understeer": "understeer_in",
-            "打滑": "oversteer_in", "oversteer": "oversteer_in",
-            "推尾": "oversteer_out",
-            "过热": "overheat", "轮胎热": "overheat",
-            "过冷": "overcool",
-            "刹车": "brake_instability",
-            "转向": "steer_delay", "迟钝": "steer_delay",
-            "速度不足": "corner_slow",
-            "直道": "straight_slow",
+            # ── Turn-in (入弯) ──
+            "转向不足": "understeer_in", "推头": "understeer_in",
+            "转向过度": "oversteer_in", "打滑": "oversteer_in",
+            "刹车刹不住": "brake_lock", "brake_lock": "brake_lock",
+            "刹车收油": "brake_lift", "brake_lift": "brake_lift",
+            # ── Apex (弯中) ──
+            "车尾易打滑": "rear_slip", "车尾打滑": "rear_slip",
+            "转向迟钝": "steer_delay",
+            # ── Turn-out (出弯) ──
+            "加速不足": "acceleration", "acceleration": "acceleration",
+            "推尾": "understeer_out", "出弯推头": "understeer_out",
+            "出弯打滑": "oversteer_out",
+            # ── Straight (直道) ──
+            "速度弱": "straight_slow", "直道慢": "straight_slow",
+            "单圈慢": "lap_slow", "lap_slow": "lap_slow",
+            # ── Global (全局) ──
+            "胎耗": "tire_wear", "轮胎磨损": "tire_wear", "tire_wear": "tire_wear",
+            "油耗": "fuel_wear", "fuel_wear": "fuel_wear",
         }
         fb_lower = feedback_text.lower()
         for kw, issue_id in _FEEDBACK_KEYWORD_MAP.items():

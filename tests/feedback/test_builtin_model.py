@@ -46,7 +46,7 @@ class TestSuggest:
         fields = [a["field"] for a in out["adjustments"]]
         assert "front_wing" in fields
         fw = next(a for a in out["adjustments"] if a["field"] == "front_wing")
-        assert fw["delta"] < 0  # 推头 → 减前翼
+        assert fw["delta"] > 0, "推头应增前翼，改善前轮载荷"
         assert "推头" in out["summary"]
 
     def test_adjustments_clamped_to_spec(self, model) -> None:
