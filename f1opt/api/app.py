@@ -62,6 +62,10 @@ from f1opt.data.tracks import (
     track_name_cn,
     track_type_cn,
 )
+from f1opt.data.track_maps import (
+    TRACK_MAPS,
+    interpolate_position,
+)
 from f1opt.model.online_correction import ObservationBuffer, add_observation
 from f1opt.observability.audit import get_audit_logger
 from f1opt.observability.metrics import MetricsRegistry
@@ -247,6 +251,10 @@ class _TelemetryState:
         self.obs_buffer = ObservationBuffer()
         self.player_setup_cache: CarSetup | None = None
         self.current_track_id: str | None = None
+        # Opt-LOOP-01: 60Hz 统一帧环形缓存 (~60s 窗口), 供 /api/analyze 弯道证据。
+        from f1opt.feedback.session_analysis import ServerFrameBuffer
+
+        self.frame_buffer = ServerFrameBuffer()
 
 
 def _emit_lap(state: _TelemetryState, row: dict[str, Any]) -> None:
@@ -415,6 +423,7 @@ def _make_subscriber(state: _TelemetryState) -> Any:
         frame = state.aligner.latest_unified_frame()
         if frame is not None:
             state.manager.broadcast(_frame_to_ws(frame))
+            state.frame_buffer.append(frame)
 
     return _on_packet
 
@@ -447,6 +456,19 @@ class FeedbackRequest(BaseModel):
     driver_profile: dict[str, Any] | None = None
     driver_style: Literal["default", "aggressive", "conservative"] = "default"
     session_id: str | None = None
+
+
+class AnalyzeRequest(BaseModel):
+    """``POST /api/analyze`` body (Opt-LOOP-01).
+
+    用户主闭环入口: 反馈文本 + 服务端自动采集的遥测/实测圈速 →
+    弯道证据 + 定向搜索 → 新调教。``track_id`` 省略时用当前会话赛道
+    (由游戏 session 包自动设置)。
+    """
+
+    question: str | None = None
+    track_id: str | None = None
+    driver_style: Literal["default", "aggressive", "conservative"] = "default"
 
 
 class BatchFeedbackRequest(BaseModel):
@@ -838,6 +860,46 @@ def create_app(start_listener: bool = True) -> FastAPI:
             )
         return _track_dict(track)
 
+    @app.get("/api/track-map/{track_id}")
+    async def get_track_map_endpoint(track_id: str) -> dict[str, Any]:
+        """Get track map data (control points and corner definitions) for frontend rendering."""
+        track_map = TRACK_MAPS.get(track_id)
+        if track_map is None:
+            raise HTTPException(
+                status_code=404, detail=f"unknown track_id: {track_id}"
+            )
+        return {
+            "track_id": track_map.track_id,
+            "image_file": track_map.image_file,
+            "canvas_width": track_map.canvas_width,
+            "canvas_height": track_map.canvas_height,
+            "control_points": track_map.control_points,
+            "corners": [
+                {
+                    "corner_id": c.corner_id,
+                    "name": c.name,
+                    "distance_start": c.distance_start,
+                    "distance_end": c.distance_end,
+                    "x_px": c.x_px,
+                    "y_px": c.y_px,
+                }
+                for c in track_map.corners
+            ],
+            "sector_boundaries": track_map.sector_boundaries,
+            "start_finish_line_px": track_map.start_finish_line_px,
+            "pit_entry_px": track_map.pit_entry_px,
+            "pit_exit_px": track_map.pit_exit_px,
+        }
+
+    @app.get("/api/track-map-pixel/{track_id}")
+    async def get_track_map_pixel(track_id: str, distance_m: float) -> dict[str, float]:
+        """Map a lap distance to pixel coordinates on the track map."""
+        track_map = TRACK_MAPS.get(track_id)
+        if track_map is None:
+            raise HTTPException(status_code=404, detail=f"unknown track_id: {track_id}")
+        x_px, y_px = interpolate_position(distance_m, track_map.control_points)
+        return {"track_id": track_id, "distance_m": distance_m, "x_px": x_px, "y_px": y_px}
+
     @app.get("/api/setup/default")
     async def default_setup() -> dict[str, Any]:
         return DEFAULT_SETUP.model_dump()
@@ -989,6 +1051,103 @@ def create_app(start_listener: bool = True) -> FastAPI:
                 return result
         finally:
             state.metrics.feedback.record(time.perf_counter() - start)
+
+    @app.post("/api/analyze")
+    @limiter.limit("10/minute")
+    async def analyze(body: AnalyzeRequest, request: Request) -> Any:
+        """Opt-LOOP-01: 主闭环分析 — 反馈 × 实测遥测 → 针对性新调教。
+
+        数据全部来自服务端自动采集 (跑圈时无需任何手动操作):
+        - ObservationBuffer: 每圈 (调教, 赛道, 实测圈速) 观测 + DNN 残差;
+        - ServerFrameBuffer: 最近 ~60s 统一帧 (弯道级证据切片);
+        - player_setup_cache: 玩家当前调教 (搜索起点)。
+
+        学习闭环: 上次分析给出的修正, 会与本轮实测最快圈自动对比并回填
+        builtin 小模型权重 (改善加权 / 恶化反向)。
+        """
+        start = time.perf_counter()
+        state: _TelemetryState = request.app.state.telemetry
+        track_id = body.track_id or state.current_track_id
+        if not track_id:
+            raise HTTPException(
+                status_code=400,
+                detail="track_id 未提供且游戏尚未通过遥测设置当前赛道",
+            )
+        from f1opt.feedback.builtin_model import get_builtin_model
+        from f1opt.feedback.session_analysis import LearningLoop, analyze_session
+        from f1opt.feedback.engine import _get_default_engine
+
+        builtin = get_builtin_model(state.settings.data_dir)
+        loop_state = LearningLoop(state.settings.data_dir)
+
+        driver_profile: Any
+        style_map = {
+            "default": None,
+            "aggressive": None,
+            "conservative": None,
+        }
+        driver_profile = None
+        try:
+            from f1opt.driver.profile import (
+                AGGRESSIVE_PROFILE,
+                CONSERVATIVE_PROFILE,
+                DEFAULT_PROFILE,
+            )
+
+            style_map = {
+                "default": DEFAULT_PROFILE,
+                "aggressive": AGGRESSIVE_PROFILE,
+                "conservative": CONSERVATIVE_PROFILE,
+            }
+            driver_profile = style_map.get(body.driver_style)
+        except ImportError:
+            driver_profile = None
+
+        # 1. 学习闭环结算: 上次修正 vs 本轮实测最快圈。
+        best_lap = None
+        try:
+            observations = state.obs_buffer.observations_for_track(track_id)
+            if observations:
+                best_lap = min(o.observed_lap for o in observations)
+        except Exception:  # noqa: BLE001
+            observations = []
+        settle_result = loop_state.settle(track_id, best_lap, builtin.learn_outcome)
+
+        # 2. 分析 + 定向搜索。
+        result = analyze_session(
+            body.question,
+            track_id,
+            state.player_setup_cache,
+            state.obs_buffer,
+            state.frame_buffer,
+            builtin_model=builtin,
+            driver_profile=driver_profile,
+        )
+        result["track_id"] = track_id
+        result["settle"] = settle_result
+
+        # 3. 登记新的 pending 修正 (供下轮闭环结算)。
+        if result.get("changes"):
+            loop_state.set_pending(
+                track_id,
+                result["sub_intent"],
+                result["changes"],
+                baseline_best_lap=best_lap,
+            )
+            result["learning"]["pending"] = True
+
+        # 4. 反馈引擎同款评估指标 (groundedness 等), 复用 _assess_quality。
+        try:
+            from f1opt.feedback.engine import _assess_quality
+
+            result["_quality"] = _assess_quality(
+                result, result.get("evidence", [])
+            )
+        except Exception:  # noqa: BLE001
+            pass
+
+        result["elapsed_ms"] = round((time.perf_counter() - start) * 1000, 1)
+        return JSONResponse(result)
 
     @app.post("/api/feedback/analyze")
     async def feedback_analyze(body: FeedbackRequest) -> Any:

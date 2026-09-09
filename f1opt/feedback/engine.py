@@ -2507,6 +2507,7 @@ def rule_based_feedback(
     setup: dict[str, Any],
     track_id: str,
     driver_profile: DriverProfile | dict[str, Any] | list[float] | None = None,
+    feedback_text: str | None = None,
 ) -> dict[str, Any]:
     """Produce ALL 18 dimension entries + setup suggestions from F1 setup rules.
 
@@ -2545,6 +2546,29 @@ def rule_based_feedback(
     dim_braking, sug = _dim_braking(values, refs, setup)
     dim_braking = _apply_personal_advice(dim_braking, profile, _braking_personal)
     suggestions.extend(sug)
+
+    # Safety filter: validate and clamp suggestions before output (Opt-Safety)
+    from f1opt.feedback.safety import filter_harmful_suggestions
+    user_issues = []
+    if feedback_text:
+        # Extract feedback issue IDs from text for consistency check
+        _FEEDBACK_KEYWORD_MAP = {
+            "推头": "understeer_in", "understeer": "understeer_in",
+            "打滑": "oversteer_in", "oversteer": "oversteer_in",
+            "推尾": "oversteer_out",
+            "过热": "overheat", "轮胎热": "overheat",
+            "过冷": "overcool",
+            "刹车": "brake_instability",
+            "转向": "steer_delay", "迟钝": "steer_delay",
+            "速度不足": "corner_slow",
+            "直道": "straight_slow",
+        }
+        fb_lower = feedback_text.lower()
+        for kw, issue_id in _FEEDBACK_KEYWORD_MAP.items():
+            if kw in fb_lower:
+                user_issues.append(issue_id)
+    suggestions, safety_report = filter_harmful_suggestions(suggestions, user_issues or None)
+
     dim_ers_deployment = _dim_ers_deployment(values, refs)
     dim_drs_usage = _dim_drs_usage(values, refs)
     dim_ers_sector = _dim_ers_sector_efficiency(values)
@@ -3564,7 +3588,8 @@ class FeedbackEngine:
         profile = _normalize_driver_profile(driver_profile)
         metrics = extract_metrics(frames, setup, track_id)
         feedback = rule_based_feedback(
-            metrics, setup, track_id, driver_profile=profile
+            metrics, setup, track_id, driver_profile=profile,
+            feedback_text=question,
         )
         # Iter-07: resolve a conversation session when session_id is provided.
         # The session is consulted (read-only) inside _answer_question so that
@@ -3635,7 +3660,8 @@ class FeedbackEngine:
         profile = _normalize_driver_profile(driver_profile)
         metrics = extract_metrics(frames, setup, track_id)
         feedback = rule_based_feedback(
-            metrics, setup, track_id, driver_profile=profile
+            metrics, setup, track_id, driver_profile=profile,
+            feedback_text=question,
         )
         conversation = get_session(session_id) if session_id is not None else None
         # Iter-125: capture prior turns BEFORE adding the current turn, so the
@@ -3704,7 +3730,8 @@ class FeedbackEngine:
         profile = _normalize_driver_profile(driver_profile)
         metrics = extract_metrics(frames, setup, track_id)
         feedback = rule_based_feedback(
-            metrics, setup, track_id, driver_profile=profile
+            metrics, setup, track_id, driver_profile=profile,
+            feedback_text=question,
         )
         conversation = get_session(session_id) if session_id is not None else None
         prior_history = conversation.recent(6) if conversation is not None else None
@@ -3766,7 +3793,8 @@ class FeedbackEngine:
         profile = _normalize_driver_profile(driver_profile)
         metrics = extract_metrics(frames, setup, track_id)
         feedback = rule_based_feedback(
-            metrics, setup, track_id, driver_profile=profile
+            metrics, setup, track_id, driver_profile=profile,
+            feedback_text=question,
         )
         conversation = get_session(session_id) if session_id is not None else None
         prior_history = conversation.recent(6) if conversation is not None else None

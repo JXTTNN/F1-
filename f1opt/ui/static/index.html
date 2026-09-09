@@ -361,6 +361,20 @@
       <span id="track-info" class="sub" style="margin:0">—</span>
     </div>
 
+    <!-- Interactive track map with corner-click feedback (Opt-Map) -->
+    <div id="track-map-wrap" class="hidden" style="position:relative;border:1px solid var(--line);border-radius:8px;overflow:hidden;margin-bottom:10px;background:var(--panel2)">
+      <div id="track-map-canvas"></div>
+      <div id="corner-feedback" class="hidden" style="position:absolute;background:var(--panel);border:1px solid var(--cyan);border-radius:8px;padding:8px;z-index:20;box-shadow:0 4px 20px rgba(0,0,0,.5);min-width:200px">
+        <div id="cf-title" style="font-size:12px;font-weight:700;margin-bottom:6px;color:var(--cyan)">弯道反馈</div>
+        <div id="cf-tags" style="display:flex;flex-wrap:wrap;gap:4px;max-width:220px"></div>
+        <div style="display:flex;gap:6px;margin-top:8px">
+          <button id="cf-submit" class="btn cyan" style="flex:1;padding:4px 8px;font-size:11px">提交反馈</button>
+          <button id="cf-cancel" class="btn" style="padding:4px 8px;font-size:11px">取消</button>
+        </div>
+      </div>
+      <div id="map-car" class="hidden" style="position:absolute;width:10px;height:10px;border-radius:50%;background:var(--red);transform:translate(-50%,-50%);box-shadow:0 0 8px var(--red);pointer-events:none;z-index:15"></div>
+    </div>
+
     <div class="ctl-row">
       <button id="predict-btn" class="btn primary">预测圈速</button>
       <input id="feedback-input" type="text" placeholder="问车手问题，如：车尾太松了怎么办" style="flex:1;min-width:140px;padding:5px 8px;background:var(--bg);border:1px solid var(--line);border-radius:4px;color:var(--txt);font-size:12px">
@@ -915,6 +929,8 @@
     else { setText("aero-val","—"); el("aero-val").style.color="var(--muted)"; }
     // 轮胎化合物 (来自 Packet 7 actualTyreCompound, 服务端已映射为 C0-C6/雨胎)
     if(f.tyre_compound_name){ setText("compound-val", f.tyre_compound_name); el("compound-val").style.color="var(--cyan)"; }
+    // Update car position on interactive track map (Opt-Map)
+    if(f.lap_distance !== undefined){ updateCarPosition(f.lap_distance); }
     else { setText("compound-val","—"); el("compound-val").style.color="var(--muted)"; }
     setText("lapdist-val", num(f.lap_distance,0)+" m");
 
@@ -1298,6 +1314,217 @@
     }
   }
 
+  // ---------- interactive track map (Opt-Map) ----------
+  state.trackMap = null;
+  state.selectedCorner = null;
+  var FEEDBACK_TAGS = [
+    {id:"understeer_in", label:"入弯推头", color:"var(--red)"},
+    {id:"oversteer_in", label:"入弯打滑", color:"var(--amber)"},
+    {id:"understeer_out", label:"出弯推头", color:"var(--red)"},
+    {id:"oversteer_out", label:"出弯打滑", color:"var(--amber)"},
+    {id:"brake_instability", label:"刹车不稳", color:"var(--red)"},
+    {id:"traction_loss", label:"油门不足", color:"var(--amber)"},
+    {id:"overheat", label:"轮胎过热", color:"var(--red)"},
+    {id:"overcool", label:"轮胎过冷", color:"var(--cyan)"},
+    {id:"steer_delay", label:"转向迟钝", color:"var(--amber)"},
+    {id:"corner_slow", label:"过弯速度不足", color:"var(--red)"},
+    {id:"straight_slow", label:"直道速度不足", color:"var(--amber)"},
+  ];
+
+  async function loadTrackMap(trackId){
+    try{
+      var map = await fetchJSON("/api/track-map/"+trackId);
+      state.trackMap = map;
+      renderTrackMap(map);
+    }catch(e){
+      state.trackMap = null;
+      el("track-map-wrap").classList.add("hidden");
+    }
+  }
+
+  function renderTrackMap(map){
+    var wrap = el("track-map-wrap");
+    var container = el("track-map-canvas");
+    wrap.classList.remove("hidden");
+    container.innerHTML = "";
+    var w = map.canvas_width, h = map.canvas_height;
+    var ns = "http://www.w3.org/2000/svg";
+
+    // Create SVG overlay
+    var svg = document.createElementNS(ns, "svg");
+    svg.setAttribute("viewBox", "0 0 "+w+" "+h);
+    svg.style.width = "100%";
+    svg.style.height = "auto";
+    svg.style.display = "block";
+
+    // Draw track line from control points
+    if(map.control_points && map.control_points.length > 1){
+      var pts = map.control_points.map(function(cp){ return cp[1]+","+cp[2]; }).join(" ");
+      var pline = document.createElementNS(ns, "polyline");
+      pline.setAttribute("points", pts);
+      pline.setAttribute("fill", "none");
+      pline.setAttribute("stroke", "rgba(255,255,255,0.15)");
+      pline.setAttribute("stroke-width", "3");
+      pline.setAttribute("stroke-linecap", "round");
+      svg.appendChild(pline);
+    }
+
+    // Draw corner markers
+    map.corners.forEach(function(c){
+      var circle = document.createElementNS(ns, "circle");
+      circle.setAttribute("cx", c.x_px);
+      circle.setAttribute("cy", c.y_px);
+      circle.setAttribute("r", "6");
+      circle.setAttribute("fill", "rgba(255,255,255,0.12)");
+      circle.setAttribute("stroke", "rgba(0,229,255,0.4)");
+      circle.setAttribute("stroke-width", "1.5");
+      circle.setAttribute("data-corner-id", c.corner_id);
+      circle.setAttribute("style", "cursor:pointer;transition:all .15s");
+      circle.addEventListener("mouseenter", function(){ this.setAttribute("r","9"); this.setAttribute("fill","rgba(0,229,255,0.3)"); this.setAttribute("stroke","var(--cyan)"); });
+      circle.addEventListener("mouseleave", function(){ this.setAttribute("r","6"); this.setAttribute("fill","rgba(255,255,255,0.12)"); this.setAttribute("stroke","rgba(0,229,255,0.4)"); });
+      circle.addEventListener("click", function(){ showCornerFeedback(c); });
+      svg.appendChild(circle);
+
+      // Corner number label
+      var txt = document.createElementNS(ns, "text");
+      txt.setAttribute("x", c.x_px);
+      txt.setAttribute("y", c.y_px - 10);
+      txt.setAttribute("text-anchor", "middle");
+      txt.setAttribute("fill", "var(--muted)");
+      txt.setAttribute("font-size", "9");
+      txt.setAttribute("font-family", "monospace");
+      txt.textContent = c.corner_id;
+      svg.appendChild(txt);
+    });
+
+    // Draw sector boundary markers
+    map.sector_boundaries.forEach(function(sd){
+      var cp = map.control_points;
+      // Find nearest control point
+      var best = cp[0], bestDist = 999999;
+      cp.forEach(function(p){
+        var d = Math.abs(p[0] - sd);
+        if(d < bestDist){ bestDist = d; best = p; }
+      });
+      var marker = document.createElementNS(ns, "line");
+      marker.setAttribute("x1", best[1]-8); marker.setAttribute("y1", best[2]-8);
+      marker.setAttribute("x2", best[1]+8); marker.setAttribute("y2", best[2]+8);
+      marker.setAttribute("stroke", "rgba(255,45,45,0.6)");
+      marker.setAttribute("stroke-width", "1.5");
+      marker.setAttribute("stroke-dasharray", "3,2");
+      svg.appendChild(marker);
+    });
+
+    // Start/finish marker
+    if(map.start_finish_line_px){
+      var sf = document.createElementNS(ns, "rect");
+      sf.setAttribute("x", map.start_finish_line_px[0]-3);
+      sf.setAttribute("y", map.start_finish_line_px[1]-3);
+      sf.setAttribute("width", "6"); sf.setAttribute("height", "6");
+      sf.setAttribute("fill", "var(--red)");
+      sf.setAttribute("rx", "1");
+      svg.appendChild(sf);
+    }
+
+    container.appendChild(svg);
+
+    // Setup feedback panel close buttons
+    el("cf-cancel").addEventListener("click", function(){ el("corner-feedback").classList.add("hidden"); });
+    el("cf-submit").addEventListener("click", submitCornerFeedback);
+  }
+
+  function showCornerFeedback(corner){
+    state.selectedCorner = corner;
+    el("cf-title").textContent = "弯道 "+corner.corner_id+" — "+corner.name;
+    el("cf-title").style.color = "var(--cyan)";
+    var tagsDiv = el("cf-tags");
+    tagsDiv.innerHTML = "";
+    FEEDBACK_TAGS.forEach(function(tag){
+      var btn = document.createElement("button");
+      btn.className = "btn";
+      btn.style.cssText = "font-size:10px;padding:3px 7px;border-color:rgba(255,255,255,0.1);transition:.12s";
+      btn.textContent = tag.label;
+      btn.dataset.tagId = tag.id;
+      btn.addEventListener("click", function(){
+        if(this.classList.contains("selected")){
+          this.classList.remove("selected");
+          this.style.borderColor = "rgba(255,255,255,0.1)";
+          this.style.color = "var(--txt)";
+        }else{
+          this.classList.add("selected");
+          this.style.borderColor = tag.color;
+          this.style.color = tag.color;
+        }
+      });
+      tagsDiv.appendChild(btn);
+    });
+    var fbPanel = el("corner-feedback");
+    fbPanel.classList.remove("hidden");
+    // Position near the corner marker in the SVG
+    var svgEl = el("track-map-canvas").querySelector("svg");
+    if(svgEl){
+      var rect = svgEl.getBoundingClientRect();
+      var scaleX = rect.width / (state.trackMap ? state.trackMap.canvas_width : 800);
+      var scaleY = rect.height / (state.trackMap ? state.trackMap.canvas_height : 600);
+      fbPanel.style.left = Math.min(corner.x_px * scaleX + 15, rect.width - 230) + "px";
+      fbPanel.style.top = Math.min(corner.y_px * scaleY - 20, rect.height - 120) + "px";
+    }
+  }
+
+  async function submitCornerFeedback(){
+    var corner = state.selectedCorner;
+    if(!corner) return;
+    var selectedTags = [];
+    el("cf-tags").querySelectorAll(".selected").forEach(function(btn){
+      selectedTags.push(btn.dataset.tagId);
+    });
+    if(!selectedTags.length){ showToast("请先选择至少一个反馈标签"); return; }
+    var question = "弯道 "+corner.corner_id+" ("+corner.name+"): " + selectedTags.map(function(t){
+      var tag = FEEDBACK_TAGS.find(function(ft){ return ft.id === t; });
+      return tag ? tag.label : t;
+    }).join(", ");
+    var textInput = el("feedback-input").value.trim();
+    if(textInput) question += "。补充说明: " + textInput;
+    el("corner-feedback").classList.add("hidden");
+    el("feedback-input").value = question;
+    await feedback(question);
+  }
+
+  // Update car position on track map (called from WS frame handler)
+  function updateCarPosition(distance_m){
+    var map = state.trackMap;
+    if(!map) return;
+    var cp = map.control_points;
+    if(!cp || cp.length < 2) return;
+    var distances = cp.map(function(p){ return p[0]; });
+    var xs = cp.map(function(p){ return p[1]; });
+    var ys = cp.map(function(p){ return p[2]; });
+    var x_px = interpolate1D(distance_m, distances, xs);
+    var y_px = interpolate1D(distance_m, distances, ys);
+    var carEl = el("map-car");
+    if(carEl){
+      carEl.classList.remove("hidden");
+      var svgEl = el("track-map-canvas").querySelector("svg");
+      if(svgEl){
+        var rect = svgEl.getBoundingClientRect();
+        carEl.style.left = (x_px / map.canvas_width * rect.width) + "px";
+        carEl.style.top = (y_px / map.canvas_height * rect.height) + "px";
+      }
+    }
+  }
+
+  function interpolate1D(x, xs, ys){
+    if(x <= xs[0]) return ys[0];
+    if(x >= xs[xs.length-1]) return ys[ys.length-1];
+    for(var i=0; i<xs.length-1; i++){
+      if(x >= xs[i] && x <= xs[i+1]){
+        var t = (x - xs[i]) / (xs[i+1] - xs[i]);
+        return ys[i] + t * (ys[i+1] - ys[i]);
+      }
+    }
+    return ys[ys.length-1];
+  }
+
   // ---------- wire up ----------
   function init(){
     // Iter-07: generate a stable per-page-load session id for multi-turn
@@ -1315,6 +1542,7 @@
 
     el("track-select").addEventListener("change", function(){
       state.currentTrackId=this.value; renderTrackInfo();
+      loadTrackMap(state.currentTrackId);
     });
     el("predict-btn").addEventListener("click", predict);
     el("feedback-btn").addEventListener("click", function(){ var q=el("feedback-input").value.trim()||null; feedback(q); });
