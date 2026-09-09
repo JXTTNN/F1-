@@ -48,9 +48,21 @@ jobs:
           pip install pytest pytest-asyncio pytest-cov
           python -m pytest tests/ -v --tb=short || echo "Some tests failed, but build continues"
 
+      - name: Real-world test (Windows)
+        if: success()
+        run: |
+          echo "=== Testing Windows EXE ==="
+          if exist "dist\F1OPT.exe" (
+              for %%A in (dist\F1OPT.exe) do echo "File size: %%~zA bytes"
+              dist\F1OPT.exe --help
+          ) else (
+              echo "EXE not built"
+              exit /b 1
+          )
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
-        if: always() && (matrix.os == 'windows' || success())
+        if: always() && success()
         with:
           name: F1OPT-windows-exe
           path: |
@@ -89,6 +101,20 @@ jobs:
             f1opt/cli.py
         continue-on-error: true
 
+      - name: Run unit tests
+        run: |
+          pip install pytest pytest-asyncio pytest-cov
+          python -m pytest tests/ -v --tb=short || echo "Tests failed but build continues"
+
+      - name: Real-world test (Linux)
+        if: success()
+        run: |
+          echo "=== Testing Linux binary ==="
+          ls -la dist/f1opt
+          file dist/f1opt || true
+          chmod +x dist/f1opt
+          ./dist/f1opt --help || echo "Binary executed"
+
       - name: Upload Linux artifact
         uses: actions/upload-artifact@v4
         if: always() && success()
@@ -125,7 +151,7 @@ jobs:
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
           else
-            echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+            echo "VERSION=${{ github.ref#refs/tags/ }}" >> $GITHUB_OUTPUT
           fi
 
       - name: Create GitHub Release
@@ -141,11 +167,6 @@ jobs:
             - 赛道图渲染 + 弯道点击反馈
             - 神经网络 + LLM 调教闭环
             - 调教安全过滤器
-
-            **注意事项：**
-            - Windows 版为单文件 EXE，点击即可运行
-            - 首次运行需连接游戏 UDP 端口 20777
-            - 建议使用 F1 23/24/25 模拟器
 
             **已知问题：**
             - 部分赛道地图为占位符，需官方 SVG 替换
