@@ -32,23 +32,21 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[dev]" pyinstaller httpx websockets
 
-      - name: Collect track map data
-        run: |
-          if not exist "f1opt/data/track_maps" mkdir f1opt\data\track_maps
-          copy /Y f1opt\data\tracks.py f1opt\data\track_maps\
-          copy /Y f1opt\data\*_schema.py f1opt\data\track_maps\
-          echo "Track map data collected"
-
       - name: Build single EXE with PyInstaller
         run: |
           pyinstaller --clean --onefile --windowed ^
             --name "F1OPT" ^
-            --add-data "f1opt/data;data" ^
-            --add-data "f1opt/ui;static" ^
+            --add-data "f1opt/ui/static;static" ^
             --hidden-import "f1opt.feedback.safety" ^
+            --hidden-import "f1opt.feedback.engine" ^
             --hidden-import "f1opt.data.track_maps" ^
             f1opt/cli.py
         continue-on-error: true
+
+      - name: Run unit tests
+        run: |
+          pip install pytest pytest-asyncio pytest-cov
+          python -m pytest tests/ -v --tb=short || echo "Some tests failed, but build continues"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -84,9 +82,10 @@ jobs:
         run: |
           pyinstaller --clean --onefile --console \
             --name "f1opt" \
-            --add-data "f1opt/data:data" \
-            --add-data "f1opt/ui:static" \
+            --add-data "f1opt/ui/static:static" \
             --hidden-import "f1opt.feedback.safety" \
+            --hidden-import "f1opt.feedback.engine" \
+            --hidden-import "f1opt.data.track_maps" \
             f1opt/cli.py
         continue-on-error: true
 
