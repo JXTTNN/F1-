@@ -30,8 +30,12 @@ $embedZip = Join-Path $env:RUNNER_TEMP "python-$PyVersion-embed-amd64.zip"
 if ($env:RUNNER_TEMP -eq $null) { $embedZip = "python-$PyVersion-embed-amd64.zip" }
 $embedUrl = "https://www.python.org/ftp/python/$PyVersion/$embedZip"
 if (-not (Test-Path $embedZip)) {
-    Write-Host "[1/7] 下载 Embeddable Python ..."
-    Invoke-WebRequest -Uri $embedUrl -OutFile $embedZip -UseBasicParsing
+    Write-Host "[1/7] 下载 Embeddable Python (curl 直连，绕开系统代理) ..."
+    # CI 环境的 Invoke-WebRequest 可能被系统代理拦截返回 404，改用 curl 直连
+    & curl -L --max-time 120 --retry 3 -o $embedZip $embedUrl
+    if ($LASTEXITCODE -ne 0 -or -not (Test-Path $embedZip) -or (Get-Item $embedZip).Length -lt 1MB) {
+        throw "Embeddable Python 下载失败"
+    }
 }
 
 # 2. 解压到便携目录
@@ -49,7 +53,8 @@ $pthFile = "python$PyNoDot._pth"   # python311._pth
 
 # 4. 引导 pip（Embeddable 版不含 pip，需 get-pip.py）
 Write-Host "[4/7] 引导 pip ..."
-Invoke-WebRequest -Uri "https://bootstrap.pypa.io/get-pip.py" -OutFile "get-pip.py" -UseBasicParsing
+& curl -L --max-time 120 --retry 3 -o "get-pip.py" "https://bootstrap.pypa.io/get-pip.py"
+if ($LASTEXITCODE -ne 0 -or -not (Test-Path "get-pip.py")) { throw "get-pip 下载失败" }
 & ".\python.exe" get-pip.py --quiet
 if ($LASTEXITCODE -ne 0) { throw "get-pip.py 执行失败" }
 
