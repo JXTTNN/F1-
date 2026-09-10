@@ -55,3 +55,12 @@ _tmp_*.ps1
 _tmp_*.py
 # pytest 冒烟缓目录 (本地sandbox创建, 递交时被扫描警告)
 pytest-cache-files-*/
+
+data_test_t7/
+*.db
+__pycache__/
+*.pyc
+.pytest_cache/
+htmlcov/
+coverage.xml
+
