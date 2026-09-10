@@ -15,10 +15,10 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
-from setup_tuner.domain.setup import ALL_SETUP_FIELDS, get_field
+from setup_tuner.domain.setup import ALL_SETUP_FIELDS
 
 
 # ---------------------------------------------------------------------------
@@ -29,7 +29,7 @@ def _now_iso8601() -> str:
 
     示例：``2026-09-10T12:00:00Z``
     """
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 # ---------------------------------------------------------------------------

@@ -23,6 +23,7 @@ from .packets import (
     PacketHeader,
     PacketTooShortError,
     UnknownPacketError,
+    packet_name,
     parse_car_setups,
     parse_car_status,
     parse_car_telemetry,
@@ -31,7 +32,6 @@ from .packets import (
     parse_lap_data,
     parse_packet,
     parse_session,
-    packet_name,
 )
 from .stream import TelemetryStream
 

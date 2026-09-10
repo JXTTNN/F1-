@@ -23,8 +23,7 @@ Dx 为 9 维**带符号实数行向量**，每维语义为「某种能力的需�
 
 from __future__ import annotations
 
-from typing import Iterable
-
+from collections.abc import Iterable
 
 # ---------------------------------------------------------------------------
 # 官方出处常量

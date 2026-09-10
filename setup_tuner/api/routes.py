@@ -51,6 +51,7 @@ from setup_tuner.report.builder import (
     extract_telemetry_summary,
     feedbacks_to_symptoms,
 )
+
 from .envelope import fail, ok
 
 logger = logging.getLogger(__name__)

@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from setup_tuner.domain.setup import ALL_SETUP_FIELDS, get_field
+from setup_tuner.domain.setup import ALL_SETUP_FIELDS
 
 from .confidence import assess_confidence
 from .coupling import COUPLING_MATRIX, CouplingCell
@@ -29,7 +29,6 @@ from .diagnostic import (
     compute_dx,
     is_zero_dx,
 )
-from .rules import get_rule
 
 
 # ---------------------------------------------------------------------------
@@ -154,7 +153,7 @@ def compute_setup_delta(
         # 步骤 4：合法区间约束
         current = float(current_setup[p])
         next_val = _clip(current + raw, spec.min_val, spec.max_val)
-        delta = next_val - current
+
 
         # 步骤 5：档位对齐（对 delta 对齐到 step，再回推 next）
         # 先对 next 对齐档位，再算 delta，保证 next 与 delta 都在档位上

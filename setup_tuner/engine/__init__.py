@@ -39,9 +39,9 @@ from .diagnostic import (
     DIAG_DIMS_ZH,
     SYMPTOM_TO_DX,
     compute_dx,
+    dx_to_vector,
     empty_dx,
     is_zero_dx,
-    dx_to_vector,
 )
 from .engine import compute_setup_delta, generate_suggestion, validate_engine
 from .rules import get_all_rules, get_rule, load_rules, validate_rules

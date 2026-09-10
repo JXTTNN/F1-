@@ -16,7 +16,6 @@ from __future__ import annotations
 from dataclasses import dataclass, fields
 from typing import Any
 
-
 # 官方出处常量
 SRC_UDP_PACKET5 = "EA F1 2026 UDP Specification, Packet 5"
 SRC_OFFICIAL_GUIDE = "EA F1 2026 官方调教指南"

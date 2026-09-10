@@ -20,17 +20,15 @@ from __future__ import annotations
 
 from typing import Any
 
-from setup_tuner.domain.setup import ALL_SETUP_FIELDS, get_field
+from setup_tuner.domain.setup import ALL_SETUP_FIELDS
 from setup_tuner.domain.symptoms import (
-    SYMPTOM_INFO,
     Symptom,
     get_symptom_category,
     get_symptom_label,
 )
 
-from .coupling import COUPLING_MATRIX, CouplingCell, EA_SETUP_GUIDE
+from .coupling import COUPLING_MATRIX, EA_SETUP_GUIDE, CouplingCell
 from .diagnostic import DIAG_DIMS, DIAG_DIMS_ZH, SYMPTOM_TO_DX
-
 
 # ---------------------------------------------------------------------------
 # 规则级主出处（症状→Dx 映射的出处，来自官方调教指南）
