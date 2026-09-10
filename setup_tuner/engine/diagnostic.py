@@ -160,14 +160,14 @@ def compute_dx(symptoms: Iterable[tuple[str, int]]) -> dict[str, float]:
     出处:
         EA F1 2026 官方调教指南（症状-机理对应章节）。
     """
-    dx: dict[str, float] = {dim: 0.0 for dim in DIAG_DIMS}
+    dx: dict[str, float] = dict.fromkeys(DIAG_DIMS, 0.0)
 
     for symptom, strength in symptoms:
         if symptom not in SYMPTOM_TO_DX:
             raise KeyError(f"未知症状标识: {symptom!r}")
         if not isinstance(strength, (int, float)):
             raise ValueError(
-                f"症状 {symptom!r} 强度类型非法: {type(strength).__name__}，应为 int/float"
+                f"症状 {symptom!r} 强度类型非法: {type(strength).__name__}，应为 int/float",
             )
         s = float(strength)
         if s < 0.0 or s > 5.0:
@@ -189,7 +189,7 @@ def empty_dx() -> dict[str, float]:
 
     用于「无反馈」场景的占位，避免空字典导致的维度缺失。
     """
-    return {dim: 0.0 for dim in DIAG_DIMS}
+    return dict.fromkeys(DIAG_DIMS, 0.0)
 
 
 def is_zero_dx(dx: dict[str, float]) -> bool:

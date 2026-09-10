@@ -69,10 +69,7 @@ def load_config(env_path: str | Path | None = None) -> Config:
     Returns:
         Config 实例。
     """
-    if env_path is None:
-        env_path = Path.cwd() / ".env"
-    else:
-        env_path = Path(env_path)
+    env_path = Path.cwd() / ".env" if env_path is None else Path(env_path)
 
     env_vars = _parse_env_file(env_path)
 

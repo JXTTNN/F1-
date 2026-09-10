@@ -20,6 +20,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 import time
@@ -135,6 +136,72 @@ def _map_corner(
 # =========================================================================== #
 # 遥测推送循环
 # =========================================================================== #
+async def _push_telemetry_status(
+    ws_manager: Any, listener: Any, last_connected: bool | None,
+) -> bool | None:
+    """推送遥测连接状态（变化时），返回当前连接状态。"""
+    connected = listener.is_running if listener else False
+    if connected != last_connected:
+        if ws_manager is not None:
+            await ws_manager.broadcast(
+                event="telemetry_status",
+                payload={"connected": connected},
+            )
+    return connected
+
+
+async def _push_telemetry_frame(ws_manager: Any, all_latest: dict[int, dict[str, Any]]) -> None:
+    """推送遥测关键帧（Packet 6 CarTelemetry）。"""
+    telemetry_data = all_latest.get(6)
+    if telemetry_data is None:
+        return
+    payload = {
+        "speed": telemetry_data.get("m_speed"),
+        "throttle": telemetry_data.get("m_throttle"),
+        "brake": telemetry_data.get("m_brake"),
+        "steer": telemetry_data.get("m_steer"),
+        "gear": telemetry_data.get("m_gear"),
+        "engine_rpm": telemetry_data.get("m_engineRPM"),
+        "drs": telemetry_data.get("m_drs"),
+    }
+    if ws_manager is not None:
+        await ws_manager.broadcast(event="telemetry", payload=payload)
+
+
+async def _push_corner_highlight(
+    ws_manager: Any, all_latest: dict[int, dict[str, Any]], app_state: Any,
+    last_corner: int | None,
+) -> int | None:
+    """推送当前弯道高亮（落点映射变化时），返回当前弯道编号。"""
+    lap_data = all_latest.get(2)
+    if lap_data is None:
+        return last_corner
+    lap_distance = lap_data.get("m_lapDistance")
+    sector = lap_data.get("m_sector")
+    current_track_id = getattr(app_state, "current_track_id", None)
+    if lap_distance is None or current_track_id is None:
+        return last_corner
+    from setup_tuner.domain.track import get_track_by_id
+
+    track = get_track_by_id(current_track_id)
+    if track is None:
+        return last_corner
+    corner_number = _map_corner(
+        float(lap_distance), track.length_m, track.corners,
+    )
+    if corner_number is not None and corner_number != last_corner:
+        if ws_manager is not None:
+            await ws_manager.broadcast(
+                event="corner",
+                payload={
+                    "track_id": current_track_id,
+                    "corner_number": corner_number,
+                    "sector": sector,
+                },
+            )
+    return corner_number if corner_number is not None else last_corner
+
+
 async def _telemetry_push_loop(ws: WebSocket, app_state: Any) -> None:
     """遥测推送循环 —— 从 TelemetryStream 读取最新帧并推送。
 
@@ -162,60 +229,17 @@ async def _telemetry_push_loop(ws: WebSocket, app_state: Any) -> None:
             continue
 
         # ① 遥测连接状态推送（变化时）
-        connected = listener.is_running if listener else False
-        if connected != last_connected:
-            last_connected = connected
-            if ws_manager is not None:
-                await ws_manager.broadcast(
-                    event="telemetry_status",
-                    payload={"connected": connected},
-                )
+        last_connected = await _push_telemetry_status(ws_manager, listener, last_connected)
 
         # ② 遥测帧推送
         all_latest = stream.get_all_latest()
         if not all_latest:
             continue
 
-        # 提取遥测关键帧（Packet 6 CarTelemetry）
-        telemetry_data = all_latest.get(6)
-        if telemetry_data is not None:
-            payload = {
-                "speed": telemetry_data.get("m_speed"),
-                "throttle": telemetry_data.get("m_throttle"),
-                "brake": telemetry_data.get("m_brake"),
-                "steer": telemetry_data.get("m_steer"),
-                "gear": telemetry_data.get("m_gear"),
-                "engine_rpm": telemetry_data.get("m_engineRPM"),
-                "drs": telemetry_data.get("m_drs"),
-            }
-            if ws_manager is not None:
-                await ws_manager.broadcast(event="telemetry", payload=payload)
+        await _push_telemetry_frame(ws_manager, all_latest)
 
         # ③ 当前弯道高亮推送（落点映射变化时）
-        lap_data = all_latest.get(2)
-        if lap_data is not None:
-            lap_distance = lap_data.get("m_lapDistance")
-            sector = lap_data.get("m_sector")
-            current_track_id = getattr(app_state, "current_track_id", None)
-            if lap_distance is not None and current_track_id is not None:
-                from setup_tuner.domain.track import get_track_by_id
-
-                track = get_track_by_id(current_track_id)
-                if track is not None:
-                    corner_number = _map_corner(
-                        float(lap_distance), track.length_m, track.corners
-                    )
-                    if corner_number is not None and corner_number != last_corner:
-                        last_corner = corner_number
-                        if ws_manager is not None:
-                            await ws_manager.broadcast(
-                                event="corner",
-                                payload={
-                                    "track_id": current_track_id,
-                                    "corner_number": corner_number,
-                                    "sector": sector,
-                                },
-                            )
+        last_corner = await _push_corner_highlight(ws_manager, all_latest, app_state, last_corner)
 
 
 # =========================================================================== #
@@ -295,8 +319,6 @@ async def websocket_endpoint(ws: WebSocket) -> None:
         logger.exception("WS endpoint error")
     finally:
         push_task.cancel()
-        try:
+        with contextlib.suppress(asyncio.CancelledError):
             await push_task
-        except asyncio.CancelledError:
-            pass
         await ws_manager.disconnect(ws)

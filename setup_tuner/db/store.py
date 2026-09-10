@@ -113,7 +113,7 @@ class Store:
         """按 track_id 查询赛道主表。"""
         with self._lock:
             row = self._conn.execute(
-                "SELECT * FROM track WHERE track_id = ?", (track_id,)
+                "SELECT * FROM track WHERE track_id = ?", (track_id,),
             ).fetchone()
         return dict(row) if row else None
 
@@ -176,6 +176,7 @@ class Store:
                 (track_id, imported_at, params_json),
             )
             self._conn.commit()
+            assert cur.lastrowid is not None
             return int(cur.lastrowid)
 
     def get_setup(self, setup_id: int) -> dict[str, Any] | None:
@@ -185,7 +186,7 @@ class Store:
         """
         with self._lock:
             row = self._conn.execute(
-                "SELECT * FROM setup WHERE id = ?", (setup_id,)
+                "SELECT * FROM setup WHERE id = ?", (setup_id,),
             ).fetchone()
         if row is None:
             return None
@@ -242,6 +243,7 @@ class Store:
                 (setup_id, track_id, corner_number, symptom, category, strength, created_at),
             )
             self._conn.commit()
+            assert cur.lastrowid is not None
             return int(cur.lastrowid)
 
     def get_feedbacks(self, track_id: str) -> list[dict[str, Any]]:
@@ -257,7 +259,7 @@ class Store:
         """判断某赛道是否至少有 1 条反馈记录。"""
         with self._lock:
             row = self._conn.execute(
-                "SELECT 1 FROM feedback WHERE track_id = ? LIMIT 1", (track_id,)
+                "SELECT 1 FROM feedback WHERE track_id = ? LIMIT 1", (track_id,),
             ).fetchone()
         return row is not None
 
@@ -290,6 +292,7 @@ class Store:
                 (setup_id, track_id, created_at, report_json),
             )
             self._conn.commit()
+            assert cur.lastrowid is not None
             return int(cur.lastrowid)
 
     def get_latest_suggestion(self, track_id: str) -> dict[str, Any] | None:
@@ -336,6 +339,7 @@ class Store:
                 (track_id, round_no, before_setup_id, after_setup_id, suggestion_id, created_at),
             )
             self._conn.commit()
+            assert cur.lastrowid is not None
             return int(cur.lastrowid)
 
     def get_iterations(self, track_id: str) -> list[dict[str, Any]]:

@@ -222,7 +222,7 @@ def extract_setup_from_packet5(packet5: dict[str, Any]) -> dict[str, float]:
     result: dict[str, float] = {}
     for spec in ALL_SETUP_FIELDS:
         udp_name = next(
-            (u for u, d in field_map.items() if d == spec.name), None
+            (u for u, d in field_map.items() if d == spec.name), None,
         )
         if udp_name is not None and udp_name in packet5:
             result[spec.name] = float(packet5[udp_name])

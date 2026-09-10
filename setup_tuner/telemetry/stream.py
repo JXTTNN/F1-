@@ -33,9 +33,7 @@ class TelemetryStream:
     def __init__(self) -> None:
         self._lock = threading.Lock()
         # 仅为支持的 6 类包预留槽位；value 为最新解析 dict 或 None
-        self._cache: dict[int, dict[str, Any] | None] = {
-            pid: None for pid in SUPPORTED_PACKET_IDS
-        }
+        self._cache: dict[int, dict[str, Any] | None] = dict.fromkeys(SUPPORTED_PACKET_IDS)
 
     def update(self, packet_id: int, data: dict[str, Any]) -> None:
         """更新指定 packet_id 的最新帧（覆盖写，线程安全）。

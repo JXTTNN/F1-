@@ -406,7 +406,7 @@ def validate_value(name: str, value: float) -> float:
     if value < spec.min_val or value > spec.max_val:
         raise ValueError(
             f"{name}={value!r} 超出允许范围 "
-            f"[{spec.min_val:g}, {spec.max_val:g}] (步长 {spec.step:g} {spec.unit})"
+            f"[{spec.min_val:g}, {spec.max_val:g}] (步长 {spec.step:g} {spec.unit})",
         )
     # 步长档位对齐：(value - min) 应为 step 的整数倍
     steps = round((value - spec.min_val) / spec.step)
@@ -414,7 +414,7 @@ def validate_value(name: str, value: float) -> float:
     if abs(snapped - value) > 1e-6:
         raise ValueError(
             f"{name}={value!r} 不符合档位步长 {spec.step:g} {spec.unit} "
-            f"(最近合法值 {snapped:g})"
+            f"(最近合法值 {snapped:g})",
         )
     return snapped
 
@@ -511,7 +511,7 @@ class CarSetup:
                         "delta": delta,
                         "direction": "increase" if delta > 0 else "decrease",
                         "delta_steps": round(delta / spec.step) if spec.step > 0 else 0,
-                    }
+                    },
                 )
         return changes
 

@@ -11,10 +11,10 @@ readme = "README.md"
 license = { text = "Proprietary" }
 authors = [{ name = "F1OPT Team" }]
 dependencies = [
-    "fastapi",
-    "uvicorn[standard]",
+    "fastapi>=0.100",
+    "uvicorn[standard]>=0.20",
     "pydantic>=2",
-    "structlog",
+    "structlog>=20.1",
 ]
 
 [project.optional-dependencies]

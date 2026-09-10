@@ -21,6 +21,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import socket
 import threading
@@ -103,7 +104,7 @@ class TelemetryListener:
         self._sock.bind((self._host, self._port))
         self._running.set()
         self._thread = threading.Thread(
-            target=self._run_loop, name=_THREAD_NAME, daemon=True
+            target=self._run_loop, name=_THREAD_NAME, daemon=True,
         )
         self._thread.start()
         logger.info("telemetry listener started on %s:%d", self._host, self._port)
@@ -115,10 +116,8 @@ class TelemetryListener:
         self._running.clear()
         # 关闭 socket 以解除阻塞的 recvfrom
         if self._sock is not None:
-            try:
+            with contextlib.suppress(OSError):
                 self._sock.close()
-            except OSError:
-                pass
             self._sock = None
         if self._thread is not None and self._thread.is_alive():
             self._thread.join(timeout=2.0)

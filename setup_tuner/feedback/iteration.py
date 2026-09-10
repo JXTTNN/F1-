@@ -103,7 +103,7 @@ class IterationService:
                         "before": b_val,
                         "after": a_val,
                         "delta": float(a_val) - float(b_val),
-                    }
+                    },
                 )
         total = len(common_keys)
         return {

@@ -91,7 +91,7 @@ def _materialize_symptom(symptom: str) -> dict[str, Any]:
             if cell.source not in sources:
                 sources.append(cell.source)
             linkages.append(
-                f"{dim}({DIAG_DIMS_ZH[dim]}) Dx={dx_val:+.2f} × C={cell.value:+.2f}"
+                f"{dim}({DIAG_DIMS_ZH[dim]}) Dx={dx_val:+.2f} × C={cell.value:+.2f}",
             )
         delta_table[param] = {
             "value": total,

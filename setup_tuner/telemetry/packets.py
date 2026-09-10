@@ -125,7 +125,7 @@ def parse_header(data: bytes) -> PacketHeader:
     """
     if len(data) < HEADER_SIZE:
         raise PacketTooShortError(
-            f"packet too short for header: {len(data)} bytes < {HEADER_SIZE}"
+            f"packet too short for header: {len(data)} bytes < {HEADER_SIZE}",
         )
     fields = _HEADER_STRUCT.unpack(data[:HEADER_SIZE])
     return PacketHeader(*fields)
@@ -135,7 +135,7 @@ def parse_header(data: bytes) -> PacketHeader:
 # 辅助：只解包玩家车辆那一段
 # --------------------------------------------------------------------------- #
 def _slice_player_car(
-    data: bytes, per_car_struct: struct.Struct, player_car_index: int
+    data: bytes, per_car_struct: struct.Struct, player_car_index: int,
 ) -> tuple:
     """从按车分组的包体中只切出 ``player_car_index`` 对应的那一辆车并解包。
 
@@ -147,7 +147,7 @@ def _slice_player_car(
     if not 0 <= player_car_index < NUM_CARS:
         # player_car_index 越界（如 255 表示无第二玩家）——视为无效包跳过。
         raise PacketTooShortError(
-            f"player_car_index {player_car_index} out of range [0,{NUM_CARS})"
+            f"player_car_index {player_car_index} out of range [0,{NUM_CARS})",
         )
     per_size = per_car_struct.size
     offset = HEADER_SIZE + player_car_index * per_size
@@ -155,7 +155,7 @@ def _slice_player_car(
     if len(data) < end:
         raise PacketTooShortError(
             f"packet too short for player car {player_car_index}: "
-            f"{len(data)} bytes < {end}"
+            f"{len(data)} bytes < {end}",
         )
     return per_car_struct.unpack(data[offset:end])
 
@@ -212,7 +212,7 @@ def parse_session(data: bytes, player_car_index: int = 0) -> dict[str, Any]:
     prefix_end = body_start + _SESSION_PREFIX_STRUCT.size
     if len(data) < prefix_end:
         raise PacketTooShortError(
-            f"Session prefix too short: {len(data)} < {prefix_end}"
+            f"Session prefix too short: {len(data)} < {prefix_end}",
         )
     v = _SESSION_PREFIX_STRUCT.unpack(data[body_start:prefix_end])
     # Source: EA F1 2026 UDP Telemetry Specification, Packet 1, Fields 1-16
@@ -231,7 +231,7 @@ def parse_session(data: bytes, player_car_index: int = 0) -> dict[str, Any]:
             # 样本数声明超过实际字节——已解到的保留，剩余跳过（容错）。
             break
         (st, to, w, tt, ttc, at, atc, rain) = _WFS_STRUCT.unpack(
-            data[s_off:s_end]
+            data[s_off:s_end],
         )
         wfs.append({
             # Source: EA F1 2026 UDP Telemetry Specification, Packet 1, WeatherForecastSample

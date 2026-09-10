@@ -155,6 +155,6 @@ def validate_intensity(intensity: int) -> int:
     """
     if intensity < INTENSITY_MIN or intensity > INTENSITY_MAX:
         raise ValueError(
-            f"症状强度 {intensity} 越界，合法范围 [{INTENSITY_MIN}, {INTENSITY_MAX}]"
+            f"症状强度 {intensity} 越界，合法范围 [{INTENSITY_MIN}, {INTENSITY_MAX}]",
         )
     return intensity

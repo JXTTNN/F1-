@@ -57,28 +57,19 @@ def _has_telemetry_evidence(telemetry: dict[str, Any] | None) -> bool:
 def _has_conflict(symptoms: list[tuple[str, int]]) -> bool:
     """判断症状列表是否包含矛盾对（且两者强度均 ≥ 2）。"""
     active = {s for s, strength in symptoms if strength >= 2}
-    for a, b in _CONFLICT_PAIRS:
-        if a in active and b in active:
-            return True
-    return False
+    return any(a in active and b in active for a, b in _CONFLICT_PAIRS)
 
 
 def _is_feedback_clear(symptoms: list[tuple[str, int]]) -> bool:
     """判断反馈是否明确（至少一条强度 ≥ 2 的有效症状）。"""
-    for symptom, strength in symptoms:
-        if symptom in SYMPTOM_TO_DX and strength >= 2:
-            return True
-    return False
+    return any(symptom in SYMPTOM_TO_DX and strength >= 2 for symptom, strength in symptoms)
 
 
 def _is_feedback_vague(symptoms: list[tuple[str, int]]) -> bool:
     """判断反馈是否模糊（全部强度 ≤ 1 或无有效症状）。"""
     if not symptoms:
         return True
-    for symptom, strength in symptoms:
-        if symptom in SYMPTOM_TO_DX and strength >= 2:
-            return False
-    return True
+    return all(not (symptom in SYMPTOM_TO_DX and strength >= 2) for symptom, strength in symptoms)
 
 
 def assess_confidence(

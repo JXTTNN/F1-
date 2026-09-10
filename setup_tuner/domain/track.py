@@ -28,6 +28,7 @@ SVG 资产：24 条赛道 SVG 已从 ``legacy/f1opt/ui/static/*.svg`` 复制到
 from __future__ import annotations
 
 import math
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Literal
 
@@ -139,6 +140,19 @@ def _build_corners(raw: list[_RawCorner]) -> list[Corner]:
     ]
 
 
+def _get_track_type_params(track_type: str) -> tuple[float, float, int]:
+    """根据赛道类型返回 (slow_frac, fast_frac, speed_max)。"""
+    if track_type == "high_speed_low_downforce":
+        return 0.25, 0.45, 280
+    if track_type == "street":
+        return 0.55, 0.10, 200
+    if track_type == "high_downforce":
+        return 0.40, 0.15, 230
+    if track_type == "mixed":
+        return 0.35, 0.25, 270
+    return 0.33, 0.22, 250  # medium
+
+
 def _synthesize_corners(track_type: str, n_corners: int) -> list[Corner]:
     """为未手工录入的赛道合成弯道数据（基于赛道特征）。
 
@@ -149,21 +163,7 @@ def _synthesize_corners(track_type: str, n_corners: int) -> list[Corner]:
     速度量级基于 F1 侧向加速度极限（~1.5g），量级准确但非 telemetry 实测。
     """
     # 赛道类型决定弯道速度分布（与 legacy generate_corner_profile 一致）
-    if track_type == "high_speed_low_downforce":
-        slow_frac, fast_frac = 0.25, 0.45
-        speed_max = 280
-    elif track_type == "street":
-        slow_frac, fast_frac = 0.55, 0.10
-        speed_max = 200
-    elif track_type == "high_downforce":
-        slow_frac, fast_frac = 0.40, 0.15
-        speed_max = 230
-    elif track_type == "mixed":
-        slow_frac, fast_frac = 0.35, 0.25
-        speed_max = 270
-    else:  # medium
-        slow_frac, fast_frac = 0.33, 0.22
-        speed_max = 250
+    slow_frac, fast_frac, speed_max = _get_track_type_params(track_type)
 
     n_slow = max(1, round(n_corners * slow_frac))
     n_fast = max(1, round(n_corners * fast_frac))
@@ -341,7 +341,7 @@ def _spa_corners() -> list[Corner]:
 
 
 # 手工录入赛道弯道构建器映射
-_MANUAL_CORNER_BUILDERS: dict[str, callable] = {
+_MANUAL_CORNER_BUILDERS: dict[str, Callable[[], list[Corner]]] = {
     "melbourne": _melbourne_corners,
     "suzuka": _suzuka_corners,
     "monaco": _monaco_corners,

@@ -228,7 +228,7 @@ def _build_param_detail(
         if cell is None:
             continue
         linkages.append(
-            f"{dim}({DIAG_DIMS_ZH[dim]}) Dx={dx_val:+.2f} × C={cell.value:+.2f}"
+            f"{dim}({DIAG_DIMS_ZH[dim]}) Dx={dx_val:+.2f} × C={cell.value:+.2f}",
         )
         if cell.source not in sources:
             sources.append(cell.source)
@@ -351,16 +351,17 @@ def validate_engine() -> None:
         AssertionError: 任一校验不通过。
     """
     from setup_tuner.domain.setup import CarSetup
+    from setup_tuner.domain.symptoms import Symptom
 
     default_setup = CarSetup.default().to_dict()
 
-    for symptom in (s.value for s in __import__("setup_tuner.domain.symptoms", fromlist=["Symptom"]).Symptom):
+    for symptom in (s.value for s in Symptom):
         # 单症状强度 3
         result1 = generate_suggestion(
-            [(symptom, 3)], default_setup, "validate_track", None
+            [(symptom, 3)], default_setup, "validate_track", None,
         )
         result2 = generate_suggestion(
-            [(symptom, 3)], default_setup, "validate_track", None
+            [(symptom, 3)], default_setup, "validate_track", None,
         )
 
         # 1. 覆盖全部 23 参数

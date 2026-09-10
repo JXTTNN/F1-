@@ -71,12 +71,12 @@ class FeedbackService:
         if sym_enum is None:
             valid = ", ".join(sorted(_VALID_SYMPTOMS))
             raise ValueError(
-                f"未知症状标识 {symptom!r}，合法值：{valid}"
+                f"未知症状标识 {symptom!r}，合法值：{valid}",
             )
         # 校验 strength 0–5
         if strength < INTENSITY_MIN or strength > INTENSITY_MAX:
             raise ValueError(
-                f"症状强度 {strength} 越界，合法范围 [{INTENSITY_MIN}, {INTENSITY_MAX}]"
+                f"症状强度 {strength} 越界，合法范围 [{INTENSITY_MIN}, {INTENSITY_MAX}]",
             )
 
         category = get_symptom_category(sym_enum)
@@ -106,7 +106,7 @@ class FeedbackService:
         return self._store.get_feedbacks(track_id)
 
     def get_corner_feedbacks(
-        self, track_id: str
+        self, track_id: str,
     ) -> dict[int | None, list[dict[str, Any]]]:
         """按弯道编号分组返回反馈。
 
@@ -121,7 +121,7 @@ class FeedbackService:
         return grouped
 
     def get_normal_corners(
-        self, track_id: str, total_corners: int
+        self, track_id: str, total_corners: int,
     ) -> list[int]:
         """返回「正常」弯道编号列表 —— 即没有反馈的弯道。
 

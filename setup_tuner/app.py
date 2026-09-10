@@ -77,7 +77,7 @@ async def _lifespan(app: FastAPI):
     # ③ 遥测
     app.state.telemetry_stream = TelemetryStream()
     listener = TelemetryListener(
-        host=config.udp_host, port=config.udp_port
+        host=config.udp_host, port=config.udp_port,
     )
     # 注册 handler：将解析结果写入 TelemetryStream
     def _on_packet(parsed: dict[str, Any]) -> None:
@@ -134,7 +134,7 @@ async def _lifespan(app: FastAPI):
 # 全局异常处理（统一 {code, message, data} 信封）
 # =========================================================================== #
 async def _http_exception_handler(
-    request: Request, exc: StarletteHTTPException
+    request: Request, exc: StarletteHTTPException,
 ) -> JSONResponse:
     """将 HTTPException 转为统一信封响应。
 
@@ -154,7 +154,7 @@ async def _http_exception_handler(
 
 
 async def _validation_exception_handler(
-    request: Request, exc: RequestValidationError
+    request: Request, exc: RequestValidationError,
 ) -> JSONResponse:
     """将请求参数校验异常转为统一信封响应（400）。"""
     body = {
@@ -166,7 +166,7 @@ async def _validation_exception_handler(
 
 
 async def _generic_exception_handler(
-    request: Request, exc: Exception
+    request: Request, exc: Exception,
 ) -> JSONResponse:
     """将未捕获异常转为统一信封响应（500）。"""
     logger.exception("unhandled exception on %s %s", request.method, request.url.path)
@@ -233,8 +233,8 @@ def create_app(config: Config | None = None) -> FastAPI:
         )
 
     # 注册全局异常处理器
-    app.add_exception_handler(StarletteHTTPException, _http_exception_handler)
-    app.add_exception_handler(RequestValidationError, _validation_exception_handler)
+    app.add_exception_handler(StarletteHTTPException, _http_exception_handler)  # type: ignore[arg-type]
+    app.add_exception_handler(RequestValidationError, _validation_exception_handler)  # type: ignore[arg-type]
     app.add_exception_handler(Exception, _generic_exception_handler)
 
     # 根路径 → 返回 API 信息

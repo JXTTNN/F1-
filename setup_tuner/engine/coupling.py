@@ -289,18 +289,18 @@ def _build_matrix() -> dict[str, dict[str, CouplingCell | None]]:
                 # 构建期校验：出处合法 + sign ∈ {+1,-1} + magnitude > 0
                 if source not in VALID_SOURCES:
                     raise AssertionError(
-                        f"耦合矩阵出处非法: diag={diag!r} param={param!r} source={source!r}"
+                        f"耦合矩阵出处非法: diag={diag!r} param={param!r} source={source!r}",
                     )
                 if sign not in (+1, -1):
                     raise AssertionError(
-                        f"耦合矩阵符号非法: diag={diag!r} param={param!r} sign={sign!r}"
+                        f"耦合矩阵符号非法: diag={diag!r} param={param!r} sign={sign!r}",
                     )
                 if magnitude <= 0.0:
                     raise AssertionError(
-                        f"耦合矩阵幅度非法: diag={diag!r} param={param!r} magnitude={magnitude!r}"
+                        f"耦合矩阵幅度非法: diag={diag!r} param={param!r} magnitude={magnitude!r}",
                     )
                 row[param] = CouplingCell(
-                    param=param, diag=diag, sign=sign, magnitude=float(magnitude), source=source
+                    param=param, diag=diag, sign=sign, magnitude=float(magnitude), source=source,
                 )
         matrix[diag] = row
     return matrix
@@ -330,7 +330,7 @@ def get_coupling(diag: str, param: str) -> CouplingCell | None:
 
 def get_row(diag: str) -> dict[str, CouplingCell | None]:
     """查询某诊断维度对应的整行（23 个参数的耦合单元）。"""
-    return COUPLING_MATRIX.get(diag, {p: None for p in PARAM_NAMES})
+    return COUPLING_MATRIX.get(diag, dict.fromkeys(PARAM_NAMES))
 
 
 def get_column(param: str) -> dict[str, CouplingCell | None]:
@@ -438,7 +438,7 @@ def matrix_stats() -> dict[str, object]:
                 for diag in DIAG_DIMS
                 for cell in COUPLING_MATRIX[diag].values()
                 if cell is not None
-            }
+            },
         ),
     }
 

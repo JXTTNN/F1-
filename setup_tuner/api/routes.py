@@ -123,7 +123,7 @@ class FeedbackRequest(BaseModel):
 
     track_id: str
     corner_number: int | None = Field(
-        default=None, ge=1, le=50, description="弯道编号（1-based）；None=全局症状"
+        default=None, ge=1, le=50, description="弯道编号（1-based）；None=全局症状",
     )
     symptom: str = Field(..., description="12 症状标识之一")
     strength: int = Field(
@@ -286,14 +286,14 @@ async def get_track(track_id: str) -> dict[str, Any]:
         )
     data = TrackDetail(
         track=_track_to_ref(track),
-        corners=[_corner_to_view(c).model_dump() for c in track.corners],
+        corners=[_corner_to_view(c) for c in track.corners],
     )
     return ok(data=data.model_dump())
 
 
 @router.post("/tracks/current")
 async def select_current_track(
-    body: SelectTrackRequest, request: Request
+    body: SelectTrackRequest, request: Request,
 ) -> dict[str, Any]:
     """手动选赛道（可被遥测覆盖）。"""
     track = get_track_by_id(body.track_id)
@@ -305,7 +305,7 @@ async def select_current_track(
         )
     _set_current_track(request, body.track_id, "manual")
     data = SelectTrackResponse(
-        current_track_id=body.track_id, source="manual"
+        current_track_id=body.track_id, source="manual",
     )
     return ok(data=data.model_dump(), message=f"已选择赛道：{track.official_name}")
 
@@ -405,7 +405,7 @@ async def get_current_setup(
 
 @router.post("/feedback")
 async def submit_feedback(
-    body: FeedbackRequest, request: Request
+    body: FeedbackRequest, request: Request,
 ) -> dict[str, Any]:
     """提交单条反馈。"""
     svc = _get_services(request)
@@ -506,7 +506,7 @@ async def list_feedbacks(
 
 @router.post("/suggest")
 async def suggest(
-    body: SuggestRequest, request: Request
+    body: SuggestRequest, request: Request,
 ) -> dict[str, Any]:
     """触发建议生成。
 
@@ -699,7 +699,7 @@ async def iteration_history(
 # WS 推送辅助（best-effort，不阻塞 REST 响应）
 # =========================================================================== #
 async def _push_suggestion_via_ws(
-    request: Request, suggestion_id: int, report: dict[str, Any]
+    request: Request, suggestion_id: int, report: dict[str, Any],
 ) -> None:
     """通过 WebSocket 推送建议生成结果（best-effort）。
 
