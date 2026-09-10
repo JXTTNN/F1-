@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>F1OPT 赛车调教优化助手</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- ==================== 顶部栏 ==================== -->
+  <header class="topbar">
+    <div class="topbar-title">
+      <span class="logo-mark">F1</span>
+      <h1>F1OPT 赛车调教优化助手</h1>
+    </div>
+    <div class="topbar-status">
+      <span id="ws-dot" class="status-dot status-offline" title="遥测连接状态"></span>
+      <span id="ws-status-text" class="status-text">遥测未连接</span>
+    </div>
+  </header>
+
+  <!-- ==================== 主内容区 ==================== -->
+  <main class="layout">
+    <!-- ---------- 左栏：赛道选择 + 赛道图 + 遥测 ---------- -->
+    <section class="col-left">
+      <!-- 赛道选择区 -->
+      <div class="card track-select-card">
+        <label class="field-label" for="track-select">选择赛道</label>
+        <select id="track-select" class="track-select">
+          <option value="">加载中…</option>
+        </select>
+        <span id="track-meta" class="track-meta"></span>
+      </div>
+
+      <!-- 赛道图区（SVG + 弯道热区叠加） -->
+      <div class="card track-map-card">
+        <div class="card-head">
+          <h2>赛道图</h2>
+          <span class="card-hint">点击弯道圆点录入反馈，未点击的弯道默认正常</span>
+        </div>
+        <div id="track-map-wrap" class="track-map-wrap">
+          <!-- SVG 通过 JS 注入；热区层在 SVG 之上叠加 -->
+          <div id="track-map-empty" class="track-map-empty">请先选择赛道</div>
+        </div>
+      </div>
+
+      <!-- 实时遥测区 -->
+      <div class="card telemetry-card">
+        <div class="card-head">
+          <h2>实时遥测</h2>
+          <span id="telemetry-sector-tag" class="sector-tag">—</span>
+        </div>
+        <div class="telemetry-grid">
+          <div class="tel-item"><span class="tel-label">速度</span><span id="tel-speed" class="tel-value">—</span><span class="tel-unit">km/h</span></div>
+          <div class="tel-item"><span class="tel-label">油门</span><span id="tel-throttle" class="tel-value">—</span><span class="tel-unit">%</span></div>
+          <div class="tel-item"><span class="tel-label">刹车</span><span id="tel-brake" class="tel-value">—</span><span class="tel-unit">%</span></div>
+          <div class="tel-item"><span class="tel-label">档位</span><span id="tel-gear" class="tel-value">—</span><span class="tel-unit"></span></div>
+          <div class="tel-item"><span class="tel-label">转速</span><span id="tel-rpm" class="tel-value">—</span><span class="tel-unit">rpm</span></div>
+          <div class="tel-item"><span class="tel-label">圈速</span><span id="tel-laptime" class="tel-value">—</span><span class="tel-unit"></span></div>
+          <div class="tel-item"><span class="tel-label">扇区</span><span id="tel-sector" class="tel-value">—</span><span class="tel-unit"></span></div>
+          <div class="tel-item"><span class="tel-label">当前弯</span><span id="tel-corner" class="tel-value">—</span><span class="tel-unit"></span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ---------- 右栏：建议报告 + 迭代历史 ---------- -->
+    <section class="col-right">
+      <!-- 建议报告区 -->
+      <div class="card report-card">
+        <div class="card-head">
+          <h2>调教建议报告</h2>
+          <button id="btn-generate-suggest" class="btn btn-primary" type="button">生成建议</button>
+        </div>
+        <div id="report-summary" class="report-summary"></div>
+        <div id="report-table-wrap" class="report-table-wrap">
+          <div class="report-empty">暂无建议，请先点击赛道图上的问题弯道录入反馈，再点击「生成建议」</div>
+        </div>
+      </div>
+
+      <!-- 迭代历史区 -->
+      <div class="card history-card">
+        <div class="card-head">
+          <h2>迭代历史</h2>
+          <button id="btn-refresh-history" class="btn btn-ghost" type="button">刷新</button>
+        </div>
+        <div id="history-wrap" class="history-wrap">
+          <div class="history-empty">暂无迭代记录</div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ==================== 反馈面板（浮动弹出） ==================== -->
+  <div id="feedback-overlay" class="fb-overlay" hidden>
+    <div class="fb-panel" role="dialog" aria-modal="true" aria-labelledby="fb-title">
+      <div class="fb-header">
+        <h3 id="fb-title">弯道反馈</h3>
+        <button id="fb-close" class="fb-close" type="button" aria-label="关闭">&times;</button>
+      </div>
+      <div class="fb-body">
+        <div class="fb-corner-info">
+          <span class="fb-corner-label">选中弯道：</span>
+          <span id="fb-corner-number" class="fb-corner-num">—</span>
+          <span id="fb-corner-name" class="fb-corner-name"></span>
+        </div>
+        <p class="fb-tip">选择一个症状（12 选 1）。入弯/弯中/出弯类症状绑定当前弯道；全局类症状作用于整条赛道。</p>
+
+        <!-- 12 症状分 4 类，每类可展开 -->
+        <div id="fb-symptom-groups" class="fb-symptom-groups">
+          <!-- 入弯 entry -->
+          <div class="sym-group" data-category="entry">
+            <div class="sym-group-head">
+              <span class="sym-group-arrow">▶</span>
+              <span class="sym-group-title">入弯（5）</span>
+            </div>
+            <div class="sym-group-body">
+              <label class="sym-option"><input type="radio" name="symptom" value="understeer" /><span class="sym-name">转向不足</span><span class="sym-desc">入弯时车头不愿指向弯心，前轮抓地不足。</span></label>
+              <label class="sym-option"><input type="radio" name="symptom" value="oversteer" /><span class="sym-name">转向过度</span><span class="sym-desc">入弯时车尾外甩，后轮抓地不足。</span></label>
+              <label class="sym-option"><input type="radio" name="symptom" value="turnin_unresponsive" /><span class="sym-name">转向不灵敏</span><span class="sym-desc">转动方向盘后车辆响应迟缓。</span></label>
+              <label class="sym-option"><input type="radio" name="symptom" value="brake_long" /><span class="sym-name">刹车距离长</span><span class="sym-desc">制动距离过长，入弯点偏晚。</span></label>
+              <label class="sym-option"><input type="radio" name="symptom" value="lockup" /><span class="sym-name">轮胎锁死</span><span class="sym-desc">制动时车轮抱死打滑。</span></label>
+            </div>
+          </div>
+          <!-- 弯中 apex -->
+          <div class="sym-group" data-category="apex">
+            <div class="sym-group-head">
+              <span class="sym-group-arrow">▶</span>
+              <span class="sym-group-title">弯中（2）</span>
+            </div>
+            <div class="sym-group-body">
+              <label class="sym-option"><input type="radio" name="symptom" value="midcorner_unstable" /><span class="sym-name">车身不稳定</span><span class="sym-desc">弯中车身姿态抖动或难以保持线路。</span></label>
+              <label class="sym-option"><input type="radio" name="symptom" value="midcorner_traction" /><span class="sym-name">弯中不能稳定加速</span><span class="sym-desc">弯中给油后驱动轮打滑，无法稳定加速。</span></label>
+            </div>
+          </div>
+          <!-- 出弯 exit -->
+          <div class="sym-group" data-category="exit">
+            <div class="sym-group-head">
+              <span class="sym-group-arrow">▶</span>
+              <span class="sym-group-title">出弯（1）</span>
+            </div>
+            <div class="sym-group-body">
+              <label class="sym-option"><input type="radio" name="symptom" value="exit_wheelspin" /><span class="sym-name">出弯打滑</span><span class="sym-desc">出弯加速时车轮空转打滑。</span></label>
+            </div>
+          </div>
+          <!-- 全局 global -->
+          <div class="sym-group" data-category="global">
+            <div class="sym-group-head">
+              <span class="sym-group-arrow">▶</span>
+              <span class="sym-group-title">全局（4）</span>
+            </div>
+            <div class="sym-group-body">
+              <label class="sym-option"><input type="radio" name="symptom" value="bottoming" /><span class="sym-name">直道刮底</span><span class="sym-desc">底盘在直道或颠簸处触地刮底。</span></label>
+              <label class="sym-option"><input type="radio" name="symptom" value="tyre_wear" /><span class="sym-name">胎耗偏高</span><span class="sym-desc">轮胎磨损速率偏高（轮胎寿命维度，非胎温）。</span></label>
+              <label class="sym-option"><input type="radio" name="symptom" value="straight_slow" /><span class="sym-name">直道速度低</span><span class="sym-desc">直道尾速不足。</span></label>
+              <label class="sym-option"><input type="radio" name="symptom" value="lap_slow" /><span class="sym-name">圈速不高</span><span class="sym-desc">整体圈速未达预期。</span></label>
+            </div>
+          </div>
+        </div>
+
+        <!-- 强度滑块 0-5（默认3） -->
+        <div class="fb-strength">
+          <label class="fb-strength-label" for="fb-strength-range">强度：<span id="fb-strength-value">3</span> / 5</label>
+          <input id="fb-strength-range" class="fb-strength-range" type="range" min="0" max="5" step="1" value="3" />
+          <div class="fb-strength-ticks"><span>0</span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span></div>
+        </div>
+      </div>
+      <div class="fb-footer">
+        <span id="fb-error" class="fb-error"></span>
+        <button id="fb-submit" class="btn btn-primary" type="button">提交反馈</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== 全局提示条 ==================== -->
+  <div id="toast" class="toast" hidden></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
