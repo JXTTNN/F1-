@@ -2,7 +2,7 @@ name: Release (Portable)
 
 # Windows 便携包构建 (Embeddable Python)
 # 触发: 推送 p* 标签
-# 用途: 对抗 PyInstaller 解压闪退，提供「零冻结」备选方案
+# 用途: 提供「零 PyInstaller 冻结」的备选方案，彻底避免解压失败闪退
 
 on:
   push:
@@ -10,9 +10,6 @@ on:
 
 permissions:
   contents: write
-
-env:
-  F1OPT_VERSION: "1.4.1"
 
 jobs:
   build:
@@ -26,75 +23,13 @@ jobs:
           python-version: "3.11"
           cache: pip
 
-      - name: Build portable package
+      - name: Build portable package via exe/portable-build.ps1
         shell: pwsh
         run: |
-          $ErrorActionPreference = "Stop"
-          
-          # Step 1: 下载 Embeddable Python
-          $zip = "python-3.11.9-embed-amd64.zip"
-          Write-Host "DownEmbed Python..."
-          Invoke-WebRequest "https://www.python.org/ftp/python/3.11.9/$zip" -OutFile $zip
-          
-          # Step 2: 解压
-          $src = "src-portable"
-          if (Test-Path $src) { Remove-Item $src -Recurse -Force }
-          Expand-Archive $zip -DestinationPath $src -Force
-          Push-Location $src
-          
-          # Step 3: 启用 site-packages
-          (Get-Content "python311._pth" | ForEach-Object {
-            if ($_ -match '^#import site') { 'import site' } else { $_ }
-          }) | Set-Content "python311._pth"
-          
-          # Step 4: 引导 pip
-          Write-Host "Bootstrap pip..."
-          Invoke-WebRequest "https://bootstrap.pypa.io/get-pip.py" -OutFile "get-pip.py"
-          .\python.exe get-pip.py --quiet
-          Remove-Item get-pip.py
-          
-          # Step 5: 安装项目 + 依赖
-          Write-Host "Install f1opt + torch..."
-          $repo = (Get-Location).Path.Substring(0, (Get-Location).Path.Length - 4) # src-portable -> repo
-          .\python.exe -m pip install "$repo\." --quiet
-          
-          # Step 6: 冒烟测试
-          Write-Host "Smoke test: python -m f1opt.cli --help"
-          .\python.exe -m f1opt.cli --help | Select-Object -First 5
-          if ($LASTEXITCODE -ne 0) { throw "Smoke test failed" }
-          
-          # Step 7: 创建启动器 & 打包
-          $bat = '@echo off`ncd /d "%%~dp0"`npython.exe -m f1opt.cli %*'
-          $bat -replace '`n', "`n" | Out-File -FilePath "f1opt.bat" -Encoding ascii
-          
-          $readme = @"
-F1OPT Portable v$env:F1OPT_VERSION
-===================================
-
-运行:
-  1. 解压本文件到任意目录 (推荐 SSD)
-  2. 双击 f1opt.bat 即可启动
-
-优势:
-  - 零 PyInstaller 冻结，避免「解压失败 => 闪退」
-  - 直接运行 Python 环境，调试更方便
-
-体积: 约 600MB (torch 依赖)
-"@
-          $readme | Out-File -FilePath "README.md" -Encoding UTF8
-          
-          # 清理 & ZIP
-          Get-ChildItem -Recurse -Directory -Filter "__pycache__" | Remove-Item -Recurse -Force
-          $zipName = "f1opt-portable-windows.zip"
-          Compress-Archive -Path $src -DestinationPath $zipName -Force
-          $sha = (Get-FileHash $zipName -Algorithm SHA256).Hash
-          "$sha  $zipName" | Out-File -Encoding ascii "$zipName.sha256"
-          
-          # 输出给下一步
-          "sha=$sha" | Out-File -FilePath $env:GITHUB_OUTPUT
-          "size=$([math]::Round((Get-Item $zipName).Length / 1MB, 1))" | Out-File -FilePath $env:GITHUB_OUTPUT
-          
-          Write-Host "Done: $zipName"
+          $ver = $env:GITHUB_REF_NAME -replace '^p', ''
+          .\exe\portable-build.ps1 -Version $ver -OutDir .
+        env:
+          GITHUB_REF_NAME: ${{ github.ref_name }}
         id: build
 
       - name: Upload artifacts
@@ -113,33 +48,38 @@ F1OPT Portable v$env:F1OPT_VERSION
         run: |
           TAG="${GITHUB_REF_NAME}"
           SHA="${{ steps.build.outputs.sha }}"
-          SIZE="${{ steps.build.outputs.size }} MiB"
-          cat <<EOF > notes.md
+          SIZE="${{ steps.build.outputs.size}} MiB"
+          
+          cat <<EOF > release-notes.md
           # F1OPT ${TAG} (Portable 版)
           
-          **Windows 便携包** (Embeddable Python 3.11.9)
+          **Windows 便携包** (Embeddable Python 3.11)
           
           ## 使用
-          1. 解压 \`f1opt-portable-windows.zip\`
-          2. 双击 \`f1opt.bat\` 运行
+          1. 下载 \`f1opt-portable-windows.zip\` 并解压
+          2. 双击 \`f1opt.bat\` 或 \`启动-F1OPT.bat\` 即可运行
           
           ## 优势
           - 零 PyInstaller 冻结，彻底避开「解压失败 => 闪退」风险
-          - 直接跑 Python 环境
+          - 直接跑 Python 环境，调试便利
           
           ## 产物
           - 大小: \`${SIZE}\`
           - SHA256: \`${SHA}\`
           
-          要求磁盘空间约 600MB。
+          ## 要求
+          解压后约 600MB 磁盘空间，建议放 SSD。
           
-          ## 环境变量
+          ## 环境变量 (可选)
           \`\`\`
+          F1OPT_LLM_BACKEND=builtin   # 默认，内置小模型
           F1OPT_LLM_BACKEND=local     # 本地 Ollama
           F1OPT_LLM_MODEL=llama3.1
-          F1OPT_LLM_BACKEND=openai    # OpenAI
+          F1OPT_LLM_BACKEND=openai    # OpenAI 云端
           F1OPT_LLM_API_KEY=sk-xxx
           \`\`\`
           EOF
+          
           gh release create "$TAG" f1opt-portable-windows.zip f1opt-portable-windows.zip.sha256 \
-            --title "F1OPT ${TAG} - Portable 版" --notes-file notes.md
+            --title "F1OPT ${TAG} - Portable 版" \
+            --notes-file release-notes.md
