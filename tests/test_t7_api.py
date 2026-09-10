@@ -3,16 +3,22 @@
 from __future__ import annotations
 
 import json
+import shutil
+from pathlib import Path
 
 from fastapi.testclient import TestClient
 
 from setup_tuner.app import create_app
 from setup_tuner.config import Config
 
+TEST_DATA_DIR = Path("./data_test_t7")
+
 
 def make_client() -> TestClient:
-    """创建测试客户端（使用临时内存配置）。"""
-    config = Config(data_dir="./data_test_t7")
+    """创建测试客户端（每次清理数据目录确保测试隔离）。"""
+    if TEST_DATA_DIR.exists():
+        shutil.rmtree(TEST_DATA_DIR)
+    config = Config(data_dir=str(TEST_DATA_DIR))
     app = create_app(config)
     return TestClient(app)
 

@@ -3,16 +3,22 @@
 from __future__ import annotations
 
 import json
+import shutil
+from pathlib import Path
 
 from fastapi.testclient import TestClient
 
 from setup_tuner.app import create_app
 from setup_tuner.config import Config
 
+TEST_DATA_DIR = Path("./data_test_t7_ws")
+
 
 def test_ws_connect():
     """WebSocket 能连接并接收 telemetry_status 事件。"""
-    config = Config(data_dir="./data_test_t7_ws")
+    if TEST_DATA_DIR.exists():
+        shutil.rmtree(TEST_DATA_DIR)
+    config = Config(data_dir=str(TEST_DATA_DIR))
     app = create_app(config)
     client = TestClient(app)
 
