@@ -110,14 +110,13 @@ pyz = PYZ(a.pure)
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
-    a.datas,
-    exclude_binaries=False,
+    exclude_binaries=True,  # onedir: 不再运行时自解压 (onefile 含 torch 在用户机
+                            # 自解压偶发 decompression return code -1 闪退, 见 v1.4.0)
     name='f1opt',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=False,  # one-file: UPX on 290MB torch DLL is slow/risky, skip
+    upx=False,
     console=True,
     disable_windowed_traceback=False,
     argv_emulation=False,
@@ -128,4 +127,13 @@ exe = EXE(
     uac_uiaccess=False,
     icon=None,
     version=os.path.join(_ROOT, 'exe', 'version_info.txt') if IS_WINDOWS else None,
+)
+
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.datas,
+    strip=False,
+    upx=False,
+    name='f1opt',
 )

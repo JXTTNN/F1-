@@ -1,7 +1,8 @@
 name: Release
 
-# 云端打包 Windows 单文件 EXE 并发布 GitHub Release。
-# 推送 v* tag 触发 (如 v1.2.2)。全程在 GitHub Actions 云端构建, 不依赖本地。
+# 云端打包 Windows 版 (onedir 文件夹形态) 并发布 GitHub Release。
+# 推送 v* tag 触发 (如 v1.4.1)。全程在 GitHub Actions 云端构建, 不依赖本地。
+# onedir 而非 onefile: 内置 torch 的超大单文件在部分用户机自解压失败导致闪退。
 
 on:
   push:
@@ -29,34 +30,43 @@ jobs:
           pip install -e .
           pip install pyinstaller
 
-      - name: Build one-file EXE
+      - name: Build onedir EXE folder
         run: pyinstaller exe/f1opt.spec --noconfirm
 
       - name: Smoke test EXE (--help)
         shell: bash
         run: |
-          # one-file 自解压需数秒, 给足超时; --help 必须成功退出。
-          timeout 120 ./dist/f1opt.exe --help > help_out.txt 2>&1 || {
+          # onedir 形态: 产物在 dist/f1opt/ 目录, 启动无需自解压
+          # (v1.4.0 onefile 在用户机自解压 torch 失败闪退, 故改 onedir)。
+          timeout 120 ./dist/f1opt/f1opt.exe --help > help_out.txt 2>&1 || {
             echo 'EXE --help FAILED'; cat help_out.txt; exit 1; }
           head -n 8 help_out.txt
 
-      - name: Compute SHA256
+      - name: Zip onedir folder
+        shell: pwsh
+        run: |
+          Compress-Archive -Path dist\f1opt -DestinationPath dist\f1opt-windows.zip -Force
+          $h = (Get-FileHash dist\f1opt-windows.zip -Algorithm SHA256).Hash
+          "$h  f1opt-windows.zip" | Out-File -Encoding ascii dist\f1opt-windows.zip.sha256
+          "sha=$h" >> $env:GITHUB_OUTPUT
+          "size=$([math]::Round((Get-Item dist\f1opt-windows.zip).Length / 1MB, 1))" >> $env:GITHUB_OUTPUT
+        id: zip
+
+      - name: Compute SHA256 (exe)
         id: hash
         shell: pwsh
         run: |
-          $h = (Get-FileHash dist\f1opt.exe -Algorithm SHA256).Hash
-          $mib = [math]::Round((Get-Item dist\f1opt.exe).Length / 1MB, 1)
+          $h = (Get-FileHash dist\f1opt\f1opt.exe -Algorithm SHA256).Hash
           "$h  f1opt.exe" | Out-File -Encoding ascii dist\f1opt.exe.sha256
-          "sha=$h"     >> $env:GITHUB_OUTPUT
-          "size=$mib"  >> $env:GITHUB_OUTPUT
+          "sha=$h" >> $env:GITHUB_OUTPUT
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
           name: f1opt-windows-exe
           path: |
-            dist/f1opt.exe
-            dist/f1opt.exe.sha256
+            dist/f1opt-windows.zip
+            dist/f1opt-windows.zip.sha256
           retention-days: 14
 
       - name: Create GitHub Release
@@ -65,18 +75,26 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="${GITHUB_REF_NAME}"
-          SHA="${{ steps.hash.outputs.sha }}"
-          SIZE="${{ steps.hash.outputs.size }} MiB"
+          SHA="${{ steps.zip.outputs.sha }}"
+          SIZE="${{ steps.zip.outputs.size }} MiB"
           {
-            echo "F1OPT ${TAG} — Windows 单文件 EXE（无需安装 Python，双击即用）"
+            echo "F1OPT ${TAG} — Windows 版（解压后双击 f1opt/f1opt.exe，无需安装 Python）"
+            echo ""
+            echo "> ⚠️ 本版从单文件 EXE 改为 **文件夹 (onedir)** 打包："
+            echo "> v1.4.0 单文件版因内置 torch 在部分用户机自解压失败导致闪退，"
+            echo "> onedir 形态启动时不再自解压，彻底解决。"
+            echo ""
+            echo "**使用方法：**"
+            echo "1. 下载 \`f1opt-windows.zip\` 并**解压到任意目录**（如桌面）"
+            echo "2. 双击 \`f1opt/f1opt.exe\` 即启动（首次启动约 3-10 秒加载模型）"
             echo ""
             echo "- 构建来源: commit ${GITHUB_SHA}"
-            echo "- SHA256: \`${SHA}\`（大小 ${SIZE}）"
+            echo "- ZIP SHA256: \`${SHA}\`（大小 ${SIZE}）"
             echo "- 云端构建: GitHub Actions windows-latest（Release 工作流）"
             echo ""
             echo "## 内置 LLM 配置（可选）"
             echo ""
-            echo "反馈引擎支持 LLM 增强（默认规则引擎，缺一不可的降级已内置）："
+            echo "反馈引擎支持 LLM 增强（默认规则引擎，降级已内置）："
             echo ""
             echo '```'
             echo "# 方式 A: 本地 Ollama (内置 local 后端, 免费)"
@@ -89,10 +107,10 @@ jobs:
             echo "F1OPT_LLM_MODEL=gpt-4o-mini"
             echo '```'
             echo ""
-            echo "写在 EXE 同目录 \`.env\` 文件或系统环境变量均可。"
+            echo "写在 f1opt.exe 同目录 \`.env\` 文件或系统环境变量均可。"
             echo "跑圈实时反馈走规则引擎（零延迟）；停表后分析自动启用 LLM 改写。"
           } > release_notes.md
-          gh release create "$TAG" dist/f1opt.exe dist/f1opt.exe.sha256 \
+          gh release create "$TAG" dist/f1opt-windows.zip dist/f1opt-windows.zip.sha256 \
             --title "$TAG" --notes-file release_notes.md
 
   exe-human-audit:
@@ -112,6 +130,13 @@ jobs:
           name: f1opt-windows-exe
           path: dist
 
+      - name: Unzip onedir folder
+        shell: pwsh
+        run: |
+          Expand-Archive -Path dist\f1opt-windows.zip -DestinationPath dist -Force
+          if (-not (Test-Path dist\f1opt\f1opt.exe)) { Write-Error 'f1opt/f1opt.exe not found after unzip'; exit 1 }
+          Get-ChildItem dist\f1opt | Select-Object -First 8
+
       - name: Install audit deps
         run: |
           python -m pip install --upgrade pip
@@ -129,7 +154,7 @@ jobs:
         run: |
           set -e
           F1OPT_API_HOST=127.0.0.1 F1OPT_API_PORT=8000 \
-            ./dist/f1opt.exe serve > server.log 2>&1 &
+            ./dist/f1opt/f1opt.exe serve > server.log 2>&1 &
           echo $! > exe.pid
           up=0
           for i in $(seq 1 240); do
