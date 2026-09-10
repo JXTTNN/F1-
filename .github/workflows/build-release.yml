@@ -3,176 +3,40 @@ name: Build & Release
 on:
   push:
     tags:
-      - "v*"
+      - 'v*'
   workflow_dispatch:
-    inputs:
-      version:
-        description: "版本号 (e.g., 1.4.0)"
-        required: true
-        default: ""
 
 jobs:
-  build-windows:
+  build:
     runs-on: windows-latest
     timeout-minutes: 30
-    strategy:
-      fail-fast: false
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
-          cache: "pip"
+          python-version: '3.11'
+          cache: pip
 
-      - name: Install build dependencies
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev]" pyinstaller httpx websockets
+          pip install -e ".[dev,build]"
 
-      - name: Build single EXE with PyInstaller
-        run: |
-          pyinstaller --clean --onefile --windowed ^
-            --name "F1OPT" ^
-            --add-data "f1opt/ui/static;static" ^
-            --hidden-import "f1opt.feedback.safety" ^
-            --hidden-import "f1opt.feedback.engine" ^
-            --hidden-import "f1opt.data.track_maps" ^
-            f1opt/cli.py
-        continue-on-error: true
-
-      - name: Run unit tests
-        run: |
-          pip install pytest pytest-asyncio pytest-cov
-          python -m pytest tests/ -v --tb=short || echo "Some tests failed, but build continues"
-
-      - name: Real-world test (Windows)
-        if: success()
-        run: |
-          echo "=== Testing Windows EXE ==="
-          if exist "dist\F1OPT.exe" (
-              for %%A in (dist\F1OPT.exe) do echo "File size: %%~zA bytes"
-              dist\F1OPT.exe --help
-          ) else (
-              echo "EXE not built"
-              exit /b 1
-          )
+      - name: Build with Nuitka
+        run: python scripts/build_nuitka.py
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
-        if: always() && success()
         with:
-          name: F1OPT-windows-exe
-          path: |
-            dist/F1OPT.exe
-            dist/F1OPT.spec
+          name: F1OPT-portable
+          path: dist/F1OPT-portable.zip
           retention-days: 30
-
-  build-linux:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-          cache: "pip"
-
-      - name: Install build deps
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y python3.11-venv
-          python -m pip install --upgrade pip
-          pip install -e ".[dev]" pyinstaller httpx websockets
-
-      - name: Build Linux binary
-        run: |
-          pyinstaller --clean --onefile --console \
-            --name "f1opt" \
-            --add-data "f1opt/ui/static:static" \
-            --hidden-import "f1opt.feedback.safety" \
-            --hidden-import "f1opt.feedback.engine" \
-            --hidden-import "f1opt.data.track_maps" \
-            f1opt/cli.py
-        continue-on-error: true
-
-      - name: Run unit tests
-        run: |
-          pip install pytest pytest-asyncio pytest-cov
-          python -m pytest tests/ -v --tb=short || echo "Tests failed but build continues"
-
-      - name: Real-world test (Linux)
-        if: success()
-        run: |
-          echo "=== Testing Linux binary ==="
-          ls -la dist/f1opt
-          file dist/f1opt || true
-          chmod +x dist/f1opt
-          ./dist/f1opt --help || echo "Binary executed"
-
-      - name: Upload Linux artifact
-        uses: actions/upload-artifact@v4
-        if: always() && success()
-        with:
-          name: F1OPT-linux-binary
-          path: |
-            dist/f1opt
-            dist/f1opt.spec
-          retention-days: 30
-
-  release:
-    needs: [build-windows, build-linux]
-    runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags') || github.event_name == 'workflow_dispatch'
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Download Windows artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: F1OPT-windows-exe
-          path: artifacts/windows
-
-      - name: Download Linux artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: F1OPT-linux-binary
-          path: artifacts/linux
-
-      - name: Set version tag
-        id: tag
-        shell: bash
-        run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
-          else
-            echo "VERSION=${{ github.ref#refs/tags/ }}" >> $GITHUB_OUTPUT
-          fi
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
         with:
-          tag_name: ${{ steps.tag.outputs.VERSION }}
-          name: F1OPT ${{ steps.tag.outputs.VERSION }}
-          body: |
-            ## F1OPT ${{ steps.tag.outputs.VERSION }}
-
-            **完整功能：**
-            - 官方数据包遥测解析 (60Hz)
-            - 赛道图渲染 + 弯道点击反馈
-            - 神经网络 + LLM 调教闭环
-            - 调教安全过滤器
-
-            **已知问题：**
-            - 部分赛道地图为占位符，需官方 SVG 替换
+          files: dist/F1OPT-portable.zip
           draft: false
           prerelease: false
-          files: |
-            artifacts/windows/F1OPT.exe
-            artifacts/linux/f1opt
-          content_type: application/octet-stream
