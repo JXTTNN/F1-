@@ -3,9 +3,9 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "f1opt"
-version = "1.4.4"
-description = "F1 2026 Setup Optimizer: telemetry, driver feedback, and setup search"
+name = "setup_tuner"
+version = "0.1.0"
+description = "F1OPT 赛车调教优化助手 - EA F1 2026 Setup Tuner"
 requires-python = ">=3.11"
 readme = "README.md"
 license = { text = "Proprietary" }
@@ -14,17 +14,7 @@ dependencies = [
     "fastapi",
     "uvicorn[standard]",
     "pydantic>=2",
-    "pyarrow",
-    "torch>=2.6.0",
-    "numpy",
-    "scipy",
-    "httpx",
-    "websockets",
     "structlog",
-    "slowapi",
-    "opentelemetry-api",
-    "opentelemetry-sdk",
-    "opentelemetry-exporter-otlp-proto-grpc",
 ]
 
 [project.optional-dependencies]
@@ -32,28 +22,24 @@ dev = [
     "pytest",
     "pytest-asyncio",
     "pytest-cov",
-    "pytest-timeout",
     "ruff",
     "mypy",
 ]
 build = [
-    "pyinstaller",
+    "nuitka",
 ]
 
 [project.scripts]
-f1opt = "f1opt.cli:main"
+f1opt = "setup_tuner.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["f1opt*"]
-exclude = ["tests*", "data_store*", "半成品*", "exe*"]
+include = ["setup_tuner*"]
+exclude = ["tests*", "legacy*", "data_store*"]
 
-# 关键: 打包静态 UI 资源
-# 没有这段时, pip install 只装 .py, f1opt/ui/static 会缺失,
-# 导致便携版启动后浏览器访问 / 返回 404 (仪表盘打不开)。
-# API 侧静态目录解析见 f1opt/api/app.py: Path(__file__).parent.parent/"ui"/"static"。
+# 打包静态 UI 资源（SVG 赛道图 + HTML/JS/CSS）
 [tool.setuptools.package-data]
-"f1opt.ui" = ["static/*", "frontend/*"]
+"setup_tuner.ui" = ["tracks/*", "*"]
 
 [tool.ruff]
 line-length = 100
@@ -61,19 +47,14 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
-# E402 (module 级延迟/顺序 import) 与 E501 (行长) 为风格项, 不影响正确性:
-# 项目中广泛使用延迟导入以避免循环依赖 / 缩短冷启动, 行长 100 对长 docstring
-# 与公式注释过严。保留功能与缺陷类规则 (F/UP/B/I/E9)。
 ignore = ["E402", "E501"]
 
 [tool.ruff.lint.per-file-ignores]
-# 测试模块允许宽松断言与未使用的 fixture 参数
 "tests/**" = ["E501"]
-# __init__.py 允许未解析 re-export
-"f1opt/**/__init__.py" = ["F401"]
+"setup_tuner/**/__init__.py" = ["F401"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["f1opt"]
+known-first-party = ["setup_tuner"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
@@ -81,23 +62,19 @@ testpaths = ["tests"]
 addopts = "-ra"
 
 [tool.mypy]
-python_version = "3.12"
+python_version = "3.11"
 ignore_missing_imports = true
 warn_unused_ignores = false
 warn_redundant_casts = true
 check_untyped_defs = false
 
-[[tool.mypy.overrides]]
-module = ["torch.*", "pyarrow.*", "opentelemetry.*"]
-ignore_missing_imports = true
-
 # --- coverage ---
 [tool.coverage.run]
-source = ["f1opt"]
+source = ["setup_tuner"]
 branch = true
 parallel = true
 omit = [
-    "f1opt/__init__.py",
+    "setup_tuner/__init__.py",
     "*/__pycache__/*",
     "tests/*",
     "scripts/*",
@@ -114,7 +91,7 @@ exclude_lines = [
     "if TYPE_CHECKING:",
     "if __name__ == .__main__.:",
     "@(abc\\.)?abstractmethod",
-    "\\.\\.\\.",  # protocol stubs
+    "\\.\\.\\.",
 ]
 
 [tool.coverage.html]

@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600">
+  <defs>
+    <style>
+      .track-bg { fill: #111317; }
+      .track-line { fill: none; stroke: #2a2e36; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
+      .track-line-accent { fill: none; stroke: rgba(0,229,255,0.25); stroke-width: 2; stroke-linecap: round; stroke-dasharray: 6,4; }
+    </style>
+  </defs>
+  <rect class="track-bg" width="800" height="600" rx="8"/>
+  <polyline class="track-line" points="200.0,150.0 260.0,180.0 340.0,200.0 420.0,180.0 500.0,200.0 560.0,260.0 600.0,340.0 580.0,420.0 520.0,460.0 440.0,440.0 360.0,400.0 200.0,150.0"/>
+  <polyline class="track-line-accent" points="200.0,150.0 260.0,180.0 340.0,200.0 420.0,180.0 500.0,200.0 560.0,260.0 600.0,340.0 580.0,420.0 520.0,460.0 440.0,440.0 360.0,400.0 200.0,150.0"/>
+  <line x1="494.0" y1="194.0" x2="506.0" y2="206.0" stroke="#ff2d2d" stroke-width="1.5" stroke-dasharray="3,2" opacity="0.6"/>
+  <line x1="574.0" y1="414.0" x2="586.0" y2="426.0" stroke="#ff2d2d" stroke-width="1.5" stroke-dasharray="3,2" opacity="0.6"/>
+  <line x1="194.0" y1="144.0" x2="206.0" y2="156.0" stroke="#ff2d2d" stroke-width="1.5" stroke-dasharray="3,2" opacity="0.6"/>
+  <circle cx="260.0" cy="180.0" r="5" fill="none" stroke="#00e5ff" stroke-width="1.5" opacity="0.7"/>
+  <text x="260.0" y="172.0" text-anchor="middle" fill="#8a909c" font-size="8" font-family="monospace">1</text>
+  <circle cx="340.0" cy="200.0" r="5" fill="none" stroke="#00e5ff" stroke-width="1.5" opacity="0.7"/>
+  <text x="340.0" y="192.0" text-anchor="middle" fill="#8a909c" font-size="8" font-family="monospace">2</text>
+  <circle cx="420.0" cy="180.0" r="5" fill="none" stroke="#00e5ff" stroke-width="1.5" opacity="0.7"/>
+  <text x="420.0" y="172.0" text-anchor="middle" fill="#8a909c" font-size="8" font-family="monospace">3</text>
+  <circle cx="500.0" cy="200.0" r="5" fill="none" stroke="#00e5ff" stroke-width="1.5" opacity="0.7"/>
+  <text x="500.0" y="192.0" text-anchor="middle" fill="#8a909c" font-size="8" font-family="monospace">4</text>
+  <circle cx="560.0" cy="260.0" r="5" fill="none" stroke="#00e5ff" stroke-width="1.5" opacity="0.7"/>
+  <text x="560.0" y="252.0" text-anchor="middle" fill="#8a909c" font-size="8" font-family="monospace">5</text>
+  <circle cx="600.0" cy="340.0" r="5" fill="none" stroke="#00e5ff" stroke-width="1.5" opacity="0.7"/>
+  <text x="600.0" y="332.0" text-anchor="middle" fill="#8a909c" font-size="8" font-family="monospace">6</text>
+  <circle cx="580.0" cy="420.0" r="5" fill="none" stroke="#00e5ff" stroke-width="1.5" opacity="0.7"/>
+  <text x="580.0" y="412.0" text-anchor="middle" fill="#8a909c" font-size="8" font-family="monospace">7</text>
+  <circle cx="520.0" cy="460.0" r="5" fill="none" stroke="#00e5ff" stroke-width="1.5" opacity="0.7"/>
+  <text x="520.0" y="452.0" text-anchor="middle" fill="#8a909c" font-size="8" font-family="monospace">8</text>
+  <circle cx="440.0" cy="440.0" r="5" fill="none" stroke="#00e5ff" stroke-width="1.5" opacity="0.7"/>
+  <text x="440.0" y="432.0" text-anchor="middle" fill="#8a909c" font-size="8" font-family="monospace">9</text>
+  <circle cx="360.0" cy="400.0" r="5" fill="none" stroke="#00e5ff" stroke-width="1.5" opacity="0.7"/>
+  <text x="360.0" y="392.0" text-anchor="middle" fill="#8a909c" font-size="8" font-family="monospace">10</text>
+  <circle cx="200.0" cy="150.0" r="5" fill="none" stroke="#00e5ff" stroke-width="1.5" opacity="0.7"/>
+  <text x="200.0" y="142.0" text-anchor="middle" fill="#8a909c" font-size="8" font-family="monospace">11</text>
+  <rect x="196.0" y="146.0" width="8" height="8" fill="#ff2d2d" rx="1"/>
+  <text x="400" y="588" text-anchor="middle" fill="#5b616e"
+        font-size="10" font-family="monospace">MIAMI</text>
+</svg>
