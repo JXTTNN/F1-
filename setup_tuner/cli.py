@@ -21,7 +21,7 @@ import webbrowser
 from time import sleep
 
 from setup_tuner.app import create_app
-from setup_tuner.config import Config, load_config
+from setup_tuner.config import load_config
 
 logger = logging.getLogger(__name__)
 
@@ -117,12 +117,12 @@ def main(argv: list[str] | None = None) -> int:
     browser_thread.start()
 
     # ⑤ 启动 uvicorn
-    print(f"\n🏁 F1OPT 赛车调教优化助手已启动")
+    print("\n🏁 F1OPT 赛车调教优化助手已启动")
     print(f"   服务地址：{url}")
     print(f"   API 文档：{url}/docs")
     print(f"   WebSocket：{url}/api/v1/ws")
     print(f"   遥测监听：{config.udp_host}:{config.udp_port}")
-    print(f"   按 Ctrl+C 退出\n")
+    print("   按 Ctrl+C 退出\n")
 
     try:
         import uvicorn

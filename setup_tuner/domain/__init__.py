@@ -5,15 +5,6 @@
 
 from __future__ import annotations
 
-from .track import (
-    ALL_TRACKS,
-    Corner,
-    CornerAnchor,
-    Track,
-    get_all_tracks,
-    get_track_by_id,
-    get_track_by_udp_id,
-)
 from .setup import (
     ALL_GROUPS,
     ALL_SETUP_FIELDS,
@@ -36,6 +27,15 @@ from .symptoms import (
     get_symptom_label,
     get_symptoms_by_category,
     validate_intensity,
+)
+from .track import (
+    ALL_TRACKS,
+    Corner,
+    CornerAnchor,
+    Track,
+    get_all_tracks,
+    get_track_by_id,
+    get_track_by_udp_id,
 )
 
 __all__ = [

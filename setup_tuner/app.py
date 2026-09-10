@@ -24,20 +24,18 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, Request
-
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from setup_tuner.api.routes import router
+from setup_tuner.api.ws import WSManager, ws_router
 from setup_tuner.config import Config, load_config
 from setup_tuner.db.store import Store
 from setup_tuner.feedback.iteration import IterationService
 from setup_tuner.feedback.service import FeedbackService
 from setup_tuner.telemetry.listener import TelemetryListener
 from setup_tuner.telemetry.stream import TelemetryStream
-
-from setup_tuner.api.routes import router
-from setup_tuner.api.ws import WSManager, ws_router
 
 logger = logging.getLogger(__name__)
 

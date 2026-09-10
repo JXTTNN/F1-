@@ -9,10 +9,10 @@
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 
 
-class SymptomCategory(str, Enum):
+class SymptomCategory(StrEnum):
     """症状所属的弯道阶段类别。"""
 
     ENTRY = "entry"    # 入弯
@@ -21,7 +21,7 @@ class SymptomCategory(str, Enum):
     GLOBAL = "global"  # 全局
 
 
-class Symptom(str, Enum):
+class Symptom(StrEnum):
     """12 项调教症状枚举（逐字对齐 spec FR-FBK-02）。"""
 
     # 入弯 entry (5)

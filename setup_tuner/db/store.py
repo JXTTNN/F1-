@@ -12,7 +12,7 @@ from __future__ import annotations
 import json
 import sqlite3
 import threading
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -22,7 +22,7 @@ _SCHEMA_PATH = Path(__file__).resolve().parent / "schema.sql"
 
 def _now_iso() -> str:
     """返回当前 UTC 时间的 ISO8601 字符串（带时区标记）。"""
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 class Store:
@@ -65,7 +65,7 @@ class Store:
     # ------------------------------------------------------------------
     # 上下文管理器支持
     # ------------------------------------------------------------------
-    def __enter__(self) -> "Store":
+    def __enter__(self) -> Store:
         return self
 
     def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:

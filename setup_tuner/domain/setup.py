@@ -13,7 +13,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field, fields
+from dataclasses import dataclass, fields
 from typing import Any
 
 
@@ -462,7 +462,7 @@ class CarSetup:
     engine_braking: float = 50.0
     ballast: float = 50.0
 
-    def validate(self) -> "CarSetup":
+    def validate(self) -> CarSetup:
         """校验全部 23 字段的范围与步长档位对齐。
 
         Returns:
@@ -480,7 +480,7 @@ class CarSetup:
         return {spec.name: float(getattr(self, spec.name)) for spec in ALL_SETUP_FIELDS}
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "CarSetup":
+    def from_dict(cls, data: dict[str, Any]) -> CarSetup:
         """从扁平字典构造 CarSetup（仅取已知字段，忽略多余键）。"""
         kwargs: dict[str, float] = {}
         for spec in ALL_SETUP_FIELDS:
@@ -489,11 +489,11 @@ class CarSetup:
         return cls(**kwargs)
 
     @classmethod
-    def default(cls) -> "CarSetup":
+    def default(cls) -> CarSetup:
         """返回全部参数取缺省值的 CarSetup。"""
         return cls(**{spec.name: spec.default for spec in ALL_SETUP_FIELDS})
 
-    def diff(self, other: "CarSetup") -> list[dict]:
+    def diff(self, other: CarSetup) -> list[dict]:
         """返回与 other 不同的字段列表（每项含 name/before/after/delta/unit）。"""
         changes: list[dict] = []
         for spec in ALL_SETUP_FIELDS:

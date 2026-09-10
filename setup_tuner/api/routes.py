@@ -40,7 +40,6 @@ from setup_tuner.domain.symptoms import (
     Symptom,
 )
 from setup_tuner.domain.track import (
-
     get_all_tracks,
     get_track_by_id,
     get_track_by_udp_id,
@@ -52,7 +51,6 @@ from setup_tuner.report.builder import (
     extract_telemetry_summary,
     feedbacks_to_symptoms,
 )
-
 from .envelope import fail, ok
 
 logger = logging.getLogger(__name__)

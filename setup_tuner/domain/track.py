@@ -28,7 +28,7 @@ SVG 资产：24 条赛道 SVG 已从 ``legacy/f1opt/ui/static/*.svg`` 复制到
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Literal
 
 # --------------------------------------------------------------------------- #
