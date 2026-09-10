@@ -1,6 +1,6 @@
 name: Release (Portable)
 
-# Windows 便携包构建 (Embeddable Python)
+# Windows 便携包构建 (python-build-standalone)
 # 触发: 推送 p* 标签
 # 用途: 提供「零 PyInstaller 冻结」的备选方案，彻底避免解压失败闪退
 
