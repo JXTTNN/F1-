@@ -1,85 +1,15 @@
 name: Release (Portable)
 
-# Windows 便携包构建 (python-build-standalone)
-# 触发: 推送 p* 标签
-# 用途: 提供「零 PyInstaller 冻结」的备选方案，彻底避免解压失败闪退
+# 此工作流已由 build-release.yml 替代。
+# 新代码使用 Nuitka 打包，不再需要单独的便携包构建。
+# 触发: 推送 p* tag → 见 .github/workflows/build-release.yml
 
 on:
   push:
     tags: ["p*"]
 
-permissions:
-  contents: write
-
 jobs:
-  build:
-    runs-on: windows-latest
-    timeout-minutes: 90
+  delegate:
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-          cache: pip
-
-      - name: Build portable package via exe/portable-build.ps1
-        shell: pwsh
-        run: |
-          $ver = $env:GITHUB_REF_NAME -replace '^p', ''
-          .\exe\portable-build.ps1 -Version $ver -OutDir .
-        env:
-          GITHUB_REF_NAME: ${{ github.ref_name }}
-        id: build
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: f1opt-portable-windows
-          path: |
-            f1opt-portable-windows.zip
-            f1opt-portable-windows.zip.sha256
-          retention-days: 14
-
-      - name: Create Release
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          TAG="${GITHUB_REF_NAME}"
-          SHA="${{ steps.build.outputs.sha }}"
-          SIZE="${{ steps.build.outputs.size}} MiB"
-          
-          cat <<EOF > release-notes.md
-          # F1OPT ${TAG} (Portable 版)
-          
-          **Windows 便携包** (Embeddable Python 3.11)
-          
-          ## 使用
-          1. 下载 \`f1opt-portable-windows.zip\` 并解压
-          2. 双击 \`f1opt.bat\` 或 \`启动-F1OPT.bat\` 即可运行
-          
-          ## 优势
-          - 零 PyInstaller 冻结，彻底避开「解压失败 => 闪退」风险
-          - 直接跑 Python 环境，调试便利
-          
-          ## 产物
-          - 大小: \`${SIZE}\`
-          - SHA256: \`${SHA}\`
-          
-          ## 要求
-          解压后约 600MB 磁盘空间，建议放 SSD。
-          
-          ## 环境变量 (可选)
-          \`\`\`
-          F1OPT_LLM_BACKEND=builtin   # 默认，内置小模型
-          F1OPT_LLM_BACKEND=local     # 本地 Ollama
-          F1OPT_LLM_MODEL=llama3.1
-          F1OPT_LLM_BACKEND=openai    # OpenAI 云端
-          F1OPT_LLM_API_KEY=sk-xxx
-          \`\`\`
-          EOF
-          
-          gh release create "$TAG" f1opt-portable-windows.zip f1opt-portable-windows.zip.sha256 \
-            --title "F1OPT ${TAG} - Portable 版" \
-            --notes-file release-notes.md
+      - run: echo "Portable 构建已委托给 build-release.yml 工作流"
