@@ -6,8 +6,8 @@ points defined in f1opt/data/track_maps/__init__.py. These serve as visual
 placeholders until official high-resolution track images are provided.
 """
 
-from pathlib import Path
 import sys
+from pathlib import Path
 
 # Add the project root to sys.path so we can import track_maps
 PROJECT_ROOT = Path(__file__).resolve().parent.parent

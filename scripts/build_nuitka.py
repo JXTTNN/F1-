@@ -21,7 +21,6 @@
 
 from __future__ import annotations
 
-import shutil
 import subprocess
 import sys
 import zipfile
@@ -128,7 +127,7 @@ def build_nuitka_command() -> list[str]:
         # 递归跟踪所有 import
         "--follow-imports",
         # 内嵌 UI 静态资源（HTML/JS/CSS + 24 SVG）
-        f"--include-data-dir=setup_tuner/ui=ui",
+        "--include-data-dir=setup_tuner/ui=ui",
         # 输出文件名与目录
         f"--output-filename={OUTPUT_FILENAME}",
         f"--output-dir={OUTPUT_DIR}",

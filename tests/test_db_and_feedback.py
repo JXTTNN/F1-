@@ -113,7 +113,7 @@ class TestStoreCrud:
 
     def test_get_latest_setup(self, store: Store) -> None:
         """获取赛道最新调教（按 imported_at 降序）。"""
-        sid1 = store.import_setup("suzuka", {"front_wing": 1.0})
+        _sid1 = store.import_setup("suzuka", {"front_wing": 1.0})
         sid2 = store.import_setup("suzuka", {"front_wing": 2.0})
         latest = store.get_latest_setup("suzuka")
         assert latest is not None

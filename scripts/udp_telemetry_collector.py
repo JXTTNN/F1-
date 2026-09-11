@@ -25,7 +25,7 @@ import socket
 import struct
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 HEADER_FMT = "<HBBBBBQfIIBB"
@@ -100,7 +100,7 @@ def main() -> int:
 
     out_dir = args.out_dir or default_out_dir()
     out_dir.mkdir(parents=True, exist_ok=True)
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    stamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
     out_file = out_dir / f"f1udp_{stamp}.jsonl"
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -137,7 +137,7 @@ def main() -> int:
                     break
                 try:
                     data, addr = sock.recvfrom(65535)
-                except socket.timeout:
+                except TimeoutError:
                     continue
                 except OSError:
                     break

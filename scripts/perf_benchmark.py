@@ -87,22 +87,11 @@ def bench_engine() -> dict[str, dict]:
 
 def bench_telemetry_parse() -> dict[str, dict]:
     """维度 3：遥测包解析性能。"""
-    from setup_tuner.telemetry import packets
-
-    # 构造 6 类包的样本数据
-    header = bytes([
-        0xE8, 0x07,  # packetFormat=2026
-        26, 1, 0, 1,  # gameYear, major, minor, packetVersion
-        0,  # packetId 占位（下面按包设置）
-        0, 0, 0, 0, 0, 0, 0, 0,  # sessionUID
-        0, 0, 0, 0,  # sessionTime
-        0, 0, 0, 0,  # frameIdentifier
-        0, 0, 0, 0,  # overallFrameIdentifier
-        0,  # playerCarIndex
-        255,  # secondaryPlayerCarIndex
-    ])
+    # 构造 6 类包的样本数据（header 用 make_header 函数构造）
     # 修正：用 struct 构造 header
     import struct
+
+    from setup_tuner.telemetry import packets
     def make_header(packet_id: int, player_idx: int = 0) -> bytes:
         return struct.pack(
             "<HBBBBBQfIIBB",
@@ -215,17 +204,15 @@ def bench_telemetry_parse() -> dict[str, dict]:
 
 def bench_coupling_matrix() -> dict[str, dict]:
     """耦合矩阵查询性能。"""
+    from setup_tuner.domain.setup import ALL_SETUP_FIELDS
     from setup_tuner.engine.coupling import (
-        COUPLING_MATRIX,
-        get_coupling,
         get_column,
+        get_coupling,
         get_row,
         matrix_stats,
         nonzero_cells_for_diag,
-        nonzero_cells_for_param,
     )
     from setup_tuner.engine.diagnostic import DIAG_DIMS
-    from setup_tuner.domain.setup import ALL_SETUP_FIELDS
 
     param_names = [f.name for f in ALL_SETUP_FIELDS]
 
@@ -284,7 +271,7 @@ def bench_store() -> dict[str, dict]:
 
         # import_setup
         samples_import: list[float] = []
-        for i in range(500):
+        for _i in range(500):
             t0 = time.perf_counter()
             store.import_setup("suzuka", default_params)
             samples_import.append(time.perf_counter() - t0)

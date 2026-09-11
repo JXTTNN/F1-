@@ -9,8 +9,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from setup_tuner.domain.track import (
     ALL_TRACKS,
     Corner,

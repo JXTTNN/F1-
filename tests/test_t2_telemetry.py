@@ -25,15 +25,9 @@ from setup_tuner.telemetry.packets import (
     SUPPORTED_PACKET_IDS,
     PacketHeader,
     PacketTooShortError,
-    parse_car_setups,
-    parse_car_status,
-    parse_car_telemetry,
-    parse_car_telemetry_2,
-    parse_header,
-    parse_lap_data,
-    parse_packet,
-    parse_session,
     packet_name,
+    parse_header,
+    parse_packet,
 )
 
 

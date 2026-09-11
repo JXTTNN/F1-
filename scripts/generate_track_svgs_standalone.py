@@ -144,7 +144,7 @@ def generate_svg(track_id: str, cp: list, corners: list, sectors: list,
     points_str = " ".join(f"{p[1]:.1f},{p[2]:.1f}" for p in cp)
 
     corner_elements = []
-    for cid, name, cx, cy in corners:
+    for cid, _name, cx, cy in corners:
         corner_elements.append(
             f'  <circle cx="{cx:.1f}" cy="{cy:.1f}" r="5" '
             f'fill="none" stroke="#00e5ff" stroke-width="1.5" opacity="0.7"/>'
@@ -199,7 +199,7 @@ def main():
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     generated = 0
 
-    for track_id, w, h, corner_count, sector_str in TRACK_META:
+    for track_id, w, h, _corner_count, sector_str in TRACK_META:
         cp = extract_control_points(track_id)
         if not cp:
             print(f"  SKIP: {track_id} (no control points found)")

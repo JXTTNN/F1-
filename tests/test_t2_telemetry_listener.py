@@ -16,8 +16,6 @@ import struct
 import threading
 import time
 
-import pytest
-
 from setup_tuner.telemetry.listener import (
     DEFAULT_HOST,
     DEFAULT_PORT,
@@ -27,8 +25,6 @@ from setup_tuner.telemetry.listener import (
 from setup_tuner.telemetry.packets import (
     HEADER_FORMAT,
     SUPPORTED_PACKET_IDS,
-    PacketTooShortError,
-    parse_packet,
 )
 from setup_tuner.telemetry.stream import TelemetryStream
 
@@ -154,7 +150,7 @@ class TestListenerLifecycle:
     def test_start_stop_lifecycle(self) -> None:
         """start → is_running True → stop → is_running False。"""
         # 使用可用端口（0 = OS 分配）
-        listener = TelemetryListener(host="127.0.0.1", port=0)
+        _listener = TelemetryListener(host="127.0.0.1", port=0)
         # port=0 时 bind 会分配端口，但我们的代码直接 bind，需改用实际端口
         # 找一个可用端口
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:

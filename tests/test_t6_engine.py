@@ -390,7 +390,7 @@ class TestSourceTraceability:
             result = generate_suggestion(
                 [(sym.value, 3)], default_setup, "t", None
             )
-            delta = result["setup_delta"]
+            _delta = result["setup_delta"]
             for pd in result["parameters"]:
                 if abs(pd["setup_delta"]) > 1e-6:
                     assert pd["source"], (
