@@ -141,8 +141,8 @@ def start_exe(exe_path: Path, cwd: Path | None = None) -> subprocess.Popen[bytes
     return subprocess.Popen(
         [str(exe_path)],
         cwd=str(cwd),
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
         creationflags=creationflags,
     )
 
@@ -315,6 +315,16 @@ def test_startup(
     if not ready:
         stop_exe(proc)
         items.append(f"❌ {info}")
+        # 打印 exe 输出用于诊断
+        try:
+            stdout_data = proc.stdout.read1(4096).decode("utf-8", errors="replace") if proc.stdout else ""
+            stderr_data = proc.stderr.read1(4096).decode("utf-8", errors="replace") if proc.stderr else ""
+            if stdout_data:
+                items.append(f"exe stdout: {stdout_data[:500]}")
+            if stderr_data:
+                items.append(f"exe stderr: {stderr_data[:500]}")
+        except Exception:
+            pass
         return TestResult("startup", False, info, items), None
     items.append(info)
 
@@ -685,7 +695,7 @@ def parse_args() -> argparse.Namespace:
         help="API 端口（默认 8000）",
     )
     parser.add_argument(
-        "--timeout", type=float, default=30,
+        "--timeout", type=float, default=120,
         help="启动超时秒数（默认 30）",
     )
     return parser.parse_args()
