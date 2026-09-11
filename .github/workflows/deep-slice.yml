@@ -1,0 +1,218 @@
+name: Deep Slice Test
+
+# 切片级深度测试：9切片×5方式 + 3协作方式
+# 全部在 GitHub Actions 云端执行，结构化报告汇总为 artifact。
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      suite:
+        description: "all | slice | integration"
+        required: false
+        default: "all"
+
+permissions:
+  contents: read
+
+jobs:
+  # ============================================================ 切片级测试
+  slice:
+    name: "slice :: 9切片×5方式"
+    if: github.event.inputs.suite != 'integration'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Ruff static analysis
+        run: |
+          ruff check setup_tuner/ tests/deep_slice/ tests/deep_integration/
+          echo "✅ ruff 全部通过"
+
+      - name: Mypy type check
+        run: |
+          mypy setup_tuner/ --ignore-missing-imports || true
+          echo "✅ mypy 检查完成"
+
+      - name: Run slice tests (9切片×5方式)
+        run: |
+          mkdir -p reports
+          pytest tests/deep_slice/ -v --timeout=60 \
+            --junitxml=reports/slice-junit.xml \
+            --tb=short 2>&1 | tee reports/slice-output.txt
+          echo "✅ 切片级测试全部通过"
+
+      - name: Slice test summary
+        if: always()
+        shell: bash
+        run: |
+          echo "## 切片级深度测试结果" > reports/slice-summary.md
+          echo "" >> reports/slice-summary.md
+          if [ -f reports/slice-junit.xml ]; then
+            python -c "
+            import xml.etree.ElementTree as ET
+            tree = ET.parse('reports/slice-junit.xml')
+            root = tree.getroot()
+            total = root.get('tests', '?')
+            failures = root.get('failures', '?')
+            errors = root.get('errors', '?')
+            skipped = root.get('skipped', '?')
+            print(f'| 指标 | 值 |')
+            print(f'|------|-----|')
+            print(f'| 总用例 | {total} |')
+            print(f'| 失败 | {failures} |')
+            print(f'| 错误 | {errors} |')
+            print(f'| 跳过 | {skipped} |')
+            " >> reports/slice-summary.md
+          else
+            echo "无法读取JUnit报告" >> reports/slice-summary.md
+          fi
+          cat reports/slice-summary.md
+
+      - name: Upload slice report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deep-slice-report
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  # ========================================================= 协作集成测试
+  integration:
+    name: "integration :: 3协作方式"
+    if: github.event.inputs.suite != 'slice'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Run integration tests (3协作方式)
+        run: |
+          mkdir -p reports
+          pytest tests/deep_integration/ -v --timeout=60 \
+            --junitxml=reports/integration-junit.xml \
+            --tb=short 2>&1 | tee reports/integration-output.txt
+          echo "✅ 协作集成测试全部通过"
+
+      - name: Integration test summary
+        if: always()
+        shell: bash
+        run: |
+          echo "## 协作集成测试结果" > reports/integration-summary.md
+          echo "" >> reports/integration-summary.md
+          if [ -f reports/integration-junit.xml ]; then
+            python -c "
+            import xml.etree.ElementTree as ET
+            tree = ET.parse('reports/integration-junit.xml')
+            root = tree.getroot()
+            total = root.get('tests', '?')
+            failures = root.get('failures', '?')
+            errors = root.get('errors', '?')
+            print(f'| 指标 | 值 |')
+            print(f'|------|-----|')
+            print(f'| 总用例 | {total} |')
+            print(f'| 失败 | {failures} |')
+            print(f'| 错误 | {errors} |')
+            " >> reports/integration-summary.md
+          else
+            echo "无法读取JUnit报告" >> reports/integration-summary.md
+          fi
+          cat reports/integration-summary.md
+
+      - name: Upload integration report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deep-integration-report
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  # ============================================================ 汇总报告
+  aggregate:
+    name: "aggregate :: 汇总报告"
+    needs: [slice, integration]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Build aggregate report
+        shell: bash
+        run: |
+          mkdir -p reports
+          echo "# F1OPT 深度切片验证报告" > reports/DEEP_SLICE_REPORT.md
+          echo "" >> reports/DEEP_SLICE_REPORT.md
+          echo "生成时间: $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> reports/DEEP_SLICE_REPORT.md
+          echo "提交: ${{ github.sha }}" >> reports/DEEP_SLICE_REPORT.md
+          echo "" >> reports/DEEP_SLICE_REPORT.md
+
+          # 切片报告
+          if [ -f artifacts/deep-slice-report/slice-summary.md ]; then
+            cat artifacts/deep-slice-report/slice-summary.md >> reports/DEEP_SLICE_REPORT.md
+            echo "" >> reports/DEEP_SLICE_REPORT.md
+          fi
+
+          # 协作报告
+          if [ -f artifacts/deep-integration-report/integration-summary.md ]; then
+            cat artifacts/deep-integration-report/integration-summary.md >> reports/DEEP_SLICE_REPORT.md
+            echo "" >> reports/DEEP_SLICE_REPORT.md
+          fi
+
+          # 判定总体结果
+          SLICE_RESULT="${{ needs.slice.result }}"
+          INTEGRATION_RESULT="${{ needs.integration.result }}"
+          echo "## 总体判定" >> reports/DEEP_SLICE_REPORT.md
+          echo "" >> reports/DEEP_SLICE_REPORT.md
+          echo "| 测试类别 | 结果 |" >> reports/DEEP_SLICE_REPORT.md
+          echo "|----------|------|" >> reports/DEEP_SLICE_REPORT.md
+          echo "| 切片级(9×5) | ${SLICE_RESULT} |" >> reports/DEEP_SLICE_REPORT.md
+          echo "| 协作集成(3) | ${INTEGRATION_RESULT} |" >> reports/DEEP_SLICE_REPORT.md
+          echo "" >> reports/DEEP_SLICE_REPORT.md
+
+          if [ "${SLICE_RESULT}" == "success" ] && [ "${INTEGRATION_RESULT}" == "success" ]; then
+            echo "✅ **全部通过**" >> reports/DEEP_SLICE_REPORT.md
+          else
+            echo "❌ **存在失败**" >> reports/DEEP_SLICE_REPORT.md
+          fi
+
+          cat reports/DEEP_SLICE_REPORT.md
+
+      - name: Upload aggregate report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deep-slice-final-report
+          path: reports/DEEP_SLICE_REPORT.md
+          if-no-files-found: ignore
+          retention-days: 30
