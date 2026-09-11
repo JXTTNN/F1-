@@ -26,6 +26,11 @@ import sys
 import zipfile
 from pathlib import Path
 
+# Windows CI 默认编码 cp1252 不支持中文，强制 UTF-8 输出
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
+
 # =========================================================================== #
 # 常量
 # =========================================================================== #
