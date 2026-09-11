@@ -1091,11 +1091,15 @@ def test_deep(
         # ── E. 业务逻辑 15 项 ──
         sub_items.append("── E. 业务逻辑（15项）──")
         # E1. POST tracks/current 200
-        resp = client.post(
-            api_url(host, port, "/tracks/current"),
-            json={"track_id": TEST_TRACK_ID},
-        )
-        check("E1 POST tracks/current 200", resp.status_code == 200)
+        try:
+            resp = client.post(
+                api_url(host, port, "/tracks/current"),
+                json={"track_id": TEST_TRACK_ID},
+                timeout=30.0,
+            )
+            check("E1 POST tracks/current 200", resp.status_code == 200)
+        except Exception as e:
+            check("E1 POST tracks/current 200", False, str(e))
         # E2. health显示current_track_id
         try:
             resp = client.get(api_url(host, port, "/health"))
@@ -1114,6 +1118,7 @@ def test_deep(
                 "symptom": TEST_SYMPTOM,
                 "strength": TEST_STRENGTH,
             },
+            timeout=30.0,
         )
         fb_body: dict = {}
         try:
@@ -1137,6 +1142,7 @@ def test_deep(
         resp = client.post(
             api_url(host, port, "/suggest"),
             json={"track_id": TEST_TRACK_ID},
+            timeout=30.0,
         )
         sg_body: dict = {}
         try:
@@ -1188,21 +1194,28 @@ def test_deep(
             check("E15 history倒序", False, str(e))
 
         # E10. 无遥测POST setup/import 409
-        resp = client.post(api_url(host, port, "/setup/import"))
-        check("E10 无遥测setup/import 409",
-              resp.status_code == 409, f"status={resp.status_code}")
+        try:
+            resp = client.post(api_url(host, port, "/setup/import"), timeout=30.0)
+            check("E10 无遥测setup/import 409",
+                  resp.status_code == 409, f"status={resp.status_code}")
+        except Exception as e:
+            check("E10 无遥测setup/import 409", False, str(e))
 
         # E14. 重复反馈不崩溃（200覆盖或409拒绝均可）
-        resp = client.post(
-            api_url(host, port, "/feedback"),
-            json={
-                "track_id": TEST_TRACK_ID,
-                "symptom": TEST_SYMPTOM,
-                "strength": TEST_STRENGTH,
-            },
-        )
-        check("E14 重复反馈不崩溃",
-              resp.status_code in (200, 409), f"status={resp.status_code}")
+        try:
+            resp = client.post(
+                api_url(host, port, "/feedback"),
+                json={
+                    "track_id": TEST_TRACK_ID,
+                    "symptom": TEST_SYMPTOM,
+                    "strength": TEST_STRENGTH,
+                },
+                timeout=30.0,
+            )
+            check("E14 重复反馈不崩溃",
+                  resp.status_code in (200, 409), f"status={resp.status_code}")
+        except Exception as e:
+            check("E14 重复反馈不崩溃", False, str(e))
 
         # ── F. 性能基准 10 项 ──
         sub_items.append("── F. 性能基准（10项）──")
@@ -1409,7 +1422,21 @@ def main() -> int:
 
     # ── 阶段 6：80 项深度检查 ──
     print("\n[6/6] 80项深度检查 (deep)...")
-    r6 = test_deep(args.exe, args.zip, args.host, args.port, args.timeout)
+    # 重新启动 exe（前面阶段已停止）
+    try:
+        deep_proc = start_exe(args.exe)
+        ready, _ = wait_for_api(args.host, args.port, args.timeout)
+        if not ready:
+            print("    ❌ 深度检查无法启动 exe")
+            stop_exe(deep_proc)
+            r6 = TestResult("deep", False, "无法启动 exe")
+        else:
+            r6 = test_deep(args.exe, args.zip, args.host, args.port, args.timeout)
+    finally:
+        try:
+            stop_exe(deep_proc)
+        except Exception:
+            pass
     report.add(r6)
     for item in r6.sub_items:
         print(f"    • {item}")
