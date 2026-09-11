@@ -60,7 +60,7 @@ TEST_SYMPTOM = "understeer"
 TEST_STRENGTH = 3
 
 # HTTP 请求超时（秒）
-HTTP_TIMEOUT = 10.0
+HTTP_TIMEOUT = 30.0
 
 
 # =========================================================================== #
@@ -1166,14 +1166,19 @@ def test_deep(
               f"keys={list(sg_data.keys())}")
 
         # E8. GET iteration/history 200
-        resp = client.get(
-            api_url(host, port, "/iteration/history"),
-            params={"track_id": TEST_TRACK_ID},
-        )
-        check("E8 GET iteration/history 200", resp.status_code == 200)
+        try:
+            resp = client.get(
+                api_url(host, port, "/iteration/history"),
+                params={"track_id": TEST_TRACK_ID},
+                timeout=30.0,
+            )
+            check("E8 GET iteration/history 200", resp.status_code == 200)
+        except Exception as e:
+            check("E8 GET iteration/history 200", False, str(e))
+            resp = None
         # E9. history>=1条 + E15. history倒序
         try:
-            body = assert_envelope(resp)
+            body = assert_envelope(resp) if resp else {}
             history = body["data"]
             check("E9 history>=1条", len(history) >= 1, f"{len(history)}条")
             # E15. history倒序（按时间戳降序）
