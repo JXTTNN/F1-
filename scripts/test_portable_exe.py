@@ -1111,17 +1111,17 @@ def test_deep(
             check("E2 health显示current_track_id", False, str(e))
 
         # E3. POST feedback 200
-        resp = client.post(
-            api_url(host, port, "/feedback"),
-            json={
-                "track_id": TEST_TRACK_ID,
-                "symptom": TEST_SYMPTOM,
-                "strength": TEST_STRENGTH,
-            },
-            timeout=30.0,
-        )
         fb_body: dict = {}
         try:
+            resp = client.post(
+                api_url(host, port, "/feedback"),
+                json={
+                    "track_id": TEST_TRACK_ID,
+                    "symptom": TEST_SYMPTOM,
+                    "strength": TEST_STRENGTH,
+                },
+                timeout=30.0,
+            )
             fb_body = assert_envelope(resp)
             check("E3 POST feedback 200", resp.status_code == 200)
         except Exception as e:
@@ -1139,13 +1139,13 @@ def test_deep(
               f"keys={list(fb_data.keys())}")
 
         # E5. POST suggest 200
-        resp = client.post(
-            api_url(host, port, "/suggest"),
-            json={"track_id": TEST_TRACK_ID},
-            timeout=30.0,
-        )
         sg_body: dict = {}
         try:
+            resp = client.post(
+                api_url(host, port, "/suggest"),
+                json={"track_id": TEST_TRACK_ID},
+                timeout=30.0,
+            )
             sg_body = assert_envelope(resp)
             check("E5 POST suggest 200", resp.status_code == 200)
         except Exception as e:
@@ -1402,6 +1402,13 @@ def main() -> int:
         report.add(r4)
         for item in r4.sub_items:
             print(f"    • {item}")
+
+        # ── 阶段 6：80 项深度检查（趁 exe 还在运行）──
+        print("\n[6/6] 80项深度检查 (deep)...")
+        r6 = test_deep(args.exe, args.zip, args.host, args.port, args.timeout)
+        report.add(r6)
+        for item in r6.sub_items:
+            print(f"    • {item}")
     finally:
         # 停止第一个 exe 实例（释放端口给便携性测试用）
         stop_exe(proc)
@@ -1415,30 +1422,6 @@ def main() -> int:
     r5 = test_portable(args.zip, args.host, args.port, args.timeout)
     report.add(r5)
     for item in r5.sub_items:
-        print(f"    • {item}")
-
-    # 等待端口释放
-    time.sleep(2)
-
-    # ── 阶段 6：80 项深度检查 ──
-    print("\n[6/6] 80项深度检查 (deep)...")
-    # 重新启动 exe（前面阶段已停止）
-    try:
-        deep_proc = start_exe(args.exe)
-        ready, _ = wait_for_api(args.host, args.port, args.timeout)
-        if not ready:
-            print("    ❌ 深度检查无法启动 exe")
-            stop_exe(deep_proc)
-            r6 = TestResult("deep", False, "无法启动 exe")
-        else:
-            r6 = test_deep(args.exe, args.zip, args.host, args.port, args.timeout)
-    finally:
-        try:
-            stop_exe(deep_proc)
-        except Exception:
-            pass
-    report.add(r6)
-    for item in r6.sub_items:
         print(f"    • {item}")
 
     # ── 打印报告 ──
