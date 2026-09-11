@@ -1024,8 +1024,9 @@ def test_deep(
         check("D5 有corners", all_has_corners)
         all_has_svg = all("svg_path" in t for t in tracks) if tracks else False
         check("D6 有svg_path", all_has_svg)
+        # /tracks 列表端点中 corners 是 int（弯道数量），不是 list
         all_corners_pos = all(
-            len(t.get("corners", [])) > 0 for t in tracks
+            t.get("corners", 0) > 0 for t in tracks
         ) if tracks else False
         check("D7 corners>0", all_corners_pos)
         all_svg_prefix = all(
