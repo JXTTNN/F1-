@@ -135,6 +135,9 @@ def build_nuitka_command() -> list[str]:
         "--follow-imports",
         # 内嵌 UI 静态资源（HTML/JS/CSS + 24 SVG）
         "--include-data-dir=setup_tuner/ui=ui",
+        # 内嵌 SQLite schema.sql（非 Python 文件，--follow-imports 不会自动包含）
+        # dest 必须与 store.py 的 __file__ 同目录：setup_tuner/db/schema.sql
+        "--include-data-files=setup_tuner/db/schema.sql=setup_tuner/db/schema.sql",
         # 输出文件名与目录
         f"--output-filename={OUTPUT_FILENAME}",
         f"--output-dir={OUTPUT_DIR}",

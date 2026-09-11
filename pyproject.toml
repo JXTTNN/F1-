@@ -39,9 +39,10 @@ where = ["."]
 include = ["setup_tuner*"]
 exclude = ["tests*", "legacy*", "data_store*"]
 
-# 打包静态 UI 资源（SVG 赛道图 + HTML/JS/CSS）
+# 打包静态 UI 资源（SVG 赛道图 + HTML/JS/CSS）+ SQLite schema
 [tool.setuptools.package-data]
 "setup_tuner.ui" = ["tracks/*", "*"]
+"setup_tuner.db" = ["*.sql"]
 
 [tool.ruff]
 line-length = 100
