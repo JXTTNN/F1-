@@ -25,6 +25,9 @@
   const SVG_PREFIX = "/tracks/";
   // 热区直径（px），在 800px 画布上约 3.5%
   const HOTZONE_DIAMETER = 28;
+  // WebSocket 自动重连配置：断开后 3 秒重连，最多 5 次
+  const WS_RECONNECT_DELAY = 3000;
+  const WS_RECONNECT_MAX = 5;
   // 症状 → 类别映射（与 domain/symptoms.py 逐字对齐）
   const SYMPTOM_CATEGORY = {
     understeer: "entry", oversteer: "entry", turnin_unresponsive: "entry",
@@ -52,12 +55,12 @@
     reportWrap: $("report-table-wrap"),
     btnHistory: $("btn-refresh-history"),
     historyWrap: $("history-wrap"),
+    toastContainer: $("toast-container"),
     // 反馈面板
     fbOverlay: $("feedback-overlay"), fbClose: $("fb-close"), fbSubmit: $("fb-submit"),
     fbCornerNum: $("fb-corner-number"), fbCornerName: $("fb-corner-name"),
     fbStrength: $("fb-strength-range"), fbStrengthVal: $("fb-strength-value"),
     fbError: $("fb-error"),
-    toast: $("toast"),
   };
 
   /* ---------- 运行时状态 ---------- */
@@ -69,6 +72,7 @@
     selectedCorner: null,  // 反馈面板当前选中的弯道 {number, name}
     currentCorner: null,   // 遥测高亮的当前弯道编号
     ws: null,              // WebSocket 实例
+    wsReconnectCount: 0,   // WebSocket 重连次数计数
   };
 
   /* ---------- 工具函数 ---------- */
@@ -88,14 +92,46 @@
     return body.data;
   }
 
-  /** 短暂提示条。 */
-  let toastTimer = null;
+  /** Toast 通知：在顶部 toast-container 中堆叠显示，3.2 秒后滑出移除。 */
   function showToast(msg, type) {
-    dom.toast.textContent = msg;
-    dom.toast.className = "toast" + (type ? ` toast-${type}` : "");
-    dom.toast.hidden = false;
-    clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => { dom.toast.hidden = true; }, 3200);
+    if (!dom.toastContainer) return;
+    const el = document.createElement("div");
+    el.className = "toast" + (type ? ` toast-${type}` : "");
+    el.textContent = msg;
+    dom.toastContainer.appendChild(el);
+    setTimeout(() => {
+      el.classList.add("toast-leaving");
+      el.addEventListener("animationend", () => el.remove(), { once: true });
+      // 兜底：动画事件未触发时 350ms 后强制移除
+      setTimeout(() => { if (el.parentNode) el.remove(); }, 350);
+    }, 3200);
+  }
+
+  /** 在指定容器内显示 loading spinner。
+   *  @param {HTMLElement} container - 目标容器
+   *  @param {string} [text] - spinner 下方提示文字
+   */
+  function showLoading(container, text) {
+    const wrap = document.createElement("div");
+    wrap.className = "spinner-wrap";
+    const spinner = document.createElement("div");
+    spinner.className = "spinner";
+    spinner.setAttribute("role", "status");
+    spinner.setAttribute("aria-label", "加载中");
+    wrap.appendChild(spinner);
+    if (text) {
+      const label = document.createElement("span");
+      label.textContent = text;
+      wrap.appendChild(label);
+    }
+    container.innerHTML = "";
+    container.appendChild(wrap);
+  }
+
+  /** 隐藏 loading spinner（清空容器）。 */
+  function hideLoading(container) {
+    const wrap = container.querySelector(".spinner-wrap");
+    if (wrap) wrap.remove();
   }
 
   /** 格式化圈速（ms → m:ss.mmm）。 */
@@ -111,6 +147,13 @@
   function esc(s) {
     return String(s == null ? "" : s).replace(/[&<>"']/g, (c) =>
       ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  }
+
+  /** 给遥测数值添加 flash 过渡 class（短暂高亮后移除）。 */
+  function flashValue(el) {
+    if (!el) return;
+    el.classList.add("flash");
+    setTimeout(() => el.classList.remove("flash"), 300);
   }
 
   /* ========================================================================
@@ -145,6 +188,9 @@
     state.feedbackCorners.clear();
     state.currentCorner = null;
 
+    // 赛道图区域显示 loading spinner
+    showLoading(dom.mapWrap, "加载赛道数据…");
+
     // 通知后端当前赛道
     try {
       await fetchJSON("/tracks/current", {
@@ -171,6 +217,7 @@
       loadIterationHistory(trackId);
     } catch (e) {
       dom.mapWrap.innerHTML = '<div class="track-map-empty">赛道数据加载失败：' + esc(e.message) + "</div>";
+      showToast("赛道数据加载失败：" + e.message, "error");
     }
   }
 
@@ -180,6 +227,9 @@
 
   async function renderTrackMap(trackId, corners) {
     dom.mapWrap.innerHTML = "";
+    // 赛道图加载中显示 spinner
+    showLoading(dom.mapWrap, "加载赛道图…");
+
     // 加载 SVG
     let svgText;
     try {
@@ -188,8 +238,13 @@
       svgText = await resp.text();
     } catch (e) {
       dom.mapWrap.innerHTML = '<div class="track-map-empty">赛道图加载失败</div>';
+      showToast("赛道图加载失败", "error");
       return;
     }
+
+    // 清除 loading，开始渲染
+    dom.mapWrap.innerHTML = "";
+    dom.mapWrap.classList.add("is-active");
 
     // 容器：SVG + 热区层
     const box = document.createElement("div");
@@ -224,8 +279,15 @@
       hz.style.height = HOTZONE_DIAMETER + "px";
       hz.dataset.corner = num;
       hz.title = `弯道 ${num}${c.name ? " · " + c.name : ""}`;
+      hz.setAttribute("role", "button");
+      hz.setAttribute("aria-label", `弯道 ${num}${c.name ? " " + c.name : ""}，点击录入反馈`);
       hz.textContent = num;
-      hz.addEventListener("click", () => openFeedbackPanel(num, c.name));
+      hz.addEventListener("click", () => {
+        // 弯道点击 pulse 动画（1 秒后移除）
+        hz.classList.add("pulse");
+        setTimeout(() => hz.classList.remove("pulse"), 1000);
+        openFeedbackPanel(num, c.name);
+      });
       layer.appendChild(hz);
     });
 
@@ -315,6 +377,7 @@
       showToast("反馈已提交", "success");
     } catch (e) {
       dom.fbError.textContent = e.message;
+      showToast("反馈提交失败：" + e.message, "error");
     } finally {
       dom.fbSubmit.disabled = false;
     }
@@ -334,20 +397,30 @@
 
   /* ========================================================================
      4. WebSocket（遥测 / 当前弯 / 建议 / 连接状态）
+        自动重连：断开后 3 秒重连，最多 5 次；重连成功后计数归零。
      ======================================================================== */
 
   function connectWebSocket() {
+    // 超过最大重连次数则停止
+    if (state.wsReconnectCount >= WS_RECONNECT_MAX) {
+      setWsStatus(false);
+      showToast("遥测连接已断开，请刷新页面重试", "error");
+      return;
+    }
     try {
       state.ws = new WebSocket(WS_URL);
     } catch (e) {
       setWsStatus(false);
+      scheduleReconnect();
       return;
     }
-    state.ws.onopen = () => { /* 状态由 telemetry_status 事件驱动 */ };
+    state.ws.onopen = () => {
+      // 重连成功，计数归零
+      state.wsReconnectCount = 0;
+    };
     state.ws.onclose = () => {
       setWsStatus(false);
-      // 断线 3 秒后重连
-      setTimeout(connectWebSocket, 3000);
+      scheduleReconnect();
     };
     state.ws.onerror = () => { /* onclose 会处理 */ };
     state.ws.onmessage = (evt) => {
@@ -364,6 +437,14 @@
     };
   }
 
+  /** 安排重连：3 秒后重连，计数 +1。 */
+  function scheduleReconnect() {
+    state.wsReconnectCount += 1;
+    if (state.wsReconnectCount <= WS_RECONNECT_MAX) {
+      setTimeout(connectWebSocket, WS_RECONNECT_DELAY);
+    }
+  }
+
   function setWsStatus(connected) {
     if (connected) {
       dom.wsDot.className = "status-dot status-online";
@@ -374,15 +455,15 @@
     }
   }
 
-  /** 遥测事件 → 更新显示。 */
+  /** 遥测事件 → 更新显示（数值变化添加 flash 过渡）。 */
   function onTelemetry(t) {
-    if (t.speed != null) dom.telSpeed.textContent = Math.round(t.speed);
-    if (t.throttle != null) dom.telThrottle.textContent = Math.round(t.throttle * 100);
-    if (t.brake != null) dom.telBrake.textContent = Math.round(t.brake * 100);
-    if (t.gear != null) dom.telGear.textContent = t.gear < 0 ? "R" : t.gear;
-    if (t.rpm != null) dom.telRpm.textContent = Math.round(t.rpm);
-    if (t.lap_time_ms != null) dom.telLaptime.textContent = fmtLapTime(t.lap_time_ms);
-    else if (t.last_lap_time_ms != null) dom.telLaptime.textContent = fmtLapTime(t.last_lap_time_ms);
+    if (t.speed != null) { dom.telSpeed.textContent = Math.round(t.speed); flashValue(dom.telSpeed); }
+    if (t.throttle != null) { dom.telThrottle.textContent = Math.round(t.throttle * 100); flashValue(dom.telThrottle); }
+    if (t.brake != null) { dom.telBrake.textContent = Math.round(t.brake * 100); flashValue(dom.telBrake); }
+    if (t.gear != null) { dom.telGear.textContent = t.gear < 0 ? "R" : t.gear; flashValue(dom.telGear); }
+    if (t.rpm != null) { dom.telRpm.textContent = Math.round(t.rpm); flashValue(dom.telRpm); }
+    if (t.lap_time_ms != null) { dom.telLaptime.textContent = fmtLapTime(t.lap_time_ms); flashValue(dom.telLaptime); }
+    else if (t.last_lap_time_ms != null) { dom.telLaptime.textContent = fmtLapTime(t.last_lap_time_ms); flashValue(dom.telLaptime); }
     if (t.sector != null) {
       dom.telSector.textContent = `S${t.sector}`;
       dom.sectorTag.textContent = `扇区 ${t.sector}`;
@@ -418,7 +499,8 @@
     }
     dom.btnSuggest.disabled = true;
     const oldText = dom.btnSuggest.textContent;
-    dom.btnSuggest.textContent = "生成中…";
+    // 按钮显示 loading spinner + 文字
+    dom.btnSuggest.innerHTML = '<span class="spinner-inline"></span>生成中…';
     try {
       const data = await fetchJSON("/suggest", {
         method: "POST",
@@ -473,7 +555,7 @@
       dom.reportSummary.classList.remove("visible");
     }
 
-    // 表格
+    // 表格（参数调整可视化条形图）
     const rows = params.map((p) => {
       const delta = p.setup_delta;
       const deltaCls = delta > 0 ? "delta-up" : delta < 0 ? "delta-down" : "delta-zero";
@@ -483,11 +565,13 @@
       const suggestVal = p.suggested != null ? p.suggested : (p.current != null && delta != null ? p.current + delta : "—");
       const linkages = Array.isArray(p.linkages) ? p.linkages.join("、") : (p.linkages || "");
       const tradeoff = p.tradeoff ? `<span class="tradeoff-text">${esc(p.tradeoff)}</span>` : "—";
+      // 可视化条形图：以 delta 比例填充
+      const barFill = renderDeltaBar(delta);
 
       return `<tr>
         <td class="col-param">${esc(p.param)}</td>
         <td class="col-current">${esc(p.current)}</td>
-        <td class="col-delta ${deltaCls}">${deltaSign}${esc(delta)}</td>
+        <td class="col-delta ${deltaCls}">${deltaSign}${esc(delta)}${barFill}</td>
         <td class="col-suggest">${esc(suggestVal)}</td>
         <td class="col-link">${esc(linkages)}</td>
         <td class="col-note">${esc(p.linked_notes || "")}</td>
@@ -514,6 +598,17 @@
         </thead>
         <tbody>${rows}</tbody>
       </table>`;
+  }
+
+  /** 渲染参数调整可视化条形图（delta 比例填充）。 */
+  function renderDeltaBar(delta) {
+    if (delta == null || delta === 0) return "";
+    // 将 delta 映射到 -100% ~ 100%，以 50% 为中点
+    const ratio = Math.min(Math.abs(delta) / 10, 1) * 50; // 假设 delta 量级 ≤10
+    const dir = delta > 0 ? "up" : "down";
+    const width = ratio.toFixed(1);
+    const left = delta > 0 ? "50%" : `${(50 - ratio).toFixed(1)}%`;
+    return `<span class="delta-bar"><span class="delta-bar-fill ${dir}" style="left:${left};width:${width}%;"></span></span>`;
   }
 
   /* ========================================================================

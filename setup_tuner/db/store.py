@@ -40,6 +40,17 @@ class Store:
         # check_same_thread=False 允许跨线程使用同一连接；
         # 线程安全由 self._lock 保证。
         self._conn = sqlite3.connect(db_path, check_same_thread=False)
+        # 性能 PRAGMA：连接创建后立即执行，提升写入并发与读吞吐
+        # （来源：2026-09-11-sqlite-pragma-tuning）
+        # WAL：Write-Ahead Logging，读不阻塞写、写不阻塞读
+        self._conn.execute("PRAGMA journal_mode = WAL")
+        # NORMAL：每个事务提交时同步一次（而非 FULL 的每次写入都 fsync），
+        # 在 WAL 模式下仅在最坏情况丢失最后一个事务
+        self._conn.execute("PRAGMA synchronous = NORMAL")
+        # 8MB 页缓存（负值表示 KB 单位：-8000 ≈ 8MB）
+        self._conn.execute("PRAGMA cache_size = -8000")
+        # 临时表与中间结果存内存，避免磁盘 I/O
+        self._conn.execute("PRAGMA temp_store = MEMORY")
         # 外键约束开启（corner/setup 等引用 track/setup）
         self._conn.execute("PRAGMA foreign_keys = ON")
         # row_factory 让查询结果可按列名访问
