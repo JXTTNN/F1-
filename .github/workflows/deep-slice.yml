@@ -63,21 +63,21 @@ jobs:
           echo "## 切片级深度测试结果" > reports/slice-summary.md
           echo "" >> reports/slice-summary.md
           if [ -f reports/slice-junit.xml ]; then
-            python -c "
-            import xml.etree.ElementTree as ET
-            tree = ET.parse('reports/slice-junit.xml')
-            root = tree.getroot()
-            total = root.get('tests', '?')
-            failures = root.get('failures', '?')
-            errors = root.get('errors', '?')
-            skipped = root.get('skipped', '?')
-            print(f'| 指标 | 值 |')
-            print(f'|------|-----|')
-            print(f'| 总用例 | {total} |')
-            print(f'| 失败 | {failures} |')
-            print(f'| 错误 | {errors} |')
-            print(f'| 跳过 | {skipped} |')
-            " >> reports/slice-summary.md
+            python << 'PYEOF' >> reports/slice-summary.md
+          import xml.etree.ElementTree as ET
+          tree = ET.parse('reports/slice-junit.xml')
+          root = tree.getroot()
+          total = root.get('tests', '?')
+          failures = root.get('failures', '?')
+          errors = root.get('errors', '?')
+          skipped = root.get('skipped', '?')
+          print(f'| 指标 | 值 |')
+          print(f'|------|-----|')
+          print(f'| 总用例 | {total} |')
+          print(f'| 失败 | {failures} |')
+          print(f'| 错误 | {errors} |')
+          print(f'| 跳过 | {skipped} |')
+          PYEOF
           else
             echo "无法读取JUnit报告" >> reports/slice-summary.md
           fi
@@ -126,19 +126,19 @@ jobs:
           echo "## 协作集成测试结果" > reports/integration-summary.md
           echo "" >> reports/integration-summary.md
           if [ -f reports/integration-junit.xml ]; then
-            python -c "
-            import xml.etree.ElementTree as ET
-            tree = ET.parse('reports/integration-junit.xml')
-            root = tree.getroot()
-            total = root.get('tests', '?')
-            failures = root.get('failures', '?')
-            errors = root.get('errors', '?')
-            print(f'| 指标 | 值 |')
-            print(f'|------|-----|')
-            print(f'| 总用例 | {total} |')
-            print(f'| 失败 | {failures} |')
-            print(f'| 错误 | {errors} |')
-            " >> reports/integration-summary.md
+            python << 'PYEOF' >> reports/integration-summary.md
+          import xml.etree.ElementTree as ET
+          tree = ET.parse('reports/integration-junit.xml')
+          root = tree.getroot()
+          total = root.get('tests', '?')
+          failures = root.get('failures', '?')
+          errors = root.get('errors', '?')
+          print(f'| 指标 | 值 |')
+          print(f'|------|-----|')
+          print(f'| 总用例 | {total} |')
+          print(f'| 失败 | {failures} |')
+          print(f'| 错误 | {errors} |')
+          PYEOF
           else
             echo "无法读取JUnit报告" >> reports/integration-summary.md
           fi
