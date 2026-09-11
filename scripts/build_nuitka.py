@@ -13,7 +13,8 @@
 
     python -m nuitka --onefile --windows-console-mode=disable
       --enable-plugin=no-qt --follow-imports
-      --include-data-dir=setup_tuner/ui=ui
+      --include-data-dir=setup_tuner/ui=setup_tuner/ui
+      --include-data-files=setup_tuner/db/schema.sql=setup_tuner/db/schema.sql
       --output-filename=F1OPT.exe
       --output-dir=dist
       setup_tuner/cli.py
@@ -134,7 +135,8 @@ def build_nuitka_command() -> list[str]:
         # 递归跟踪所有 import
         "--follow-imports",
         # 内嵌 UI 静态资源（HTML/JS/CSS + 24 SVG）
-        "--include-data-dir=setup_tuner/ui=ui",
+        # dest 必须与 app.py 的 _UI_DIR = Path(__file__).parent / "ui" 同目录
+        "--include-data-dir=setup_tuner/ui=setup_tuner/ui",
         # 内嵌 SQLite schema.sql（非 Python 文件，--follow-imports 不会自动包含）
         # dest 必须与 store.py 的 __file__ 同目录：setup_tuner/db/schema.sql
         "--include-data-files=setup_tuner/db/schema.sql=setup_tuner/db/schema.sql",
