@@ -125,6 +125,8 @@ def build_nuitka_command() -> list[str]:
         "nuitka",
         # 单文件便携包
         "--onefile",
+        # 自动下载依赖（Dependency Walker 等），CI 非交互模式必需
+        "--assume-yes-for-downloads",
         # Windows GUI 模式（无控制台窗口）
         "--windows-console-mode=disable",
         # 禁用 Qt 插件（本项目无 Qt 依赖，加速编译）
