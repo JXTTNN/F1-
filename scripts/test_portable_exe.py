@@ -672,6 +672,631 @@ def test_portable(
 
 
 # =========================================================================== #
+# 测试阶段 6：80 项深度检查
+# =========================================================================== #
+# 深度检查阈值常量
+MIN_ZIP_SIZE_MB = 10
+MIN_INDEX_HTML_BYTES = 5000
+MIN_APP_JS_BYTES = 10000
+MIN_STYLE_CSS_BYTES = 5000
+MIN_SVG_BYTES = 100
+MAX_STARTUP_SECONDS = 15
+MAX_MEMORY_MB = 200
+MAX_DB_SIZE_MB = 10
+
+# 性能基准阈值（毫秒）
+PERF_HEALTH_MS = 50
+PERF_TRACKS_MS = 100
+PERF_SELECT_MS = 100
+PERF_FEEDBACK_MS = 200
+PERF_SUGGEST_MS = 500
+PERF_HISTORY_MS = 100
+PERF_ALL_SVG_MS = 1000
+
+# 深度检查总项数
+DEEP_TOTAL_COUNT = 80
+
+
+def _get_process_memory_mb(pid: int) -> float | None:
+    """获取指定 PID 进程的内存占用（MB）。
+
+    Args:
+        pid: 进程 ID。
+
+    Returns:
+        内存占用 MB；失败返回 None。
+    """
+    try:
+        result = subprocess.run(
+            ["tasklist", "/FI", f"PID eq {pid}", "/FO", "CSV", "/NH"],
+            capture_output=True, text=True, timeout=5,
+        )
+        # 输出格式："F1OPT.exe","1234","Console","1","123,456 K"
+        line = result.stdout.strip()
+        if not line or "INFO:" in line:
+            return None
+        parts = line.split('","')
+        if len(parts) >= 5:
+            mem_str = parts[4].strip().strip('"').replace(",", "").replace(" K", "")
+            return int(mem_str) / 1024  # KB → MB
+    except Exception:
+        pass
+    return None
+
+
+def _measure_api_ms(
+    client: httpx.Client, url: str, method: str = "GET",
+    json_body: dict | None = None,
+) -> tuple[float, httpx.Response | None]:
+    """测量单次 API 请求耗时（毫秒）。
+
+    Args:
+        client: httpx 客户端。
+        url: 请求 URL。
+        method: HTTP 方法。
+        json_body: POST body。
+
+    Returns:
+        (耗时ms, 响应对象)；失败返回 (inf, None)。
+    """
+    start = time.perf_counter()
+    try:
+        if method == "GET":
+            resp = client.get(url)
+        else:
+            resp = client.post(url, json=json_body)
+        elapsed_ms = (time.perf_counter() - start) * 1000
+        return elapsed_ms, resp
+    except httpx.HTTPError:
+        return float("inf"), None
+
+
+def test_deep(
+    exe_path: Path, zip_path: Path, host: str, port: int, timeout: float,
+) -> TestResult:
+    """第 6 阶段：80 项深度检查。
+
+    检查分组:
+        A. 产物完整性 10 项
+        B. 启动检查 10 项
+        C. UI 完整性 15 项
+        D. 数据正确性 20 项
+        E. 业务逻辑 15 项
+        F. 性能基准 10 项
+
+    Args:
+        exe_path: exe 文件路径。
+        zip_path: zip 文件路径。
+        host: API 主机。
+        port: API 端口。
+        timeout: 启动超时秒数。
+
+    Returns:
+        TestResult("deep", all_passed, summary, sub_items)
+    """
+    sub_items: list[str] = []
+    passed_count = 0
+    base_url = f"http://{host}:{port}"
+
+    def check(label: str, ok: bool, detail: str = "") -> None:
+        """记录单项检查结果。
+
+        Args:
+            label: 检查项标签。
+            ok: 是否通过。
+            detail: 附加详情。
+        """
+        nonlocal passed_count
+        mark = "✓" if ok else "✗"
+        suffix = f" — {detail}" if detail else ""
+        sub_items.append(f"{mark} {label}{suffix}")
+        if ok:
+            passed_count += 1
+
+    # ── A. 产物完整性 10 项 ──
+    sub_items.append("── A. 产物完整性（10项）──")
+    # A1. zip>10MB
+    zip_exists = zip_path.exists()
+    zip_size_mb = zip_path.stat().st_size / (1024 * 1024) if zip_exists else 0
+    check("A1 zip>10MB", zip_exists and zip_size_mb > MIN_ZIP_SIZE_MB,
+          f"{zip_size_mb:.2f}MB" if zip_exists else "zip不存在")
+
+    # A2. zip无损坏
+    zip_ok = False
+    zip_names: list[str] = []
+    if zip_exists:
+        try:
+            with zipfile.ZipFile(zip_path, "r") as zf:
+                bad = zf.testzip()
+                zip_ok = bad is None
+                zip_names = zf.namelist()
+        except zipfile.BadZipFile:
+            zip_ok = False
+    check("A2 zip无损坏", zip_ok)
+
+    # A3. zip含exe
+    exe_in_zip = any(n == "F1OPT.exe" or n.endswith("/F1OPT.exe") for n in zip_names)
+    check("A3 zip含F1OPT.exe", exe_in_zip)
+
+    # A4. zip含bat
+    bat_in_zip = any("一键启动.bat" in n for n in zip_names)
+    check("A4 zip含一键启动.bat", bat_in_zip)
+
+    # A5. exe>10MB
+    exe_exists = exe_path.exists()
+    exe_size_mb = exe_path.stat().st_size / (1024 * 1024) if exe_exists else 0
+    check("A5 exe>10MB", exe_exists and exe_size_mb > MIN_EXE_SIZE_MB,
+          f"{exe_size_mb:.2f}MB" if exe_exists else "exe不存在")
+
+    # A6-A10. bat 文件检查
+    bat_path = exe_path.parent / "一键启动.bat"
+    bat_content = ""
+    bat_exists = bat_path.exists()
+    if bat_exists:
+        try:
+            bat_content = bat_path.read_text(encoding="utf-8")
+        except Exception:
+            try:
+                bat_content = bat_path.read_text(encoding="gbk")
+            except Exception:
+                bat_content = ""
+
+    # A6. bat含start
+    check("A6 bat含start", "start" in bat_content.lower())
+    # A7. bat含health检查
+    check("A7 bat含health检查", "health" in bat_content)
+    # A8. bat不含^字符（避免换行转义问题）
+    check("A8 bat不含^字符", "^" not in bat_content)
+    # A9. zip文件数>=2
+    check("A9 zip文件数>=2", len(zip_names) >= 2, f"{len(zip_names)}个文件")
+    # A10. bat UTF-8编码
+    bat_utf8 = False
+    if bat_exists:
+        try:
+            bat_path.read_text(encoding="utf-8")
+            bat_utf8 = True
+        except UnicodeDecodeError:
+            bat_utf8 = False
+    check("A10 bat UTF-8编码", bat_utf8)
+
+    # ── B. 启动检查 10 项 ──
+    sub_items.append("── B. 启动检查（10项）──")
+    # B1. exe能启动
+    proc: subprocess.Popen[bytes] | None = None
+    try:
+        proc = start_exe(exe_path)
+        check("B1 exe能启动", proc is not None and proc.poll() is None,
+              f"PID={proc.pid if proc else 'N/A'}")
+    except Exception as e:
+        check("B1 exe能启动", False, str(e))
+
+    if proc is None:
+        # 启动失败，剩余检查全失败并跳过后续阶段
+        for label in ["B2 API 20秒就绪", "B3 health 200", "B4 status=ok",
+                      "B5 telemetry_connected字段存在", "B6 udp_host=127.0.0.1",
+                      "B7 udp_port=20777", "B8 current_track_id=None",
+                      "B9 启动<15秒", "B10 内存<200MB"]:
+            check(label, False, "exe未启动")
+        for section, _count in [("C", 15), ("D", 20), ("E", 15), ("F", 10)]:
+            sub_items.append(f"── {section}. 跳过（exe未启动）──")
+        summary = f"80项深度检查：{passed_count}/{DEEP_TOTAL_COUNT} 通过（exe启动失败）"
+        return TestResult("deep", False, summary, sub_items)
+
+    # B2. API 20秒就绪 + B9. 启动<15秒
+    start_time = time.perf_counter()
+    ready, info = wait_for_api(host, port, 20)
+    startup_elapsed = time.perf_counter() - start_time
+    check("B2 API 20秒就绪", ready, info)
+    check("B9 启动<15秒", ready and startup_elapsed < MAX_STARTUP_SECONDS,
+          f"{startup_elapsed:.2f}s")
+
+    health_data: dict = {}
+    if ready:
+        try:
+            resp = httpx.get(api_url(host, port, "/health"), timeout=HTTP_TIMEOUT)
+            body = assert_envelope(resp)
+            health_data = body.get("data", {})
+            # B3. health 200
+            check("B3 health 200", resp.status_code == 200)
+            # B4. status=ok
+            check("B4 status=ok", health_data.get("status") == "ok",
+                  f"status={health_data.get('status')}")
+            # B5. telemetry_connected字段存在
+            check("B5 telemetry_connected字段存在",
+                  "telemetry_connected" in health_data,
+                  f"telemetry_connected={health_data.get('telemetry_connected')}")
+            # B6. udp_host=127.0.0.1
+            check("B6 udp_host=127.0.0.1",
+                  health_data.get("udp_host") == "127.0.0.1",
+                  f"udp_host={health_data.get('udp_host')}")
+            # B7. udp_port=20777
+            check("B7 udp_port=20777",
+                  health_data.get("udp_port") == 20777,
+                  f"udp_port={health_data.get('udp_port')}")
+            # B8. current_track_id=None
+            check("B8 current_track_id=None",
+                  health_data.get("current_track_id") is None,
+                  f"current_track_id={health_data.get('current_track_id')}")
+        except (httpx.HTTPError, AssertionError, KeyError) as e:
+            for label in ["B3 health 200", "B4 status=ok",
+                          "B5 telemetry_connected字段存在",
+                          "B6 udp_host=127.0.0.1", "B7 udp_port=20777",
+                          "B8 current_track_id=None"]:
+                check(label, False, str(e))
+    else:
+        for label in ["B3 health 200", "B4 status=ok",
+                      "B5 telemetry_connected字段存在",
+                      "B6 udp_host=127.0.0.1", "B7 udp_port=20777",
+                      "B8 current_track_id=None"]:
+            check(label, False, "API未就绪")
+
+    # B10. 内存<200MB
+    mem_mb = _get_process_memory_mb(proc.pid)
+    check("B10 内存<200MB",
+          mem_mb is not None and mem_mb < MAX_MEMORY_MB,
+          f"{mem_mb:.2f}MB" if mem_mb is not None else "无法获取")
+
+    # 如果 API 未就绪，跳过 C-F
+    if not ready:
+        for section in ["C", "D", "E", "F"]:
+            sub_items.append(f"── {section}. 跳过（API未就绪）──")
+        stop_exe(proc)
+        summary = f"80项深度检查：{passed_count}/{DEEP_TOTAL_COUNT} 通过（API未就绪）"
+        return TestResult("deep", False, summary, sub_items)
+
+    client = httpx.Client(timeout=HTTP_TIMEOUT)
+    try:
+        # ── C. UI 完整性 15 项 ──
+        sub_items.append("── C. UI完整性（15项）──")
+        # C1. GET/ 200
+        resp = client.get(f"{base_url}/")
+        check("C1 GET/ 200", resp.status_code == 200)
+        # C2. GET/ JSON含code:0
+        root_body: dict = {}
+        try:
+            root_body = resp.json()
+            check("C2 GET/ JSON含code:0", root_body.get("code") == 0)
+        except Exception:
+            check("C2 GET/ JSON含code:0", False, "非JSON")
+
+        # C3. index.html 200
+        resp = client.get(f"{base_url}/static/index.html")
+        index_html = resp.text if resp.status_code == 200 else ""
+        check("C3 index.html 200", resp.status_code == 200)
+        # C4. index.html>5000字节
+        idx_bytes = len(index_html.encode("utf-8"))
+        check("C4 index.html>5000字节", idx_bytes > MIN_INDEX_HTML_BYTES,
+              f"{idx_bytes}字节")
+        # C5. 含<title>
+        check("C5 含<title>", "<title>" in index_html.lower())
+        # C6. 含app.js引用
+        check("C6 含app.js引用", "app.js" in index_html)
+        # C7. 含style.css引用
+        check("C7 含style.css引用", "style.css" in index_html)
+
+        # C8. app.js 200
+        resp = client.get(f"{base_url}/static/app.js")
+        app_js = resp.text if resp.status_code == 200 else ""
+        check("C8 app.js 200", resp.status_code == 200)
+        # C9. app.js>10000字节
+        js_bytes = len(app_js.encode("utf-8"))
+        check("C9 app.js>10000字节", js_bytes > MIN_APP_JS_BYTES,
+              f"{js_bytes}字节")
+        # C10. app.js含fetch
+        check("C10 app.js含fetch", "fetch" in app_js)
+        # C11. app.js含WebSocket
+        check("C11 app.js含WebSocket",
+              "WebSocket" in app_js or "websocket" in app_js.lower())
+
+        # C12. style.css 200
+        resp = client.get(f"{base_url}/static/style.css")
+        style_css = resp.text if resp.status_code == 200 else ""
+        check("C12 style.css 200", resp.status_code == 200)
+        # C13. style.css>5000字节
+        css_bytes = len(style_css.encode("utf-8"))
+        check("C13 style.css>5000字节", css_bytes > MIN_STYLE_CSS_BYTES,
+              f"{css_bytes}字节")
+        # C14. style.css含body
+        check("C14 style.css含body", "body" in style_css)
+        # C15. style.css含track/map
+        check("C15 style.css含track-map", "track" in style_css and "map" in style_css)
+
+        # ── D. 数据正确性 20 项 ──
+        sub_items.append("── D. 数据正确性（20项）──")
+        # D1. /tracks 200
+        resp = client.get(api_url(host, port, "/tracks"))
+        check("D1 /tracks 200", resp.status_code == 200)
+        # D2. 24赛道
+        tracks: list[dict] = []
+        try:
+            body = assert_envelope(resp)
+            tracks = body["data"]
+            check("D2 24赛道", len(tracks) == EXPECTED_TRACK_COUNT, f"{len(tracks)}个")
+        except Exception as e:
+            check("D2 24赛道", False, str(e))
+
+        # D3-D8. 每赛道字段检查
+        all_has_id = all("track_id" in t for t in tracks) if tracks else False
+        check("D3 每赛道有id", all_has_id)
+        all_has_name = all("name" in t for t in tracks) if tracks else False
+        check("D4 有name", all_has_name)
+        all_has_corners = all("corners" in t for t in tracks) if tracks else False
+        check("D5 有corners", all_has_corners)
+        all_has_svg = all("svg_path" in t for t in tracks) if tracks else False
+        check("D6 有svg_path", all_has_svg)
+        all_corners_pos = all(
+            len(t.get("corners", [])) > 0 for t in tracks
+        ) if tracks else False
+        check("D7 corners>0", all_corners_pos)
+        all_svg_prefix = all(
+            str(t.get("svg_path", "")).startswith("tracks/")
+            for t in tracks
+        ) if tracks else False
+        check("D8 svg_path以tracks/开头", all_svg_prefix)
+
+        # D9-D12. 24 SVG 逐个检查
+        svg_all_ok = True
+        svg_all_size = True
+        svg_all_start = True
+        svg_all_viewbox = True
+        for t in tracks:
+            sp = t.get("svg_path", "")
+            try:
+                resp = client.get(f"{base_url}/static/{sp}")
+                if resp.status_code != 200:
+                    svg_all_ok = False
+                    continue
+                content = resp.text
+                if len(content.encode("utf-8")) <= MIN_SVG_BYTES:
+                    svg_all_size = False
+                if not content.lstrip().startswith("<svg"):
+                    svg_all_start = False
+                if "viewBox" not in content:
+                    svg_all_viewbox = False
+            except httpx.HTTPError:
+                svg_all_ok = False
+        check("D9 24 SVG全200", svg_all_ok)
+        check("D10 每SVG>100字节", svg_all_size)
+        check("D11 SVG以<svg开头", svg_all_start)
+        check("D12 SVG含viewBox", svg_all_viewbox)
+
+        # D13. name不重复
+        names = [t.get("name") for t in tracks]
+        check("D13 name不重复", len(names) == len(set(names)))
+        # D14. id不重复
+        ids = [t.get("track_id") for t in tracks]
+        check("D14 id不重复", len(ids) == len(set(ids)))
+
+        # D15. /docs 200
+        resp = client.get(f"{base_url}/docs")
+        check("D15 /docs 200", resp.status_code == 200)
+        # D16. /openapi.json 200
+        resp = client.get(f"{base_url}/openapi.json")
+        check("D16 /openapi.json 200", resp.status_code == 200)
+        # D17-D20. openapi 含端点
+        openapi_text = resp.text if resp.status_code == 200 else ""
+        check("D17 openapi含tracks", "tracks" in openapi_text)
+        check("D18 openapi含feedback", "feedback" in openapi_text)
+        check("D19 openapi含suggest", "suggest" in openapi_text)
+        check("D20 openapi含iteration", "iteration" in openapi_text)
+
+        # ── E. 业务逻辑 15 项 ──
+        sub_items.append("── E. 业务逻辑（15项）──")
+        # E1. POST tracks/current 200
+        resp = client.post(
+            api_url(host, port, "/tracks/current"),
+            json={"track_id": TEST_TRACK_ID},
+        )
+        check("E1 POST tracks/current 200", resp.status_code == 200)
+        # E2. health显示current_track_id
+        try:
+            resp = client.get(api_url(host, port, "/health"))
+            body = assert_envelope(resp)
+            ctid = body["data"].get("current_track_id")
+            check("E2 health显示current_track_id",
+                  ctid == TEST_TRACK_ID, f"current={ctid}")
+        except Exception as e:
+            check("E2 health显示current_track_id", False, str(e))
+
+        # E3. POST feedback 200
+        resp = client.post(
+            api_url(host, port, "/feedback"),
+            json={
+                "track_id": TEST_TRACK_ID,
+                "symptom": TEST_SYMPTOM,
+                "strength": TEST_STRENGTH,
+            },
+        )
+        fb_body: dict = {}
+        try:
+            fb_body = assert_envelope(resp)
+            check("E3 POST feedback 200", resp.status_code == 200)
+        except Exception as e:
+            check("E3 POST feedback 200", False, str(e))
+        # E4. feedback返回id
+        fb_id = fb_body.get("data", {}).get("id") if fb_body else None
+        check("E4 feedback返回id", fb_id is not None, f"id={fb_id}")
+        # E11. feedback含corner_index
+        fb_data = fb_body.get("data", {}) if fb_body else {}
+        check("E11 feedback含corner_index",
+              "corner_number" in fb_data or "corner_index" in fb_data,
+              f"keys={list(fb_data.keys())}")
+        # E12. feedback含symptom
+        check("E12 feedback含symptom", "symptom" in fb_data,
+              f"keys={list(fb_data.keys())}")
+
+        # E5. POST suggest 200
+        resp = client.post(
+            api_url(host, port, "/suggest"),
+            json={"track_id": TEST_TRACK_ID},
+        )
+        sg_body: dict = {}
+        try:
+            sg_body = assert_envelope(resp)
+            check("E5 POST suggest 200", resp.status_code == 200)
+        except Exception as e:
+            check("E5 POST suggest 200", False, str(e))
+        # E6. suggest返回id
+        sg_id = sg_body.get("data", {}).get("suggestion_id") if sg_body else None
+        check("E6 suggest返回id", sg_id is not None, f"id={sg_id}")
+        # E7. suggest含建议内容
+        sg_report = sg_body.get("data", {}).get("report") if sg_body else None
+        check("E7 suggest含建议内容",
+              sg_report is not None and len(str(sg_report)) > 0)
+        # E13. suggest含建议项
+        sg_data = sg_body.get("data", {}) if sg_body else {}
+        has_suggestion_items = any(
+            k in sg_data for k in ["adjustments", "suggestions", "items", "report"]
+        )
+        check("E13 suggest含建议项", has_suggestion_items,
+              f"keys={list(sg_data.keys())}")
+
+        # E8. GET iteration/history 200
+        resp = client.get(
+            api_url(host, port, "/iteration/history"),
+            params={"track_id": TEST_TRACK_ID},
+        )
+        check("E8 GET iteration/history 200", resp.status_code == 200)
+        # E9. history>=1条 + E15. history倒序
+        try:
+            body = assert_envelope(resp)
+            history = body["data"]
+            check("E9 history>=1条", len(history) >= 1, f"{len(history)}条")
+            # E15. history倒序（按时间戳降序）
+            if len(history) >= 2:
+                timestamps = [
+                    h.get("created_at", h.get("timestamp", ""))
+                    for h in history
+                ]
+                is_desc = all(
+                    timestamps[i] >= timestamps[i + 1]
+                    for i in range(len(timestamps) - 1)
+                )
+                check("E15 history倒序", is_desc)
+            else:
+                check("E15 history倒序", True, "仅1条无法比较")
+        except Exception as e:
+            check("E9 history>=1条", False, str(e))
+            check("E15 history倒序", False, str(e))
+
+        # E10. 无遥测POST setup/import 409
+        resp = client.post(api_url(host, port, "/setup/import"))
+        check("E10 无遥测setup/import 409",
+              resp.status_code == 409, f"status={resp.status_code}")
+
+        # E14. 重复反馈不崩溃（200覆盖或409拒绝均可）
+        resp = client.post(
+            api_url(host, port, "/feedback"),
+            json={
+                "track_id": TEST_TRACK_ID,
+                "symptom": TEST_SYMPTOM,
+                "strength": TEST_STRENGTH,
+            },
+        )
+        check("E14 重复反馈不崩溃",
+              resp.status_code in (200, 409), f"status={resp.status_code}")
+
+        # ── F. 性能基准 10 项 ──
+        sub_items.append("── F. 性能基准（10项）──")
+        # F1. health<50ms
+        ms, _ = _measure_api_ms(client, api_url(host, port, "/health"))
+        check("F1 health<50ms", ms < PERF_HEALTH_MS, f"{ms:.1f}ms")
+        # F2. tracks<100ms
+        ms, _ = _measure_api_ms(client, api_url(host, port, "/tracks"))
+        check("F2 tracks<100ms", ms < PERF_TRACKS_MS, f"{ms:.1f}ms")
+        # F3. select<100ms
+        ms, _ = _measure_api_ms(
+            client, api_url(host, port, "/tracks/current"), "POST",
+            {"track_id": TEST_TRACK_ID},
+        )
+        check("F3 select<100ms", ms < PERF_SELECT_MS, f"{ms:.1f}ms")
+        # F4. feedback<200ms
+        ms, _ = _measure_api_ms(
+            client, api_url(host, port, "/feedback"), "POST",
+            {"track_id": TEST_TRACK_ID, "symptom": TEST_SYMPTOM, "strength": 2},
+        )
+        check("F4 feedback<200ms", ms < PERF_FEEDBACK_MS, f"{ms:.1f}ms")
+        # F5. suggest<500ms
+        ms, _ = _measure_api_ms(
+            client, api_url(host, port, "/suggest"), "POST",
+            {"track_id": TEST_TRACK_ID},
+        )
+        check("F5 suggest<500ms", ms < PERF_SUGGEST_MS, f"{ms:.1f}ms")
+        # F6. history<100ms
+        ms, _ = _measure_api_ms(
+            client, api_url(host, port, "/iteration/history"),
+        )
+        check("F6 history<100ms", ms < PERF_HISTORY_MS, f"{ms:.1f}ms")
+
+        # F7. 24SVG总加载<1000ms
+        start = time.perf_counter()
+        for t in tracks:
+            try:
+                client.get(f"{base_url}/static/{t.get('svg_path', '')}")
+            except httpx.HTTPError:
+                pass
+        svg_total_ms = (time.perf_counter() - start) * 1000
+        check("F7 24SVG总加载<1000ms",
+              svg_total_ms < PERF_ALL_SVG_MS, f"{svg_total_ms:.1f}ms")
+
+        # F8. 并发10请求全成功
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        concurrency_ok = True
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            futures = [
+                executor.submit(client.get, api_url(host, port, "/health"))
+                for _ in range(10)
+            ]
+            for f in as_completed(futures):
+                try:
+                    r = f.result()
+                    if r.status_code != 200:
+                        concurrency_ok = False
+                except Exception:
+                    concurrency_ok = False
+        check("F8 并发10请求全成功", concurrency_ok)
+
+        # F9. 连续50次health无错误
+        health_ok = True
+        for _ in range(50):
+            try:
+                r = client.get(api_url(host, port, "/health"))
+                if r.status_code != 200:
+                    health_ok = False
+                    break
+            except httpx.HTTPError:
+                health_ok = False
+                break
+        check("F9 连续50次health无错误", health_ok)
+
+        # F10. 数据库<10MB
+        db_path = exe_path.parent / "data" / "f1opt.db"
+        if db_path.exists():
+            db_size_mb = db_path.stat().st_size / (1024 * 1024)
+            check("F10 数据库<10MB",
+                  db_size_mb < MAX_DB_SIZE_MB, f"{db_size_mb:.2f}MB")
+        else:
+            # 在工作目录递归查找
+            found_db = False
+            for candidate in exe_path.parent.rglob("f1opt.db"):
+                db_size_mb = candidate.stat().st_size / (1024 * 1024)
+                check("F10 数据库<10MB",
+                      db_size_mb < MAX_DB_SIZE_MB, f"{db_size_mb:.2f}MB")
+                found_db = True
+                break
+            if not found_db:
+                check("F10 数据库<10MB", False, "未找到f1opt.db")
+
+    finally:
+        client.close()
+        stop_exe(proc)
+
+    all_passed = passed_count == DEEP_TOTAL_COUNT
+    summary = f"80项深度检查：{passed_count}/{DEEP_TOTAL_COUNT} 通过"
+    return TestResult("deep", all_passed, summary, sub_items)
+
+
+# =========================================================================== #
 # 主入口
 # =========================================================================== #
 def parse_args() -> argparse.Namespace:
@@ -721,7 +1346,7 @@ def main() -> int:
     print(f"  超时:   {args.timeout}s")
 
     # ── 阶段 1：产物完整性 ──
-    print("\n[1/5] 产物完整性验证 (integrity)...")
+    print("\n[1/6] 产物完整性验证 (integrity)...")
     r1 = test_integrity(args.exe, args.zip)
     report.add(r1)
     for item in r1.sub_items:
@@ -732,7 +1357,7 @@ def main() -> int:
         return 1
 
     # ── 阶段 2：exe 启动冒烟 ──
-    print("\n[2/5] exe 启动冒烟 (startup)...")
+    print("\n[2/6] exe 启动冒烟 (startup)...")
     r2, proc = test_startup(args.exe, args.host, args.port, args.timeout)
     report.add(r2)
     for item in r2.sub_items:
@@ -744,14 +1369,14 @@ def main() -> int:
 
     try:
         # ── 阶段 3：端到端运行 ──
-        print("\n[3/5] 端到端运行测试 (e2e)...")
+        print("\n[3/6] 端到端运行测试 (e2e)...")
         r3 = test_e2e(args.host, args.port)
         report.add(r3)
         for item in r3.sub_items:
             print(f"    • {item}")
 
         # ── 阶段 4：资源完整性 ──
-        print("\n[4/5] 资源完整性验证 (resources)...")
+        print("\n[4/6] 资源完整性验证 (resources)...")
         r4 = test_resources(args.host, args.port)
         report.add(r4)
         for item in r4.sub_items:
@@ -765,10 +1390,20 @@ def main() -> int:
     time.sleep(2)
 
     # ── 阶段 5：便携性验证 ──
-    print("\n[5/5] 便携性验证 (portable)...")
+    print("\n[5/6] 便携性验证 (portable)...")
     r5 = test_portable(args.zip, args.host, args.port, args.timeout)
     report.add(r5)
     for item in r5.sub_items:
+        print(f"    • {item}")
+
+    # 等待端口释放
+    time.sleep(2)
+
+    # ── 阶段 6：80 项深度检查 ──
+    print("\n[6/6] 80项深度检查 (deep)...")
+    r6 = test_deep(args.exe, args.zip, args.host, args.port, args.timeout)
+    report.add(r6)
+    for item in r6.sub_items:
         print(f"    • {item}")
 
     # ── 打印报告 ──

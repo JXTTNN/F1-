@@ -361,3 +361,21 @@ class Store:
                 (track_id,),
             ).fetchall()
         return [dict(r) for r in rows]
+
+    def get_latest_round(self, track_id: str) -> int:
+        """获取某赛道最新轮次号（用 SQL MAX，避免拉全部记录）。
+
+        性能优化（task-36）：替代 IterationService.get_latest_round 拉全部
+        iterations 再取 max 的实现，单次聚合查询 O(1)。
+
+        Returns:
+            最新轮次号；无历史记录时返回 0。
+        """
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT MAX(round_no) AS m FROM iteration WHERE track_id = ?",
+                (track_id,),
+            ).fetchone()
+        if row is None or row["m"] is None:
+            return 0
+        return int(row["m"])

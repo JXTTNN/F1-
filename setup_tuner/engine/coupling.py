@@ -310,6 +310,31 @@ COUPLING_MATRIX: dict[str, dict[str, CouplingCell | None]] = _build_matrix()
 
 
 # ---------------------------------------------------------------------------
+# 预计算：参数 → 非零耦合单元列表（性能优化，task-36）
+# 矩阵乘法 raw[p] = Σ_d Dx[d] × C[d][p] 只需遍历 p 列上的非零 cell，
+# 避免每次都遍历全部 9 个诊断维度。23 参数 × 9 维 = 207 次查表
+# 降至仅遍历非零 cell（约 80 个），减少 ~60% 迭代次数。
+# ---------------------------------------------------------------------------
+_PARAM_NONZERO_CELLS: dict[str, list[CouplingCell]] = {
+    param: [
+        COUPLING_MATRIX[diag][param]
+        for diag in DIAG_DIMS
+        if COUPLING_MATRIX[diag][param] is not None
+    ]
+    for param in PARAM_NAMES
+}
+
+
+def nonzero_cells_for_param_cached(param: str) -> list[CouplingCell]:
+    """返回某参数被所有诊断维度影响的非零耦合单元（预计算，O(1) 查表）。
+
+    性能优化（task-36）：替代 nonzero_cells_for_param 的每次遍历 9 维实现，
+    直接返回预计算列表。
+    """
+    return _PARAM_NONZERO_CELLS.get(param, [])
+
+
+# ---------------------------------------------------------------------------
 # 查询接口
 # ---------------------------------------------------------------------------
 def get_coupling(diag: str, param: str) -> CouplingCell | None:

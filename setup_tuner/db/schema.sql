@@ -72,3 +72,14 @@ CREATE INDEX IF NOT EXISTS idx_feedback_setup ON feedback(setup_id);
 CREATE INDEX IF NOT EXISTS idx_setup_track ON setup(track_id);
 CREATE INDEX IF NOT EXISTS idx_suggestion_track ON suggestion(track_id);
 CREATE INDEX IF NOT EXISTS idx_iteration_track ON iteration(track_id);
+
+-- 复合索引：加速 ORDER BY ... DESC LIMIT 1 查询（性能优化 task-36）
+-- get_latest_setup: WHERE track_id=? ORDER BY imported_at DESC LIMIT 1
+CREATE INDEX IF NOT EXISTS idx_setup_track_imported_at
+  ON setup(track_id, imported_at DESC);
+-- get_latest_suggestion: WHERE track_id=? ORDER BY created_at DESC LIMIT 1
+CREATE INDEX IF NOT EXISTS idx_suggestion_track_created_at
+  ON suggestion(track_id, created_at DESC);
+-- get_latest_round: WHERE track_id=? 聚合 MAX(round_no)
+CREATE INDEX IF NOT EXISTS idx_iteration_track_round
+  ON iteration(track_id, round_no DESC);

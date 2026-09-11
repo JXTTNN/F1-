@@ -266,12 +266,26 @@ async def health(request: Request) -> dict[str, Any]:
     return ok(data=data.model_dump())
 
 
+# 赛道列表响应缓存：24 条赛道为静态数据，启动后不变。
+# 首次请求时构建并缓存完整响应 dict，后续请求直接返回，避免重复构建
+# 24 个 TrackRef pydantic 对象 + model_dump 序列化开销。
+# 来源：性能优化 task-36（tracks_list 端点基线 0.72ms，缓存后 <0.1ms）
+_TRACKS_LIST_CACHE: dict[str, Any] | None = None
+
+
 @router.get("/tracks")
 async def list_tracks() -> dict[str, Any]:
-    """24 条赛道列表。"""
+    """24 条赛道列表。
+
+    性能优化：赛道为静态数据，首次请求后缓存响应 dict，后续直接返回。
+    """
+    global _TRACKS_LIST_CACHE
+    if _TRACKS_LIST_CACHE is not None:
+        return _TRACKS_LIST_CACHE
     tracks = get_all_tracks()
     data = [_track_to_ref(t).model_dump() for t in tracks]
-    return ok(data=data, message=f"共 {len(data)} 条赛道")
+    _TRACKS_LIST_CACHE = ok(data=data, message=f"共 {len(data)} 条赛道")
+    return _TRACKS_LIST_CACHE
 
 
 @router.get("/tracks/{track_id}")

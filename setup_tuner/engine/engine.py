@@ -21,9 +21,8 @@ from typing import Any
 from setup_tuner.domain.setup import ALL_SETUP_FIELDS
 
 from .confidence import assess_confidence
-from .coupling import COUPLING_MATRIX, CouplingCell
+from .coupling import nonzero_cells_for_param_cached
 from .diagnostic import (
-    DIAG_DIMS,
     DIAG_DIMS_POSITIVE_SEMANTICS,
     DIAG_DIMS_ZH,
     compute_dx,
@@ -133,13 +132,11 @@ def compute_setup_delta(
         p = spec.name
 
         # 步骤 1：矩阵乘法 raw[p] = Σ_d Dx[d] × C[d][p]
+        # 性能优化（task-36）：仅遍历该参数列上的非零 cell，避免遍历全部 9 维。
         raw = 0.0
-        for dim in DIAG_DIMS:
-            dx_val = dx.get(dim, 0.0)
+        for cell in nonzero_cells_for_param_cached(p):
+            dx_val = dx.get(cell.diag, 0.0)
             if dx_val == 0.0:
-                continue
-            cell: CouplingCell | None = COUPLING_MATRIX[dim][p]
-            if cell is None:
                 continue
             raw += dx_val * cell.value
 
@@ -218,17 +215,15 @@ def _build_param_detail(
 ) -> dict[str, Any]:
     """组装单参数的报告详情（联动说明 / 出处 / tradeoff）。"""
     # 收集贡献该参数的诊断维度
+    # 性能优化（task-36）：用预计算的非零 cell 列表，避免遍历全部 9 维。
     linkages: list[str] = []
     sources: list[str] = []
-    for dim in DIAG_DIMS:
-        dx_val = dx.get(dim, 0.0)
+    for cell in nonzero_cells_for_param_cached(spec_name):
+        dx_val = dx.get(cell.diag, 0.0)
         if dx_val == 0.0:
             continue
-        cell: CouplingCell | None = COUPLING_MATRIX[dim][spec_name]
-        if cell is None:
-            continue
         linkages.append(
-            f"{dim}({DIAG_DIMS_ZH[dim]}) Dx={dx_val:+.2f} × C={cell.value:+.2f}",
+            f"{cell.diag}({DIAG_DIMS_ZH[cell.diag]}) Dx={dx_val:+.2f} × C={cell.value:+.2f}",
         )
         if cell.source not in sources:
             sources.append(cell.source)
@@ -236,10 +231,9 @@ def _build_param_detail(
     # 联动说明（中文）
     if linkages:
         linked_notes = "、".join(
-            f"{DIAG_DIMS_POSITIVE_SEMANTICS.get(dim, dim)}"
-            for dim in DIAG_DIMS
-            if dx.get(dim, 0.0) != 0.0
-            and COUPLING_MATRIX[dim][spec_name] is not None
+            f"{DIAG_DIMS_POSITIVE_SEMANTICS.get(cell.diag, cell.diag)}"
+            for cell in nonzero_cells_for_param_cached(spec_name)
+            if dx.get(cell.diag, 0.0) != 0.0
         )
         if not linked_notes:
             linked_notes = "由多个诊断维度联动调整"

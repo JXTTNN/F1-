@@ -61,13 +61,13 @@ class IterationService:
     def get_latest_round(self, track_id: str) -> int:
         """获取某赛道最新轮次号。
 
+        性能优化（task-36）：改用 Store.get_latest_round 的 SQL MAX 实现，
+        避免拉取全部 iteration 记录再取 max。
+
         Returns:
             最新轮次号；无历史记录时返回 0（下一次 create_iteration 将使用 1）。
         """
-        iterations = self._store.get_iterations(track_id)
-        if not iterations:
-            return 0
-        return max(it["round_no"] for it in iterations)
+        return self._store.get_latest_round(track_id)
 
     # ------------------------------------------------------------------
     # 前后调教对比
