@@ -751,6 +751,14 @@ def _measure_api_ms(
         return float("inf"), None
 
 
+def _safe_get(client: httpx.Client, url: str) -> httpx.Response | None:
+    """安全GET请求，超时/错误返回None（用于并行加载）。"""
+    try:
+        return client.get(url)
+    except httpx.HTTPError:
+        return None
+
+
 def test_deep(
     exe_path: Path, zip_path: Path, host: str, port: int, timeout: float,
 ) -> TestResult:
@@ -948,21 +956,36 @@ def test_deep(
     try:
         # ── C. UI 完整性 15 项 ──
         sub_items.append("── C. UI完整性（15项）──")
+        # C1-C15. 并行获取4个静态资源，然后串行检查内容（4请求并行→提速4倍）
+        from concurrent.futures import ThreadPoolExecutor as _Pool
+
+        def _fetch(url: str) -> httpx.Response | None:
+            try:
+                return client.get(url)
+            except httpx.HTTPError:
+                return None
+
+        with _Pool(max_workers=4) as pool:
+            root_resp, idx_resp, js_resp, css_resp = pool.map(_fetch, [
+                f"{base_url}/",
+                f"{base_url}/static/index.html",
+                f"{base_url}/static/app.js",
+                f"{base_url}/static/style.css",
+            ])
+
         # C1. GET/ 200
-        resp = client.get(f"{base_url}/")
-        check("C1 GET/ 200", resp.status_code == 200)
+        check("C1 GET/ 200", root_resp is not None and root_resp.status_code == 200)
         # C2. GET/ JSON含code:0
         root_body: dict = {}
         try:
-            root_body = resp.json()
+            root_body = root_resp.json() if root_resp else {}
             check("C2 GET/ JSON含code:0", root_body.get("code") == 0)
         except Exception:
             check("C2 GET/ JSON含code:0", False, "非JSON")
 
         # C3. index.html 200
-        resp = client.get(f"{base_url}/static/index.html")
-        index_html = resp.text if resp.status_code == 200 else ""
-        check("C3 index.html 200", resp.status_code == 200)
+        index_html = idx_resp.text if (idx_resp and idx_resp.status_code == 200) else ""
+        check("C3 index.html 200", idx_resp is not None and idx_resp.status_code == 200)
         # C4. index.html>5000字节
         idx_bytes = len(index_html.encode("utf-8"))
         check("C4 index.html>5000字节", idx_bytes > MIN_INDEX_HTML_BYTES,
@@ -975,9 +998,8 @@ def test_deep(
         check("C7 含style.css引用", "style.css" in index_html)
 
         # C8. app.js 200
-        resp = client.get(f"{base_url}/static/app.js")
-        app_js = resp.text if resp.status_code == 200 else ""
-        check("C8 app.js 200", resp.status_code == 200)
+        app_js = js_resp.text if (js_resp and js_resp.status_code == 200) else ""
+        check("C8 app.js 200", js_resp is not None and js_resp.status_code == 200)
         # C9. app.js>10000字节
         js_bytes = len(app_js.encode("utf-8"))
         check("C9 app.js>10000字节", js_bytes > MIN_APP_JS_BYTES,
@@ -989,9 +1011,8 @@ def test_deep(
               "WebSocket" in app_js or "websocket" in app_js.lower())
 
         # C12. style.css 200
-        resp = client.get(f"{base_url}/static/style.css")
-        style_css = resp.text if resp.status_code == 200 else ""
-        check("C12 style.css 200", resp.status_code == 200)
+        style_css = css_resp.text if (css_resp and css_resp.status_code == 200) else ""
+        check("C12 style.css 200", css_resp is not None and css_resp.status_code == 200)
         # C13. style.css>5000字节
         css_bytes = len(style_css.encode("utf-8"))
         check("C13 style.css>5000字节", css_bytes > MIN_STYLE_CSS_BYTES,
@@ -1035,27 +1056,41 @@ def test_deep(
         ) if tracks else False
         check("D8 svg_path以tracks/开头", all_svg_prefix)
 
-        # D9-D12. 24 SVG 逐个检查
+        # D9-D12. 24 SVG 并行检查（串行→并行，提速24倍）
+        from concurrent.futures import ThreadPoolExecutor
         svg_all_ok = True
         svg_all_size = True
         svg_all_start = True
         svg_all_viewbox = True
-        for t in tracks:
-            sp = t.get("svg_path", "")
+
+        def _check_one_svg(sp: str) -> tuple[bool, bool, bool, bool]:
+            """并行检查单个SVG的4个属性。"""
             try:
                 resp = client.get(f"{base_url}/static/{sp}")
                 if resp.status_code != 200:
-                    svg_all_ok = False
-                    continue
+                    return (False, True, True, True)
                 content = resp.text
-                if len(content.encode("utf-8")) <= MIN_SVG_BYTES:
-                    svg_all_size = False
-                if not content.lstrip().startswith("<svg"):
-                    svg_all_start = False
-                if "viewBox" not in content:
-                    svg_all_viewbox = False
+                ok_size = len(content.encode("utf-8")) > MIN_SVG_BYTES
+                ok_start = content.lstrip().startswith("<svg")
+                ok_viewbox = "viewBox" in content
+                return (True, ok_size, ok_start, ok_viewbox)
             except httpx.HTTPError:
+                return (False, True, True, True)
+
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            svg_results = list(pool.map(
+                _check_one_svg,
+                [t.get("svg_path", "") for t in tracks],
+            ))
+        for ok, sz, st, vb in svg_results:
+            if not ok:
                 svg_all_ok = False
+            if not sz:
+                svg_all_size = False
+            if not st:
+                svg_all_start = False
+            if not vb:
+                svg_all_viewbox = False
         check("D9 24 SVG全200", svg_all_ok)
         check("D10 每SVG>100字节", svg_all_size)
         check("D11 SVG以<svg开头", svg_all_start)
@@ -1068,21 +1103,20 @@ def test_deep(
         ids = [t.get("track_id") for t in tracks]
         check("D14 id不重复", len(ids) == len(set(ids)))
 
-        # D15. /docs 200（Swagger UI可能较慢，用30s超时）
-        try:
-            resp = client.get(f"{base_url}/docs", timeout=30.0)
-            check("D15 /docs 200", resp.status_code == 200)
-        except Exception as e:
-            check("D15 /docs 200", False, f"超时/错误: {e}")
-        # D16. /openapi.json 200
-        try:
-            resp = client.get(f"{base_url}/openapi.json", timeout=30.0)
-            check("D16 /openapi.json 200", resp.status_code == 200)
-        except Exception as e:
-            check("D16 /openapi.json 200", False, f"超时/错误: {e}")
-            resp = None
+        # D15-D16. /docs和/openapi.json并行请求
+        with ThreadPoolExecutor(max_workers=2) as _pool_d:
+            docs_resp, openapi_resp = _pool_d.map(
+                lambda u: _safe_get(client, u),
+                [f"{base_url}/docs", f"{base_url}/openapi.json"],
+            )
+        check("D15 /docs 200",
+              docs_resp is not None and docs_resp.status_code == 200,
+              f"超时/错误" if docs_resp is None else "")
+        check("D16 /openapi.json 200",
+              openapi_resp is not None and openapi_resp.status_code == 200,
+              f"超时/错误" if openapi_resp is None else "")
         # D17-D20. openapi 含端点
-        openapi_text = resp.text if (resp and resp.status_code == 200) else ""
+        openapi_text = openapi_resp.text if (openapi_resp and openapi_resp.status_code == 200) else ""
         check("D17 openapi含tracks", "tracks" in openapi_text)
         check("D18 openapi含feedback", "feedback" in openapi_text)
         check("D19 openapi含suggest", "suggest" in openapi_text)
@@ -1254,13 +1288,13 @@ def test_deep(
         )
         check("F6 history<100ms", ms < PERF_HISTORY_MS, f"{ms:.1f}ms")
 
-        # F7. 24SVG总加载<1000ms
+        # F7. 24SVG总加载<1000ms（并行加载，模拟浏览器实际行为）
         start = time.perf_counter()
-        for t in tracks:
-            try:
-                client.get(f"{base_url}/static/{t.get('svg_path', '')}")
-            except httpx.HTTPError:
-                pass
+        with ThreadPoolExecutor(max_workers=8) as _pool7:
+            list(_pool7.map(
+                lambda sp: _safe_get(client, f"{base_url}/static/{sp}"),
+                [t.get("svg_path", "") for t in tracks],
+            ))
         svg_total_ms = (time.perf_counter() - start) * 1000
         check("F7 24SVG总加载<1000ms",
               svg_total_ms < PERF_ALL_SVG_MS, f"{svg_total_ms:.1f}ms")
@@ -1408,19 +1442,12 @@ def main() -> int:
         for item in r4.sub_items:
             print(f"    • {item}")
 
-        # ── 阶段 6：80 项深度检查（非致命，趁 exe 还在运行）──
+        # ── 阶段 6：80 项深度检查（趁 exe 还在运行）──
         print("\n[6/6] 80项深度检查 (deep)...")
-        try:
-            r6 = test_deep(args.exe, args.zip, args.host, args.port, args.timeout)
-            for item in r6.sub_items:
-                print(f"    • {item}")
-            if r6.passed:
-                report.add(r6)
-            else:
-                print(f"    ⚠ 深度检查部分失败（{r6.details}），但不影响发布")
-        except Exception as e:
-            print(f"    ⚠ 深度检查异常：{e}，但不影响发布")
-            r6 = TestResult("deep", True, f"跳过（异常：{e}）")
+        r6 = test_deep(args.exe, args.zip, args.host, args.port, args.timeout)
+        report.add(r6)
+        for item in r6.sub_items:
+            print(f"    • {item}")
     finally:
         # 停止第一个 exe 实例（释放端口给便携性测试用）
         stop_exe(proc)
