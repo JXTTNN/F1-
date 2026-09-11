@@ -317,12 +317,13 @@ def test_startup(
         items.append(f"❌ {info}")
         # 打印 exe 输出用于诊断
         try:
-            stdout_data = proc.stdout.read1(4096).decode("utf-8", errors="replace") if proc.stdout else ""
-            stderr_data = proc.stderr.read1(4096).decode("utf-8", errors="replace") if proc.stderr else ""
-            if stdout_data:
-                items.append(f"exe stdout: {stdout_data[:500]}")
-            if stderr_data:
-                items.append(f"exe stderr: {stderr_data[:500]}")
+            stdout_data, stderr_data = proc.communicate(timeout=5)
+            stdout_text = stdout_data.decode("utf-8", errors="replace") if stdout_data else ""
+            stderr_text = stderr_data.decode("utf-8", errors="replace") if stderr_data else ""
+            if stdout_text:
+                items.append(f"exe stdout: {stdout_text[:2000]}")
+            if stderr_text:
+                items.append(f"exe stderr: {stderr_text[:2000]}")
         except Exception:
             pass
         return TestResult("startup", False, info, items), None
