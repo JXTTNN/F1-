@@ -1,10 +1,13 @@
-"""F1 2026 调教症状枚举（12 项，4 类）。
+"""F1 2026 调教症状枚举（15 项，4 类）。
 
-逐字对齐 spec FR-FBK-02：12 种症状分入弯/弯中/出弯/全局四类，
+逐字对齐 spec FR-FBK-02：15 种症状分入弯/弯中/出弯/全局四类，
 每项含中文标签、类别与描述。强度 0–5，默认 3。
 
 关键：tyre_wear 中文标签为「胎耗偏高」（非「胎温」），对应轮胎寿命维度，
 与胎温（tyre temperature）是不同概念。
+
+task-60 扩展：新增 3 项症状（midcorner_understeer / exit_oversteer /
+high_speed_instability），支持同一症状在不同弯道阶段有不同的 Dx 映射。
 """
 
 from __future__ import annotations
@@ -22,7 +25,7 @@ class SymptomCategory(StrEnum):
 
 
 class Symptom(StrEnum):
-    """12 项调教症状枚举（逐字对齐 spec FR-FBK-02）。"""
+    """15 项调教症状枚举（逐字对齐 spec FR-FBK-02 + task-60 扩展）。"""
 
     # 入弯 entry (5)
     UNDERSTEER = "understeer"              # 转向不足
@@ -30,16 +33,19 @@ class Symptom(StrEnum):
     TURNIN_UNRESPONSIVE = "turnin_unresponsive"  # 转向不灵敏
     BRAKE_LONG = "brake_long"              # 刹车距离长
     LOCKUP = "lockup"                      # 轮胎锁死
-    # 弯中 apex (2)
+    # 弯中 apex (3)
+    MIDCORNER_UNDERSTEER = "midcorner_understeer"  # 弯中推头（task-60 新增）
     MIDCORNER_UNSTABLE = "midcorner_unstable"    # 车身不稳定
     MIDCORNER_TRACTION = "midcorner_traction"    # 弯中不能稳定加速
-    # 出弯 exit (1)
+    # 出弯 exit (2)
     EXIT_WHEELSPIN = "exit_wheelspin"      # 出弯打滑
-    # 全局 global (4)
+    EXIT_OVERSTEER = "exit_oversteer"      # 出弯甩尾（task-60 新增）
+    # 全局 global (5)
     BOTTOMING = "bottoming"                # 直道刮底
     TYRE_WEAR = "tyre_wear"                # 胎耗偏高（非胎温！）
     STRAIGHT_SLOW = "straight_slow"        # 直道速度低
     LAP_SLOW = "lap_slow"                  # 圈速不高
+    HIGH_SPEED_INSTABILITY = "high_speed_instability"  # 高速不稳（task-60 新增）
 
 
 # 每症状的元信息：中文标签 / 类别 / 描述
@@ -71,6 +77,11 @@ SYMPTOM_INFO: dict[Symptom, dict[str, str]] = {
         "description": "制动时车轮抱死打滑。",
     },
     # 弯中 apex
+    Symptom.MIDCORNER_UNDERSTEER: {
+        "label": "弯中推头",
+        "category": SymptomCategory.APEX.value,
+        "description": "弯中持续转向不足，前轮抓地不足。",
+    },
     Symptom.MIDCORNER_UNSTABLE: {
         "label": "车身不稳定",
         "category": SymptomCategory.APEX.value,
@@ -86,6 +97,11 @@ SYMPTOM_INFO: dict[Symptom, dict[str, str]] = {
         "label": "出弯打滑",
         "category": SymptomCategory.EXIT.value,
         "description": "出弯加速时车轮空转打滑。",
+    },
+    Symptom.EXIT_OVERSTEER: {
+        "label": "出弯甩尾",
+        "category": SymptomCategory.EXIT.value,
+        "description": "出弯加速时车尾外甩。",
     },
     # 全局 global
     Symptom.BOTTOMING: {
@@ -107,6 +123,11 @@ SYMPTOM_INFO: dict[Symptom, dict[str, str]] = {
         "label": "圈速不高",
         "category": SymptomCategory.GLOBAL.value,
         "description": "整体圈速未达预期。",
+    },
+    Symptom.HIGH_SPEED_INSTABILITY: {
+        "label": "高速不稳",
+        "category": SymptomCategory.GLOBAL.value,
+        "description": "高速段方向不稳定。",
     },
 }
 

@@ -27,18 +27,41 @@ from setup_tuner.domain.symptoms import (
     get_symptom_label,
 )
 
-from .coupling import COUPLING_MATRIX, EA_SETUP_GUIDE, CouplingCell
+from .coupling import COUPLING_MATRIX, F1_SETUP_DOMAIN, CouplingCell
 from .diagnostic import DIAG_DIMS, DIAG_DIMS_ZH, SYMPTOM_TO_DX
 
 # ---------------------------------------------------------------------------
 # 规则级主出处（症状→Dx 映射的出处，来自官方调教指南）
 # ---------------------------------------------------------------------------
-RULE_SOURCE = EA_SETUP_GUIDE  # 症状-机理对应章节出处
+RULE_SOURCE = F1_SETUP_DOMAIN  # 症状-机理对应章节出处
 
 
 # ---------------------------------------------------------------------------
 # 物化单症状的 delta_table（强度 s=1 时的全参数增量）
 # ---------------------------------------------------------------------------
+def _compute_param_total(
+    param: str, dx_coefs: dict[str, float],
+) -> tuple[float, list[str], list[str]]:
+    """计算单参数的 Dx×C 总和、出处列表与联动说明。"""
+    total = 0.0
+    sources: list[str] = []
+    linkages: list[str] = []
+    for dim in DIAG_DIMS:
+        dx_val = dx_coefs.get(dim, 0.0)
+        if dx_val == 0.0:
+            continue
+        cell: CouplingCell | None = COUPLING_MATRIX[dim][param]
+        if cell is None:
+            continue
+        total += dx_val * cell.value
+        if cell.source not in sources:
+            sources.append(cell.source)
+        linkages.append(
+            f"{dim}({DIAG_DIMS_ZH[dim]}) Dx={dx_val:+.2f} × C={cell.value:+.2f}",
+        )
+    return total, sources, linkages
+
+
 def _materialize_symptom(symptom: str) -> dict[str, Any]:
     """物化单症状的规则（强度 s=1 时的 Dx×C 结果）。
 
@@ -62,7 +85,7 @@ def _materialize_symptom(symptom: str) -> dict[str, Any]:
                 },
                 ...23 个参数...
               },
-              "source": "EA_SETUP_GUIDE"       # 规则级主出处
+              "source": "F1_SETUP_DOMAIN"     # 规则级主出处
             }
 
     Raises:
@@ -70,36 +93,32 @@ def _materialize_symptom(symptom: str) -> dict[str, Any]:
     """
     if symptom not in SYMPTOM_TO_DX:
         raise KeyError(f"未知症状标识: {symptom!r}")
-
     dx_coefs = SYMPTOM_TO_DX[symptom]  # {dim: coef} 强度 s=1 时的 Dx
+    delta_table = _build_delta_table(dx_coefs)
+    return _assemble_symptom_rule(symptom, dx_coefs, delta_table)
 
-    # 矩阵乘法：raw[p] = Σ_d Dx[d] × C[d][p]
+
+def _build_delta_table(
+    dx_coefs: dict[str, float],
+) -> dict[str, dict[str, Any]]:
+    """矩阵乘法：raw[p] = Σ_d Dx[d] × C[d][p]，构建 delta_table。"""
     delta_table: dict[str, dict[str, Any]] = {}
     for spec in ALL_SETUP_FIELDS:
-        param = spec.name
-        total = 0.0
-        sources: list[str] = []
-        linkages: list[str] = []
-        for dim in DIAG_DIMS:
-            dx_val = dx_coefs.get(dim, 0.0)
-            if dx_val == 0.0:
-                continue
-            cell: CouplingCell | None = COUPLING_MATRIX[dim][param]
-            if cell is None:
-                continue
-            total += dx_val * cell.value
-            if cell.source not in sources:
-                sources.append(cell.source)
-            linkages.append(
-                f"{dim}({DIAG_DIMS_ZH[dim]}) Dx={dx_val:+.2f} × C={cell.value:+.2f}",
-            )
-        delta_table[param] = {
+        total, sources, linkages = _compute_param_total(spec.name, dx_coefs)
+        delta_table[spec.name] = {
             "value": total,
             "sources": sources,
             "linkages": linkages,
         }
+    return delta_table
 
-    # 症状元信息
+
+def _assemble_symptom_rule(
+    symptom: str,
+    dx_coefs: dict[str, float],
+    delta_table: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    """组装单症状规则字典（含症状元信息）。"""
     sym_enum = Symptom(symptom)
     return {
         "id": f"rule_{symptom}",
@@ -151,8 +170,8 @@ def validate_rules() -> None:
     """构建期校验规则库完整性。
 
     校验项：
-        1. 规则数 == 12（覆盖全部症状）；
-        2. 每条规则的 delta_table 覆盖全部 23 参数；
+        1. 规则数 == len(SYMPTOM_TO_DX)（覆盖全部症状）；
+        2. 每条规则的 delta_table 覆盖全部 20 参数；
         3. 每条规则 source 非空；
         4. 每条非零 delta 的参数 sources 非空（可追溯出处）。
 

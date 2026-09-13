@@ -1,18 +1,18 @@
-"""F1 2026 UDP 遥测包解析（纯 struct，零 numpy/torch）。
+"""F1 25 UDP 遥测包解析（纯 struct，零 numpy/torch）。
 
-本模块解析 EA F1 2026（packetFormat=2026）UDP 遥测协议的 6 类核心包，
+本模块解析 EA F1 25（packetFormat=2026）UDP 遥测协议的 5 类核心包，
 **仅解析玩家车辆数据**（通过 ``playerCarIndex`` 索引），剥离全部 ML 依赖。
 
 协议特征：
 - 小端（little-endian）、紧凑（无填充）。
 - Header 固定 29 字节。
-- 按车分包（LapData/CarSetups/CarTelemetry/CarStatus/CarTelemetry2）含 24 个
+- 按车分包（LapData/CarSetups/CarTelemetry/CarStatus）含 24 个
   车位固定数组（``NUM_CARS = 24``）；本版只解包玩家那一段，避免 60Hz 全量解包开销。
 - 容错：短包抛 :class:`PacketTooShortError`；未知 packetId 跳过不崩溃。
 
 官方规范出处（每条字段映射均在行内注释中标注）：
-- **EA F1 2026 UDP Telemetry Specification**（MacManley/f1-26-udp 权威规范，
-  F1 2026 Season Pack）。本模块字段偏移/类型/大小端均对照该规范。
+- **EA F1 25 UDP Telemetry Specification**（F1 25 官方 UDP 遥测规范）。
+  本模块字段偏移/类型/大小端均对照该规范。
 - 旧版 ``legacy/f1opt/telemetry/packets.py`` 仅用于**字段偏移核对**，
   逻辑全部重写（对齐 C-06：拒绝复用旧 bug 代码）。
 """
@@ -26,7 +26,7 @@ from typing import Any
 # --------------------------------------------------------------------------- #
 # 常量
 # --------------------------------------------------------------------------- #
-# Source: EA F1 2026 UDP Telemetry Specification, PacketHeader
+# Source: EA F1 25 UDP Telemetry Specification, PacketHeader
 # 29 字节包头，小端无填充：
 #   uint16 m_packetFormat
 #   uint8  m_gameYear / m_gameMajorVersion / m_gameMinorVersion / m_packetVersion / m_packetId
@@ -40,11 +40,11 @@ HEADER_FORMAT = "<HBBBBBQfIIBB"
 HEADER_SIZE = struct.calcsize(HEADER_FORMAT)  # 29
 assert HEADER_SIZE == 29, f"header size mismatch: {HEADER_SIZE}"
 
-# Source: EA F1 2026 UDP Telemetry Specification — cs_maxNumCarsInUDPData
-# F1 2026 固定数组 24 车位（标准网格 22 车，协议保留 24 槽）。
+# Source: EA F1 25 UDP Telemetry Specification — cs_maxNumCarsInUDPData
+# F1 25 固定数组 24 车位（标准网格 22 车，协议保留 24 槽）。
 NUM_CARS = 24
 
-# Source: EA F1 2026 UDP Telemetry Specification — Packet IDs
+# Source: EA F1 25 UDP Telemetry Specification — Packet IDs
 PACKET_NAMES: dict[int, str] = {
     0: "Motion",
     1: "Session",
@@ -62,7 +62,7 @@ PACKET_NAMES: dict[int, str] = {
     13: "MotionEx",
     14: "TimeTrial",
     15: "LapPositions",
-    16: "CarTelemetryData2",  # F1 2026 主动空力/超车
+
 }
 
 
@@ -91,7 +91,7 @@ class UnknownPacketError(ValueError):
 # --------------------------------------------------------------------------- #
 @dataclass(frozen=True, slots=True)
 class PacketHeader:
-    """解析后的 29 字节 F1 2026 包头。
+    """解析后的 29 字节 F1 25 包头。
 
     所有字段名与官方规范一致（``m_`` 前缀去除，转为 snake_case）。
     """
@@ -163,7 +163,7 @@ def _slice_player_car(
 # --------------------------------------------------------------------------- #
 # Packet 1 — Session（全局会话数据，非按车分组）
 # --------------------------------------------------------------------------- #
-# Source: EA F1 2026 UDP Telemetry Specification, Packet 1 (Session)
+# Source: EA F1 25 UDP Telemetry Specification, Packet 1 (Session)
 # 包体开头 16 字段（小端）：
 #   uint8  m_weather
 #   int8   m_trackTemperature
@@ -194,7 +194,7 @@ _SESSION_PREFIX_FMT = (
 )
 _SESSION_PREFIX_STRUCT = struct.Struct(_SESSION_PREFIX_FMT)
 
-# Source: EA F1 2026 UDP Telemetry Specification, Packet 1, WeatherForecastSample
+# Source: EA F1 25 UDP Telemetry Specification, Packet 1, WeatherForecastSample
 # 每个 8 字节：sessionType(B) timeOffset(B) weather(B) trackTemp(b)
 #   trackTempChange(b) airTemp(b) airTempChange(b) rainPercentage(B)
 _WFS_STRUCT = struct.Struct("<BBBbbbbB")
@@ -215,26 +215,34 @@ def parse_session(data: bytes, player_car_index: int = 0) -> dict[str, Any]:
             f"Session prefix too short: {len(data)} < {prefix_end}",
         )
     v = _SESSION_PREFIX_STRUCT.unpack(data[body_start:prefix_end])
-    # Source: EA F1 2026 UDP Telemetry Specification, Packet 1, Fields 1-16
+    # Source: EA F1 25 UDP Telemetry Specification, Packet 1, Fields 1-16
     (weather, track_temp, air_temp, total_laps, track_len, session_type, track_id,
      formula, session_time_left, session_duration, pit_speed_limit, game_paused,
      is_spectating, spectator_car_idx, sli_pro, _num_marshal,
      *_marshal_flat, sc_status, network_game, num_wfs) = v
 
-    # 解析天气预测样本（最多 64 个，按 num_wfs 实际数量）
+    wfs = _parse_weather_forecast_samples(data, prefix_end, num_wfs)
+    return _build_session_dict(
+        weather, track_temp, air_temp, total_laps, track_len, session_type, track_id,
+        formula, session_time_left, session_duration, pit_speed_limit, game_paused,
+        is_spectating, spectator_car_idx, sli_pro, sc_status, network_game, num_wfs, wfs,
+    )
+
+
+def _parse_weather_forecast_samples(
+    data: bytes, wfs_start: int, num_wfs: int,
+) -> list[dict[str, Any]]:
+    """解析天气预测样本（最多 64 个，按 num_wfs 实际数量，容错截断）。"""
     wfs: list[dict[str, Any]] = []
-    wfs_start = prefix_end
     for i in range(num_wfs):
         s_off = wfs_start + i * _WFS_STRUCT.size
         s_end = s_off + _WFS_STRUCT.size
         if len(data) < s_end:
             # 样本数声明超过实际字节——已解到的保留，剩余跳过（容错）。
             break
-        (st, to, w, tt, ttc, at, atc, rain) = _WFS_STRUCT.unpack(
-            data[s_off:s_end],
-        )
+        (st, to, w, tt, ttc, at, atc, rain) = _WFS_STRUCT.unpack(data[s_off:s_end])
         wfs.append({
-            # Source: EA F1 2026 UDP Telemetry Specification, Packet 1, WeatherForecastSample
+            # Source: EA F1 25 UDP Telemetry Specification, Packet 1, WeatherForecastSample
             "m_sessionType": st,
             "m_timeOffset": to,
             "m_weather": w,
@@ -244,9 +252,20 @@ def parse_session(data: bytes, player_car_index: int = 0) -> dict[str, Any]:
             "m_airTemperatureChange": atc,
             "m_rainPercentage": rain,
         })
+    return wfs
 
+
+def _build_session_dict(
+    weather: int, track_temp: int, air_temp: int, total_laps: int,
+    track_len: int, session_type: int, track_id: int, formula: int,
+    session_time_left: int, session_duration: int, pit_speed_limit: int,
+    game_paused: int, is_spectating: int, spectator_car_idx: int,
+    sli_pro: int, sc_status: int, network_game: int,
+    num_wfs: int, wfs: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """组装 Packet 1 Session 返回字典。"""
     return {
-        # Source: EA F1 2026 UDP Telemetry Specification, Packet 1, Session Fields
+        # Source: EA F1 25 UDP Telemetry Specification, Packet 1, Session Fields
         "m_trackId": track_id,                # uint8 — 赛道 ID（用于自动识别）
         "m_weather": weather,                 # uint8 — 当前天气
         "m_trackTemperature": track_temp,     # int8  — 赛道温度 (℃)
@@ -272,7 +291,7 @@ def parse_session(data: bytes, player_car_index: int = 0) -> dict[str, Any]:
 # --------------------------------------------------------------------------- #
 # Packet 2 — LapData（按车分组，只解玩家车）
 # --------------------------------------------------------------------------- #
-# Source: EA F1 2026 UDP Telemetry Specification, Packet 2 (LapData)
+# Source: EA F1 25 UDP Telemetry Specification, Packet 2 (LapData)
 # 每车 58 字节：
 #   uint32 m_lastLapTimeInMS
 #   uint32 m_currentLapTimeInMS
@@ -309,14 +328,14 @@ def parse_lap_data(data: bytes, player_car_index: int) -> dict[str, Any]:
     """
     c = _slice_player_car(data, _LAP_PER_STRUCT, player_car_index)
     # 扇区时间组合：MSPart + MinutesPart * 60000 → 完整毫秒值
-    # Source: EA F1 2026 UDP Telemetry Specification, Packet 2, Sector Time Encoding
+    # Source: EA F1 25 UDP Telemetry Specification, Packet 2, Sector Time Encoding
     sector1_ms = int(c[3]) * 60000 + int(c[2])
     sector2_ms = int(c[5]) * 60000 + int(c[4])
     delta_front_ms = int(c[7]) * 60000 + int(c[6])
     delta_leader_ms = int(c[9]) * 60000 + int(c[8])
 
     return {
-        # Source: EA F1 2026 UDP Telemetry Specification, Packet 2, LapData Fields
+        # Source: EA F1 25 UDP Telemetry Specification, Packet 2, LapData Fields
         "m_lastLapTimeInMS": c[0],           # uint32 — 上一圈用时 (ms)
         "m_currentLapTimeInMS": c[1],        # uint32 — 当前圈用时 (ms)
         "m_sector1TimeInMS": sector1_ms,     # 组合 — 扇区 1 用时 (ms)
@@ -352,13 +371,13 @@ def parse_lap_data(data: bytes, player_car_index: int) -> dict[str, Any]:
 # --------------------------------------------------------------------------- #
 # Packet 5 — CarSetups（按车分组，只解玩家车）
 # --------------------------------------------------------------------------- #
-# Source: EA F1 2026 UDP Telemetry Specification, Packet 5 (CarSetups)
-# 每车 50 字节：
+# Source: EA F1 25 UDP Telemetry Specification, Packet 5 (CarSetups)
+# 每车 49 字节：
 #   uint8 m_frontWing / m_rearWing / m_onThrottleDiff / m_offThrottleDiff  (game clicks)
 #   float m_frontCamber / m_rearCamber / m_frontToe / m_rearToe
 #   uint8 m_frontSuspension / m_rearSuspension / m_frontAntiRollBar /
 #         m_rearAntiRollBar / m_frontSuspensionHeight / m_rearSuspensionHeight /
-#         m_brakePressure / m_brakeBias / m_engineBraking
+#         m_brakePressure / m_brakeBias
 #   float m_rearLeftTyrePressure / m_rearRightTyrePressure /
 #         m_frontLeftTyrePressure / m_frontRightTyrePressure
 #   uint8 m_ballast
@@ -367,7 +386,7 @@ _SETUP_PER_FMT = (
     "<"
     "BBBB"        # frontWing, rearWing, onThrottleDiff, offThrottleDiff
     "ffff"        # frontCamber, rearCamber, frontToe, rearToe
-    "BBBBBBBBB"   # 9 × uint8 (悬挂/防倾杆/行驶高度/刹车压力/配比/发动机制动)
+    "BBBBBBBB"    # 8 × uint8 (悬挂/防倾杆/行驶高度/刹车压力/配比)
     "ffff"        # 4 × float 胎压
     "B"           # ballast
     "f"           # fuelLoad
@@ -383,7 +402,7 @@ def parse_car_setups(data: bytes, player_car_index: int) -> dict[str, Any]:
     """
     c = _slice_player_car(data, _SETUP_PER_STRUCT, player_car_index)
     return {
-        # Source: EA F1 2026 UDP Telemetry Specification, Packet 5, CarSetup Fields
+        # Source: EA F1 25 UDP Telemetry Specification, Packet 5, CarSetup Fields
         "m_frontWing": c[0],                 # uint8 — 前翼 (clicks)
         "m_rearWing": c[1],                  # uint8 — 后翼 (clicks)
         "m_onThrottleDiff": c[2],            # uint8 — 油门差速器 (clicks)
@@ -400,20 +419,19 @@ def parse_car_setups(data: bytes, player_car_index: int) -> dict[str, Any]:
         "m_rearSuspensionHeight": c[13],     # uint8 — 后行驶高度
         "m_brakePressure": c[14],            # uint8 — 刹车压力
         "m_brakeBias": c[15],                # uint8 — 刹车配比
-        "m_engineBraking": c[16],            # uint8 — 发动机制动
-        "m_rearLeftTyrePressure": c[17],     # float — 后左胎压 (PSI)
-        "m_rearRightTyrePressure": c[18],    # float — 后右胎压
-        "m_frontLeftTyrePressure": c[19],    # float — 前左胎压
-        "m_frontRightTyrePressure": c[20],   # float — 前右胎压
-        "m_ballast": c[21],                  # uint8 — 配重
-        "m_fuelLoad": c[22],                 # float — 燃油量 (kg)
+        "m_rearLeftTyrePressure": c[16],     # float — 后左胎压 (PSI)
+        "m_rearRightTyrePressure": c[17],    # float — 后右胎压
+        "m_frontLeftTyrePressure": c[18],    # float — 前左胎压
+        "m_frontRightTyrePressure": c[19],   # float — 前右胎压
+        "m_ballast": c[20],                  # uint8 — 配重
+        "m_fuelLoad": c[21],                 # float — 燃油量 (kg)
     }
 
 
 # --------------------------------------------------------------------------- #
 # Packet 6 — CarTelemetry（按车分组，只解玩家车）
 # --------------------------------------------------------------------------- #
-# Source: EA F1 2026 UDP Telemetry Specification, Packet 6 (CarTelemetry)
+# Source: EA F1 25 UDP Telemetry Specification, Packet 6 (CarTelemetry)
 # 每车 59 字节：
 #   uint16 m_speed
 #   float  m_throttle / m_steer / m_brake
@@ -455,7 +473,7 @@ def parse_car_telemetry(data: bytes, player_car_index: int) -> dict[str, Any]:
     """
     c = _slice_player_car(data, _TELEM_PER_STRUCT, player_car_index)
     return {
-        # Source: EA F1 2026 UDP Telemetry Specification, Packet 6, CarTelemetry Fields
+        # Source: EA F1 25 UDP Telemetry Specification, Packet 6, CarTelemetry Fields
         "m_speed": c[0],                     # uint16 — 速度 (km/h)
         "m_throttle": c[1],                  # float  — 油门 (0~1)
         "m_steer": c[2],                     # float  — 方向 (-1~1)
@@ -478,7 +496,7 @@ def parse_car_telemetry(data: bytes, player_car_index: int) -> dict[str, Any]:
 # --------------------------------------------------------------------------- #
 # Packet 7 — CarStatus（按车分组，只解玩家车）
 # --------------------------------------------------------------------------- #
-# Source: EA F1 2026 UDP Telemetry Specification, Packet 7 (CarStatus)
+# Source: EA F1 25 UDP Telemetry Specification, Packet 7 (CarStatus)
 # 每车 59 字节：
 #   uint8 m_tractionControl / m_antiLockBrakes / m_fuelMix / m_frontBrakeBias /
 #         m_pitLimiterStatus
@@ -519,7 +537,7 @@ def parse_car_status(data: bytes, player_car_index: int) -> dict[str, Any]:
     """
     c = _slice_player_car(data, _STATUS_PER_STRUCT, player_car_index)
     return {
-        # Source: EA F1 2026 UDP Telemetry Specification, Packet 7, CarStatus Fields
+        # Source: EA F1 25 UDP Telemetry Specification, Packet 7, CarStatus Fields
         "m_tractionControl": c[0],
         "m_antiLockBrakes": c[1],
         "m_fuelMix": c[2],                   # uint8 — 燃油混合模式
@@ -550,43 +568,7 @@ def parse_car_status(data: bytes, player_car_index: int) -> dict[str, Any]:
 
 
 # --------------------------------------------------------------------------- #
-# Packet 16 — CarTelemetryData2（按车分组，只解玩家车）
-# --------------------------------------------------------------------------- #
-# Source: EA F1 2026 UDP Telemetry Specification, Packet 16 (CarTelemetryData2)
-# 每车 10 字节：
-#   uint8  m_activeAeroMode (0=Corner/Z, 1=Straight/X)
-#   uint8  m_activeAeroAvailable
-#   uint16 m_activeAeroActivationDistance
-#   uint8  m_overtakeAvailable / m_overtakeActive
-#   uint16 m_overtakeActivationDistance
-#   uint8  m_2026Regulations / m_drivingWrongWay
-_CT2_PER_FMT = "<BBHBBHBB"
-_CT2_PER_STRUCT = struct.Struct(_CT2_PER_FMT)
 
-
-def parse_car_telemetry_2(data: bytes, player_car_index: int) -> dict[str, Any]:
-    """解析 Packet 16 (CarTelemetryData2) — 玩家车主动空力模式/超车状态。
-
-    ``m_activeAeroMode``: 0 = Corner/Z（弯道 Z 轴），1 = Straight/X（直道 X 轴）。
-
-    Raises:
-        PacketTooShortError: 包体不足以覆盖玩家车辆字段。
-    """
-    c = _slice_player_car(data, _CT2_PER_STRUCT, player_car_index)
-    return {
-        # Source: EA F1 2026 UDP Telemetry Specification, Packet 16, CarTelemetryData2 Fields
-        "m_activeAeroMode": c[0],                  # uint8 — 主动空力模式 (0=Z/弯, 1=X/直)
-        "m_activeAeroAvailable": c[1],
-        "m_activeAeroActivationDistance": c[2],
-        "m_overtakeAvailable": c[3],
-        "m_overtakeActive": c[4],
-        "m_overtakeActivationDistance": c[5],
-        "m_2026Regulations": c[6],
-        "m_drivingWrongWay": c[7],
-    }
-
-
-# --------------------------------------------------------------------------- #
 # 主入口：按 packetId 分发
 # --------------------------------------------------------------------------- #
 # 本版支持的 6 类包及其解析函数
@@ -596,7 +578,7 @@ _PARSERS: dict[int, Any] = {
     5: parse_car_setups,
     6: parse_car_telemetry,
     7: parse_car_status,
-    16: parse_car_telemetry_2,
+
 }
 
 # 支持的 packetId 集合（供外部查询）

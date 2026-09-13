@@ -19,13 +19,14 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from setup_tuner.api.routes import router
@@ -46,23 +47,8 @@ _UI_DIR = Path(__file__).resolve().parent / "ui"
 # =========================================================================== #
 # 生命周期管理
 # =========================================================================== #
-@asynccontextmanager
-async def _lifespan(app: FastAPI):
-    """应用生命周期：启动时初始化服务，停止时清理。
-
-    初始化：
-        - Store（SQLite）
-        - FeedbackService / IterationService
-        - TelemetryStream（最新帧缓存）
-        - TelemetryListener（UDP 监听，后台线程）
-        - WSManager（WebSocket 连接管理器）
-
-    清理：
-        - 停止 TelemetryListener
-        - 关闭 Store
-    """
-    config: Config = app.state.config
-
+def _init_app_services(app: FastAPI, config: Config) -> tuple[Store, TelemetryListener]:
+    """初始化 Store、业务服务、遥测流与监听器，返回 (store, listener)。"""
     # ① Store
     data_dir = Path(config.data_dir)
     data_dir.mkdir(parents=True, exist_ok=True)
@@ -79,13 +65,8 @@ async def _lifespan(app: FastAPI):
     listener = TelemetryListener(
         host=config.udp_host, port=config.udp_port,
     )
-    # 注册 handler：将解析结果写入 TelemetryStream
-    def _on_packet(parsed: dict[str, Any]) -> None:
-        packet_id = parsed.get("packet_id")
-        if packet_id is not None:
-            app.state.telemetry_stream.update(int(packet_id), parsed)
-
-    listener.add_handler(_on_packet)
+    listener.add_handler(_make_packet_handler(app))
+    listener.add_raw_handler(_make_raw_packet_handler(app))
     app.state.telemetry_listener = listener
 
     # ④ WS 管理器
@@ -94,40 +75,80 @@ async def _lifespan(app: FastAPI):
     # ⑤ 当前赛道（None 表示未选择）
     app.state.current_track_id = None
     app.state.current_track_source = "manual"
+    return store, listener
 
-    # 启动 UDP 监听（后台线程，容错不崩溃）
+
+def _make_packet_handler(app: FastAPI) -> Callable[[dict[str, Any]], None]:
+    """构造 UDP 包处理函数：将解析结果写入 TelemetryStream。"""
+    def _on_packet(parsed: dict[str, Any]) -> None:
+        packet_id = parsed.get("packet_id")
+        if packet_id is not None:
+            app.state.telemetry_stream.update(int(packet_id), parsed)
+    return _on_packet
+
+
+def _make_raw_packet_handler(app: FastAPI) -> Callable[[bytes, dict[str, Any] | None], None]:
+    """构造原始字节处理函数：将原始字节 + 解析结果传给录制器。"""
+    def _on_raw_packet(data: bytes, parsed: dict[str, Any] | None) -> None:
+        recorder = getattr(app.state, "telemetry_recorder", None)
+        if recorder is not None and recorder.is_recording:
+            recorder.on_raw_packet(data, parsed)
+    return _on_raw_packet
+
+
+def _start_telemetry_listener(listener: TelemetryListener, config: Config) -> None:
+    """启动 UDP 监听（后台线程，端口占用时降级运行不崩溃）。"""
     try:
         listener.start()
         logger.info(
             "telemetry listener started on %s:%d",
-            config.udp_host,
-            config.udp_port,
+            config.udp_host, config.udp_port,
         )
     except OSError as e:
-        # UDP 端口占用不阻止 API 启动（降级运行）
         logger.warning(
             "telemetry listener failed to start on %s:%d: %s "
             "(API will run without telemetry)",
-            config.udp_host,
-            config.udp_port,
-            e,
+            config.udp_host, config.udp_port, e,
         )
 
+
+def _cleanup_app_services(listener: TelemetryListener, store: Store) -> None:
+    """停止 UDP 监听并关闭 Store（容错，失败仅记日志）。"""
+    try:
+        listener.stop()
+    except Exception:
+        logger.exception("telemetry listener stop failed")
+    try:
+        store.close()
+    except Exception:
+        logger.exception("store close failed")
+    logger.info("F1OPT app stopped")
+
+
+@asynccontextmanager
+async def _lifespan(app: FastAPI):
+    """应用生命周期：启动时初始化服务，停止时清理。
+
+    初始化：
+        - Store（SQLite）
+        - FeedbackService / IterationService
+        - TelemetryStream（最新帧缓存）
+        - TelemetryListener（UDP 监听，后台线程）
+        - WSManager（WebSocket 连接管理器）
+
+    清理：
+        - 停止 TelemetryListener
+        - 关闭 Store
+    """
+    config: Config = app.state.config
+    store, listener = _init_app_services(app, config)
+    _start_telemetry_listener(listener, config)
     logger.info("F1OPT app started, data_dir=%s", config.data_dir)
 
     try:
         yield
     finally:
-        # 清理
-        try:
-            listener.stop()
-        except Exception:
-            logger.exception("telemetry listener stop failed")
-        try:
-            store.close()
-        except Exception:
-            logger.exception("store close failed")
-        logger.info("F1OPT app stopped")
+        _cleanup_app_services(listener, store)
 
 
 # =========================================================================== #
@@ -181,6 +202,50 @@ async def _generic_exception_handler(
 # =========================================================================== #
 # 应用工厂
 # =========================================================================== #
+def _mount_static_assets(app: FastAPI) -> None:
+    """挂载 UI 静态资源（SVG 赛道图 + index.html/app.js/style.css）。"""
+    if not _UI_DIR.exists():
+        return
+    from fastapi.staticfiles import StaticFiles
+
+    # 挂载 SVG 赛道图子目录
+    tracks_dir = _UI_DIR / "tracks"
+    if tracks_dir.exists():
+        app.mount(
+            "/static/tracks",
+            StaticFiles(directory=str(tracks_dir)),
+            name="static-tracks",
+        )
+    # 挂载 UI 根目录（index.html / app.js / style.css）
+    app.mount(
+        "/static",
+        StaticFiles(directory=str(_UI_DIR)),
+        name="static-ui",
+    )
+
+
+def _register_exception_handlers(app: FastAPI) -> None:
+    """注册全局异常处理器（统一 {code, message, data} 信封）。"""
+    app.add_exception_handler(StarletteHTTPException, _http_exception_handler)  # type: ignore[arg-type]
+    app.add_exception_handler(RequestValidationError, _validation_exception_handler)  # type: ignore[arg-type]
+    app.add_exception_handler(Exception, _generic_exception_handler)
+
+
+def _register_root_route(app: FastAPI) -> None:
+    """注册根路径路由，返回前端 index.html。"""
+    @app.get("/", tags=["root"])
+    async def root() -> HTMLResponse:
+        """根路径 —— 返回前端 index.html，用户打开浏览器即见界面。"""
+        index_path = _UI_DIR / "index.html"
+        if index_path.exists():
+            return HTMLResponse(index_path.read_text(encoding="utf-8"))
+        # UI 文件不存在时回退到提示页
+        return HTMLResponse(
+            "<html><body><h1>F1OPT</h1><p>UI 未找到，请检查安装。</p></body></html>",
+            status_code=404,
+        )
+
+
 def create_app(config: Config | None = None) -> FastAPI:
     """创建并配置 FastAPI 应用实例。
 
@@ -201,7 +266,7 @@ def create_app(config: Config | None = None) -> FastAPI:
 
     app = FastAPI(
         title="F1OPT 赛车调教优化助手",
-        description="EA F1 2026 Setup Tuner — 纯确定性规则引擎",
+        description="F1 25 Setup Tuner — 纯确定性规则引擎",
         version="0.1.0",
         lifespan=_lifespan,
     )
@@ -213,41 +278,7 @@ def create_app(config: Config | None = None) -> FastAPI:
     app.include_router(router)
     app.include_router(ws_router)
 
-    # 挂载静态资源（ui/ 目录，含 SVG/HTML/JS/CSS）
-    if _UI_DIR.exists():
-        from fastapi.staticfiles import StaticFiles
-
-        # 挂载 SVG 赛道图子目录
-        tracks_dir = _UI_DIR / "tracks"
-        if tracks_dir.exists():
-            app.mount(
-                "/static/tracks",
-                StaticFiles(directory=str(tracks_dir)),
-                name="static-tracks",
-            )
-        # 挂载 UI 根目录（index.html / app.js / style.css）
-        app.mount(
-            "/static",
-            StaticFiles(directory=str(_UI_DIR)),
-            name="static-ui",
-        )
-
-    # 注册全局异常处理器
-    app.add_exception_handler(StarletteHTTPException, _http_exception_handler)  # type: ignore[arg-type]
-    app.add_exception_handler(RequestValidationError, _validation_exception_handler)  # type: ignore[arg-type]
-    app.add_exception_handler(Exception, _generic_exception_handler)
-
-    # 根路径 → 返回 API 信息
-    @app.get("/", tags=["root"])
-    async def root() -> dict[str, Any]:
-        """根路径 —— 返回 API 信息与前端入口。"""
-        return {
-            "name": "F1OPT 赛车调教优化助手",
-            "version": "0.1.0",
-            "docs": "/docs",
-            "openapi": "/openapi.json",
-            "static": "/static/",
-            "websocket": "/api/v1/ws",
-        }
-
+    _mount_static_assets(app)
+    _register_exception_handlers(app)
+    _register_root_route(app)
     return app

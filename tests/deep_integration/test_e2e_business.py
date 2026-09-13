@@ -195,7 +195,7 @@ class TestImportSetup:
             data = _assert_envelope(resp.json())
             assert data["track_id"] == "suzuka"
             assert data["setup_id"] > 0
-            assert len(data["params"]) == 23
+            assert len(data["params"]) == 20
 
     def test_get_current_setup_after_import(self) -> None:
         """导入后 GET /setup/current 应返回刚导入的快照。"""
@@ -212,7 +212,7 @@ class TestImportSetup:
             assert resp.status_code == 200
             data = _assert_envelope(resp.json())
             assert data["track_id"] == "suzuka"
-            assert len(data["params"]) == 23
+            assert len(data["params"]) == 20
 
 
 # ===========================================================================
@@ -338,7 +338,7 @@ class TestGenerateSuggestion:
             report = data["report"]
             assert report["track_id"] == "suzuka"
             assert "generated_at" in report
-            assert len(report["parameters"]) == 23
+            assert len(report["parameters"]) == 20
             assert report["confidence"] in {"high", "medium", "low"}
 
             # 每参数含必要字段
@@ -539,7 +539,7 @@ class TestFullClosedLoop:
             resp = client.post("/api/v1/setup/import")
             assert resp.status_code == 200
             setup_data = _assert_envelope(resp.json())
-            assert len(setup_data["params"]) == 23
+            assert len(setup_data["params"]) == 20
 
             # ③ 提交多弯道反馈
             for corner, symptom, strength in [
@@ -563,7 +563,7 @@ class TestFullClosedLoop:
             assert resp.status_code == 200
             suggestion_data = _assert_envelope(resp.json())
             report = suggestion_data["report"]
-            assert len(report["parameters"]) == 23
+            assert len(report["parameters"]) == 20
             # 应有非零调整（多症状非零 Dx）
             nonzero_count = sum(
                 1 for v in report["setup_delta"].values() if abs(v) > 1e-9

@@ -18,7 +18,7 @@ timeout /t 1 /nobreak >nul 2>nul
 set /a count+=1
 powershell -NoProfile -Command "try{$r=Invoke-WebRequest -Uri 'http://127.0.0.1:8000/api/v1/health' -UseBasicParsing -TimeoutSec 2;if($r.StatusCode -eq 200){exit 0}else{exit 1}}catch{exit 1}" >nul 2>nul
 if %ERRORLEVEL% EQU 0 goto :ready
-if %count% LSS :20 goto :waitloop
+if %count% LSS 20 goto :waitloop
 
 echo [失败] 启动超时（20秒内 API 未就绪）
 echo 请检查 F1OPT.exe 是否被杀毒软件拦截。

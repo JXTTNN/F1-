@@ -131,7 +131,7 @@ class TestHeader:
         assert parse_header(build_header(packet_id=5)).name == "CarSetups"
         assert parse_header(build_header(packet_id=6)).name == "CarTelemetry"
         assert parse_header(build_header(packet_id=7)).name == "CarStatus"
-        assert parse_header(build_header(packet_id=16)).name == "CarTelemetryData2"
+
 
     def test_short_header_raises(self) -> None:
         """不足 29 字节应抛 PacketTooShortError。"""
@@ -162,14 +162,14 @@ class TestPacketDispatch:
         assert parse_packet(data) is None
 
     def test_supported_packet_ids(self) -> None:
-        """SUPPORTED_PACKET_IDS 应为 {1,2,5,6,7,16}。"""
-        assert SUPPORTED_PACKET_IDS == frozenset({1, 2, 5, 6, 7, 16})
+        """SUPPORTED_PACKET_IDS 应为 {1,2,5,6,7}。"""
+        assert SUPPORTED_PACKET_IDS == frozenset({1, 2, 5, 6, 7})
 
     def test_packet_name_known_and_unknown(self) -> None:
         """packet_name 已知返回名称，未知返回 Unknown(<id>)。"""
         assert packet_name(1) == "Session"
         assert packet_name(99) == "Unknown(99)"
-        assert PACKET_NAMES[16] == "CarTelemetryData2"
+
 
 
 # ===========================================================================
@@ -395,19 +395,32 @@ class TestCarSetupsPacket:
         rear_camber: float = -2.5,
         front_toe: float = 0.25,
         rear_toe: float = 0.25,
+        front_suspension: int = 1,
+        rear_suspension: int = 1,
+        front_anti_roll_bar: int = 1,
+        rear_anti_roll_bar: int = 1,
+        front_ride_height: int = 1,
+        rear_ride_height: int = 1,
         brake_pressure: int = 75,
         brake_bias: int = 65,
-        front_left_press: float = 25.5,
         rear_left_press: float = 25.5,
+        rear_right_press: float = 25.5,
+        front_left_press: float = 25.5,
+        front_right_press: float = 25.5,
         ballast: int = 50,
         fuel_load: float = 100.0,
     ) -> bytes:
+        """构造单辆车的 CarSetups 段（49 字节，与 packets.py _SETUP_PER_FMT 一致）。"""
         return struct.pack(
-            "<BBBBffffBBBBBBBBBffffBf",
+            "<BBBBffffBBBBBBBBffffBf",
             front_wing, rear_wing, on_throttle, off_throttle,
             front_camber, rear_camber, front_toe, rear_toe,
-            1, 1, 1, 1, 1, 1, brake_pressure, brake_bias, 50,  # 9 × uint8
-            rear_left_press, 25.5, front_left_press, 25.5,  # 4 × float 胎压
+            front_suspension, rear_suspension,
+            front_anti_roll_bar, rear_anti_roll_bar,
+            front_ride_height, rear_ride_height,
+            brake_pressure, brake_bias,
+            rear_left_press, rear_right_press,
+            front_left_press, front_right_press,
             ballast, fuel_load,
         )
 
@@ -418,7 +431,8 @@ class TestCarSetupsPacket:
             front_camber=-3.0, rear_camber=-2.0,
             front_toe=0.20, rear_toe=0.30,
             brake_pressure=80, brake_bias=70,
-            front_left_press=26.0, rear_left_press=25.0,
+            rear_left_press=25.0, rear_right_press=24.0,
+            front_left_press=26.0, front_right_press=25.5,
             ballast=55, fuel_load=110.0,
         )
         data = build_header(packet_id=5, player_car_index=0) + per
@@ -435,13 +449,15 @@ class TestCarSetupsPacket:
         assert result["m_brakePressure"] == 80
         assert result["m_brakeBias"] == 70
         assert result["m_rearLeftTyrePressure"] == pytest.approx(25.0)
+        assert result["m_rearRightTyrePressure"] == pytest.approx(24.0)
         assert result["m_frontLeftTyrePressure"] == pytest.approx(26.0)
+        assert result["m_frontRightTyrePressure"] == pytest.approx(25.5)
         assert result["m_ballast"] == 55
         assert result["m_fuelLoad"] == pytest.approx(110.0)
 
     def test_car_setups_player_car_index_2(self) -> None:
         """playerCarIndex=2 时应解析第 3 辆车。"""
-        per_size = struct.calcsize("<BBBBffffBBBBBBBBBffffBf")
+        per_size = struct.calcsize("<BBBBffffBBBBBBBBffffBf")
         target = self._build_setup_per_car(front_wing=9)
         body = b"\x00" * per_size * 2 + target
         data = build_header(packet_id=5, player_car_index=2) + body
@@ -600,63 +616,7 @@ class TestCarStatusPacket:
 
 
 # ===========================================================================
-# 8. Packet 16 — CarTelemetryData2
-# ===========================================================================
-class TestCarTelemetry2Packet:
-    """Packet 16 (CarTelemetryData2) 解析。"""
-
-    @staticmethod
-    def _build_ct2_per_car(
-        *,
-        aero_mode: int = 0,
-        aero_available: int = 1,
-        aero_distance: int = 100,
-        overtake_available: int = 1,
-        overtake_active: int = 0,
-        overtake_distance: int = 200,
-        reg_2026: int = 1,
-        wrong_way: int = 0,
-    ) -> bytes:
-        return struct.pack(
-            "<BBHBBHBB",
-            aero_mode, aero_available, aero_distance,
-            overtake_available, overtake_active, overtake_distance,
-            reg_2026, wrong_way,
-        )
-
-    def test_ct2_fields(self) -> None:
-        """逐字段断言 CarTelemetryData2 解析。"""
-        per = self._build_ct2_per_car(
-            aero_mode=1, aero_distance=150,
-            overtake_available=1, overtake_active=1,
-            overtake_distance=250, wrong_way=1,
-        )
-        data = build_header(packet_id=16, player_car_index=0) + per
-        result = parse_packet(data)
-        assert result is not None
-        assert result["m_activeAeroMode"] == 1
-        assert result["m_activeAeroAvailable"] == 1
-        assert result["m_activeAeroActivationDistance"] == 150
-        assert result["m_overtakeAvailable"] == 1
-        assert result["m_overtakeActive"] == 1
-        assert result["m_overtakeActivationDistance"] == 250
-        assert result["m_2026Regulations"] == 1
-        assert result["m_drivingWrongWay"] == 1
-
-    def test_ct2_player_car_index_1(self) -> None:
-        """playerCarIndex=1 时应解析第 2 辆车。"""
-        per_size = struct.calcsize("<BBHBBHBB")
-        target = self._build_ct2_per_car(aero_mode=0, overtake_active=1)
-        body = b"\x00" * per_size + target
-        data = build_header(packet_id=16, player_car_index=1) + body
-        result = parse_packet(data)
-        assert result is not None
-        assert result["m_activeAeroMode"] == 0
-        assert result["m_overtakeActive"] == 1
-
-
-# ===========================================================================
-# 9. parse_packet 端到端
+# 8. parse_packet 端到端
 # ===========================================================================
 class TestParsePacketEndToEnd:
     """parse_packet 端到端：header + body 组合。"""

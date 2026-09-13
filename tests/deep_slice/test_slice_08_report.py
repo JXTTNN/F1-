@@ -125,7 +125,7 @@ class TestUnit:
     def test_extract_setup_returns_23_fields(self, sample_packet5: dict) -> None:
         """extract_setup_from_packet5 返回 23 项参数。"""
         result = extract_setup_from_packet5(sample_packet5)
-        assert len(result) == 23
+        assert len(result) == 20
         # 字段名与 ALL_SETUP_FIELDS 一致
         assert set(result.keys()) == {f.name for f in ALL_SETUP_FIELDS}
 
@@ -134,18 +134,15 @@ class TestUnit:
         result = extract_setup_from_packet5(sample_packet5)
         assert result["front_wing"] == 6.0
 
-    def test_extract_setup_aero_mode_z(self, sample_packet5: dict) -> None:
-        """extract_setup_from_packet5 m_activeAeroMode=0 → active_aero_z=0.6。"""
-        result = extract_setup_from_packet5(sample_packet5)
-        assert result["active_aero_z"] == 0.6
-        assert result["active_aero_x"] == 0.4
-
     def test_extract_setup_tyre_pressure(self, sample_packet5: dict) -> None:
-        """extract_setup_from_packet5 胎压取前/后轴均值。"""
+        """extract_setup_from_packet5 胎压取4个独立字段。"""
         result = extract_setup_from_packet5(sample_packet5)
-        # tyresPressure = [25.5, 25.6, 25.4, 25.5]
-        assert abs(result["front_tyre_pressure"] - 25.55) < 1e-6
-        assert abs(result["rear_tyre_pressure"] - 25.45) < 1e-6
+        # sample_packet5 含 m_rearLeftTyrePressure, m_rearRightTyrePressure,
+        # m_frontLeftTyrePressure, m_frontRightTyrePressure
+        assert "rear_left_tyre_pressure" in result
+        assert "rear_right_tyre_pressure" in result
+        assert "front_left_tyre_pressure" in result
+        assert "front_right_tyre_pressure" in result
 
     # ---------- extract_telemetry_summary ----------
     def test_extract_telemetry_summary_session(self) -> None:
@@ -242,9 +239,9 @@ class TestBoundary:
 
     def test_extract_setup_out_of_range_clamped(self) -> None:
         """extract_setup_from_packet5 越界值被 clamp 到合法区间。"""
-        # front_wing 范围 0-11，传 99 应 clamp 到 11
+        # front_wing 范围 0-10，传 99 应 clamp 到 10
         result = extract_setup_from_packet5({"m_frontWing": 99.0})
-        assert result["front_wing"] == 11.0
+        assert result["front_wing"] == 10.0
 
     def test_extract_setup_negative_clamped(self) -> None:
         """extract_setup_from_packet5 负数越界被 clamp 到 min。"""
@@ -252,23 +249,25 @@ class TestBoundary:
         assert result["front_wing"] == 0.0
 
     def test_extract_setup_aero_mode_unknown(self) -> None:
-        """extract_setup_from_packet5 未知 aero_mode 不修改缺省值。"""
+        """extract_setup_from_packet5 未知 aero_mode 不影响调教参数。"""
         result = extract_setup_from_packet5({"m_activeAeroMode": 99})
-        # 缺省 0.5
-        assert result["active_aero_z"] == 0.5
-        assert result["active_aero_x"] == 0.5
+        # active_aero 字段已删除，不应出现在结果中
+        assert "active_aero_z" not in result
+        assert "active_aero_x" not in result
 
     def test_extract_setup_aero_mode_x(self) -> None:
-        """extract_setup_from_packet5 m_activeAeroMode=1 → X 直道模式。"""
+        """extract_setup_from_packet5 m_activeAeroMode=1 不影响调教参数。"""
         result = extract_setup_from_packet5({"m_activeAeroMode": 1})
-        assert result["active_aero_z"] == 0.4
-        assert result["active_aero_x"] == 0.6
+        # active_aero 字段已删除，不应出现在结果中
+        assert "active_aero_z" not in result
+        assert "active_aero_x" not in result
 
     def test_extract_setup_tyre_pressure_short(self) -> None:
-        """extract_setup_from_packet5 胎压列表不足 4 个取缺省。"""
-        result = extract_setup_from_packet5({"tyresPressure": [25.0, 25.0]})
-        # 缺省胎压
-        assert result["front_tyre_pressure"] == 25.5
+        """extract_setup_from_packet5 胎压字段缺失时取缺省。"""
+        result = extract_setup_from_packet5({})
+        defaults = CarSetup.default().to_dict()
+        assert result["front_left_tyre_pressure"] == defaults["front_left_tyre_pressure"]
+        assert result["rear_left_tyre_pressure"] == defaults["rear_left_tyre_pressure"]
 
     # ---------- extract_telemetry_summary ----------
     def test_extract_telemetry_summary_empty(self) -> None:
@@ -328,7 +327,7 @@ class TestProperty:
             track_id="suzuka",
         )
         report = build_report(suggestion, track_id="suzuka")
-        assert len(report["parameters"]) == 23
+        assert len(report["parameters"]) == 20
 
     def test_build_report_setup_delta_keys_match_params(
         self, sample_params: dict,
@@ -492,8 +491,8 @@ class TestSmoke:
         restored = json.loads(text)
         assert restored["track_id"] == "suzuka"
 
-    def test_all_12_symptoms_report(self, sample_params: dict) -> None:
-        """全部 12 症状输入 → 报告生成不抛异常。"""
+    def test_all_15_symptoms_report(self, sample_params: dict) -> None:
+        """全部 15 症状输入 → 报告生成不抛异常（task-60 扩展）。"""
         symptoms = [(s.value, 3) for s in Symptom]
         suggestion = generate_suggestion(
             symptoms=symptoms,
@@ -501,7 +500,7 @@ class TestSmoke:
             track_id="suzuka",
         )
         report = build_report(suggestion, track_id="suzuka")
-        assert len(report["parameters"]) == 23
+        assert len(report["parameters"]) == 20
 
     def test_telemetry_aware_report(
         self, sample_params: dict, sample_packet5: dict,

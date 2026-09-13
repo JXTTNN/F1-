@@ -2,54 +2,53 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600">
   <defs>
     <style>
-      .track-bg { fill: #111317; }
-      .track-line { fill: none; stroke: #2a2e36; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
-      .track-line-accent { fill: none; stroke: rgba(0,229,255,0.25); stroke-width: 2; stroke-linecap: round; stroke-dasharray: 6,4; }
+      .track-bg { fill: #0d0d12; }
+      .track-line { fill: none; stroke: #3a3e48; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+      .track-line-accent { fill: none; stroke: rgba(59,158,255,0.20); stroke-width: 1.5; stroke-linecap: round; stroke-dasharray: 6,4; }
+      .track-edge { fill: none; stroke: #3a3e48; stroke-width: 1; stroke-linecap: round; stroke-linejoin: round; opacity: 0.6; }
     </style>
   </defs>
   <rect class="track-bg" width="800" height="600" rx="8"/>
-  <polyline class="track-line" points="400.0,100.0 420.0,140.0 460.0,180.0 500.0,220.0 540.0,260.0 560.0,300.0 540.0,350.0 500.0,400.0 440.0,440.0 380.0,460.0 320.0,440.0 280.0,400.0 260.0,340.0 280.0,280.0 320.0,220.0 360.0,160.0 380.0,120.0 390.0,110.0 400.0,100.0"/>
-  <polyline class="track-line-accent" points="400.0,100.0 420.0,140.0 460.0,180.0 500.0,220.0 540.0,260.0 560.0,300.0 540.0,350.0 500.0,400.0 440.0,440.0 380.0,460.0 320.0,440.0 280.0,400.0 260.0,340.0 280.0,280.0 320.0,220.0 360.0,160.0 380.0,120.0 390.0,110.0 400.0,100.0"/>
-  <line x1="534.0" y1="344.0" x2="546.0" y2="356.0" stroke="#ff2d2d" stroke-width="1.5" stroke-dasharray="3,2" opacity="0.6"/>
-  <line x1="274.0" y1="274.0" x2="286.0" y2="286.0" stroke="#ff2d2d" stroke-width="1.5" stroke-dasharray="3,2" opacity="0.6"/>
-  <line x1="394.0" y1="94.0" x2="406.0" y2="106.0" stroke="#ff2d2d" stroke-width="1.5" stroke-dasharray="3,2" opacity="0.6"/>
-  <circle cx="420.0" cy="140.0" r="5" fill="none" stroke="#00e5ff" stroke-width="1.5" opacity="0.7"/>
-  <text x="420.0" y="132.0" text-anchor="middle" fill="#8a909c" font-size="8" font-family="monospace">1</text>
-  <circle cx="460.0" cy="180.0" r="5" fill="none" stroke="#00e5ff" stroke-width="1.5" opacity="0.7"/>
-  <text x="460.0" y="172.0" text-anchor="middle" fill="#8a909c" font-size="8" font-family="monospace">2</text>
-  <circle cx="500.0" cy="220.0" r="5" fill="none" stroke="#00e5ff" stroke-width="1.5" opacity="0.7"/>
-  <text x="500.0" y="212.0" text-anchor="middle" fill="#8a909c" font-size="8" font-family="monospace">3</text>
-  <circle cx="540.0" cy="260.0" r="5" fill="none" stroke="#00e5ff" stroke-width="1.5" opacity="0.7"/>
-  <text x="540.0" y="252.0" text-anchor="middle" fill="#8a909c" font-size="8" font-family="monospace">4</text>
-  <circle cx="560.0" cy="300.0" r="5" fill="none" stroke="#00e5ff" stroke-width="1.5" opacity="0.7"/>
-  <text x="560.0" y="292.0" text-anchor="middle" fill="#8a909c" font-size="8" font-family="monospace">5</text>
-  <circle cx="540.0" cy="350.0" r="5" fill="none" stroke="#00e5ff" stroke-width="1.5" opacity="0.7"/>
-  <text x="540.0" y="342.0" text-anchor="middle" fill="#8a909c" font-size="8" font-family="monospace">6</text>
-  <circle cx="500.0" cy="400.0" r="5" fill="none" stroke="#00e5ff" stroke-width="1.5" opacity="0.7"/>
-  <text x="500.0" y="392.0" text-anchor="middle" fill="#8a909c" font-size="8" font-family="monospace">7</text>
-  <circle cx="440.0" cy="440.0" r="5" fill="none" stroke="#00e5ff" stroke-width="1.5" opacity="0.7"/>
-  <text x="440.0" y="432.0" text-anchor="middle" fill="#8a909c" font-size="8" font-family="monospace">8</text>
-  <circle cx="380.0" cy="460.0" r="5" fill="none" stroke="#00e5ff" stroke-width="1.5" opacity="0.7"/>
-  <text x="380.0" y="452.0" text-anchor="middle" fill="#8a909c" font-size="8" font-family="monospace">9</text>
-  <circle cx="260.0" cy="340.0" r="5" fill="none" stroke="#00e5ff" stroke-width="1.5" opacity="0.7"/>
-  <text x="260.0" y="332.0" text-anchor="middle" fill="#8a909c" font-size="8" font-family="monospace">10</text>
-  <circle cx="260.0" cy="340.0" r="5" fill="none" stroke="#00e5ff" stroke-width="1.5" opacity="0.7"/>
-  <text x="260.0" y="332.0" text-anchor="middle" fill="#8a909c" font-size="8" font-family="monospace">11</text>
-  <circle cx="280.0" cy="280.0" r="5" fill="none" stroke="#00e5ff" stroke-width="1.5" opacity="0.7"/>
-  <text x="280.0" y="272.0" text-anchor="middle" fill="#8a909c" font-size="8" font-family="monospace">12</text>
-  <circle cx="360.0" cy="160.0" r="5" fill="none" stroke="#00e5ff" stroke-width="1.5" opacity="0.7"/>
-  <text x="360.0" y="152.0" text-anchor="middle" fill="#8a909c" font-size="8" font-family="monospace">13</text>
-  <circle cx="380.0" cy="120.0" r="5" fill="none" stroke="#00e5ff" stroke-width="1.5" opacity="0.7"/>
-  <text x="380.0" y="112.0" text-anchor="middle" fill="#8a909c" font-size="8" font-family="monospace">14</text>
-  <circle cx="390.0" cy="110.0" r="5" fill="none" stroke="#00e5ff" stroke-width="1.5" opacity="0.7"/>
-  <text x="390.0" y="102.0" text-anchor="middle" fill="#8a909c" font-size="8" font-family="monospace">15</text>
-  <circle cx="400.0" cy="100.0" r="5" fill="none" stroke="#00e5ff" stroke-width="1.5" opacity="0.7"/>
-  <text x="400.0" y="92.0" text-anchor="middle" fill="#8a909c" font-size="8" font-family="monospace">16</text>
-  <circle cx="400.0" cy="100.0" r="5" fill="none" stroke="#00e5ff" stroke-width="1.5" opacity="0.7"/>
-  <text x="400.0" y="92.0" text-anchor="middle" fill="#8a909c" font-size="8" font-family="monospace">17</text>
-  <circle cx="400.0" cy="100.0" r="5" fill="none" stroke="#00e5ff" stroke-width="1.5" opacity="0.7"/>
-  <text x="400.0" y="92.0" text-anchor="middle" fill="#8a909c" font-size="8" font-family="monospace">18</text>
-  <rect x="396.0" y="96.0" width="8" height="8" fill="#ff2d2d" rx="1"/>
-  <text x="400" y="588" text-anchor="middle" fill="#5b616e"
-        font-size="10" font-family="monospace">SUZUKA</text>
+  <path class="track-edge" d="M 395.5 102.2 C 397.6 108.8 405.8 129.5 416.0 143.0 C 426.2 156.5 443.1 170.1 456.5 183.5 C 469.9 197.0 483.2 210.3 496.5 223.5 C 509.7 236.8 526.2 250.3 536.0 263.0 C 545.8 275.7 555.0 285.9 555.0 300.0 C 555.0 314.1 545.4 331.4 535.7 347.4 C 526.0 363.5 513.0 381.6 496.7 396.3 C 480.3 411.0 457.2 425.7 437.8 435.5 C 418.3 445.3 399.2 455.0 380.0 455.0 C 360.8 455.0 338.5 445.3 322.6 435.7 C 306.6 426.1 293.9 413.4 284.3 397.4 C 274.7 381.5 265.0 359.2 265.0 340.0 C 265.0 320.8 274.6 301.8 284.5 282.2 C 294.3 262.7 310.9 242.7 324.2 222.8 C 337.5 202.8 354.3 179.3 364.3 162.6 C 374.3 145.9 379.4 130.7 384.3 122.6 C 389.2 114.4 390.3 116.7 393.5 113.5 C 396.7 110.4 403.2 105.4 403.5 103.5 C 403.9 101.7 393.5 95.7 395.5 102.2 Z"/>
+  <path class="track-edge" d="M 404.5 97.8 C 409.1 104.5 414.2 123.9 424.0 137.0 C 433.8 150.1 450.3 163.2 463.5 176.5 C 476.8 189.7 490.1 203.0 503.5 216.5 C 516.9 229.9 533.8 243.1 544.0 257.0 C 554.2 270.9 565.0 284.1 565.0 300.0 C 565.0 315.9 554.6 335.3 544.3 352.6 C 534.0 369.9 520.4 388.4 503.3 403.7 C 486.3 419.0 462.8 434.3 442.2 444.5 C 421.7 454.7 400.8 465.0 380.0 465.0 C 359.2 465.0 334.8 454.7 317.4 444.3 C 300.0 433.9 286.1 420.0 275.7 402.6 C 265.3 385.2 255.0 360.8 255.0 340.0 C 255.0 319.2 265.4 298.2 275.5 277.8 C 285.7 257.3 302.5 237.3 315.8 217.2 C 329.2 197.2 345.7 174.1 355.7 157.4 C 365.7 140.8 370.6 125.9 375.7 117.4 C 380.8 108.9 383.0 110.0 386.5 106.5 C 389.9 103.0 393.5 97.9 396.5 96.5 C 399.5 95.0 399.9 91.0 404.5 97.8 Z"/>
+  <path class="track-line" d="M 400.0 100.0 C 403.3 106.7 410.0 126.7 420.0 140.0 C 430.0 153.3 446.7 166.7 460.0 180.0 C 473.3 193.3 486.7 206.7 500.0 220.0 C 513.3 233.3 530.0 246.7 540.0 260.0 C 550.0 273.3 560.0 285.0 560.0 300.0 C 560.0 315.0 550.0 333.3 540.0 350.0 C 530.0 366.7 516.7 385.0 500.0 400.0 C 483.3 415.0 460.0 430.0 440.0 440.0 C 420.0 450.0 400.0 460.0 380.0 460.0 C 360.0 460.0 336.7 450.0 320.0 440.0 C 303.3 430.0 290.0 416.7 280.0 400.0 C 270.0 383.3 260.0 360.0 260.0 340.0 C 260.0 320.0 270.0 300.0 280.0 280.0 C 290.0 260.0 306.7 240.0 320.0 220.0 C 333.3 200.0 350.0 176.7 360.0 160.0 C 370.0 143.3 375.0 128.3 380.0 120.0 C 385.0 111.7 386.7 113.3 390.0 110.0 C 393.3 106.7 398.3 101.7 400.0 100.0 C 401.7 98.3 396.7 93.3 400.0 100.0 Z"/>
+  <path class="track-line-accent" d="M 400.0 100.0 C 403.3 106.7 410.0 126.7 420.0 140.0 C 430.0 153.3 446.7 166.7 460.0 180.0 C 473.3 193.3 486.7 206.7 500.0 220.0 C 513.3 233.3 530.0 246.7 540.0 260.0 C 550.0 273.3 560.0 285.0 560.0 300.0 C 560.0 315.0 550.0 333.3 540.0 350.0 C 530.0 366.7 516.7 385.0 500.0 400.0 C 483.3 415.0 460.0 430.0 440.0 440.0 C 420.0 450.0 400.0 460.0 380.0 460.0 C 360.0 460.0 336.7 450.0 320.0 440.0 C 303.3 430.0 290.0 416.7 280.0 400.0 C 270.0 383.3 260.0 360.0 260.0 340.0 C 260.0 320.0 270.0 300.0 280.0 280.0 C 290.0 260.0 306.7 240.0 320.0 220.0 C 333.3 200.0 350.0 176.7 360.0 160.0 C 370.0 143.3 375.0 128.3 380.0 120.0 C 385.0 111.7 386.7 113.3 390.0 110.0 C 393.3 106.7 398.3 101.7 400.0 100.0 C 401.7 98.3 396.7 93.3 400.0 100.0 Z"/>
+  <rect x="395.0" y="95.0" width="10" height="10" fill="#FF1801" rx="1"/>
+  <circle cx="420.0" cy="140.0" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
+  <text x="420.0" y="131.0" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">1</text>
+  <circle cx="460.0" cy="180.0" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
+  <text x="460.0" y="171.0" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">2</text>
+  <circle cx="500.0" cy="220.0" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
+  <text x="500.0" y="211.0" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">3</text>
+  <circle cx="540.0" cy="260.0" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
+  <text x="540.0" y="251.0" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">4</text>
+  <circle cx="560.0" cy="300.0" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
+  <text x="560.0" y="291.0" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">5</text>
+  <circle cx="540.0" cy="350.0" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
+  <text x="540.0" y="341.0" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">6</text>
+  <circle cx="500.0" cy="400.0" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
+  <text x="500.0" y="391.0" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">7</text>
+  <circle cx="440.0" cy="440.0" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
+  <text x="440.0" y="431.0" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">8</text>
+  <circle cx="380.0" cy="460.0" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
+  <text x="380.0" y="451.0" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">9</text>
+  <circle cx="260.0" cy="340.0" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
+  <text x="260.0" y="331.0" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">10</text>
+  <circle cx="260.0" cy="340.0" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
+  <text x="260.0" y="331.0" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">11</text>
+  <circle cx="280.0" cy="280.0" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
+  <text x="280.0" y="271.0" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">12</text>
+  <circle cx="360.0" cy="160.0" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
+  <text x="360.0" y="151.0" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">13</text>
+  <circle cx="380.0" cy="120.0" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
+  <text x="380.0" y="111.0" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">14</text>
+  <circle cx="390.0" cy="110.0" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
+  <text x="390.0" y="101.0" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">15</text>
+  <circle cx="400.0" cy="100.0" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
+  <text x="400.0" y="91.0" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">16</text>
+  <circle cx="400.0" cy="100.0" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
+  <text x="400.0" y="91.0" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">17</text>
+  <circle cx="400.0" cy="100.0" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
+  <text x="400.0" y="91.0" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">18</text>
+  <text x="400.0" y="588" text-anchor="middle" fill="#5c5c70" font-size="11" font-family="monospace" letter-spacing="2">SUZUKA</text>
 </svg>

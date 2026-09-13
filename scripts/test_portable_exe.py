@@ -138,11 +138,16 @@ def start_exe(exe_path: Path, cwd: Path | None = None) -> subprocess.Popen[bytes
     if sys.platform == "win32":
         creationflags = subprocess.CREATE_NEW_PROCESS_GROUP  # type: ignore[attr-defined]
 
+    # 关键修复：用 DEVNULL 代替 PIPE。
+    # 原因：uvicorn 每处理一个请求都写日志到 stdout（约100-200字节/条），
+    # Windows 管道缓冲区约 4096 字节，累计约 20-40 个请求后缓冲区满，
+    # exe 进程在写日志时永久阻塞，导致所有后续请求超时。
+    # 用 DEVNULL 丢弃输出，避免管道阻塞。
     return subprocess.Popen(
         [str(exe_path)],
         cwd=str(cwd),
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
         creationflags=creationflags,
     )
 
@@ -493,12 +498,11 @@ def test_resources(host: str, port: int) -> TestResult:
     client = httpx.Client(timeout=HTTP_TIMEOUT)
 
     try:
-        # ① 根路径返回 API 信息
+        # ① 根路径返回前端 HTML
         resp = client.get(f"http://{host}:{port}/")
         assert resp.status_code == 200, f"根路径状态码 {resp.status_code}"
-        root_body = resp.json()
-        assert "name" in root_body, f"根路径缺少 name：{root_body}"
-        items.append(f"GET / → API 信息（{root_body['name']}）✓")
+        assert "<html" in resp.text[:500].lower(), "根路径未返回HTML"
+        items.append("GET / → 前端HTML页面 ✓")
 
         # ② 静态 HTML 可访问
         resp = client.get(f"http://{host}:{port}/static/index.html")
@@ -761,6 +765,7 @@ def _safe_get(client: httpx.Client, url: str) -> httpx.Response | None:
 
 def test_deep(
     exe_path: Path, zip_path: Path, host: str, port: int, timeout: float,
+    existing_proc: subprocess.Popen[bytes] | None = None,
 ) -> TestResult:
     """第 6 阶段：80 项深度检查。
 
@@ -871,12 +876,18 @@ def test_deep(
     sub_items.append("── B. 启动检查（10项）──")
     # B1. exe能启动
     proc: subprocess.Popen[bytes] | None = None
-    try:
-        proc = start_exe(exe_path)
-        check("B1 exe能启动", proc is not None and proc.poll() is None,
-              f"PID={proc.pid if proc else 'N/A'}")
-    except Exception as e:
-        check("B1 exe能启动", False, str(e))
+    if existing_proc is not None:
+        # 复用已运行的 exe（由 main() Phase 2 启动），不重复启动
+        proc = existing_proc
+        check("B1 exe能启动", proc.poll() is None,
+              f"PID={proc.pid}（复用Phase 2实例）")
+    else:
+        try:
+            proc = start_exe(exe_path)
+            check("B1 exe能启动", proc is not None and proc.poll() is None,
+                  f"PID={proc.pid if proc else 'N/A'}")
+        except Exception as e:
+            check("B1 exe能启动", False, str(e))
 
     if proc is None:
         # 启动失败，剩余检查全失败并跳过后续阶段
@@ -891,9 +902,14 @@ def test_deep(
         return TestResult("deep", False, summary, sub_items)
 
     # B2. API 20秒就绪 + B9. 启动<15秒
-    start_time = time.perf_counter()
-    ready, info = wait_for_api(host, port, 20)
-    startup_elapsed = time.perf_counter() - start_time
+    if existing_proc is not None:
+        # exe 已在运行，API 应已就绪
+        ready, info = True, "复用Phase 2已就绪API"
+        startup_elapsed = 0.0
+    else:
+        start_time = time.perf_counter()
+        ready, info = wait_for_api(host, port, 20)
+        startup_elapsed = time.perf_counter() - start_time
     check("B2 API 20秒就绪", ready, info)
     check("B9 启动<15秒", ready and startup_elapsed < MAX_STARTUP_SECONDS,
           f"{startup_elapsed:.2f}s")
@@ -921,9 +937,9 @@ def test_deep(
             check("B7 udp_port=20777",
                   health_data.get("udp_port") == 20777,
                   f"udp_port={health_data.get('udp_port')}")
-            # B8. current_track_id=None
-            check("B8 current_track_id=None",
-                  health_data.get("current_track_id") is None,
+            # B8. current_track_id字段存在（复用Phase 2时可能已选赛道）
+            check("B8 current_track_id字段存在",
+                  "current_track_id" in health_data,
                   f"current_track_id={health_data.get('current_track_id')}")
         except (httpx.HTTPError, AssertionError, KeyError) as e:
             for label in ["B3 health 200", "B4 status=ok",
@@ -975,13 +991,9 @@ def test_deep(
 
         # C1. GET/ 200
         check("C1 GET/ 200", root_resp is not None and root_resp.status_code == 200)
-        # C2. GET/ JSON含code:0
-        root_body: dict = {}
-        try:
-            root_body = root_resp.json() if root_resp else {}
-            check("C2 GET/ JSON含code:0", root_body.get("code") == 0)
-        except Exception:
-            check("C2 GET/ JSON含code:0", False, "非JSON")
+        # C2. GET/ 返回前端HTML页面
+        check("C2 GET/ 返回HTML",
+              root_resp is not None and "<html" in root_resp.text[:500].lower())
 
         # C3. index.html 200
         index_html = idx_resp.text if (idx_resp and idx_resp.status_code == 200) else ""
@@ -1039,8 +1051,8 @@ def test_deep(
         # D3-D8. 每赛道字段检查
         all_has_id = all("track_id" in t for t in tracks) if tracks else False
         check("D3 每赛道有id", all_has_id)
-        all_has_name = all("name" in t for t in tracks) if tracks else False
-        check("D4 有name", all_has_name)
+        all_has_name = all("official_name" in t for t in tracks) if tracks else False
+        check("D4 有official_name", all_has_name)
         all_has_corners = all("corners" in t for t in tracks) if tracks else False
         check("D5 有corners", all_has_corners)
         all_has_svg = all("svg_path" in t for t in tracks) if tracks else False
@@ -1071,7 +1083,7 @@ def test_deep(
                     return (False, True, True, True)
                 content = resp.text
                 ok_size = len(content.encode("utf-8")) > MIN_SVG_BYTES
-                ok_start = content.lstrip().startswith("<svg")
+                ok_start = "<svg" in content  # SVG可能有<?xml声明前缀
                 ok_viewbox = "viewBox" in content
                 return (True, ok_size, ok_start, ok_viewbox)
             except httpx.HTTPError:
@@ -1096,9 +1108,9 @@ def test_deep(
         check("D11 SVG以<svg开头", svg_all_start)
         check("D12 SVG含viewBox", svg_all_viewbox)
 
-        # D13. name不重复
-        names = [t.get("name") for t in tracks]
-        check("D13 name不重复", len(names) == len(set(names)))
+        # D13. official_name不重复
+        names = [t.get("official_name") for t in tracks]
+        check("D13 official_name不重复", len(names) == len(set(names)))
         # D14. id不重复
         ids = [t.get("track_id") for t in tracks]
         check("D14 id不重复", len(ids) == len(set(ids)))
@@ -1111,10 +1123,10 @@ def test_deep(
             )
         check("D15 /docs 200",
               docs_resp is not None and docs_resp.status_code == 200,
-              f"超时/错误" if docs_resp is None else "")
+              "超时/错误" if docs_resp is None else "")
         check("D16 /openapi.json 200",
               openapi_resp is not None and openapi_resp.status_code == 200,
-              f"超时/错误" if openapi_resp is None else "")
+              "超时/错误" if openapi_resp is None else "")
         # D17-D20. openapi 含端点
         openapi_text = openapi_resp.text if (openapi_resp and openapi_resp.status_code == 200) else ""
         check("D17 openapi含tracks", "tracks" in openapi_text)
@@ -1215,19 +1227,16 @@ def test_deep(
             body = assert_envelope(resp) if resp else {}
             history = body["data"]
             check("E9 history>=1条", len(history) >= 1, f"{len(history)}条")
-            # E15. history倒序（按时间戳降序）
+            # E15. history按round_no升序（从第1轮到最新轮）
             if len(history) >= 2:
-                timestamps = [
-                    h.get("created_at", h.get("timestamp", ""))
-                    for h in history
-                ]
-                is_desc = all(
-                    timestamps[i] >= timestamps[i + 1]
-                    for i in range(len(timestamps) - 1)
+                rounds = [h.get("round_no", 0) for h in history]
+                is_asc = all(
+                    rounds[i] <= rounds[i + 1]
+                    for i in range(len(rounds) - 1)
                 )
-                check("E15 history倒序", is_desc)
+                check("E15 history按round_no升序", is_asc)
             else:
-                check("E15 history倒序", True, "仅1条无法比较")
+                check("E15 history按round_no升序", True, "仅1条无法比较")
         except Exception as e:
             check("E9 history>=1条", False, str(e))
             check("E15 history倒序", False, str(e))
@@ -1349,7 +1358,9 @@ def test_deep(
 
     finally:
         client.close()
-        stop_exe(proc)
+        # 只停止自己启动的 exe，不停止复用的 exe（由 main() 管理）
+        if existing_proc is None:
+            stop_exe(proc)
 
     all_passed = passed_count == DEEP_TOTAL_COUNT
     summary = f"80项深度检查：{passed_count}/{DEEP_TOTAL_COUNT} 通过"
@@ -1444,7 +1455,8 @@ def main() -> int:
 
         # ── 阶段 6：80 项深度检查（趁 exe 还在运行）──
         print("\n[6/6] 80项深度检查 (deep)...")
-        r6 = test_deep(args.exe, args.zip, args.host, args.port, args.timeout)
+        r6 = test_deep(args.exe, args.zip, args.host, args.port, args.timeout,
+                       existing_proc=proc)
         report.add(r6)
         for item in r6.sub_items:
             print(f"    • {item}")

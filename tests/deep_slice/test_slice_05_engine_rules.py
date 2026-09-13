@@ -40,10 +40,10 @@ from setup_tuner.engine.rules import (
 class TestUnit:
     """单元测试：验证规则引擎公开函数的正常输入正确性。"""
 
-    def test_unit_load_rules_returns_12(self) -> None:
-        """load_rules 应返回 12 条规则。"""
+    def test_unit_load_rules_returns_15(self) -> None:
+        """load_rules 应返回 15 条规则（task-60 扩展）。"""
         rules = load_rules()
-        assert len(rules) == 12
+        assert len(rules) == 15
 
     def test_unit_get_rule_returns_dict(self) -> None:
         """get_rule 应返回规则字典。"""
@@ -58,7 +58,7 @@ class TestUnit:
         """get_rule 的 delta_table 应覆盖全部 23 参数。"""
         rule = get_rule("understeer")
         assert rule is not None
-        assert len(rule["delta_table"]) == 23
+        assert len(rule["delta_table"]) == 20
 
     def test_unit_get_all_rules_alias(self) -> None:
         """get_all_rules 应为 load_rules 的别名。"""
@@ -70,7 +70,7 @@ class TestUnit:
         dx = compute_dx([("understeer", 3)])
         setup = CarSetup.default().to_dict()
         delta = compute_setup_delta(dx, setup)
-        assert len(delta) == 23
+        assert len(delta) == 20
 
     def test_unit_assess_confidence_high(self) -> None:
         """assess_confidence 有遥测 + 明确反馈 → high。"""
@@ -111,7 +111,7 @@ class TestUnit:
         assert "parameters" in result
         assert "confidence" in result
         assert "summary" in result
-        assert len(result["parameters"]) == 23
+        assert len(result["parameters"]) == 20
 
     def test_unit_generate_suggestion_no_symptoms(self) -> None:
         """generate_suggestion 空症状应返回无调整建议。"""
@@ -287,13 +287,13 @@ class TestProperty:
 class TestStatic:
     """静态分析：验证规则库数量与约束。"""
 
-    def test_static_rules_count_is_12(self) -> None:
-        """数量约束：规则库恰好 12 条。"""
-        assert len(load_rules()) == 12
+    def test_static_rules_count_is_15(self) -> None:
+        """数量约束：规则库恰好 15 条（task-60 扩展）。"""
+        assert len(load_rules()) == 15
 
-    def test_static_rule_source_is_ea_setup_guide(self) -> None:
-        """枚举约束：RULE_SOURCE 为 EA_SETUP_GUIDE。"""
-        assert RULE_SOURCE == "EA_SETUP_GUIDE"
+    def test_static_rule_source_is_f1_setup_domain(self) -> None:
+        """枚举约束：RULE_SOURCE 为 F1_SETUP_DOMAIN。"""
+        assert RULE_SOURCE == "F1_SETUP_DOMAIN"
 
     @pytest.mark.parametrize("symptom", [s.value for s in Symptom])
     def test_static_each_symptom_has_rule(self, symptom: str) -> None:
@@ -363,20 +363,20 @@ class TestSmoke:
         )
         assert result["track_id"] == "suzuka"
         assert result["confidence"] == "high"
-        assert len(result["setup_delta"]) == 23
-        assert len(result["parameters"]) == 23
+        assert len(result["setup_delta"]) == 20
+        assert len(result["parameters"]) == 20
         # 至少有 1 个非零 delta
         nonzero = sum(1 for v in result["setup_delta"].values() if abs(v) > 1e-9)
         assert nonzero > 0
 
-    def test_smoke_all_12_symptoms_suggestion(self) -> None:
-        """冒烟：全部 12 症状各自 generate_suggestion 均成功。"""
+    def test_smoke_all_15_symptoms_suggestion(self) -> None:
+        """冒烟：全部 15 症状各自 generate_suggestion 均成功（task-60 扩展）。"""
         setup = CarSetup.default().to_dict()
         for symptom in Symptom:
             result = generate_suggestion(
                 [(symptom.value, 3)], setup, "suzuka", None,
             )
-            assert len(result["setup_delta"]) == 23
+            assert len(result["setup_delta"]) == 20
             assert result["confidence"] in ("high", "medium", "low")
 
     def test_smoke_suggestion_with_real_telemetry(self) -> None:
@@ -448,4 +448,4 @@ class TestSmoke:
                 [("understeer", 3)], setup, track.track_id, None,
             )
             assert result["track_id"] == track.track_id
-            assert len(result["setup_delta"]) == 23
+            assert len(result["setup_delta"]) == 20

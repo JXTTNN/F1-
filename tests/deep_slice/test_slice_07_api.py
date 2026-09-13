@@ -225,11 +225,17 @@ class TestBoundary:
         assert resp.status_code == 422
 
     def test_feedback_missing_symptom(self, app_client: TestClient) -> None:
-        """POST /api/v1/feedback 缺 symptom 应被 pydantic 拒绝。"""
+        """POST /api/v1/feedback 旧格式缺 symptom 返回 400（业务校验）。
+
+        注：symptom 现为可选字段（支持批量 feedbacks 格式），
+        旧格式单条提交时在运行时校验 symptom 非空，返回 400 而非 422。
+        """
         resp = app_client.post("/api/v1/feedback", json={
             "track_id": "suzuka", "strength": 3,
         })
-        assert resp.status_code == 422
+        assert resp.status_code == 400
+        body = resp.json()
+        assert body["code"] != 0
 
     def test_suggest_no_feedback(self, app_client: TestClient) -> None:
         """POST /api/v1/suggest 无反馈时返回 400 + 引导消息。"""
@@ -273,13 +279,15 @@ class TestBoundary:
 
     @pytest.mark.parametrize("symptom", [
         "understeer", "oversteer", "turnin_unresponsive", "brake_long", "lockup",
-        "midcorner_unstable", "midcorner_traction", "exit_wheelspin",
+        "midcorner_understeer", "midcorner_unstable", "midcorner_traction",
+        "exit_wheelspin", "exit_oversteer",
         "bottoming", "tyre_wear", "straight_slow", "lap_slow",
+        "high_speed_instability",
     ])
-    def test_all_12_symptoms_accepted(
+    def test_all_15_symptoms_accepted(
         self, app_client: TestClient, symptom: str,
     ) -> None:
-        """全部 12 症状标识应被 API 接受。"""
+        """全部 15 症状标识应被 API 接受（task-60 扩展）。"""
         resp = app_client.post("/api/v1/feedback", json={
             "track_id": "suzuka", "symptom": symptom, "strength": 3,
         })
@@ -384,9 +392,13 @@ class TestStatic:
         assert r2.status_code == 404
 
     def test_feedback_validation_status_422(self, app_client: TestClient) -> None:
-        """POST /feedback 参数校验失败状态码 422。"""
+        """POST /feedback 旧格式缺 symptom 返回 400（业务校验）。
+
+        注：symptom 现为可选字段（支持批量 feedbacks 格式），
+        仅传 track_id 时走旧格式分支，运行时校验 symptom 非空返回 400。
+        """
         resp = app_client.post("/api/v1/feedback", json={"track_id": "suzuka"})
-        assert resp.status_code == 422
+        assert resp.status_code == 400
 
     def test_suggest_no_feedback_status_400(self, app_client: TestClient) -> None:
         """POST /suggest 无反馈状态码 400（业务失败，非 500）。"""
@@ -544,13 +556,10 @@ class TestSmoke:
             assert data["event"] == "info"
 
     def test_root_endpoint(self, app_client: TestClient) -> None:
-        """根路径 / 返回 API 信息。"""
+        """根路径 / 返回前端 HTML 页面。"""
         r = app_client.get("/")
         assert r.status_code == 200
-        body = r.json()
-        assert "name" in body
-        assert "version" in body
-        assert "docs" in body
+        assert "text/html" in r.headers.get("content-type", "")
 
     def test_openapi_schema_available(self, app_client: TestClient) -> None:
         """OpenAPI schema 端点可访问。"""

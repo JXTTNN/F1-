@@ -104,7 +104,7 @@ class TestTelemetryGain:
     def test_none_telemetry(self) -> None:
         """None 返回全 1.0 增益。"""
         gain = _derive_telemetry_gain(None)
-        assert len(gain) == 23
+        assert len(gain) == 20
         assert all(v == 1.0 for v in gain.values())
 
     def test_empty_telemetry(self) -> None:
@@ -359,12 +359,12 @@ class TestRulesEdgeCases:
         assert rule["symptom"] == "understeer"
         assert rule["id"] == "rule_understeer"
         assert "delta_table" in rule
-        assert len(rule["delta_table"]) == 23
+        assert len(rule["delta_table"]) == 20
 
-    def test_load_rules_count_12(self) -> None:
-        """load_rules 返回 12 条规则。"""
+    def test_load_rules_count_15(self) -> None:
+        """load_rules 返回 15 条规则（task-60 扩展）。"""
         rules = load_rules()
-        assert len(rules) == 12
+        assert len(rules) == 15
 
     def test_get_all_rules_same_as_load(self) -> None:
         """get_all_rules 与 load_rules 一致。"""
@@ -378,7 +378,7 @@ class TestRulesEdgeCases:
         """每条规则 delta_table 覆盖 23 参数。"""
         rules = load_rules()
         for symptom, rule in rules.items():
-            assert len(rule["delta_table"]) == 23, f"规则 {symptom!r} delta_table 非 23 项"
+            assert len(rule["delta_table"]) == 20, f"规则 {symptom!r} delta_table 非 20 项"
 
     def test_every_rule_has_source(self) -> None:
         """每条规则 source 非空。"""
@@ -402,7 +402,7 @@ class TestCouplingMatrixEdgeCases:
     def test_get_row_unknown_diag(self) -> None:
         """get_row 未知维度 → 全 None。"""
         row = get_row("nonexistent_diag")
-        assert len(row) == 23
+        assert len(row) == 20
         assert all(v is None for v in row.values())
 
     def test_get_coupling_both_unknown(self) -> None:

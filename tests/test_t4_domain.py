@@ -38,26 +38,25 @@ from setup_tuner.domain.symptoms import (
 # 1. 调教参数 schema
 # ===========================================================================
 class TestSetupSchema:
-    """23 项调教参数 / 7 大类 schema 校验。"""
+    """20 8调教参数 / 6 大类 schema 校验。"""
 
-    def test_field_count_is_23(self) -> None:
-        """ALL_SETUP_FIELDS 必须恰好 23 项。"""
-        assert len(ALL_SETUP_FIELDS) == 23
+    def test_field_count_is_20(self) -> None:
+        """ALL_SETUP_FIELDS 必须恰好 20 项。"""
+        assert len(ALL_SETUP_FIELDS) == 20
 
-    def test_group_count_is_7(self) -> None:
-        """ALL_GROUPS 必须恰好 7 大类。"""
-        assert len(ALL_GROUPS) == 7
+    def test_group_count_is_6(self) -> None:
+        """ALL_GROUPS 必须恰好 6 大类。"""
+        assert len(ALL_GROUPS) == 6
 
     def test_groups_expected(self) -> None:
-        """7 大类名称与顺序。"""
+        """6 大类名称与顺序。"""
         assert ALL_GROUPS == [
             "Aerodynamics",
-            "Differential",
+            "Transmission",
             "Suspension Geometry",
             "Suspension",
             "Brakes",
             "Tyres",
-            "New2026",
         ]
 
     def test_all_fields_are_setupfield(self) -> None:
@@ -104,15 +103,14 @@ class TestSetupSchema:
             assert f.source, f"参数 {f.name!r} source 为空"
 
     def test_group_field_counts(self) -> None:
-        """7 大类参数数量分布：4/2/4/7/2/2/2 = 23。"""
+        """6 大类参数数量分布：2/2/4/6/2/4 = 20。"""
         expected = {
-            "Aerodynamics": 4,
-            "Differential": 2,
+            "Aerodynamics": 2,
+            "Transmission": 2,
             "Suspension Geometry": 4,
-            "Suspension": 7,
+            "Suspension": 6,
             "Brakes": 2,
-            "Tyres": 2,
-            "New2026": 2,
+            "Tyres": 4,
         }
         for group, count in expected.items():
             fields = get_fields_by_group(group)
@@ -126,7 +124,7 @@ class TestSetupSchema:
         assert f.name == "front_wing"
         assert f.label == "前翼"
         assert f.min_val == 0.0
-        assert f.max_val == 11.0
+        assert f.max_val == 10.0
 
     def test_get_field_unknown_raises(self) -> None:
         """get_field 未知名抛 KeyError。"""
@@ -144,7 +142,7 @@ class TestValidateValue:
         """合法值返回对齐后的值。"""
         assert validate_value("front_wing", 5.0) == 5.0
         assert validate_value("front_wing", 0.0) == 0.0
-        assert validate_value("front_wing", 11.0) == 11.0
+        assert validate_value("front_wing", 10.0) == 10.0
 
     def test_out_of_range_raises(self) -> None:
         """超出范围抛 ValueError。"""
@@ -161,9 +159,9 @@ class TestValidateValue:
 
     def test_float_step_alignment(self) -> None:
         """浮点步长参数对齐。"""
-        # active_aero_z step=0.1, min=0.0
-        assert validate_value("active_aero_z", 0.5) == pytest.approx(0.5)
-        assert validate_value("active_aero_z", 0.3) == pytest.approx(0.3)
+        # front_camber step=0.1, min=-3.5
+        assert validate_value("front_camber", -3.0) == pytest.approx(-3.0)
+        assert validate_value("front_camber", -2.5) == pytest.approx(-2.5)
 
     def test_unknown_param_raises(self) -> None:
         """未知参数名抛 KeyError。"""
@@ -181,7 +179,7 @@ class TestCarSetup:
         """default() 产出 23 字段。"""
         cs = CarSetup.default()
         d = cs.to_dict()
-        assert len(d) == 23
+        assert len(d) == 20
 
     def test_default_values_match_spec(self) -> None:
         """default() 各字段值与 SetupField.default 一致。"""
@@ -200,10 +198,10 @@ class TestCarSetup:
         cs2 = CarSetup.from_dict(d)
         assert cs2.to_dict() == d
 
-    def test_field_names_count_23(self) -> None:
-        """field_names() 返回 23 个字段名。"""
+    def test_field_names_count_20(self) -> None:
+        """field_names() 返回 20 个字段名。"""
         cs = CarSetup.default()
-        assert len(cs.field_names()) == 23
+        assert len(cs.field_names()) == 20
 
     def test_diff_detects_changes(self) -> None:
         """diff 应检测出变更字段。"""
@@ -223,9 +221,9 @@ class TestCarSetup:
 class TestSymptoms:
     """12 项症状 / 4 类枚举校验。"""
 
-    def test_symptom_count_is_12(self) -> None:
-        """Symptom 枚举必须恰好 12 项。"""
-        assert len(list(Symptom)) == 12
+    def test_symptom_count_is_15(self) -> None:
+        """Symptom 枚举必须恰好 15 项（task-60 扩展）。"""
+        assert len(list(Symptom)) == 15
 
     def test_category_count_is_4(self) -> None:
         """SymptomCategory 必须恰好 4 类。"""
@@ -260,11 +258,11 @@ class TestSymptoms:
         assert get_symptom_category(Symptom.TYRE_WEAR) == "global"
 
     def test_get_symptoms_by_category_counts(self) -> None:
-        """4 类症状数量分布：entry=5, apex=2, exit=1, global=4。"""
+        """4 类症状数量分布：entry=5, apex=3, exit=2, global=5（task-60 扩展）。"""
         assert len(get_symptoms_by_category(SymptomCategory.ENTRY)) == 5
-        assert len(get_symptoms_by_category(SymptomCategory.APEX)) == 2
-        assert len(get_symptoms_by_category(SymptomCategory.EXIT)) == 1
-        assert len(get_symptoms_by_category(SymptomCategory.GLOBAL)) == 4
+        assert len(get_symptoms_by_category(SymptomCategory.APEX)) == 3
+        assert len(get_symptoms_by_category(SymptomCategory.EXIT)) == 2
+        assert len(get_symptoms_by_category(SymptomCategory.GLOBAL)) == 5
 
     def test_get_symptoms_by_category_string_arg(self) -> None:
         """get_symptoms_by_category 接受字符串参数。"""

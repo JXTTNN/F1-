@@ -2,44 +2,43 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600">
   <defs>
     <style>
-      .track-bg { fill: #111317; }
-      .track-line { fill: none; stroke: #2a2e36; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
-      .track-line-accent { fill: none; stroke: rgba(0,229,255,0.25); stroke-width: 2; stroke-linecap: round; stroke-dasharray: 6,4; }
+      .track-bg { fill: #0d0d12; }
+      .track-line { fill: none; stroke: #3a3e48; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+      .track-line-accent { fill: none; stroke: rgba(59,158,255,0.20); stroke-width: 1.5; stroke-linecap: round; stroke-dasharray: 6,4; }
+      .track-edge { fill: none; stroke: #3a3e48; stroke-width: 1; stroke-linecap: round; stroke-linejoin: round; opacity: 0.6; }
     </style>
   </defs>
   <rect class="track-bg" width="800" height="600" rx="8"/>
-  <polyline class="track-line" points="350.0,100.0 380.0,140.0 420.0,180.0 440.0,240.0 420.0,300.0 380.0,360.0 340.0,400.0 300.0,420.0 260.0,380.0 240.0,320.0 260.0,260.0 350.0,100.0"/>
-  <polyline class="track-line-accent" points="350.0,100.0 380.0,140.0 420.0,180.0 440.0,240.0 420.0,300.0 380.0,360.0 340.0,400.0 300.0,420.0 260.0,380.0 240.0,320.0 260.0,260.0 350.0,100.0"/>
-  <line x1="414.0" y1="294.0" x2="426.0" y2="306.0" stroke="#ff2d2d" stroke-width="1.5" stroke-dasharray="3,2" opacity="0.6"/>
-  <line x1="294.0" y1="414.0" x2="306.0" y2="426.0" stroke="#ff2d2d" stroke-width="1.5" stroke-dasharray="3,2" opacity="0.6"/>
-  <line x1="344.0" y1="94.0" x2="356.0" y2="106.0" stroke="#ff2d2d" stroke-width="1.5" stroke-dasharray="3,2" opacity="0.6"/>
-  <circle cx="380.0" cy="140.0" r="5" fill="none" stroke="#00e5ff" stroke-width="1.5" opacity="0.7"/>
-  <text x="380.0" y="132.0" text-anchor="middle" fill="#8a909c" font-size="8" font-family="monospace">1</text>
-  <circle cx="420.0" cy="180.0" r="5" fill="none" stroke="#00e5ff" stroke-width="1.5" opacity="0.7"/>
-  <text x="420.0" y="172.0" text-anchor="middle" fill="#8a909c" font-size="8" font-family="monospace">2</text>
-  <circle cx="440.0" cy="240.0" r="5" fill="none" stroke="#00e5ff" stroke-width="1.5" opacity="0.7"/>
-  <text x="440.0" y="232.0" text-anchor="middle" fill="#8a909c" font-size="8" font-family="monospace">3</text>
-  <circle cx="420.0" cy="300.0" r="5" fill="none" stroke="#00e5ff" stroke-width="1.5" opacity="0.7"/>
-  <text x="420.0" y="292.0" text-anchor="middle" fill="#8a909c" font-size="8" font-family="monospace">4</text>
-  <circle cx="380.0" cy="360.0" r="5" fill="none" stroke="#00e5ff" stroke-width="1.5" opacity="0.7"/>
-  <text x="380.0" y="352.0" text-anchor="middle" fill="#8a909c" font-size="8" font-family="monospace">5</text>
-  <circle cx="340.0" cy="400.0" r="5" fill="none" stroke="#00e5ff" stroke-width="1.5" opacity="0.7"/>
-  <text x="340.0" y="392.0" text-anchor="middle" fill="#8a909c" font-size="8" font-family="monospace">6</text>
-  <circle cx="300.0" cy="420.0" r="5" fill="none" stroke="#00e5ff" stroke-width="1.5" opacity="0.7"/>
-  <text x="300.0" y="412.0" text-anchor="middle" fill="#8a909c" font-size="8" font-family="monospace">7</text>
-  <circle cx="260.0" cy="380.0" r="5" fill="none" stroke="#00e5ff" stroke-width="1.5" opacity="0.7"/>
-  <text x="260.0" y="372.0" text-anchor="middle" fill="#8a909c" font-size="8" font-family="monospace">8</text>
-  <circle cx="240.0" cy="320.0" r="5" fill="none" stroke="#00e5ff" stroke-width="1.5" opacity="0.7"/>
-  <text x="240.0" y="312.0" text-anchor="middle" fill="#8a909c" font-size="8" font-family="monospace">9</text>
-  <circle cx="260.0" cy="260.0" r="5" fill="none" stroke="#00e5ff" stroke-width="1.5" opacity="0.7"/>
-  <text x="260.0" y="252.0" text-anchor="middle" fill="#8a909c" font-size="8" font-family="monospace">10</text>
-  <circle cx="300.0" cy="140.0" r="5" fill="none" stroke="#00e5ff" stroke-width="1.5" opacity="0.7"/>
-  <text x="300.0" y="132.0" text-anchor="middle" fill="#8a909c" font-size="8" font-family="monospace">11</text>
-  <circle cx="330.0" cy="120.0" r="5" fill="none" stroke="#00e5ff" stroke-width="1.5" opacity="0.7"/>
-  <text x="330.0" y="112.0" text-anchor="middle" fill="#8a909c" font-size="8" font-family="monospace">12</text>
-  <circle cx="340.0" cy="110.0" r="5" fill="none" stroke="#00e5ff" stroke-width="1.5" opacity="0.7"/>
-  <text x="340.0" y="102.0" text-anchor="middle" fill="#8a909c" font-size="8" font-family="monospace">13</text>
-  <rect x="346.0" y="96.0" width="8" height="8" fill="#ff2d2d" rx="1"/>
-  <text x="400" y="588" text-anchor="middle" fill="#5b616e"
-        font-size="10" font-family="monospace">MONACO</text>
+  <path class="track-edge" d="M 346.0 103.0 C 349.6 109.8 364.6 130.0 376.2 143.3 C 387.9 156.6 405.9 166.5 415.7 182.6 C 425.5 198.7 435.0 220.8 435.0 240.0 C 435.0 259.2 425.3 278.3 415.5 297.8 C 405.7 317.2 389.2 340.5 376.1 356.9 C 363.0 373.2 349.5 386.3 337.0 396.0 C 324.5 405.7 313.3 418.2 301.2 415.1 C 289.1 412.1 273.7 393.3 264.3 377.4 C 254.9 361.6 245.0 339.2 245.0 320.0 C 245.0 300.8 246.2 298.5 264.5 262.2 C 282.7 226.0 340.8 129.0 354.4 102.5 C 367.9 75.9 342.4 96.2 346.0 103.0 Z"/>
+  <path class="track-edge" d="M 354.0 97.0 C 360.4 103.5 372.0 123.3 383.8 136.7 C 395.5 150.1 414.1 160.2 424.3 177.4 C 434.5 194.6 445.0 219.2 445.0 240.0 C 445.0 260.8 434.7 281.7 424.5 302.2 C 414.3 322.8 397.5 346.2 383.9 363.1 C 370.3 380.1 357.2 393.7 343.0 404.0 C 328.8 414.3 313.3 428.4 298.8 424.9 C 284.2 421.3 266.3 400.0 255.7 382.6 C 245.1 365.1 235.0 340.8 235.0 320.0 C 235.0 299.2 237.1 294.8 255.5 257.8 C 274.0 220.7 329.2 124.3 345.6 97.5 C 362.1 70.8 347.6 90.5 354.0 97.0 Z"/>
+  <path class="track-line" d="M 350.0 100.0 C 355.0 106.7 368.3 126.7 380.0 140.0 C 391.7 153.3 410.0 163.3 420.0 180.0 C 430.0 196.7 440.0 220.0 440.0 240.0 C 440.0 260.0 430.0 280.0 420.0 300.0 C 410.0 320.0 393.3 343.3 380.0 360.0 C 366.7 376.7 353.3 390.0 340.0 400.0 C 326.7 410.0 313.3 423.3 300.0 420.0 C 286.7 416.7 270.0 396.7 260.0 380.0 C 250.0 363.3 240.0 340.0 240.0 320.0 C 240.0 300.0 241.7 296.7 260.0 260.0 C 278.3 223.3 335.0 126.7 350.0 100.0 C 365.0 73.3 345.0 93.3 350.0 100.0 Z"/>
+  <path class="track-line-accent" d="M 350.0 100.0 C 355.0 106.7 368.3 126.7 380.0 140.0 C 391.7 153.3 410.0 163.3 420.0 180.0 C 430.0 196.7 440.0 220.0 440.0 240.0 C 440.0 260.0 430.0 280.0 420.0 300.0 C 410.0 320.0 393.3 343.3 380.0 360.0 C 366.7 376.7 353.3 390.0 340.0 400.0 C 326.7 410.0 313.3 423.3 300.0 420.0 C 286.7 416.7 270.0 396.7 260.0 380.0 C 250.0 363.3 240.0 340.0 240.0 320.0 C 240.0 300.0 241.7 296.7 260.0 260.0 C 278.3 223.3 335.0 126.7 350.0 100.0 C 365.0 73.3 345.0 93.3 350.0 100.0 Z"/>
+  <rect x="345.0" y="95.0" width="10" height="10" fill="#FF1801" rx="1"/>
+  <circle cx="380.0" cy="140.0" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
+  <text x="380.0" y="131.0" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">1</text>
+  <circle cx="420.0" cy="180.0" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
+  <text x="420.0" y="171.0" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">2</text>
+  <circle cx="440.0" cy="240.0" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
+  <text x="440.0" y="231.0" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">3</text>
+  <circle cx="420.0" cy="300.0" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
+  <text x="420.0" y="291.0" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">4</text>
+  <circle cx="380.0" cy="360.0" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
+  <text x="380.0" y="351.0" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">5</text>
+  <circle cx="340.0" cy="400.0" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
+  <text x="340.0" y="391.0" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">6</text>
+  <circle cx="300.0" cy="420.0" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
+  <text x="300.0" y="411.0" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">7</text>
+  <circle cx="260.0" cy="380.0" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
+  <text x="260.0" y="371.0" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">8</text>
+  <circle cx="240.0" cy="320.0" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
+  <text x="240.0" y="311.0" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">9</text>
+  <circle cx="260.0" cy="260.0" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
+  <text x="260.0" y="251.0" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">10</text>
+  <circle cx="300.0" cy="140.0" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
+  <text x="300.0" y="131.0" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">11</text>
+  <circle cx="330.0" cy="120.0" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
+  <text x="330.0" y="111.0" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">12</text>
+  <circle cx="340.0" cy="110.0" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
+  <text x="340.0" y="101.0" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">13</text>
+  <text x="400.0" y="588" text-anchor="middle" fill="#5c5c70" font-size="11" font-family="monospace" letter-spacing="2">MONACO</text>
 </svg>

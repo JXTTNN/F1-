@@ -134,6 +134,8 @@ def build_nuitka_command() -> list[str]:
         "--enable-plugin=no-qt",
         # 递归跟踪所有 import
         "--follow-imports",
+        # 并行编译加速（本地多核CPU）
+        "--jobs=4",
         # 内嵌 UI 静态资源（HTML/JS/CSS + 24 SVG）
         # dest 必须与 app.py 的 _UI_DIR = Path(__file__).parent / "ui" 同目录
         "--include-data-dir=setup_tuner/ui=setup_tuner/ui",

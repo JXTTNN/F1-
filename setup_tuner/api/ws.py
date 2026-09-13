@@ -245,6 +245,58 @@ async def _telemetry_push_loop(ws: WebSocket, app_state: Any) -> None:
 # =========================================================================== #
 # WebSocket 端点
 # =========================================================================== #
+async def _handle_ws_message(
+    ws: WebSocket, ws_manager: WSManager, msg: dict, app_state: Any,
+) -> None:
+    """处理单条客户端 WebSocket 消息。"""
+    action = msg.get("action")
+    if action == "select_track":
+        track_id = msg.get("track_id")
+        if track_id:
+            app_state.current_track_id = track_id
+            app_state.current_track_source = "manual"
+            await ws_manager.send_to(
+                ws,
+                event="track_selected",
+                payload={"track_id": track_id, "source": "manual"},
+            )
+    elif action == "request_suggestion":
+        # 提示前端通过 REST POST /api/v1/suggest 触发
+        await ws_manager.send_to(
+            ws,
+            event="info",
+            payload={
+                "message": "请通过 POST /api/v1/suggest 触发建议生成",
+                "track_id": msg.get("track_id"),
+            },
+        )
+    else:
+        await ws_manager.send_to(
+            ws,
+            event="error",
+            payload={"message": f"未知 action：{action}"},
+        )
+
+
+async def _ws_receive_loop(ws: WebSocket, ws_manager: WSManager, app_state: Any) -> None:
+    """接收客户端消息循环。"""
+    while True:
+        try:
+            text = await ws.receive_text()
+        except WebSocketDisconnect:
+            break
+        try:
+            msg = json.loads(text)
+        except json.JSONDecodeError:
+            await ws_manager.send_to(
+                ws,
+                event="error",
+                payload={"message": "无效的 JSON 消息"},
+            )
+            continue
+        await _handle_ws_message(ws, ws_manager, msg, app_state)
+
+
 @ws_router.websocket("/api/v1/ws")
 async def websocket_endpoint(ws: WebSocket) -> None:
     """WebSocket 端点 —— 单连接多事件。
@@ -268,51 +320,7 @@ async def websocket_endpoint(ws: WebSocket) -> None:
     push_task = asyncio.create_task(_telemetry_push_loop(ws, app_state))
 
     try:
-        # 接收客户端消息循环
-        while True:
-            try:
-                text = await ws.receive_text()
-            except WebSocketDisconnect:
-                break
-
-            # 解析客户端消息
-            try:
-                msg = json.loads(text)
-            except json.JSONDecodeError:
-                await ws_manager.send_to(
-                    ws,
-                    event="error",
-                    payload={"message": "无效的 JSON 消息"},
-                )
-                continue
-
-            action = msg.get("action")
-            if action == "select_track":
-                track_id = msg.get("track_id")
-                if track_id:
-                    app_state.current_track_id = track_id
-                    app_state.current_track_source = "manual"
-                    await ws_manager.send_to(
-                        ws,
-                        event="track_selected",
-                        payload={"track_id": track_id, "source": "manual"},
-                    )
-            elif action == "request_suggestion":
-                # 提示前端通过 REST POST /api/v1/suggest 触发
-                await ws_manager.send_to(
-                    ws,
-                    event="info",
-                    payload={
-                        "message": "请通过 POST /api/v1/suggest 触发建议生成",
-                        "track_id": msg.get("track_id"),
-                    },
-                )
-            else:
-                await ws_manager.send_to(
-                    ws,
-                    event="error",
-                    payload={"message": f"未知 action：{action}"},
-                )
+        await _ws_receive_loop(ws, ws_manager, app_state)
     except WebSocketDisconnect:
         pass
     except Exception:

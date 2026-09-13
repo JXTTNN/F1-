@@ -1,6 +1,6 @@
 """UDP 遥测监听器（标准库 socket，后台线程，容错）。
 
-在可配置端口（默认 ``127.0.0.1:20777``）监听 EA F1 2026 UDP 遥测数据包，
+在可配置端口（默认 ``127.0.0.1:20777``）监听 F1 25 UDP 遥测数据包，
 后台线程接收并解析，通过回调机制通知注册的 handler。
 
 容错策略（对齐 FR-TEL-04）：
@@ -32,7 +32,7 @@ from .packets import PacketTooShortError, parse_packet
 
 logger = logging.getLogger(__name__)
 
-# 默认监听地址（EA F1 2026 默认 UDP 输出端口）
+# 默认监听地址（F1 25 默认 UDP 输出端口）
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 20777
 # 单个 UDP 包最大接收字节数（F1 2026 最大包约 1.4KB，预留余量）
@@ -42,6 +42,8 @@ _THREAD_NAME = "f1opt-telemetry-listener"
 
 # handler 类型：接收解析后的 dict
 PacketHandler = Callable[[dict[str, Any]], None]
+# raw handler 类型：接收原始字节 + 解析后的 dict（可能为 None）
+RawPacketHandler = Callable[[bytes, dict[str, Any] | None], None]
 
 
 class TelemetryListener:
@@ -61,6 +63,7 @@ class TelemetryListener:
         self._port = port
         self._max_packet_size = max_packet_size
         self._handlers: list[PacketHandler] = []
+        self._raw_handlers: list[RawPacketHandler] = []
         self._handlers_lock = threading.Lock()
         self._sock: socket.socket | None = None
         self._thread: threading.Thread | None = None
@@ -81,6 +84,23 @@ class TelemetryListener:
             if handler in self._handlers:
                 self._handlers.remove(handler)
 
+    def add_raw_handler(self, handler: RawPacketHandler) -> None:
+        """注册一个原始字节处理回调。
+
+        收到每个 UDP 包时调用，传入 (raw_bytes, parsed_dict_or_None)。
+        parsed 为 None 表示解析失败或未知包类型。
+        用于遥测录制器等需要原始字节的场景。
+        """
+        with self._handlers_lock:
+            if handler not in self._raw_handlers:
+                self._raw_handlers.append(handler)
+
+    def remove_raw_handler(self, handler: RawPacketHandler) -> None:
+        """移除一个已注册的原始字节回调。"""
+        with self._handlers_lock:
+            if handler in self._raw_handlers:
+                self._raw_handlers.remove(handler)
+
     def _dispatch(self, parsed: dict[str, Any]) -> None:
         """将解析结果分发给所有已注册 handler（handler 异常不中断监听）。"""
         with self._handlers_lock:
@@ -90,6 +110,16 @@ class TelemetryListener:
                 h(parsed)
             except Exception:
                 logger.exception("handler %r raised, continuing", h)
+
+    def _dispatch_raw(self, data: bytes, parsed: dict[str, Any] | None) -> None:
+        """将原始字节 + 解析结果分发给所有已注册 raw handler。"""
+        with self._handlers_lock:
+            raw_handlers = list(self._raw_handlers)
+        for h in raw_handlers:
+            try:
+                h(data, parsed)
+            except Exception:
+                logger.exception("raw handler %r raised, continuing", h)
 
     # ------------------------------------------------------------------ #
     # 生命周期
@@ -147,18 +177,28 @@ class TelemetryListener:
             self._process(data)
 
     def _process(self, data: bytes) -> None:
-        """解析单个包并分发，容错：短包/未知包/解析异常均不崩溃。"""
+        """解析单个包并分发，容错：短包/未知包/解析异常均不崩溃。
+
+        分发顺序：
+        1. 先调用 raw_handlers（传入原始字节 + 解析结果/None）；
+        2. 再调用 handlers（仅传入解析结果，仅当解析成功时）。
+        """
+        parsed: dict[str, Any] | None = None
         try:
             parsed = parse_packet(data)
         except PacketTooShortError:
-            # 短包——记录并跳过（对齐 FR-TEL-04 容错降级）
             logger.debug("packet too short (%d bytes), skipped", len(data))
+            # 仍通知 raw handler（录制器需要保存短包用于诊断）
+            self._dispatch_raw(data, None)
             return
         except Exception:
-            # 其他解析异常——记录并跳过，保证线程不死
             logger.exception("parse_packet failed (%d bytes), skipped", len(data))
+            self._dispatch_raw(data, None)
             return
-        if parsed is None:
-            # 未知 packetId——跳过不崩溃
-            return
-        self._dispatch(parsed)
+
+        # 先通知 raw handler（含原始字节 + 解析结果）
+        self._dispatch_raw(data, parsed)
+
+        # 再通知普通 handler（仅解析结果）
+        if parsed is not None:
+            self._dispatch(parsed)

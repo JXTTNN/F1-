@@ -161,12 +161,21 @@ def build_setup_per_car(
     ballast: int = 50,
     fuel_load: float = 100.0,
 ) -> bytes:
-    """构造单辆车的 CarSetups 段（50 字节）。"""
+    """构造单辆车的 CarSetups 段（49 字节）。
+
+    格式与 packets.py 中 _SETUP_PER_FMT 完全一致：
+        BBBB ffff BBBBBBBB ffff B f
+    字段顺序：frontWing rearWing onThrottle offThrottle
+              frontCamber rearCamber frontToe rearToe
+              frontSusp rearSusp frontARB rearARB frontHeight rearHeight brakePressure brakeBias
+              rearLeftPress rearRightPress frontLeftPress frontRightPress
+              ballast fuelLoad
+    """
     return struct.pack(
-        "<BBBBffffBBBBBBBBBffffBf",
+        "<BBBBffffBBBBBBBBffffBf",
         front_wing, rear_wing, on_throttle, off_throttle,
         front_camber, rear_camber, front_toe, rear_toe,
-        1, 1, 1, 1, 1, 1, brake_pressure, brake_bias, 50,
+        1, 1, 1, 1, 1, 1, brake_pressure, brake_bias,
         rear_left_press, 25.5, front_left_press, 25.5,
         ballast, fuel_load,
     )

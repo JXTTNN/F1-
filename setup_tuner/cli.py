@@ -19,6 +19,7 @@ import sys
 import threading
 import webbrowser
 from time import sleep
+from typing import Any
 
 from setup_tuner.app import create_app
 from setup_tuner.config import load_config
@@ -69,6 +70,57 @@ def _open_browser_delayed(url: str, delay: float = 1.5) -> None:
 # =========================================================================== #
 # 主入口
 # =========================================================================== #
+def _check_port_available(host: str, port: int) -> int:
+    """检测端口占用，被占用时返回 1，否则返回 0。"""
+    if is_port_in_use(host, port):
+        print(
+            f"\n❌ 端口 {port} 已被占用，请关闭占用程序或修改 .env 中的 API_PORT\n"
+            f"   提示：可执行 `netstat -ano | findstr :{port}` 查看占用进程\n",
+            file=sys.stderr,
+        )
+        return 1
+    return 0
+
+
+def _start_browser_thread(url: str) -> threading.Thread:
+    """启动延迟打开浏览器的后台线程。"""
+    browser_thread = threading.Thread(
+        target=_open_browser_delayed,
+        args=(url,),
+        daemon=True,
+        name="f1opt-browser",
+    )
+    browser_thread.start()
+    return browser_thread
+
+
+def _print_startup_banner(url: str, config: Any) -> None:
+    """打印启动横幅。"""
+    print("\n🏁 F1OPT 赛车调教优化助手已启动")
+    print(f"   服务地址：{url}")
+    print(f"   API 文档：{url}/docs")
+    print(f"   WebSocket：{url}/api/v1/ws")
+    print(f"   遥测监听：{config.udp_host}:{config.udp_port}")
+    print("   按 Ctrl+C 退出\n")
+
+
+def _run_uvicorn(app: Any, host: str, port: int, log_level: str) -> int:
+    """启动 uvicorn 服务，返回退出码。"""
+    try:
+        import uvicorn
+
+        uvicorn.run(app, host=host, port=port, log_level=log_level.lower())
+    except KeyboardInterrupt:
+        print("\n\n正在停止服务...")
+        logger.info("received KeyboardInterrupt, shutting down")
+    except Exception as e:
+        logger.exception("uvicorn run failed")
+        print(f"\n❌ 启动失败：{e}\n", file=sys.stderr)
+        return 2
+    print("服务已停止。")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     """一键启动主入口。
 
@@ -95,12 +147,7 @@ def main(argv: list[str] | None = None) -> int:
     port = config.api_port
 
     # ② 端口占用检测
-    if is_port_in_use(host, port):
-        print(
-            f"\n❌ 端口 {port} 已被占用，请关闭占用程序或修改 .env 中的 API_PORT\n"
-            f"   提示：可执行 `netstat -ano | findstr :{port}` 查看占用进程\n",
-            file=sys.stderr,
-        )
+    if _check_port_available(host, port):
         return 1
 
     # ③ 创建应用
@@ -108,41 +155,11 @@ def main(argv: list[str] | None = None) -> int:
 
     # ④ 延迟打开浏览器（后台线程）
     url = f"http://{host}:{port}"
-    browser_thread = threading.Thread(
-        target=_open_browser_delayed,
-        args=(url,),
-        daemon=True,
-        name="f1opt-browser",
-    )
-    browser_thread.start()
+    _start_browser_thread(url)
 
     # ⑤ 启动 uvicorn
-    print("\n🏁 F1OPT 赛车调教优化助手已启动")
-    print(f"   服务地址：{url}")
-    print(f"   API 文档：{url}/docs")
-    print(f"   WebSocket：{url}/api/v1/ws")
-    print(f"   遥测监听：{config.udp_host}:{config.udp_port}")
-    print("   按 Ctrl+C 退出\n")
-
-    try:
-        import uvicorn
-
-        uvicorn.run(
-            app,
-            host=host,
-            port=port,
-            log_level=config.log_level.lower(),
-        )
-    except KeyboardInterrupt:
-        print("\n\n正在停止服务...")
-        logger.info("received KeyboardInterrupt, shutting down")
-    except Exception as e:
-        logger.exception("uvicorn run failed")
-        print(f"\n❌ 启动失败：{e}\n", file=sys.stderr)
-        return 2
-
-    print("服务已停止。")
-    return 0
+    _print_startup_banner(url, config)
+    return _run_uvicorn(app, host, port, config.log_level)
 
 
 if __name__ == "__main__":

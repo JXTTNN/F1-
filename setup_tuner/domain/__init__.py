@@ -8,7 +8,6 @@ from __future__ import annotations
 from .setup import (
     ALL_GROUPS,
     ALL_SETUP_FIELDS,
-    SRC_OFFICIAL_GUIDE,
     SRC_UDP_PACKET5,
     CarSetup,
     SetupField,
@@ -56,7 +55,7 @@ __all__ = [
     "get_fields_by_group",
     "validate_value",
     "SRC_UDP_PACKET5",
-    "SRC_OFFICIAL_GUIDE",
+
     # symptoms.py
     "SymptomCategory",
     "Symptom",

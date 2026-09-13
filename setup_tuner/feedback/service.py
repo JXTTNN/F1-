@@ -28,6 +28,44 @@ _VALID_SYMPTOMS: dict[str, Symptom] = {sym.value: sym for sym in Symptom}
 _NO_FEEDBACK_HINT = "未发现反馈，请先点击赛道图上的问题弯道并录入反馈"
 
 
+def _validate_symptom(symptom: str) -> Symptom:
+    """校验 symptom 在 12 枚举内，返回对应 Symptom 枚举值。"""
+    sym_enum = _VALID_SYMPTOMS.get(symptom)
+    if sym_enum is None:
+        valid = ", ".join(sorted(_VALID_SYMPTOMS))
+        raise ValueError(f"未知症状标识 {symptom!r}，合法值：{valid}")
+    return sym_enum
+
+
+def _validate_strength(strength: int) -> None:
+    """校验 strength 在 [INTENSITY_MIN, INTENSITY_MAX] 范围内。"""
+    if strength < INTENSITY_MIN or strength > INTENSITY_MAX:
+        raise ValueError(
+            f"症状强度 {strength} 越界，合法范围 [{INTENSITY_MIN}, {INTENSITY_MAX}]",
+        )
+
+
+def _build_feedback_record(
+    feedback_id: int,
+    track_id: str,
+    corner_number: int | None,
+    symptom: str,
+    category: str,
+    strength: int,
+    setup_id: int | None,
+) -> dict[str, Any]:
+    """构建反馈记录返回字典。"""
+    return {
+        "id": feedback_id,
+        "track_id": track_id,
+        "corner_number": corner_number,
+        "symptom": symptom,
+        "category": category,
+        "strength": strength,
+        "setup_id": setup_id,
+    }
+
+
 class FeedbackService:
     """反馈录入/查询/未点击默认正常 业务服务。
 
@@ -66,19 +104,8 @@ class FeedbackService:
         Raises:
             ValueError: symptom 不在 12 枚举内，或 strength 越界。
         """
-        # 校验 symptom 在 12 枚举内
-        sym_enum = _VALID_SYMPTOMS.get(symptom)
-        if sym_enum is None:
-            valid = ", ".join(sorted(_VALID_SYMPTOMS))
-            raise ValueError(
-                f"未知症状标识 {symptom!r}，合法值：{valid}",
-            )
-        # 校验 strength 0–5
-        if strength < INTENSITY_MIN or strength > INTENSITY_MAX:
-            raise ValueError(
-                f"症状强度 {strength} 越界，合法范围 [{INTENSITY_MIN}, {INTENSITY_MAX}]",
-            )
-
+        sym_enum = _validate_symptom(symptom)
+        _validate_strength(strength)
         category = get_symptom_category(sym_enum)
         feedback_id = self._store.add_feedback(
             track_id=track_id,
@@ -88,15 +115,9 @@ class FeedbackService:
             strength=strength,
             setup_id=setup_id,
         )
-        return {
-            "id": feedback_id,
-            "track_id": track_id,
-            "corner_number": corner_number,
-            "symptom": symptom,
-            "category": category,
-            "strength": strength,
-            "setup_id": setup_id,
-        }
+        return _build_feedback_record(
+            feedback_id, track_id, corner_number, symptom, category, strength, setup_id,
+        )
 
     # ------------------------------------------------------------------
     # 查询

@@ -11,6 +11,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from setup_tuner.domain.setup import ALL_SETUP_FIELDS, CarSetup
 from setup_tuner.engine.engine import generate_suggestion
 from setup_tuner.report.builder import (
@@ -138,7 +140,7 @@ class TestBuildReport:
         """参数列表 23 项。"""
         result = self._make_suggestion_result()
         report = build_report(result, track_id="suzuka")
-        assert len(report["parameters"]) == 23
+        assert len(report["parameters"]) == 20
 
     def test_report_param_entry_fields(self) -> None:
         """每参数项含必要字段。"""
@@ -213,7 +215,7 @@ class TestExtractSetupFromPacket5:
             "m_ballast": 50,
         }
         params = extract_setup_from_packet5(packet5)
-        assert len(params) == 23
+        assert len(params) == 20
         assert params["front_wing"] == 7.0
         assert params["rear_wing"] == 6.0
         assert params["brake_pressure"] == 80.0
@@ -225,53 +227,37 @@ class TestExtractSetupFromPacket5:
         for name, val in defaults.items():
             assert params[name] == val, f"{name}: {params[name]} != {val}"
 
-    def test_extract_active_aero_mode_0(self) -> None:
-        """m_activeAeroMode=0 (Z/弯道) → active_aero_z=0.6, active_aero_x=0.4。"""
-        params = extract_setup_from_packet5({"m_activeAeroMode": 0})
-        assert params["active_aero_z"] == 0.6
-        assert params["active_aero_x"] == 0.4
-
-    def test_extract_active_aero_mode_1(self) -> None:
-        """m_activeAeroMode=1 (X/直道) → active_aero_z=0.4, active_aero_x=0.6。"""
-        params = extract_setup_from_packet5({"m_activeAeroMode": 1})
-        assert params["active_aero_z"] == 0.4
-        assert params["active_aero_x"] == 0.6
-
-    def test_extract_tyre_pressure_from_list(self) -> None:
-        """从 tyresPressure[4] 取前轴/后轴均值。"""
+    def test_extract_tyre_pressure_from_m_fields(self) -> None:
+        """从 m_rearLeftTyrePressure 等 4 个独立字段取胎压。"""
         packet5 = {
-            "tyresPressure": [25.0, 26.0, 27.0, 28.0],
+            "m_rearLeftTyrePressure": 22.0,
+            "m_rearRightTyrePressure": 22.5,
+            "m_frontLeftTyrePressure": 24.0,
+            "m_frontRightTyrePressure": 23.5,
         }
         params = extract_setup_from_packet5(packet5)
-        # front = (25+26)/2 = 25.5, rear = (27+28)/2 = 27.5
-        assert params["front_tyre_pressure"] == 25.5
-        assert params["rear_tyre_pressure"] == 27.5
-
-    def test_extract_tyre_pressure_from_m_field(self) -> None:
-        """从 m_tyresPressure&lsqb;4&rsqb; 取胎压。"""
-        packet5 = {
-            "m_tyresPressure": [24.0, 26.0, 28.0, 30.0],
-        }
-        params = extract_setup_from_packet5(packet5)
-        assert params["front_tyre_pressure"] == 25.0
-        assert params["rear_tyre_pressure"] == 29.0
+        assert params["rear_left_tyre_pressure"] == pytest.approx(22.0)
+        assert params["rear_right_tyre_pressure"] == pytest.approx(22.5)
+        assert params["front_left_tyre_pressure"] == pytest.approx(24.0)
+        assert params["front_right_tyre_pressure"] == pytest.approx(23.5)
 
     def test_extract_clamp_to_valid_range(self) -> None:
         """UDP 值越界时 clamp 到合法区间。"""
         params = extract_setup_from_packet5({
-            "m_frontWing": 999,  # 越界（max=11）
-            "m_brakePressure": -50,  # 越界（min=50）
+            "m_frontWing": 999,  # 越界（max=10）
+            "m_brakePressure": -50,  # 越界（min=80）
         })
         spec_fw = next(f for f in ALL_SETUP_FIELDS if f.name == "front_wing")
         spec_bp = next(f for f in ALL_SETUP_FIELDS if f.name == "brake_pressure")
         assert params["front_wing"] == spec_fw.max_val
         assert params["brake_pressure"] == spec_bp.min_val
 
-    def test_extract_tyre_pressure_invalid_ignored(self) -> None:
-        """胎压列表不足 4 个时取缺省。"""
-        params = extract_setup_from_packet5({"tyresPressure": [25.0, 26.0]})
+    def test_extract_tyre_pressure_missing_uses_default(self) -> None:
+        """胎压字段缺失时取缺省。"""
+        params = extract_setup_from_packet5({})
         defaults = CarSetup.default().to_dict()
-        assert params["front_tyre_pressure"] == defaults["front_tyre_pressure"]
+        assert params["front_left_tyre_pressure"] == defaults["front_left_tyre_pressure"]
+        assert params["rear_left_tyre_pressure"] == defaults["rear_left_tyre_pressure"]
 
 
 # ===========================================================================

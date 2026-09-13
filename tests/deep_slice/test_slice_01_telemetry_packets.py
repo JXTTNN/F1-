@@ -1,7 +1,7 @@
 """切片 1 深度测试：UDP 遥测包解析（setup_tuner.telemetry.packets）。
 
-覆盖 6 类包：Session(1) / LapData(2) / CarSetups(5) / CarTelemetry(6) /
-CarStatus(7) / CarTelemetryData2(16)。
+覆盖 5 类包：Session(1) / LapData(2) / CarSetups(5) / CarTelemetry(6) /
+CarStatus(7)。
 
 5 种测试方式：
     1. unit     — 每个公开解析函数的正常输入正确性
@@ -29,7 +29,6 @@ from setup_tuner.telemetry.packets import (
     parse_car_setups,
     parse_car_status,
     parse_car_telemetry,
-    parse_car_telemetry_2,
     parse_header,
     parse_lap_data,
     parse_packet,
@@ -37,7 +36,6 @@ from setup_tuner.telemetry.packets import (
 )
 
 from .conftest import (
-    build_ct2_per_car,
     build_header,
     build_lap_per_car,
     build_session_body,
@@ -143,22 +141,10 @@ class TestUnit:
         assert result["m_tyresAgeLaps"] == 5
         assert result["m_ersStoreEnergy"] == pytest.approx(800000.0)
 
-    def test_unit_parse_car_telemetry_2_fields(self) -> None:
-        """parse_car_telemetry_2 应正确解析 CarTelemetryData2 玩家车段。"""
-        per = build_ct2_per_car(
-            aero_mode=1, overtake_active=1, overtake_distance=250,
-        )
-        data = build_header(packet_id=16, player_car_index=0) + per
-        result = parse_car_telemetry_2(data, 0)
-        assert result["m_activeAeroMode"] == 1
-        assert result["m_overtakeActive"] == 1
-        assert result["m_overtakeActivationDistance"] == 250
-
     def test_unit_packet_name_known(self) -> None:
         """packet_name 对已知 ID 返回正确名称。"""
         assert packet_name(1) == "Session"
         assert packet_name(2) == "LapData"
-        assert packet_name(16) == "CarTelemetryData2"
 
     def test_unit_parse_packet_dispatch(self) -> None:
         """parse_packet 应按 packet_id 分发到正确的解析函数。"""
@@ -230,14 +216,6 @@ class TestBoundary:
             data = build_header(packet_id=pid) + b"\x00" * 64
             assert parse_packet(data) is None
 
-    def test_boundary_max_player_car_index(self) -> None:
-        """player_car_index = NUM_CARS - 1（23）为合法边界，应解析成功。"""
-        per_size = struct.calcsize("<BBHBBHBB")
-        # 构造 24 辆车的 CarTelemetryData2 包体
-        body = b"\x00" * per_size * (NUM_CARS - 1) + build_ct2_per_car(aero_mode=1)
-        data = build_header(packet_id=16, player_car_index=NUM_CARS - 1) + body
-        result = parse_car_telemetry_2(data, NUM_CARS - 1)
-        assert result["m_activeAeroMode"] == 1
 
     def test_boundary_session_with_max_weather_samples(self) -> None:
         """Session 含 64 个天气样本（协议上限）应正确解析。"""
@@ -306,7 +284,7 @@ class TestProperty:
             (5, build_setup_per_car(front_wing=9), {"m_frontWing": 9}),
             (6, build_telem_per_car(speed=350), {"m_speed": 350}),
             (7, build_status_per_car(tyres_age=8), {"m_tyresAgeLaps": 8}),
-            (16, build_ct2_per_car(aero_mode=1), {"m_activeAeroMode": 1}),
+
         ]
         for pid, body, expected_kv in cases:
             data = build_header(packet_id=pid) + body
@@ -326,21 +304,6 @@ class TestProperty:
                 except PacketTooShortError:
                     pass  # 某些包体不足时跳过
 
-    def test_property_player_car_index_isolation(self) -> None:
-        """不变量：只解包玩家车段，其他车数据不影响结果。"""
-
-        # 玩家车（index=2）数据固定
-        target = build_ct2_per_car(aero_mode=1, overtake_active=1)
-        # 前 2 辆车用不同垃圾数据
-        junk_a = build_ct2_per_car(aero_mode=0, overtake_active=0)
-        junk_b = build_ct2_per_car(aero_mode=1, overtake_active=0)
-        body = junk_a + junk_b + target
-        data = build_header(packet_id=16, player_car_index=2) + body
-        result = parse_car_telemetry_2(data, 2)
-        # 玩家车结果不受前两辆车影响
-        assert result["m_activeAeroMode"] == 1
-        assert result["m_overtakeActive"] == 1
-
 
 # ===========================================================================
 # 4. 静态分析 (static) — 类型约束、值域约束、不变量约束（参数化）
@@ -348,18 +311,13 @@ class TestProperty:
 class TestStatic:
     """静态分析：用参数化测试验证类型约束、值域约束与不变量约束。"""
 
-    def test_static_header_size_is_29(self) -> None:
-        """值域约束：HEADER_SIZE 必须为 29（协议固定）。"""
-        assert HEADER_SIZE == 29
-        assert struct.calcsize(HEADER_FORMAT) == 29
-
     def test_static_num_cars_is_24(self) -> None:
         """值域约束：NUM_CARS 必须为 24（F1 2026 协议固定数组大小）。"""
         assert NUM_CARS == 24
 
     def test_static_supported_packet_ids_exact(self) -> None:
-        """不变量约束：SUPPORTED_PACKET_IDS 必须为 {1,2,5,6,7,16}。"""
-        assert SUPPORTED_PACKET_IDS == frozenset({1, 2, 5, 6, 7, 16})
+        """不变量约束：SUPPORTED_PACKET_IDS 必须为 {1,2,5,6,7}。"""
+        assert SUPPORTED_PACKET_IDS == frozenset({1, 2, 5, 6, 7})
 
     @pytest.mark.parametrize("pid,name", [
         (0, "Motion"), (1, "Session"), (2, "LapData"), (3, "Event"),
@@ -367,10 +325,9 @@ class TestStatic:
         (7, "CarStatus"), (8, "FinalClassification"), (9, "LobbyInfo"),
         (10, "CarDamage"), (11, "SessionHistory"), (12, "TyreSets"),
         (13, "MotionEx"), (14, "TimeTrial"), (15, "LapPositions"),
-        (16, "CarTelemetryData2"),
     ])
     def test_static_packet_names_complete(self, pid: int, name: str) -> None:
-        """参数化：PACKET_NAMES 覆盖全部 17 个已知 packet_id 且名称正确。"""
+        """参数化：PACKET_NAMES 覆盖全部已知 packet_id 且名称正确。"""
         assert PACKET_NAMES[pid] == name
 
     @pytest.mark.parametrize("pid", list(SUPPORTED_PACKET_IDS))
@@ -490,29 +447,14 @@ class TestSmoke:
         assert result["m_tyresAgeLaps"] == 10
         assert result["m_ersDeployMode"] == 2
 
-    def test_smoke_ct2_full_chain(self) -> None:
-        """冒烟：构造完整 CarTelemetryData2 包 → parse_packet → 验证字段。"""
-        per = build_ct2_per_car(
-            aero_mode=1, aero_distance=150,
-            overtake_available=1, overtake_active=1,
-            overtake_distance=250, wrong_way=0,
-        )
-        data = build_header(packet_id=16, player_car_index=0) + per
-        result = parse_packet(data)
-        assert result is not None
-        assert result["m_activeAeroMode"] == 1
-        assert result["m_overtakeActive"] == 1
-        assert result["m_drivingWrongWay"] == 0
-
-    def test_smoke_all_6_packet_types_in_sequence(self) -> None:
-        """冒烟：连续解析 6 类包，全部成功且 packet_id 正确。"""
+    def test_smoke_all_5_packet_types_in_sequence(self) -> None:
+        """冒烟：连续解析 5 类包，全部成功且 packet_id 正确。"""
         packets = [
             (1, build_session_body()),
             (2, build_lap_per_car()),
             (5, build_setup_per_car()),
             (6, build_telem_per_car()),
             (7, build_status_per_car()),
-            (16, build_ct2_per_car()),
         ]
         for pid, body in packets:
             data = build_header(packet_id=pid) + body

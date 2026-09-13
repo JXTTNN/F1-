@@ -42,15 +42,11 @@ def make_client() -> TestClient:
 # 1. 根路径
 # ===========================================================================
 def test_root_path():
-    """根路径返回 API 信息。"""
+    """根路径返回前端 HTML 页面。"""
     with make_client() as client:
         resp = client.get("/")
         assert resp.status_code == 200
-        body = resp.json()
-        assert "name" in body
-        assert "version" in body
-        assert "docs" in body
-        assert "websocket" in body
+        assert "text/html" in resp.headers.get("content-type", "")
 
 
 # ===========================================================================
@@ -275,7 +271,7 @@ def test_full_workflow_with_setup_import():
         assert resp.status_code == 200
         report = resp.json()["data"]["report"]
         assert report["track_id"] == "silverstone"
-        assert len(report["parameters"]) == 23
+        assert len(report["parameters"]) == 20
 
         # 读取最新建议
         resp = client.get("/api/v1/suggest/latest", params={"track_id": "silverstone"})

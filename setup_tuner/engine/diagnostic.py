@@ -17,7 +17,12 @@ Dx 为 9 维**带符号实数行向量**，每维语义为「某种能力的需�
 症状 → Dx 映射为确定性规则，多症状叠加时 Dx 分量**代数求和**；
 「未点击弯道=正常」不产生贡献。
 
-出处：EA F1 2026 官方调教指南（症状-机理对应章节）。
+task-60 扩展：同一症状在不同弯道阶段（entry/apex/exit/global）有不同的
+Dx 系数映射。``SYMPTOM_STAGE_TO_DX`` 为 ``(症状, 阶段) → Dx`` 映射，
+``SYMPTOM_DEFAULT_STAGE`` 指定每个症状的默认阶段（向后兼容二元组调用）。
+``SYMPTOM_TO_DX`` 从阶段映射自动生成，保持向后兼容。
+
+出处：F1 25 官方调教指南（症状-机理对应章节）。
 本模块为纯函数、零 IO、零随机，满足 FR-ENG-05 / FR-NFR-R1（可复现）。
 """
 
@@ -28,7 +33,7 @@ from collections.abc import Iterable
 # ---------------------------------------------------------------------------
 # 官方出处常量
 # ---------------------------------------------------------------------------
-SOURCE_DX = "EA F1 2026 官方调教指南"
+SOURCE_DX = "F1 25 官方调教指南"
 
 
 # ---------------------------------------------------------------------------
@@ -75,79 +80,196 @@ DIAG_DIMS_POSITIVE_SEMANTICS: dict[str, str] = {
 
 
 # ---------------------------------------------------------------------------
-# 症状 → Dx 映射规则（确定性，逐字对齐 design.md 2.7.2 表）
+# 症状 × 阶段 → Dx 映射规则（确定性，task-60 阶段敏感扩展）
 # ---------------------------------------------------------------------------
-# 每个症状映射到一个 {维度key: 系数} 字典；
-# Dx 分量 = 系数 × 强度 s（s∈[0,5]，默认 3，归一化系数 k=1.0）。
-# 多症状叠加时各维度代数求和。
-SYMPTOM_TO_DX: dict[str, dict[str, float]] = {
+# 同一症状在不同弯道阶段有不同的 Dx 系数映射。
+# 每个症状有一个"默认阶段"，当不指定阶段时使用默认阶段的映射。
+SYMPTOM_STAGE_TO_DX: dict[str, dict[str, dict[str, float]]] = {
     # 入弯 entry
     "understeer": {
-        "front_grip_req": 0.80,
-        "turnin_req": 0.30,
+        "entry": {"front_grip_req": 0.80, "turnin_req": 0.30, "brake_stab_req": 0.10},
+        "apex": {"front_grip_req": 0.60, "hi_speed_stab_req": 0.30, "turnin_req": 0.10},
     },
     "oversteer": {
-        "rear_grip_req": 0.80,
-        "hi_speed_stab_req": 0.30,
+        "entry": {"rear_grip_req": 0.80, "hi_speed_stab_req": 0.30, "exit_traction_req": 0.10},
+        "exit": {"rear_grip_req": 0.50, "exit_traction_req": 0.40, "hi_speed_stab_req": 0.10},
     },
     "turnin_unresponsive": {
-        "turnin_req": 0.80,
-        "front_grip_req": 0.30,
+        "entry": {"turnin_req": 0.80, "front_grip_req": 0.30, "brake_stab_req": 0.10},
     },
     "brake_long": {
-        "brake_power_req": 0.80,
+        "entry": {"brake_power_req": 0.80, "brake_stab_req": 0.20},
     },
     "lockup": {
-        "brake_stab_req": 0.70,
-        "brake_power_req": -0.30,  # 锁死需减压（负号）
+        "entry": {"brake_stab_req": 0.70, "brake_power_req": -0.30, "front_grip_req": 0.10},
     },
     # 弯中 apex
+    "midcorner_understeer": {
+        "apex": {"front_grip_req": 0.60, "hi_speed_stab_req": 0.30, "turnin_req": 0.10},
+    },
     "midcorner_unstable": {
-        "hi_speed_stab_req": 0.70,
-        "rear_grip_req": 0.30,
+        "apex": {"hi_speed_stab_req": 0.70, "rear_grip_req": 0.30, "front_grip_req": 0.10},
     },
     "midcorner_traction": {
-        "exit_traction_req": 0.60,
-        "rear_grip_req": 0.40,
+        "apex": {"exit_traction_req": 0.60, "rear_grip_req": 0.40, "hi_speed_stab_req": 0.10},
     },
     # 出弯 exit
     "exit_wheelspin": {
-        "exit_traction_req": 0.70,
-        "rear_grip_req": 0.30,
+        "exit": {"exit_traction_req": 0.70, "rear_grip_req": 0.30, "hi_speed_stab_req": 0.10},
+    },
+    "exit_oversteer": {
+        "exit": {"rear_grip_req": 0.60, "exit_traction_req": 0.30, "hi_speed_stab_req": 0.10},
     },
     # 全局 global
     "bottoming": {
-        "ride_height_req": 0.90,
+        "global": {"ride_height_req": 0.90, "hi_speed_stab_req": 0.10},
     },
     "tyre_wear": {
-        "tyre_life_req": 0.80,
+        "global": {"tyre_life_req": 0.80, "brake_stab_req": 0.10, "exit_traction_req": 0.10},
     },
     "straight_slow": {
-        "front_grip_req": -0.50,  # 下压力过大致阻力（负号）
-        "rear_grip_req": -0.50,
+        "global": {"front_grip_req": -0.50, "rear_grip_req": -0.50, "hi_speed_stab_req": -0.20},
     },
     "lap_slow": {
-        "brake_power_req": 0.30,
-        "exit_traction_req": 0.30,
-        "turnin_req": 0.30,
-        "hi_speed_stab_req": 0.20,
+        "global": {
+            "brake_power_req": 0.30, "exit_traction_req": 0.30, "turnin_req": 0.30,
+            "hi_speed_stab_req": 0.20, "front_grip_req": 0.10,
+        },
     },
+    "high_speed_instability": {
+        "global": {"hi_speed_stab_req": 0.80, "front_grip_req": 0.10, "rear_grip_req": 0.10},
+    },
+}
+
+
+# 症状默认阶段映射（用于不指定阶段时的 fallback）
+SYMPTOM_DEFAULT_STAGE: dict[str, str] = {
+    "understeer": "entry",
+    "oversteer": "entry",
+    "turnin_unresponsive": "entry",
+    "brake_long": "entry",
+    "lockup": "entry",
+    "midcorner_understeer": "apex",
+    "midcorner_unstable": "apex",
+    "midcorner_traction": "apex",
+    "exit_wheelspin": "exit",
+    "exit_oversteer": "exit",
+    "bottoming": "global",
+    "tyre_wear": "global",
+    "straight_slow": "global",
+    "lap_slow": "global",
+    "high_speed_instability": "global",
+}
+
+
+# ---------------------------------------------------------------------------
+# 向后兼容：SYMPTOM_TO_DX 从阶段映射自动生成
+# ---------------------------------------------------------------------------
+# 使用每个症状的默认阶段的映射，保持与旧代码完全兼容。
+SYMPTOM_TO_DX: dict[str, dict[str, float]] = {
+    symptom: SYMPTOM_STAGE_TO_DX[symptom][SYMPTOM_DEFAULT_STAGE[symptom]]
+    for symptom in SYMPTOM_STAGE_TO_DX
 }
 
 
 # ---------------------------------------------------------------------------
 # 核心求值函数
 # ---------------------------------------------------------------------------
-def compute_dx(symptoms: Iterable[tuple[str, int]]) -> dict[str, float]:
+# 症状输入类型：二元组 (symptom, strength) 或三元组 (symptom, strength, stage)
+SymptomInput = tuple[str, int | float] | tuple[str, int | float, str]
+
+
+def _resolve_stage(symptom: str, stage: str | None) -> str:
+    """解析症状的有效阶段。
+
+    Args:
+        symptom: 症状标识字符串。
+        stage: 显式指定的阶段；None 时使用默认阶段。
+
+    Returns:
+        有效阶段字符串。
+
+    Raises:
+        KeyError: 症状未知，或指定阶段不在该症状的阶段映射中且无默认阶段。
+    """
+    if symptom not in SYMPTOM_STAGE_TO_DX:
+        raise KeyError(f"未知症状标识: {symptom!r}")
+
+    stage_map = SYMPTOM_STAGE_TO_DX[symptom]
+
+    if stage is not None and stage in stage_map:
+        return stage
+
+    # 指定阶段不存在时 fallback 到默认阶段
+    default_stage = SYMPTOM_DEFAULT_STAGE.get(symptom)
+    if default_stage is None or default_stage not in stage_map:
+        raise KeyError(f"症状 {symptom!r} 无可用阶段映射")
+    return default_stage
+
+
+def _unpack_symptom_item(
+    item: SymptomInput,
+) -> tuple[str, int | float, str | None]:
+    """解包症状输入项为 (symptom, strength, stage) 三元组。
+
+    Args:
+        item: 二元组 (symptom, strength) 或三元组 (symptom, strength, stage)。
+
+    Returns:
+        (symptom, strength, stage) 三元组，stage 可能为 None。
+
+    Raises:
+        ValueError: 输入格式非法（非二元组或三元组）。
+    """
+    if len(item) == 3:
+        symptom, strength, stage = item  # type: ignore[misc]
+        return symptom, strength, stage
+    if len(item) == 2:
+        symptom, strength = item  # type: ignore[misc]
+        return symptom, strength, None
+    raise ValueError(f"症状输入格式非法: {item!r}，应为二元组或三元组")
+
+
+def _validate_symptom_strength(symptom: str, strength: int | float) -> float:
+    """校验症状强度类型与范围，返回 float 化的强度值。
+
+    Args:
+        symptom: 症状标识字符串。
+        strength: 原始强度值。
+
+    Returns:
+        float 化的强度值。
+
+    Raises:
+        KeyError: 症状未知。
+        ValueError: 强度类型非法或越界 [0, 5]。
+    """
+    if symptom not in SYMPTOM_STAGE_TO_DX:
+        raise KeyError(f"未知症状标识: {symptom!r}")
+    if not isinstance(strength, (int, float)):
+        raise ValueError(
+            f"症状 {symptom!r} 强度类型非法: {type(strength).__name__}，应为 int/float",
+        )
+    s = float(strength)
+    if s < 0.0 or s > 5.0:
+        raise ValueError(f"症状 {symptom!r} 强度 {s} 越界，合法范围 [0, 5]")
+    return s
+
+
+def compute_dx(symptoms: Iterable[SymptomInput]) -> dict[str, float]:
     """从症状列表计算诊断向量 Dx（多症状代数求和）。
 
     确定性纯函数：相同输入必得相同输出，无 IO、无随机、无时间依赖。
 
     Args:
-        symptoms: 可迭代的 (symptom_key, strength) 二元组序列。
-            - symptom_key: 症状标识字符串（见 SYMPTOM_TO_DX 的 key）。
+        symptoms: 可迭代的症状序列，每项为：
+            - 二元组 ``(symptom_key, strength)``：使用症状的默认阶段（向后兼容）；
+            - 三元组 ``(symptom_key, strength, stage)``：使用指定阶段。
+            - symptom_key: 症状标识字符串（见 SYMPTOM_STAGE_TO_DX 的 key）。
             - strength: 症状强度 s∈[0,5]，作为 Dx 系数的乘数。
               强度 0 表示该症状不产生贡献（与未触发等价）。
+            - stage: 弯道阶段（``"entry"``/``"apex"``/``"exit"``/``"global"``）。
+              若指定阶段不在该症状的阶段映射中，自动 fallback 到默认阶段。
 
     Returns:
         9 维 Dx 字典 {dim_key: value}，所有 9 个维度均出现（无触发维度为 0.0）。
@@ -158,30 +280,29 @@ def compute_dx(symptoms: Iterable[tuple[str, int]]) -> dict[str, float]:
         ValueError: 强度超出 [0, 5] 区间。
 
     出处:
-        EA F1 2026 官方调教指南（症状-机理对应章节）。
+        F1 25 官方调教指南（症状-机理对应章节）。
     """
     dx: dict[str, float] = dict.fromkeys(DIAG_DIMS, 0.0)
 
-    for symptom, strength in symptoms:
-        if symptom not in SYMPTOM_TO_DX:
-            raise KeyError(f"未知症状标识: {symptom!r}")
-        if not isinstance(strength, (int, float)):
-            raise ValueError(
-                f"症状 {symptom!r} 强度类型非法: {type(strength).__name__}，应为 int/float",
-            )
-        s = float(strength)
-        if s < 0.0 or s > 5.0:
-            raise ValueError(f"症状 {symptom!r} 强度 {s} 越界，合法范围 [0, 5]")
-
+    for item in symptoms:
+        symptom, strength, stage = _unpack_symptom_item(item)
+        s = _validate_symptom_strength(symptom, strength)
         # 强度 0 直接跳过（不产生贡献）
         if s == 0.0:
             continue
-
-        contribution = SYMPTOM_TO_DX[symptom]
-        for dim, coef in contribution.items():
-            dx[dim] += coef * s
+        _accumulate_dx_contribution(dx, symptom, s, stage)
 
     return dx
+
+
+def _accumulate_dx_contribution(
+    dx: dict[str, float], symptom: str, strength: float, stage: str | None,
+) -> None:
+    """将单个症状的 Dx 贡献累加到 dx（原地修改）。"""
+    effective_stage = _resolve_stage(symptom, stage)
+    contribution = SYMPTOM_STAGE_TO_DX[symptom][effective_stage]
+    for dim, coef in contribution.items():
+        dx[dim] += coef * strength
 
 
 def empty_dx() -> dict[str, float]:

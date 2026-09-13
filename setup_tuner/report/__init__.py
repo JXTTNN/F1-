@@ -4,7 +4,7 @@
     - :func:`build_report` — 组装 design 2.7.7 格式的报告 JSON
     - :func:`format_linkages` — 格式化联动说明
     - :func:`build_summary` — 生成摘要文本
-    - :func:`extract_setup_from_packet5` — 从遥测 Packet 5 提取 23 参数快照
+    - :func:`extract_setup_from_packet5` — 从遥测 Packet 5 提取 20 参数快照
     - :func:`extract_telemetry_summary` — 从遥测帧缓存提取遥测摘要
     - :func:`feedbacks_to_symptoms` — 反馈记录转症状列表
 """

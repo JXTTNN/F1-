@@ -66,7 +66,7 @@ class TestUnit:
     def test_unit_get_fields_by_group(self) -> None:
         """get_fields_by_group 应返回该类下全部参数。"""
         aero = get_fields_by_group("Aerodynamics")
-        assert len(aero) == 4
+        assert len(aero) == 2
         assert all(f.group == "Aerodynamics" for f in aero)
 
     def test_unit_validate_value_in_range(self) -> None:
@@ -79,16 +79,16 @@ class TestUnit:
         # front_wing step=1.0, min=0.0 → 5.0 已在档位上
         result = validate_value("front_wing", 5.0)
         assert result == 5.0
-        # active_aero_z step=0.1, min=0.0 → 0.5 已在档位上
-        result = validate_value("active_aero_z", 0.5)
-        assert result == pytest.approx(0.5)
+        # front_toe step=0.01, min=0.0 → 0.05 已在档位上
+        result = validate_value("front_toe", 0.05)
+        assert result == pytest.approx(0.05)
 
     def test_unit_car_setup_default(self) -> None:
         """CarSetup.default() 应返回全部缺省值。"""
         s = CarSetup.default()
         assert s.front_wing == 5.0
         assert s.rear_wing == 5.0
-        assert s.brake_pressure == 75.0
+        assert s.brake_pressure == 90.0
 
     def test_unit_car_setup_validate_passes(self) -> None:
         """CarSetup.default().validate() 应通过校验。"""
@@ -99,7 +99,7 @@ class TestUnit:
         """CarSetup.to_dict 应返回 23 字段扁平字典。"""
         s = CarSetup.default()
         d = s.to_dict()
-        assert len(d) == 23
+        assert len(d) == 20
         assert d["front_wing"] == 5.0
 
     def test_unit_car_setup_from_dict(self) -> None:
@@ -109,7 +109,7 @@ class TestUnit:
         assert s.front_wing == 7.0
         assert s.rear_wing == 3.0
         # 未提供字段取缺省值
-        assert s.brake_pressure == 75.0
+        assert s.brake_pressure == 90.0
 
     def test_unit_get_symptoms_by_category(self) -> None:
         """get_symptoms_by_category 应返回该类别下全部症状。"""
@@ -174,14 +174,14 @@ class TestBoundary:
 
     def test_boundary_validate_value_wrong_step_raises(self) -> None:
         """validate_value 对不符合步长的值应抛 ValueError。"""
-        # active_aero_z step=0.1, min=0.0 → 0.25 不在档位上
+        # front_camber step=0.1, min=-3.5 → -3.05 不在档位上
         with pytest.raises(ValueError, match="不符合档位步长"):
-            validate_value("active_aero_z", 0.25)
+            validate_value("front_camber", -3.05)
 
     def test_boundary_validate_value_at_min_max(self) -> None:
         """validate_value 对边界值（min/max）应通过。"""
         assert validate_value("front_wing", 0.0) == 0.0
-        assert validate_value("front_wing", 11.0) == 11.0
+        assert validate_value("front_wing", 10.0) == 10.0
 
     def test_boundary_validate_intensity_below_zero(self) -> None:
         """validate_intensity 对 < 0 应抛 ValueError。"""
@@ -239,7 +239,7 @@ class TestProperty:
     def test_property_default_to_dict_has_23_fields(self) -> None:
         """不变量：default().to_dict() 恰好含 23 个字段。"""
         d = CarSetup.default().to_dict()
-        assert len(d) == 23
+        assert len(d) == 20
 
     def test_property_default_is_idempotent(self) -> None:
         """幂等性：多次调用 default() 结果一致。"""
@@ -300,21 +300,21 @@ class TestProperty:
 class TestStatic:
     """静态分析：验证数量与值域约束。"""
 
-    def test_static_setup_field_count_is_23(self) -> None:
+    def test_static_setup_field_count_is_20(self) -> None:
         """数量约束：ALL_SETUP_FIELDS 恰好 23 项。"""
-        assert len(ALL_SETUP_FIELDS) == 23
+        assert len(ALL_SETUP_FIELDS) == 20
 
-    def test_static_group_count_is_7(self) -> None:
-        """数量约束：ALL_GROUPS 恰好 7 大类。"""
-        assert len(ALL_GROUPS) == 7
+    def test_static_group_count_is_6(self) -> None:
+        """数量约束：ALL_GROUPS 恰好 6 大类。"""
+        assert len(ALL_GROUPS) == 6
         assert ALL_GROUPS == [
-            "Aerodynamics", "Differential", "Suspension Geometry",
-            "Suspension", "Brakes", "Tyres", "New2026",
+            "Aerodynamics", "Transmission", "Suspension Geometry",
+            "Suspension", "Brakes", "Tyres",
         ]
 
-    def test_static_symptom_count_is_12(self) -> None:
-        """数量约束：Symptom 枚举恰好 12 项。"""
-        assert len(list(Symptom)) == 12
+    def test_static_symptom_count_is_15(self) -> None:
+        """数量约束：Symptom 枚举恰好 15 项（task-60 扩展）。"""
+        assert len(list(Symptom)) == 15
 
     def test_static_track_count_is_24(self) -> None:
         """数量约束：ALL_TRACKS 恰好 24 条赛道。"""
@@ -395,7 +395,7 @@ class TestSmoke:
         modified = CarSetup(
             front_wing=7.0, rear_wing=3.0,
             brake_pressure=80.0, brake_bias=70.0,
-            front_tyre_pressure=26.5, rear_tyre_pressure=24.5,
+            front_left_tyre_pressure=24.5, rear_left_tyre_pressure=23.0,
         )
         modified.validate()
 
@@ -414,12 +414,12 @@ class TestSmoke:
             assert fetched.track_id == track.track_id
             assert fetched.udp_track_id == track.udp_track_id
 
-    def test_smoke_all_12_symptoms_categorized(self) -> None:
-        """冒烟：全部 12 症状可按类别检索。"""
+    def test_smoke_all_15_symptoms_categorized(self) -> None:
+        """冒烟：全部 15 症状可按类别检索（task-60 扩展）。"""
         all_categorized: list[Symptom] = []
         for cat in SymptomCategory:
             all_categorized.extend(get_symptoms_by_category(cat))
-        assert len(all_categorized) == 12
+        assert len(all_categorized) == 15
         assert set(all_categorized) == set(Symptom)
 
     def test_smoke_setup_roundtrip_with_modifications(self) -> None:

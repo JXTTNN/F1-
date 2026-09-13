@@ -1,115 +1,226 @@
-#!/usr/bin/env python3
-"""Generate SVG track map placeholders from control points data.
+"""从 legacy/f1opt/data/track_maps 重新生成 24 条赛道的高质量 SVG。
 
-Creates simple SVG representations of each track's layout using the control
-points defined in f1opt/data/track_maps/__init__.py. These serve as visual
-placeholders until official high-resolution track images are provided.
+改进点：
+1. 用 SVG path + 三次贝塞尔（C 命令）代替 polyline，得到平滑赛道轮廓
+2. 画外/内两条平行轮廓线（间距 ~10px）呈现赛道宽度
+3. 用红色方块标注 start_finish_line_px
+4. 在 corners 的 (x_px, y_px) 位置画圆圈 + 编号
+5. 底部标注赛道名称
+6. F1 深色主题：背景 #111317 / 赛道线 #2a2e36 / 弯道标记 #00e5ff
+
+输出：setup_tuner/ui/tracks/<track_id>.svg，viewBox="0 0 800 600"。
+
+同时导出 _track_anchors.py 模块供 track.py 使用。
 """
+from __future__ import annotations
 
 import sys
 from pathlib import Path
 
-# Add the project root to sys.path so we can import track_maps
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(PROJECT_ROOT))
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "legacy"))
 
-from f1opt.data.track_maps import TRACK_MAPS, TrackMapData
+from f1opt.data.track_maps import TRACK_MAPS, TrackMapData  # noqa: E402
+
+OUT_DIR = ROOT / "setup_tuner" / "ui" / "tracks"
+
+# F1 Broadcast 深色主题
+BG = "#0d0d12"
+TRACK_LINE = "#3a3e48"
+TRACK_ACCENT = "rgba(59,158,255,0.20)"
+CORNER_RING = "#3B9EFF"
+CORNER_TEXT = "#9494a8"
+START_LINE = "#FF1801"
+LABEL_COLOR = "#5c5c70"
 
 
-def generate_svg(track_data: TrackMapData) -> str:
-    """Generate a simple SVG track map from control points."""
-    w = track_data.canvas_width
-    h = track_data.canvas_height
-    cp = track_data.control_points
+# --------------------------------------------------------------------------- #
+# 几何辅助
+# --------------------------------------------------------------------------- #
 
-    # Build the track outline path
-    points_str = " ".join(f"{p[1]:.1f},{p[2]:.1f}" for p in cp)
+def _catmull_rom_to_bezier(pts: list[tuple[float, float]]) -> str:
+    """把控制点序列转为闭合的三次贝塞尔 SVG path。
 
-    # Build corner markers SVG elements
-    corner_elements = []
-    for c in track_data.corners:
+    用 Catmull-Rom 样条转换到三次贝塞尔（每段 4 控制点 → 1 个 C 命令），
+    生成 C1 连续的平滑闭合曲线。张力因子 0.5（标准 Catmull-Rom）。
+    """
+    n = len(pts)
+    if n < 3:
+        d = "M " + " L ".join(f"{x:.1f},{y:.1f}" for x, y in pts)
+        return d + " Z"
+
+    pts_ext = pts[-1:] + pts + pts[:2]
+    path_parts: list[str] = [f"M {pts[0][0]:.1f} {pts[0][1]:.1f}"]
+    for i in range(n):
+        p0 = pts_ext[i]
+        p1 = pts_ext[i + 1]
+        p2 = pts_ext[i + 2]
+        p3 = pts_ext[i + 3]
+        c1x = p1[0] + (p2[0] - p0[0]) / 6.0
+        c1y = p1[1] + (p2[1] - p0[1]) / 6.0
+        c2x = p2[0] - (p3[0] - p1[0]) / 6.0
+        c2y = p2[1] - (p3[1] - p1[1]) / 6.0
+        path_parts.append(
+            f"C {c1x:.1f} {c1y:.1f} {c2x:.1f} {c2y:.1f} {p2[0]:.1f} {p2[1]:.1f}"
+        )
+    path_parts.append("Z")
+    return " ".join(path_parts)
+
+
+def _offset_path(pts: list[tuple[float, float]], offset: float) -> list[tuple[float, float]]:
+    """沿法线方向偏移点序列（用于生成内/外赛道线）。
+
+    对每个点取前后相邻点切向，法向偏移 offset 像素。
+    """
+    n = len(pts)
+    out: list[tuple[float, float]] = []
+    for i in range(n):
+        prev = pts[(i - 1) % n]
+        nxt = pts[(i + 1) % n]
+        tx = nxt[0] - prev[0]
+        ty = nxt[1] - prev[1]
+        length = (tx * tx + ty * ty) ** 0.5
+        if length < 1e-6:
+            out.append(pts[i])
+            continue
+        nx = -ty / length
+        ny = tx / length
+        out.append((pts[i][0] + nx * offset, pts[i][1] + ny * offset))
+    return out
+
+
+# --------------------------------------------------------------------------- #
+# SVG 生成
+# --------------------------------------------------------------------------- #
+
+def _build_svg(track: TrackMapData, track_label: str) -> str:
+    canvas_w = track.canvas_width
+    canvas_h = track.canvas_height
+    pts = [(cp[1], cp[2]) for cp in track.control_points]
+    dedup: list[tuple[float, float]] = []
+    for p in pts:
+        if not dedup or (abs(dedup[-1][0] - p[0]) > 0.5 or abs(dedup[-1][1] - p[1]) > 0.5):
+            dedup.append(p)
+    if len(dedup) < 3:
+        dedup = pts
+
+    outer = _offset_path(dedup, 5.0)
+    inner = _offset_path(dedup, -5.0)
+    center_path = _catmull_rom_to_bezier(dedup)
+    outer_path = _catmull_rom_to_bezier(outer)
+    inner_path = _catmull_rom_to_bezier(inner)
+
+    lines: list[str] = []
+    lines.append('<?xml version="1.0" encoding="UTF-8"?>')
+    lines.append(
+        f'<svg xmlns="http://www.w3.org/2000/svg" '
+        f'viewBox="0 0 {canvas_w} {canvas_h}" '
+        f'width="{canvas_w}" height="{canvas_h}">'
+    )
+    lines.append("  <defs>")
+    lines.append("    <style>")
+    lines.append(f"      .track-bg {{ fill: {BG}; }}")
+    lines.append(
+        "      .track-line { fill: none; stroke: " + TRACK_LINE + "; "
+        "stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }"
+    )
+    lines.append(
+        "      .track-line-accent { fill: none; stroke: " + TRACK_ACCENT + "; "
+        "stroke-width: 1.5; stroke-linecap: round; stroke-dasharray: 6,4; }"
+    )
+    lines.append(
+        "      .track-edge { fill: none; stroke: " + TRACK_LINE + "; "
+        "stroke-width: 1; stroke-linecap: round; stroke-linejoin: round; opacity: 0.6; }"
+    )
+    lines.append("    </style>")
+    lines.append("  </defs>")
+    lines.append(f'  <rect class="track-bg" width="{canvas_w}" height="{canvas_h}" rx="8"/>')
+
+    lines.append(f'  <path class="track-edge" d="{outer_path}"/>')
+    lines.append(f'  <path class="track-edge" d="{inner_path}"/>')
+    lines.append(f'  <path class="track-line" d="{center_path}"/>')
+    lines.append(f'  <path class="track-line-accent" d="{center_path}"/>')
+
+    sx, sy = track.start_finish_line_px
+    lines.append(
+        f'  <rect x="{sx - 5:.1f}" y="{sy - 5:.1f}" width="10" height="10" '
+        f'fill="{START_LINE}" rx="1"/>'
+    )
+
+    for c in track.corners:
         cx, cy = c.x_px, c.y_px
-        corner_elements.append(
-            f'  <circle cx="{cx:.1f}" cy="{cy:.1f}" r="5" '
-            f'fill="none" stroke="#00e5ff" stroke-width="1.5" opacity="0.7"/>'
+        lines.append(
+            f'  <circle cx="{cx:.1f}" cy="{cy:.1f}" r="6" fill="none" '
+            f'stroke="{CORNER_RING}" stroke-width="1.5" opacity="0.85"/>'
         )
-        corner_elements.append(
-            f'  <text x="{cx:.1f}" y="{cy - 8:.1f}" text-anchor="middle" '
-            f'fill="#8a909c" font-size="8" font-family="monospace">{c.corner_id}</text>'
-        )
-
-    # Build sector boundary markers
-    sector_elements = []
-    for sd in track_data.sector_boundaries:
-        # Find nearest control point
-        best = cp[0]
-        best_dist = 999999
-        for p in cp:
-            d = abs(p[0] - sd)
-            if d < best_dist:
-                best_dist = d
-                best = p
-        sx, sy = best[1], best[2]
-        sector_elements.append(
-            f'  <line x1="{sx-6:.1f}" y1="{sy-6:.1f}" x2="{sx+6:.1f}" y2="{sy+6:.1f}" '
-            f'stroke="#ff2d2d" stroke-width="1.5" stroke-dasharray="3,2" opacity="0.6"/>'
+        lines.append(
+            f'  <text x="{cx:.1f}" y="{cy - 9:.1f}" text-anchor="middle" '
+            f'fill="{CORNER_TEXT}" font-size="9" font-family="monospace">{c.corner_id}</text>'
         )
 
-    # Start/finish marker
-    sf_element = ""
-    if track_data.start_finish_line_px:
-        sfx, sfy = track_data.start_finish_line_px
-        sf_element = (
-            f'  <rect x="{sfx - 4:.1f}" y="{sfy - 4:.1f}" width="8" height="8" '
-            f'fill="#ff2d2d" rx="1"/>'
-        )
-
-    svg = f'''<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {w} {h}" width="{w}" height="{h}">
-  <defs>
-    <style>
-      .track-bg {{ fill: #111317; }}
-      .track-line {{ fill: none; stroke: #2a2e36; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }}
-      .track-line-accent {{ fill: none; stroke: rgba(0,229,255,0.25); stroke-width: 2; stroke-linecap: round; stroke-dasharray: 6,4; }}
-    </style>
-  </defs>
-
-  <!-- Background -->
-  <rect class="track-bg" width="{w}" height="{h}" rx="8"/>
-
-  <!-- Track outline (wide shadow line) -->
-  <polyline class="track-line" points="{points_str}"/>
-
-  <!-- Track accent line -->
-  <polyline class="track-line-accent" points="{points_str}"/>
-
-{chr(10).join(sector_elements)}
-
-{chr(10).join(corner_elements)}
-
-{sf_element}
-
-  <!-- Track label -->
-  <text x="{w/2:.0f}" y="{h - 12:.0f}" text-anchor="middle" fill="#5b616e"
-        font-size="10" font-family="monospace">{track_data.track_id.upper()}</text>
-</svg>'''
-    return svg
+    lines.append(
+        f'  <text x="{canvas_w / 2}" y="{canvas_h - 12}" text-anchor="middle" '
+        f'fill="{LABEL_COLOR}" font-size="11" font-family="monospace" '
+        f'letter-spacing="2">{track_label}</text>'
+    )
+    lines.append("</svg>")
+    return "\n".join(lines) + "\n"
 
 
-def main():
-    output_dir = PROJECT_ROOT / "f1opt" / "ui" / "static"
-    output_dir.mkdir(parents=True, exist_ok=True)
+# --------------------------------------------------------------------------- #
+# 锚点数据导出
+# --------------------------------------------------------------------------- #
 
-    generated = 0
-    for track_id, track_data in TRACK_MAPS.items():
-        svg_content = generate_svg(track_data)
-        out_path = output_dir / f"{track_id}.svg"
-        out_path.write_text(svg_content, encoding="utf-8")
-        generated += 1
-        print(f"  Generated: {out_path.name} ({track_data.canvas_width}x{track_data.canvas_height})")
+def _export_anchors_module() -> str:
+    """生成 setup_tuner/domain/_track_anchors.py 源码。"""
+    lines: list[str] = []
+    lines.append('"""从 legacy track_maps 提取的真实弯道像素坐标。')
+    lines.append("")
+    lines.append("由 scripts/generate_track_svgs.py 自动生成，请勿手工编辑。")
+    lines.append('"""')
+    lines.append("")
+    lines.append("from __future__ import annotations")
+    lines.append("")
+    lines.append("# (canvas_width, canvas_height)")
+    lines.append("TRACK_CANVAS: dict[str, tuple[int, int]] = {")
+    for tid in sorted(TRACK_MAPS):
+        tm = TRACK_MAPS[tid]
+        lines.append(f'    "{tid}": ({tm.canvas_width}, {tm.canvas_height}),')
+    lines.append("}")
+    lines.append("")
+    lines.append("# {track_id: {corner_number: (x_px, y_px)}}")
+    lines.append("TRACK_ANCHORS: dict[str, dict[int, tuple[float, float]]] = {")
+    for tid in sorted(TRACK_MAPS):
+        tm = TRACK_MAPS[tid]
+        lines.append(f'    "{tid}": {{')
+        for c in tm.corners:
+            lines.append(f"        {c.corner_id}: ({c.x_px}, {c.y_px}),")
+        lines.append("    },")
+    lines.append("}")
+    lines.append("")
+    return "\n".join(lines)
 
-    print(f"\nDone: {generated} SVG track maps generated in {output_dir}")
+
+# --------------------------------------------------------------------------- #
+# 主入口
+# --------------------------------------------------------------------------- #
+
+def main() -> int:
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    count = 0
+    for tid, tm in TRACK_MAPS.items():
+        label = tid.replace("_", " ").upper()
+        svg = _build_svg(tm, label)
+        out_path = OUT_DIR / f"{tid}.svg"
+        out_path.write_text(svg, encoding="utf-8")
+        count += 1
+    print(f"生成 {count} 个 SVG -> {OUT_DIR}")
+
+    anchors_path = ROOT / "setup_tuner" / "domain" / "_track_anchors.py"
+    anchors_path.write_text(_export_anchors_module(), encoding="utf-8")
+    print(f"导出锚点数据 -> {anchors_path}")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

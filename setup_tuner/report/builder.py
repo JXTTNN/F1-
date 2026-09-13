@@ -20,6 +20,33 @@ from typing import Any
 
 from setup_tuner.domain.setup import ALL_SETUP_FIELDS
 
+# ---------------------------------------------------------------------------
+# Packet 5 字段映射（UDP 字段名 → domain.setup 参数名）
+# 对照 design 1.2.1 Packet 5 与 domain/setup.py 20 参数定义
+# ---------------------------------------------------------------------------
+_PACKET5_FIELD_MAP: dict[str, str] = {
+    "m_frontWing": "front_wing",
+    "m_rearWing": "rear_wing",
+    "m_onThrottleDiff": "on_throttle_diff",
+    "m_offThrottleDiff": "off_throttle_diff",
+    "m_frontCamber": "front_camber",
+    "m_rearCamber": "rear_camber",
+    "m_frontToe": "front_toe",
+    "m_rearToe": "rear_toe",
+    "m_frontSuspension": "front_suspension",
+    "m_rearSuspension": "rear_suspension",
+    "m_frontAntiRollBar": "front_anti_roll_bar",
+    "m_rearAntiRollBar": "rear_anti_roll_bar",
+    "m_frontSuspensionHeight": "front_ride_height",
+    "m_rearSuspensionHeight": "rear_ride_height",
+    "m_brakePressure": "brake_pressure",
+    "m_brakeBias": "brake_bias",
+    "m_rearLeftTyrePressure": "rear_left_tyre_pressure",
+    "m_rearRightTyrePressure": "rear_right_tyre_pressure",
+    "m_frontLeftTyrePressure": "front_left_tyre_pressure",
+    "m_frontRightTyrePressure": "front_right_tyre_pressure",
+}
+
 
 # ---------------------------------------------------------------------------
 # ISO8601 时间戳
@@ -152,18 +179,25 @@ def build_report(
               "setup_delta": {param: delta}  # 扁平增量（便于前端批量应用）
             }
     """
-    # 置信度（取引擎结果；缺省 medium）
     confidence = str(suggestion_result.get("confidence", "medium"))
-
-    # 参数列表（取引擎结果；缺省空列表）
     raw_params: list[dict[str, Any]] = suggestion_result.get("parameters", [])
     parameters = [_build_param_entry(pd, confidence) for pd in raw_params]
-
-    # 摘要（优先使用引擎结果；缺省则按参数列表重新生成）
     summary = suggestion_result.get("summary") or build_summary(parameters)
+    return _assemble_report_dict(
+        track_id, setup_id, parameters, summary, confidence, suggestion_result,
+    )
 
-    # 顶层组装
-    report: dict[str, Any] = {
+
+def _assemble_report_dict(
+    track_id: str,
+    setup_id: int | None,
+    parameters: list[dict[str, Any]],
+    summary: str,
+    confidence: str,
+    suggestion_result: dict[str, Any],
+) -> dict[str, Any]:
+    """组装报告顶层字典（对齐 design 2.7.7）。"""
+    return {
         "track_id": track_id,
         "setup_id": setup_id,
         "generated_at": _now_iso8601(),
@@ -174,93 +208,46 @@ def build_report(
         "setup_delta": suggestion_result.get("setup_delta", {}),
         "dx": suggestion_result.get("dx", {}),
     }
-    return report
 
 
 # ---------------------------------------------------------------------------
-# 辅助：从 CarSetups 包（遥测 Packet 5）提取 23 参数快照
+# 辅助：从 CarSetups 包（遥测 Packet 5）提取 20 参数快照
 # ---------------------------------------------------------------------------
 def extract_setup_from_packet5(packet5: dict[str, Any]) -> dict[str, float]:
-    """从遥测 CarSetups 包（packet_id=5）提取 23 项调教参数快照。
+    """从遥测 CarSetups 包（packet_id=5）提取 20 项调教参数快照。
 
-    对齐 design 1.2.1 Packet 5 字段映射与 domain.setup 23 参数全集。
+    对齐 design 1.2.1 Packet 5 字段映射与 domain.setup 20 参数全集。
     缺失字段取 SetupField.default。
 
     Args:
         packet5: ``parse_car_setups`` 返回的字典（含 m_frontWing 等字段）。
 
     Returns:
-        23 参数扁平字典 ``{param_name: value}``。
+        20 参数扁平字典 ``{param_name: value}``。
     """
-    # UDP 字段名 → domain.setup 参数名 的映射
-    # （对照 design 1.2.1 Packet 5 与 domain/setup.py 23 参数定义）
-    field_map: dict[str, str] = {
-        "m_frontWing": "front_wing",
-        "m_rearWing": "rear_wing",
-        # 主动空力 Z/X：UDP 仅有 m_activeAeroMode（0=Z/弯, 1=X/直），
-        # 此处将 mode 映射为 ratio 占位（0.5），实际值需玩家在 garage 确认
-        "m_onThrottleDiff": "on_throttle_diff",
-        "m_offThrottleDiff": "off_throttle_diff",
-        "m_frontCamber": "front_camber",
-        "m_rearCamber": "rear_camber",
-        "m_frontToe": "front_toe",
-        "m_rearToe": "rear_toe",
-        "m_frontSuspension": "front_spring",
-        "m_rearSuspension": "rear_spring",
-        "m_frontAntiRollBar": "front_anti_roll_bar",
-        "m_rearAntiRollBar": "rear_anti_roll_bar",
-        "m_frontSuspensionHeight": "front_ride_height",
-        "m_rearSuspensionHeight": "rear_ride_height",
-        # damping：UDP Packet 5 无此字段，取缺省
-        "m_brakePressure": "brake_pressure",
-        "m_brakeBias": "brake_bias",
-        # 胎压：UDP 为 tyresPressure[4]，取前两轴均值作为前/后胎压占位
-        "m_engineBraking": "engine_braking",
-        "m_ballast": "ballast",
-    }
-
     result: dict[str, float] = {}
     for spec in ALL_SETUP_FIELDS:
         udp_name = next(
-            (u for u, d in field_map.items() if d == spec.name), None,
+            (u for u, d in _PACKET5_FIELD_MAP.items() if d == spec.name), None,
         )
         if udp_name is not None and udp_name in packet5:
             result[spec.name] = float(packet5[udp_name])
         else:
             result[spec.name] = spec.default
 
-    # 主动空力 Z/X：从 m_activeAeroMode 推断占位
-    # （0=Z/弯道模式 → active_aero_z 取 0.6, active_aero_x 取 0.4；
-    #  1=X/直道模式 → active_aero_z 取 0.4, active_aero_x 取 0.6；
-    #  其他取缺省 0.5）
-    aero_mode = packet5.get("m_activeAeroMode")
-    if aero_mode == 0:
-        result["active_aero_z"] = 0.6
-        result["active_aero_x"] = 0.4
-    elif aero_mode == 1:
-        result["active_aero_z"] = 0.4
-        result["active_aero_x"] = 0.6
-
-    # 胎压：从 tyresPressure[4] 取前轴/后轴均值
-    pressures = packet5.get("tyresPressure") or packet5.get("m_tyresPressure")
-    if isinstance(pressures, (list, tuple)) and len(pressures) >= 4:
-        try:
-            front_p = (float(pressures[0]) + float(pressures[1])) / 2.0
-            rear_p = (float(pressures[2]) + float(pressures[3])) / 2.0
-            result["front_tyre_pressure"] = front_p
-            result["rear_tyre_pressure"] = rear_p
-        except (TypeError, ValueError):
-            pass
-
     # clamp 到合法区间（防御性，UDP 值可能越界）
+    _clamp_setup_to_bounds(result)
+    return result
+
+
+def _clamp_setup_to_bounds(result: dict[str, float]) -> None:
+    """将 20 参数值 clamp 到各自合法区间（原地修改）。"""
     for spec in ALL_SETUP_FIELDS:
         val = result[spec.name]
         if val < spec.min_val:
             result[spec.name] = spec.min_val
         elif val > spec.max_val:
             result[spec.name] = spec.max_val
-
-    return result
 
 
 # ---------------------------------------------------------------------------
@@ -282,40 +269,65 @@ def extract_telemetry_summary(
         遥测摘要字典。
     """
     summary: dict[str, Any] = {}
-
-    # Packet 1 Session：天气/温度
-    session = all_latest.get(1)
-    if session:
-        summary["weather"] = session.get("m_weather")
-        summary["track_temp"] = session.get("m_trackTemperature")
-        summary["air_temp"] = session.get("m_airTemperature")
-        summary["track_id_udp"] = session.get("m_trackId")
-
-    # Packet 6 CarTelemetry：速度/油门/刹车/挡位/转速
-    telemetry = all_latest.get(6)
-    if telemetry:
-        summary["speed"] = telemetry.get("m_speed")
-        summary["throttle"] = telemetry.get("m_throttle")
-        summary["brake"] = telemetry.get("m_brake")
-        summary["gear"] = telemetry.get("m_gear")
-        summary["engine_rpm"] = telemetry.get("m_engineRPM")
-
-    # Packet 7 CarStatus：轮胎配方/胎龄/燃油
-    status = all_latest.get(7)
-    if status:
-        summary["tyre_compound"] = status.get("m_visualTyreCompound")
-        summary["tyres_age_laps"] = status.get("m_tyresAgeLaps")
-        summary["fuel_in_tank"] = status.get("m_fuelInTank")
-
-    # Packet 2 LapData：圈速/扇区/圈距离
-    lap = all_latest.get(2)
-    if lap:
-        summary["lap_distance"] = lap.get("m_lapDistance")
-        summary["sector"] = lap.get("m_sector")
-        summary["current_lap_num"] = lap.get("m_currentLapNum")
-        summary["last_lap_time_ms"] = lap.get("m_lastLapTimeInMS")
-
+    _merge_session_summary(summary, all_latest.get(1))
+    _merge_telemetry_summary(summary, all_latest.get(6))
+    _merge_status_summary(summary, all_latest.get(7))
+    _merge_lap_summary(summary, all_latest.get(2))
     return summary
+
+
+def _merge_session_summary(
+    summary: dict[str, Any], session: dict[str, Any] | None,
+) -> None:
+    """从 Packet 1 Session 提取天气/温度。"""
+    if not session:
+        return
+    summary["weather"] = session.get("m_weather")
+    summary["track_temp"] = session.get("m_trackTemperature")
+    summary["air_temp"] = session.get("m_airTemperature")
+    summary["track_id_udp"] = session.get("m_trackId")
+
+
+def _merge_telemetry_summary(
+    summary: dict[str, Any], telemetry: dict[str, Any] | None,
+) -> None:
+    """从 Packet 6 CarTelemetry 提取速度/油门/刹车/挡位/转速/胎温/制动温度/胎压。"""
+    if not telemetry:
+        return
+    summary["speed"] = telemetry.get("m_speed")
+    summary["throttle"] = telemetry.get("m_throttle")
+    summary["m_throttle"] = telemetry.get("m_throttle")
+    summary["brake"] = telemetry.get("m_brake")
+    summary["m_brake"] = telemetry.get("m_brake")
+    summary["gear"] = telemetry.get("m_gear")
+    summary["engine_rpm"] = telemetry.get("m_engineRPM")
+    summary["m_tyresSurfaceTemperature"] = telemetry.get("m_tyresSurfaceTemperature")
+    summary["m_tyresInnerTemperature"] = telemetry.get("m_tyresInnerTemperature")
+    summary["m_brakesTemperature"] = telemetry.get("m_brakesTemperature")
+    summary["m_tyresPressure"] = telemetry.get("m_tyresPressure")
+
+
+def _merge_status_summary(
+    summary: dict[str, Any], status: dict[str, Any] | None,
+) -> None:
+    """从 Packet 7 CarStatus 提取轮胎配方/胎龄/燃油。"""
+    if not status:
+        return
+    summary["tyre_compound"] = status.get("m_visualTyreCompound")
+    summary["tyres_age_laps"] = status.get("m_tyresAgeLaps")
+    summary["fuel_in_tank"] = status.get("m_fuelInTank")
+
+
+def _merge_lap_summary(
+    summary: dict[str, Any], lap: dict[str, Any] | None,
+) -> None:
+    """从 Packet 2 LapData 提取圈速/扇区/圈距离。"""
+    if not lap:
+        return
+    summary["lap_distance"] = lap.get("m_lapDistance")
+    summary["sector"] = lap.get("m_sector")
+    summary["current_lap_num"] = lap.get("m_currentLapNum")
+    summary["last_lap_time_ms"] = lap.get("m_lastLapTimeInMS")
 
 
 # ---------------------------------------------------------------------------

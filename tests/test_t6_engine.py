@@ -128,8 +128,8 @@ class TestDiagnosticVector:
         assert vec[0] == pytest.approx(0.80)  # front_grip_req
         assert vec[2] == pytest.approx(0.30)  # turnin_req
 
-    def test_all_12_symptoms_have_dx_mapping(self) -> None:
-        """全部 12 症状都有 Dx 映射。"""
+    def test_all_15_symptoms_have_dx_mapping(self) -> None:
+        """全部 15 症状都有 Dx 映射（task-60 扩展）。"""
         for sym in Symptom:
             assert sym.value in SYMPTOM_TO_DX, f"症状 {sym!r} 缺 Dx 映射"
 
@@ -138,21 +138,21 @@ class TestDiagnosticVector:
 # 2. 耦合矩阵
 # ===========================================================================
 class TestCouplingMatrix:
-    """9×23 耦合矩阵 3 条硬约束校验。"""
+    """9×20 耦合矩阵 3 条硬约束校验。"""
 
     def test_validate_matrix_passes(self) -> None:
         """validate_matrix 3 条硬约束通过。"""
         validate_matrix()  # 不抛异常即通过
 
-    def test_matrix_shape_9x23(self) -> None:
+    def test_matrix_shape_9x20(self) -> None:
         """矩阵形状 9 行 × 23 列。"""
         assert len(COUPLING_MATRIX) == 9
         for diag in DIAG_DIMS:
-            assert len(COUPLING_MATRIX[diag]) == 23
+            assert len(COUPLING_MATRIX[diag]) == 20
 
     def test_param_names_count_23(self) -> None:
         """PARAM_NAMES 23 项且与 ALL_SETUP_FIELDS 一致。"""
-        assert len(PARAM_NAMES) == 23
+        assert len(PARAM_NAMES) == 20
         assert PARAM_NAMES == [f.name for f in ALL_SETUP_FIELDS]
 
     def test_no_empty_column(self) -> None:
@@ -221,13 +221,13 @@ class TestCouplingMatrix:
     def test_get_row_returns_23_entries(self) -> None:
         """get_row 返回 23 个参数的耦合单元。"""
         row = get_row("front_grip_req")
-        assert len(row) == 23
+        assert len(row) == 20
         assert set(row.keys()) == set(PARAM_NAMES)
 
     def test_get_row_unknown_diag_returns_all_none(self) -> None:
         """get_row 未知维度返回全 None 行。"""
         row = get_row("nonexistent")
-        assert len(row) == 23
+        assert len(row) == 20
         assert all(v is None for v in row.values())
 
     def test_get_column_returns_9_entries(self) -> None:
@@ -265,8 +265,8 @@ class TestCouplingMatrix:
         """matrix_stats 返回完整统计。"""
         stats = matrix_stats()
         assert stats["diag_dims"] == 9
-        assert stats["params"] == 23
-        assert stats["total_cells"] == 9 * 23
+        assert stats["params"] == 20
+        assert stats["total_cells"] == 9 * 20
         assert stats["nonzero_cells"] > 0
         assert stats["density"] > 0
         assert isinstance(stats["sources_used"], list)
@@ -566,10 +566,10 @@ class TestRules:
         """validate_rules 通过。"""
         validate_rules()
 
-    def test_rule_count_is_12(self) -> None:
-        """规则数 == 12。"""
+    def test_rule_count_is_15(self) -> None:
+        """规则数 == 15（task-60 扩展）。"""
         rules = get_all_rules()
-        assert len(rules) == 12
+        assert len(rules) == 15
 
     def test_every_rule_covers_23_params(self) -> None:
         """每条规则 delta_table 覆盖 23 参数。"""
@@ -620,7 +620,7 @@ class TestEngineSelfValidation:
         assert "confidence" in result
         assert "summary" in result
         assert result["track_id"] == "suzuka"
-        assert len(result["parameters"]) == 23
+        assert len(result["parameters"]) == 20
 
     def test_summary_zero_dx(self, default_setup) -> None:
         """无有效症状时摘要含「无调整建议」。"""

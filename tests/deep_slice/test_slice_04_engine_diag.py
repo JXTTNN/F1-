@@ -1,8 +1,8 @@
-"""切片 4 深度测试：诊断向量(9维)与耦合矩阵(9×23)（diagnostic + coupling）。
+"""切片 4 深度测试：诊断向量(9维)与耦合矩阵(9×20)（diagnostic + coupling）。
 
 覆盖：
     - setup_tuner.engine.diagnostic（9 维 Dx 向量，compute_dx 等纯函数）
-    - setup_tuner.engine.coupling（9×23 耦合矩阵，CouplingCell，validate_matrix）
+    - setup_tuner.engine.coupling（9×20 耦合矩阵，CouplingCell，validate_matrix）
 
 5 种测试方式：
     1. unit     — compute_dx / get_coupling / empty_dx 等正常输入正确性
@@ -18,10 +18,10 @@ import pytest
 
 from setup_tuner.engine.coupling import (
     COUPLING_MATRIX,
-    EA_SETUP_GUIDE,
-    EA_UDP_2026,
+    F1_SETUP_DOMAIN,
+    F1_UDP_SPEC,
     PARAM_NAMES,
-    PIRELLI,
+    PIRELLI_TYRE,
     VALID_SOURCES,
     CouplingCell,
     get_column,
@@ -117,7 +117,7 @@ class TestUnit:
     def test_unit_get_row(self) -> None:
         """get_row 应返回某诊断维度的整行（23 个参数）。"""
         row = get_row("front_grip_req")
-        assert len(row) == 23
+        assert len(row) == 20
 
     def test_unit_get_column(self) -> None:
         """get_column 应返回某参数的整列（9 个诊断维度）。"""
@@ -196,7 +196,7 @@ class TestBoundary:
     def test_boundary_get_row_unknown_diag_returns_empty_dict(self) -> None:
         """get_row 对未知诊断维度应返回全 None 的 23 槽字典。"""
         row = get_row("unknown_diag")
-        assert len(row) == 23
+        assert len(row) == 20
         assert all(v is None for v in row.values())
 
     def test_boundary_dx_to_vector_missing_dims_defaults_zero(self) -> None:
@@ -281,15 +281,15 @@ class TestStatic:
         """数量约束：DIAG_DIMS 恰好 9 维。"""
         assert len(DIAG_DIMS) == 9
 
-    def test_static_param_names_count_is_23(self) -> None:
+    def test_static_param_names_count_is_20(self) -> None:
         """数量约束：PARAM_NAMES 恰好 23 项。"""
-        assert len(PARAM_NAMES) == 23
+        assert len(PARAM_NAMES) == 20
 
-    def test_static_matrix_shape_9x23(self) -> None:
-        """形状约束：耦合矩阵为 9×23。"""
+    def test_static_matrix_shape_9x20(self) -> None:
+        """形状约束：耦合矩阵为 9×20。"""
         assert len(COUPLING_MATRIX) == 9
         for diag in DIAG_DIMS:
-            assert len(COUPLING_MATRIX[diag]) == 23
+            assert len(COUPLING_MATRIX[diag]) == 20
 
     def test_static_matrix_density_above_30_percent(self) -> None:
         """密度约束：矩阵非零密度 ≥ 30%。"""
@@ -298,7 +298,7 @@ class TestStatic:
 
     def test_static_valid_sources(self) -> None:
         """枚举约束：VALID_SOURCES 含 3 个合法出处。"""
-        assert VALID_SOURCES == frozenset({EA_SETUP_GUIDE, EA_UDP_2026, PIRELLI})
+        assert VALID_SOURCES == frozenset({F1_SETUP_DOMAIN, F1_UDP_SPEC, PIRELLI_TYRE})
 
     def test_static_all_cells_use_valid_sources(self) -> None:
         """不变量约束：所有非零单元的 source 在 VALID_SOURCES 内。"""
@@ -396,8 +396,8 @@ class TestSmoke:
         # understeer 应对 front_wing 产生非零增量
         assert raw["front_wing"] != 0.0
 
-    def test_smoke_all_12_symptoms_produce_valid_dx(self) -> None:
-        """冒烟：全部 12 症状各自计算 Dx 均产出 9 维向量。"""
+    def test_smoke_all_15_symptoms_produce_valid_dx(self) -> None:
+        """冒烟：全部 15 症状各自计算 Dx 均产出 9 维向量（task-60 扩展）。"""
         for symptom in SYMPTOM_TO_DX:
             dx = compute_dx([(symptom, 3)])
             assert set(dx.keys()) == set(DIAG_DIMS)
@@ -406,8 +406,8 @@ class TestSmoke:
         """冒烟：matrix_stats 返回真实统计信息。"""
         stats = matrix_stats()
         assert stats["diag_dims"] == 9
-        assert stats["params"] == 23
-        assert stats["total_cells"] == 9 * 23
+        assert stats["params"] == 20
+        assert stats["total_cells"] == 9 * 20
         assert stats["nonzero_cells"] > 0
         assert stats["density"] > 0.0
         assert len(stats["sources_used"]) >= 1
@@ -430,7 +430,7 @@ class TestSmoke:
         """冒烟：遍历全部 9 行 23 列，所有单元可访问。"""
         for diag in DIAG_DIMS:
             row = get_row(diag)
-            assert len(row) == 23
+            assert len(row) == 20
         for param in PARAM_NAMES:
             col = get_column(param)
             assert len(col) == 9

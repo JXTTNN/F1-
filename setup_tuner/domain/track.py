@@ -15,14 +15,19 @@
       （弯角编号 / 名称 / 类型 / apex 速度）。
     - 其余 18 条赛道的弯道序列由 :func:`_synthesize_corners` 基于赛道特征合成
       （量级准确，弯角名称用编号占位）。
-    - ``udp_track_id`` 为 EA F1 2026 UDP Session 包 ``m_trackId`` 枚举值；
+    - ``udp_track_id`` 为 F1 25 UDP Session 包 ``m_trackId`` 枚举值；
       legacy 无明确映射表，本版按赛历轮次顺序分配（round_number - 1），
-      **需对照 EA F1 2026 官方 UDP 规范 m_trackId 枚举校准**。
-    - 弯道锚点 (anchor_x / anchor_y) legacy 无此数据，由 :func:`_estimate_anchor`
-      沿椭圆分布估算（占位），**需后续用 SVG 路径校准**。
-
-SVG 资产：24 条赛道 SVG 已从 ``legacy/f1opt/ui/static/*.svg`` 复制到
-``setup_tuner/ui/tracks/``，文件名 = track_id（如 ``suzuka.svg``）。
+      **需对照 F1 25 官方 UDP 规范 m_trackId 枚举校准**。
+    - 弯道锚点 (anchor_x / anchor_y) 优先取自
+      ``legacy/f1opt/data/track_maps/__init__.py`` 中各赛道 ``corners`` 的真实
+      像素坐标（由 :func:`_apply_real_anchors` 用 ``x_px/canvas_width``、
+      ``y_px/canvas_height`` 归一化到 [0, 1]）。未在 track_maps 中出现的弯道
+      退回 :func:`_estimate_anchor` 的椭圆分布估算。
+ 
+ SVG 资产：24 条赛道 SVG 由 ``scripts/generate_track_svgs.py`` 从
+ ``legacy/f1opt/data/track_maps`` 的 ``control_points`` / ``corners`` 重新生成
+ （Catmull-Rom 平滑 path + 内外偏移线 + 起点红块 + 弯道圆圈），输出到
+ ``setup_tuner/ui/tracks/``，文件名 = track_id（如 ``suzuka.svg``）。
 """
 
 from __future__ import annotations
@@ -31,6 +36,8 @@ import math
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Literal
+
+from ._track_anchors import TRACK_ANCHORS, TRACK_CANVAS
 
 # --------------------------------------------------------------------------- #
 # 数据类定义
@@ -95,25 +102,70 @@ class Track:
 
 
 # --------------------------------------------------------------------------- #
-# 锚点估算（占位，需后续用 SVG 路径校准）
+# 锚点估算与真实坐标校准
 # --------------------------------------------------------------------------- #
 
 def _estimate_anchor(number: int, total: int) -> CornerAnchor:
-    """沿椭圆分布估算弯道锚点（占位）。
+    """沿椭圆分布估算弯道锚点（fallback，仅用于无真实坐标的弯道）。
 
-    legacy 无弯道坐标数据。本函数将弯道按编号沿一个中心椭圆均匀分布，
-    模拟赛道轮廓形状。anchor_x / anchor_y 均落在 [0.1, 0.9] 区间内，
-    严格在 (0, 1) 开区间内，满足验收要求。
+    将弯道按编号沿一个中心椭圆均匀分布，模拟赛道轮廓形状。
+    anchor_x / anchor_y 均落在 [0.1, 0.9] 区间内，严格在 (0, 1) 开区间内。
 
     .. note::
-        锚点为估算值，需后续用 SVG 路径校准（对照各赛道 SVG 轮廓 path
-        的实际弯道位置修正）。
+        真实坐标优先取自 ``_track_anchors.TRACK_ANCHORS``；本函数仅作为
+        fallback，用于 track_maps 未覆盖的弯道（如 sakhir/miami/monaco
+        中 track.py 弯道数多于 track_maps 的部分）。
     """
     angle = 2.0 * math.pi * (number - 1) / total
     return CornerAnchor(
         anchor_x=0.5 + 0.4 * math.cos(angle),
         anchor_y=0.5 + 0.4 * math.sin(angle),
     )
+
+
+def _clamp01(v: float, eps: float = 1e-4) -> float:
+    """把值夹到 (0, 1) 开区间内，避免边界 0/1 导致热区贴边。"""
+    if v <= 0.0:
+        return eps
+    if v >= 1.0:
+        return 1.0 - eps
+    return v
+
+
+def _apply_real_anchors(track_id: str, corners: list[Corner]) -> list[Corner]:
+    """用 track_maps 真实像素坐标覆盖 corners 的 anchor。
+
+    策略：
+        1. 若 ``track_id`` 不在 ``TRACK_ANCHORS``，原样返回（保留椭圆估算）。
+        2. 否则按 ``corner.number`` 在 ``TRACK_ANCHORS[track_id]`` 中查真实坐标；
+           命中则用 ``x_px/canvas_width`` / ``y_px/canvas_height`` 归一化并夹到
+           (0, 1) 开区间；未命中保留原 ``_estimate_anchor`` 估算值。
+
+    返回新的 Corner 列表（不就地修改，保持纯函数）。
+    """
+    real = TRACK_ANCHORS.get(track_id)
+    if not real:
+        return corners
+    canvas = TRACK_CANVAS.get(track_id, (800, 600))
+    cw, ch = float(canvas[0]), float(canvas[1])
+    out: list[Corner] = []
+    for c in corners:
+        px = real.get(c.number)
+        if px is None:
+            out.append(c)
+            continue
+        ax = _clamp01(px[0] / cw)
+        ay = _clamp01(px[1] / ch)
+        out.append(
+            Corner(
+                number=c.number,
+                name=c.name,
+                corner_type=c.corner_type,
+                speed_kmh=c.speed_kmh,
+                anchor=CornerAnchor(anchor_x=ax, anchor_y=ay),
+            )
+        )
+    return out
 
 
 # --------------------------------------------------------------------------- #
@@ -352,18 +404,20 @@ _MANUAL_CORNER_BUILDERS: dict[str, Callable[[], list[Corner]]] = {
 
 
 def _make_corners(track_id: str, track_type: str, n_corners: int) -> list[Corner]:
-    """获取赛道弯道列表：手工录入优先，否则合成。"""
+    """获取赛道弯道列表：手工录入优先，否则合成；再用真实坐标校准锚点。"""
     builder = _MANUAL_CORNER_BUILDERS.get(track_id)
     if builder is not None:
-        return builder()
-    return _synthesize_corners(track_type, n_corners)
+        corners = builder()
+    else:
+        corners = _synthesize_corners(track_type, n_corners)
+    return _apply_real_anchors(track_id, corners)
 
 
 # --------------------------------------------------------------------------- #
 # 24 条 F1 2026 赛历赛道（按赛历轮次顺序）
 # --------------------------------------------------------------------------- #
 # 元数据核对自 legacy/f1opt/data/tracks.py ALL_TRACKS。
-# udp_track_id 按赛历轮次顺序分配（round_number - 1），需对照 EA F1 2026
+# udp_track_id 按赛历轮次顺序分配（round_number - 1），需对照 F1 25
 # 官方 UDP 规范 m_trackId 枚举校准。
 # svg_path 相对 setup_tuner/ui/ 目录。
 
