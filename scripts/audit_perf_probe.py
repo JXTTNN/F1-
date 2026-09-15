@@ -489,10 +489,15 @@ def p2c_detail_old_vs_new():
     assert old_core() == new_core(), "新实现输出与旧实现不一致（重构不等价）"
     _, t_old = bench(old_core, 3000)
     _, t_new = bench(new_core, 3000)
-    item("P2c.报告文案组装 旧 vs 新（同轮对比）", "PASS",
-         f"同一症状集下：旧实现 {t_old:.1f} µs → 新实现 {t_new:.1f} µs，"
-         f"降低 {(1 - t_new / t_old) * 100:.0f}%（{t_old / t_new:.2f}× 加速）；"
-         "输出逐字一致（已断言等值），纯查表去重，无语义变化")
+    delta = (1 - t_new / t_old) * 100
+    item("P2c.报告文案组装 旧 vs 新（同轮对比）",
+         "PASS" if delta > 10 else "INFO",
+         f"旧实现 {t_old:.1f} µs → 新实现 {t_new:.1f} µs（{delta:+.0f}%）。"
+         + ("查表去重带来实质收益" if delta > 10 else
+            "**实测无实质收益**：`nonzero_cells_for_param_cached` 本身已缓存，"
+            "第二次调用几乎免费；真正耗时在 f-string 格式化与 "
+            "`\"、\".join(...)` 文案拼接，把这些从计时里拿掉才是下一步。"
+            "本改动保留是因为它更清晰、无成本，但**不应算作性能优化**"))
     _ = CarSetup
 
 
@@ -530,10 +535,11 @@ def p7c_recorder_old_vs_new():
     per_old = t_old / len(pool)
 
     item("P7c.录制接收线程成本 旧 vs 新（同轮对比）", "PASS",
-         f"同样 {len(pool)} 包：旧实现 {per_old * 1e6:.1f} µs/包（全部在接收线程）→ "
-         f"新实现 {per_new * 1e6:.2f} µs/包（接收线程只入队），"
+         f"同样 {len(pool)} 包：旧实现 {per_old:.1f} µs/包（zstd 压缩 + 整包 JSON 序列化"
+         f"全部在接收线程）→ 新实现 {per_new:.2f} µs/包（接收线程只入队），"
          f"降低 {(1 - per_new / per_old) * 100:.1f}%（{per_old / per_new:.0f}×）；"
-         f"本批已录制 {summary.get('packet_count')}，丢弃 {summary.get('dropped_count')}")
+         f"本批已录制 {summary.get('packet_count')}，丢弃 {summary.get('dropped_count')}。"
+         "注：此处旧路径不含 SQLite flush，故绝对值低于主分支实测的 82 µs/包")
 
 
 def main() -> int:
