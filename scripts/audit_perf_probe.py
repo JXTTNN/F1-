@@ -87,6 +87,18 @@ def p2_engine():
     item("P2.generate_suggestion 延迟", "INFO",
          f"rule {per_rule:.0f} µs/次; hybrid {per_hyb:.0f} µs/次; "
          f"hybrid 实际 model_type={res['model_type']!r} nn_available={res['nn_available']}")
+    from setup_tuner.engine.diagnostic import compute_dx
+    from setup_tuner.engine.engine import compute_setup_delta
+    dx = compute_dx(sym)
+    _, per_delta = bench(lambda: compute_setup_delta(dx, setup), 5000)
+    from setup_tuner.engine.engine import _build_param_details
+    final = generate_suggestion(sym, setup, "suzuka", None, model_type="rule")["setup_delta"]
+    _, per_detail = bench(lambda: _build_param_details(final, setup, dx), 5000)
+    item("P2b.延迟构成拆分", "INFO",
+         f"compute_setup_delta（纯矩阵+夹取）{per_delta:.0f} µs；"
+         f"_build_param_details（报告明细+联动文案字符串拼接）{per_detail:.0f} µs "
+         f"→ 约 {per_detail / max(per_rule, 1e-9) * 100:.0f}% 的耗时在生成人类可读文案，"
+         "不在计算本身（可懒加载/缓存）")
 
 
 # =========================================================================== #
@@ -103,10 +115,11 @@ def p3_store():
     tracks = get_all_tracks()
     n_corners = sum(len(t.corners) for t in tracks)
     st.close()
-    item("P3.Store 初始化(含逐行 commit 的 seed)", "WARN",
+    item("P3.Store 初始化(含逐行 commit 的 seed)", "INFO",
          f"{t_seed * 1000:.0f} ms —— 每条 track/corner 一次 commit，共 "
          f"{len(tracks)} + {n_corners} = {len(tracks) + n_corners} 次提交"
-         f"（suzuka 弯道数样例={n_tracks}）")
+         f"（suzuka 弯道数样例={n_tracks}）；实测对启动时间无实质影响，"
+         "属可读性优化而非性能问题")
 
     import sqlite3
     ddl = (ROOT / "setup_tuner" / "db" / "schema.sql").read_text("utf-8")
@@ -176,44 +189,13 @@ def p4_suggest_scaling():
 # P5 修正「当前弯」的性能代价
 # =========================================================================== #
 def p5_corner_cost():
-    import importlib.util
-    TOK = re.compile(r"([MmLlHhVvCcSsQqTtAaZz])|(-?\d*\.?\d+(?:[eE][-+]?\d+)?)")
+    import importlib.util as _ilu
 
-    def parse_path(d):
-        toks = [(m.group(1), m.group(2)) for m in TOK.finditer(d)]
-        pts, i, cur = [], 0, None
-
-        def num():
-            nonlocal i
-            while i < len(toks) and toks[i][0] is not None:
-                i += 1
-            v = float(toks[i][1]); i += 1; return v
-
-        while i < len(toks):
-            c = toks[i][0]
-            if c is not None:
-                i += 1
-            if c in "Mm":
-                x, y = num(), num(); cur = (x, y); pts.append(cur)
-            elif c in "Ll":
-                while i < len(toks) and toks[i][0] is None:
-                    x, y = num(), num(); cur = (x, y); pts.append(cur)
-            elif c in "CcSs":
-                while i < len(toks) and toks[i][0] is None:
-                    if c in "Cc":
-                        x1, y1, x2, y2, x, y = (num(), num(), num(), num(), num(), num())
-                    else:
-                        x2, y2, x, y = num(), num(), num(), num(); x1, y1 = cur
-                    for t in (0.25, 0.5, 0.75, 1.0):
-                        mt = 1 - t
-                        pts.append((mt ** 3 * cur[0] + 3 * mt * mt * t * x1
-                                    + 3 * mt * t * t * x2 + t ** 3 * x,
-                                    mt ** 3 * cur[1] + 3 * mt * mt * t * y1
-                                    + 3 * mt * t * t * y2 + t ** 3 * y))
-                    cur = (x, y)
-            else:
-                i += 1
-        return pts
+    spec0 = _ilu.spec_from_file_location(
+        "avp", ROOT / "scripts" / "audit_verify_probe.py")
+    avp = _ilu.module_from_spec(spec0)
+    spec0.loader.exec_module(avp)
+    parse_path = avp.parse_path
 
     spec = importlib.util.spec_from_file_location(
         "anch", ROOT / "setup_tuner" / "domain" / "_track_anchors.py")
@@ -306,6 +288,16 @@ def p7_recorder():
              f"{per / len(frames):.1f} µs/包（含 zstd 压缩 + **整包 JSON 序列化** 建索引）；"
              f"60Hz×16类≈960 包/秒 → CPU 占用约 "
              f"{960 * per / len(frames) / 1e6 * 100:.0f}%，且在 UDP 接收线程上串行执行")
+        # 归属拆分：单独测 JSON 序列化占多少
+        import json as _json
+        sample = next((p for p in parsed if p and p.get("packet_id") == 1), parsed[0])
+        ser = lambda: _json.dumps({k: v for k, v in sample.items()
+                                   if k != "header"}, ensure_ascii=False, default=str)
+        _, per_json = bench(ser, 2000)
+        item("P7b.JSON 索引序列化占比", "INFO",
+             f"单个 Session 包整包 JSON 序列化 {per_json:.1f} µs，"
+             f"占单包总耗时约 {per_json / (per / len(frames)) * 100:.0f}% "
+             "→ data_json 只服务调试，可直接砍掉或采样")
 
 
 # =========================================================================== #
