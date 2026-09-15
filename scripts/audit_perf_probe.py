@@ -199,7 +199,7 @@ def p5_corner_cost():
 
     spec = _ilu.spec_from_file_location(
         "anch", ROOT / "setup_tuner" / "domain" / "_track_anchors.py")
-    anch = importlib.util.module_from_spec(spec); spec.loader.exec_module(anch)
+    anch = _ilu.module_from_spec(spec); spec.loader.exec_module(anch)
     from setup_tuner.api.ws import _map_corner
     from setup_tuner.domain.track import get_track_by_id
 
@@ -256,9 +256,13 @@ def p6_stream_alias():
     snap = s.get_all_latest()
     snap[6]["m_tyresPressure"][0] = 999.0
     again = s.get_latest(6)
-    item("P6.get_all_latest 深拷贝声明", "FAIL" if again["m_tyresPressure"][0] == 999.0 else "PASS",
-         f"文档称『深拷贝快照，调用方可安全修改』，实际 dict(val) 是浅拷贝："
-         f"调用方改了嵌套 list 后缓存变成 {again['m_tyresPressure']}")
+    polluted = again["m_tyresPressure"][0] == 999.0
+    item("P6.快照隔离（帧内 list 是否被拷贝）",
+         "FAIL" if polluted else "PASS",
+         ("调用方修改嵌套 list 后缓存被污染：" + str(again["m_tyresPressure"]))
+         if polluted else
+         ("帧内一维 list 已做值拷贝，缓存不被污染；"
+          "嵌套 list 的元素（如 Session 的天气预报样本）仍为共享引用，已在文档注明"))
     _, per = bench(lambda: s.get_all_latest(), 20000)
     item("P6b.get_all_latest 成本", "INFO", f"{per:.2f} µs/次（60Hz × N 连接）")
 
@@ -281,23 +285,27 @@ def p7_recorder():
             for f, p in zip(frames, parsed):
                 rec.on_raw_packet(f, p)
         dt, per = bench(run, 20)
-        st = rec.get_status() if hasattr(rec, "get_status") else {}
-        rec.stop()
+        summary = rec.stop()
         n = len(frames) * 20
-        item("P7.录制热路径成本", "WARN",
-             f"{per / len(frames):.1f} µs/包（含 zstd 压缩 + **整包 JSON 序列化** 建索引）；"
-             f"60Hz×16类≈960 包/秒 → CPU 占用约 "
-             f"{960 * per / len(frames) / 1e6 * 100:.0f}%，且在 UDP 接收线程上串行执行")
-        # 归属拆分：单独测 JSON 序列化占多少
+        per_pkt = per / len(frames)
+        item("P7.录制对 UDP 接收线程的影响", "PASS" if per_pkt < 5 else "WARN",
+             f"on_raw_packet 在接收线程上只做入队：{per_pkt:.2f} µs/包；"
+             f"60Hz×16类≈960 包/秒 → 接收线程占用约 "
+             f"{960 * per_pkt / 1e6 * 100:.2f}%；"
+             f"压缩/序列化/落库已移到独立工作线程"
+             f"（本批 {n} 包：已录制 {summary.get('packet_count')}，"
+             f"丢弃 {summary.get('dropped_count')}）")
+        # 归属拆分：整包 JSON 序列化的成本（现在由工作线程承担）
         import json as _json
         sample = next((p for p in parsed if p and p.get("packet_id") == 1), parsed[0])
-        ser = lambda: _json.dumps({k: v for k, v in sample.items()
-                                   if k != "header"}, ensure_ascii=False, default=str)
-        _, per_json = bench(ser, 2000)
-        item("P7b.JSON 索引序列化占比", "INFO",
+        def _dump() -> str:
+            return _json.dumps({k: v for k, v in sample.items() if k != "header"},
+                               ensure_ascii=False, default=str)
+        _, per_json = bench(_dump, 2000)
+        item("P7b.整包 JSON 索引序列化的代价（现已移出接收线程）", "INFO",
              f"单个 Session 包整包 JSON 序列化 {per_json:.1f} µs，"
-             f"占单包总耗时约 {per_json / (per / len(frames)) * 100:.0f}% "
-             "→ data_json 只服务调试，可直接砍掉或采样")
+             f"是入队成本（{per_pkt:.2f} µs）的 {per_json / max(per_pkt, 1e-9):.0f} 倍 —— "
+             "这正是把它移出接收线程的收益；若还嫌重可用 index_json=False 完全关闭")
 
 
 # =========================================================================== #
