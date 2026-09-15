@@ -1,0 +1,45 @@
+name: Audit Verify
+
+# 只读验证工作流：对一批具体可证伪的疑点做云端断言并打印证据。
+# 不修改任何生产代码；不改动测试；仅在独立分支上运行。
+
+on:
+  push:
+    branches: ["audit/**", "fix/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Run audit verification
+        continue-on-error: true
+        shell: bash
+        run: python -u scripts/audit_verify_probe.py 2>&1 | tee audit_verify.log
+
+      - name: Upload result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: audit-verify
+          path: |
+            audit_verify_result.json
+            audit_verify.log
+          if-no-files-found: ignore
+          retention-days: 14

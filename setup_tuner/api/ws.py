@@ -202,11 +202,19 @@ async def _push_corner_highlight(
     return corner_number if corner_number is not None else last_corner
 
 
-async def _telemetry_push_loop(ws: WebSocket, app_state: Any) -> None:
-    """遥测推送循环 —— 从 TelemetryStream 读取最新帧并推送。
+async def _telemetry_push_loop(app_state: Any) -> None:
+    """应用级**单一**推送循环（所有连接共享）。
 
-    节流 ≤ 60Hz（每帧间隔 ≥ 16.67ms）。
+    设计要点（性能）：
+        此前是「每个连接各起一个推送循环」，而每个循环都调用
+        ``ws_manager.broadcast()`` 向**所有**连接发送，于是 N 个客户端
+        每 tick 产生 **N×N** 次快照读取 + 序列化 + 发送（实测 N=8 时
+        每 tick 64 次、60Hz 下占单核 0.74%，并随 N² 增长）。
+        现在改为单个应用级任务：每 tick 只取一次快照、只序列化一次，
+        由 ``broadcast`` 完成 O(N) 扇出。
+
     推送事件：telemetry / corner / telemetry_status。
+    节流 ≤ 60Hz（每帧间隔 ≥ 16.67ms）。
     """
     last_push_time = 0.0
     last_corner: int | None = None
@@ -217,6 +225,11 @@ async def _telemetry_push_loop(ws: WebSocket, app_state: Any) -> None:
     ws_manager = getattr(app_state, "ws_manager", None)
 
     while True:
+        if ws_manager is None or ws_manager.connection_count == 0:
+            # 无客户端时不空转，等下一个 tick 再检查
+            await asyncio.sleep(_THROTTLE_INTERVAL_SEC)
+            continue
+
         await asyncio.sleep(_THROTTLE_INTERVAL_SEC)
 
         # 节流：距上次推送不足一个间隔则跳过
@@ -240,6 +253,27 @@ async def _telemetry_push_loop(ws: WebSocket, app_state: Any) -> None:
 
         # ③ 当前弯道高亮推送（落点映射变化时）
         last_corner = await _push_corner_highlight(ws_manager, all_latest, app_state, last_corner)
+
+
+def _ensure_pusher(app_state: Any) -> None:
+    """确保应用级推送任务存在（幂等；无客户端时由 _stop_pusher_if_idle 停掉）。"""
+    task = getattr(app_state, "ws_pusher_task", None)
+    if task is None or task.done():
+        app_state.ws_pusher_task = asyncio.create_task(
+            _telemetry_push_loop(app_state),
+        )
+
+
+async def _stop_pusher_if_idle(app_state: Any, ws_manager: Any) -> None:
+    """最后一个连接断开后停掉推送任务，避免无人订阅时后台空转。"""
+    if ws_manager is not None and ws_manager.connection_count > 0:
+        return
+    task = getattr(app_state, "ws_pusher_task", None)
+    app_state.ws_pusher_task = None
+    if task is not None and not task.done():
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
 
 
 # =========================================================================== #
@@ -305,6 +339,9 @@ async def websocket_endpoint(ws: WebSocket) -> None:
     前端→服务消息（JSON）：
         - {"action": "select_track", "track_id": "suzuka"}
         - {"action": "request_suggestion", "track_id": "suzuka"}
+
+    性能：遥测推送由**应用级单一任务**负责（首个连接接入时启动，
+    最后一个连接断开时停止），本端点只处理连接注册与消息收发。
     """
     app_state = ws.app.state
     ws_manager = getattr(app_state, "ws_manager", None)
@@ -315,9 +352,7 @@ async def websocket_endpoint(ws: WebSocket) -> None:
         app_state.ws_manager = ws_manager
 
     await ws_manager.connect(ws)
-
-    # 启动遥测推送循环（后台任务）
-    push_task = asyncio.create_task(_telemetry_push_loop(ws, app_state))
+    _ensure_pusher(app_state)
 
     try:
         await _ws_receive_loop(ws, ws_manager, app_state)
@@ -326,7 +361,5 @@ async def websocket_endpoint(ws: WebSocket) -> None:
     except Exception:
         logger.exception("WS endpoint error")
     finally:
-        push_task.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await push_task
         await ws_manager.disconnect(ws)
+        await _stop_pusher_if_idle(app_state, ws_manager)

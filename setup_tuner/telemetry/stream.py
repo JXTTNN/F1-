@@ -53,15 +53,28 @@ class TelemetryStream:
     def get_all_latest(self) -> dict[int, dict[str, Any]]:
         """获取所有已缓存且有数据的 packet_id 的最新帧快照。
 
-        返回的 dict 是深拷贝快照（各 value 也是 dict 副本），调用方可安全修改。
+        返回的 dict 是**顶层副本，且帧内一维 list 也会复制**（如
+        ``m_tyresPressure`` / ``m_tyresSurfaceTemperature`` / ``m_brakesTemperature``），
+        修改它们不会污染缓存。
+
+        .. note::
+            嵌套 list 的**元素**仍是共享引用（例如 Session 包的
+            ``m_weatherForecastSamples`` 是 ``list[dict]``）。这些字段请只读使用；
+            需要完全隔离时调用方自行 ``copy.deepcopy``。
+
         未收到过的包不会出现在返回值中。
         """
         with self._lock:
-            return {
-                pid: dict(val)
-                for pid, val in self._cache.items()
-                if val is not None
-            }
+            snapshot: dict[int, dict[str, Any]] = {}
+            for pid, val in self._cache.items():
+                if val is None:
+                    continue
+                # 浅拷贝帧 dict，但对一维 list 做值拷贝，避免调用方原地修改污染缓存
+                snapshot[pid] = {
+                    k: (list(v) if isinstance(v, list) else v)
+                    for k, v in val.items()
+                }
+            return snapshot
 
     def clear(self) -> None:
         """清空所有缓存（线程安全）。"""
