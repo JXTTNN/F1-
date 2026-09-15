@@ -187,29 +187,30 @@ def l4_ws_fanout(samples: list[dict]) -> None:
             if p:
                 st.update(p["packet_id"], p)
     payload = st.get_all_latest().get(6, {})
-    msg = json.dumps({"event": "telemetry", "payload": {
+    # 与 api/ws.py::_push_telemetry_frame 一致：只序列化标量字段
+    payload_msg = json.dumps({"event": "telemetry", "payload": {
         "speed": payload.get("m_speed"), "throttle": payload.get("m_throttle"),
         "brake": payload.get("m_brake"), "steer": payload.get("m_steer"),
         "gear": payload.get("m_gear"), "engine_rpm": payload.get("m_engineRPM"),
         "drs": payload.get("m_drs")}}, ensure_ascii=False)
-    _, per_dumps = bench(lambda: len(msg.encode()), 20000)
+    _, per_dumps = bench(lambda: len(payload_msg.encode()), 20000)
 
     def old_tick(n_conn: int) -> None:
         # 旧实现：每个连接各有一个推送循环，每个循环又 broadcast 给全部连接
+        # → 每 tick 取 N 次快照、序列化 N×N 次
         for _ in range(n_conn):
             all_latest = st.get_all_latest()
             extract_telemetry_summary(all_latest)
             for _ in range(n_conn):
-                json.dumps({"event": "telemetry", "payload": all_latest.get(6, {})})
+                _ = len(payload_msg)
 
     def new_tick(n_conn: int) -> None:
         # 新实现：应用级单一推送循环，每 tick 取一次快照、序列化一次，扇出 N 次
         all_latest = st.get_all_latest()
         extract_telemetry_summary(all_latest)
-        payload = {"event": "telemetry", "payload": all_latest.get(6, {})}
-        _ = payload
+        _ = len(payload_msg)
         for _ in range(n_conn):
-            _ = len(msg)
+            _ = len(payload_msg)
 
     print(f"     {'连接数':>6}{'旧:每tick发送':>14}{'旧:每tick':>12}{'旧:单核@60Hz':>14}"
           f"{'新:每tick发送':>14}{'新:每tick':>12}{'新:单核@60Hz':>14}", flush=True)
