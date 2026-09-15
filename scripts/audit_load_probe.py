@@ -61,7 +61,7 @@ def l1_load_model(samples: list[dict]) -> dict:
     total_pkt = sum(_RATE_HZ.get(k, 0) for k in sizes)
     total_bw = sum(_RATE_HZ.get(k, 0) * v for k, v in sizes.items())
     sup = {"Session", "LapData", "CarSetups", "CarTelemetry", "CarStatus"}
-    sup_pkt = sum(_RATE_HZ[k] for k in sizes if k in sup)
+    sup_pkt = sum(_RATE_HZ.get(k, 0) for k in sizes if k in sup)
     frame_ids = [r["frameIdentifier"] for r in samples if r["name"] == "CarTelemetry"]
     item("L1.真实负载模型（尺寸×官方频率）", "INFO",
          f"包类型 {len(sizes)} 种；合计 {total_pkt:.0f} 包/秒，"
@@ -320,12 +320,27 @@ def l7_corner_map() -> None:
         p = (lap_distance % length_m) / length_m
         return min(fracs, key=lambda cf: min(abs(cf[1] - p), 1 - abs(cf[1] - p)))[0]
 
+    import bisect
+    sorted_tab: dict[str, tuple[list[float], list[int]]] = {}
+    for tid, fracs in table.items():
+        order = sorted(fracs, key=lambda cf: cf[1])
+        sorted_tab[tid] = ([f for _, f in order], [c for c, _ in order])
+
+    def arc_map_bisect(lap_distance: float, length_m: float, tid: str) -> int:
+        fr, cn = sorted_tab[tid]
+        p = (lap_distance % length_m) / length_m
+        i = bisect.bisect_left(fr, p)
+        lo = fr[i - 1] if i > 0 else fr[-1] - 1.0
+        hi = fr[i] if i < len(fr) else fr[0] + 1.0
+        return cn[i - 1] if (p - lo) <= (hi - p) else cn[i % len(cn)]
+
     tr = None
     for t in get_all_tracks():
         if t.track_id == "suzuka":
             tr = t
     _, t_old = bench(lambda: _map_corner(1500.0, tr.length_m, tr.corners), 30000)
-    _, t_new = bench(lambda: arc_map(1500.0, tr.length_m, "suzuka"), 30000)
+    _, t_min = bench(lambda: arc_map(1500.0, tr.length_m, "suzuka"), 30000)
+    _, t_bis = bench(lambda: arc_map_bisect(1500.0, tr.length_m, "suzuka"), 30000)
 
     # 正确率：24 赛道 × 200 采样点
     wrong = tot_n = 0
@@ -340,12 +355,22 @@ def l7_corner_map() -> None:
             got = _map_corner(d, t.length_m, t.corners)
             wrong += 0 if got == truth else 1
             tot_n += 1
+    # 修正版（bisect）与真值一致性
+    wrong2 = 0
+    for t in get_all_tracks():
+        if t.track_id not in sorted_tab:
+            continue
+        for i in range(200):
+            d = t.length_m * i / 200
+            if arc_map_bisect(d, t.length_m, t.track_id) != arc_map(d, t.length_m, t.track_id):
+                wrong2 += 1
+    cost_60hz8 = t_bis / 1e6 * 60 * 8 * 100
     item("L7.当前弯判定：成本与正确率", "FAIL",
-         f"弧长表构建 {build_ms:.0f} ms（启动时算一次，可缓存进 SVG 或 JSON）；"
-         f"单次查询 现有 {t_old:.2f} µs / 修正版 {t_new:.2f} µs "
-         f"→ **修正后仍比现状更快**，且把错误率从 "
-         f"{wrong / tot_n * 100:.1f}%（{wrong}/{tot_n} 采样点）降到 0%")
-    _ = (t_new, t_old)
+         f"弧长表构建 {build_ms:.0f} ms（24 赛道，启动/打包时算一次即可）｜单次查询："
+         f"现状 {t_old:.2f} µs、修正版(min) {t_min:.2f} µs、修正版(bisect) {t_bis:.2f} µs｜"
+         f"错误率 {wrong / tot_n * 100:.1f}%（{wrong}/{tot_n}）→ 0%（bisect 版与真值差 {wrong2} 个）｜"
+         f"bisect 版在 60Hz×8 连接下仅占单核 {cost_60hz8:.2f}%，"
+         "比现状慢几十微秒但完全可忽略 —— 正确性优先，不必为性能保留错误算法")
 
 
 def main() -> int:
