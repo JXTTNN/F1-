@@ -197,7 +197,7 @@ def p5_corner_cost():
     spec0.loader.exec_module(avp)
     parse_path = avp.parse_path
 
-    spec = importlib.util.spec_from_file_location(
+    spec = _ilu.spec_from_file_location(
         "anch", ROOT / "setup_tuner" / "domain" / "_track_anchors.py")
     anch = importlib.util.module_from_spec(spec); spec.loader.exec_module(anch)
     from setup_tuner.api.ws import _map_corner
