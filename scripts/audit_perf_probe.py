@@ -445,6 +445,97 @@ def q7_nn_dims():
              "（vec 只分配 12 位，而症状有 15 个）")
 
 
+# =========================================================================== #
+# P2c 报告文案组装：旧实现（查表两次） vs 新实现（查表一次）—— 同进程同轮对比
+# =========================================================================== #
+def p2c_detail_old_vs_new():
+    from setup_tuner.domain.setup import ALL_SETUP_FIELDS, CarSetup
+    from setup_tuner.engine.coupling import nonzero_cells_for_param_cached
+    from setup_tuner.engine.diagnostic import (
+        DIAG_DIMS_POSITIVE_SEMANTICS, DIAG_DIMS_ZH, compute_dx,
+    )
+    from setup_tuner.engine.engine import _active_cells
+
+    dx = compute_dx([("understeer", 3), ("exit_wheelspin", 2), ("tyre_wear", 4)])
+
+    def old_core() -> list:
+        out = []
+        for spec in ALL_SETUP_FIELDS:
+            links = [
+                f"{c.diag}({DIAG_DIMS_ZH[c.diag]}) Dx={dx.get(c.diag, 0.0):+.2f}"
+                for c in nonzero_cells_for_param_cached(spec.name)
+                if dx.get(c.diag, 0.0) != 0.0
+            ]
+            notes = "、".join(
+                DIAG_DIMS_POSITIVE_SEMANTICS.get(c.diag, c.diag)
+                for c in nonzero_cells_for_param_cached(spec.name)
+                if dx.get(c.diag, 0.0) != 0.0
+            )
+            out.append((links, notes))
+        return out
+
+    def new_core() -> list:
+        out = []
+        for spec in ALL_SETUP_FIELDS:
+            cells = _active_cells(spec.name, dx)
+            links = [
+                f"{c.diag}({DIAG_DIMS_ZH[c.diag]}) Dx={dx.get(c.diag, 0.0):+.2f}"
+                for c in cells
+            ]
+            notes = "、".join(DIAG_DIMS_POSITIVE_SEMANTICS.get(c.diag, c.diag) for c in cells)
+            out.append((links, notes))
+        return out
+
+    assert old_core() == new_core(), "新实现输出与旧实现不一致（重构不等价）"
+    _, t_old = bench(old_core, 3000)
+    _, t_new = bench(new_core, 3000)
+    item("P2c.报告文案组装 旧 vs 新（同轮对比）", "PASS",
+         f"同一症状集下：旧实现 {t_old:.1f} µs → 新实现 {t_new:.1f} µs，"
+         f"降低 {(1 - t_new / t_old) * 100:.0f}%（{t_old / t_new:.2f}× 加速）；"
+         "输出逐字一致（已断言等值），纯查表去重，无语义变化")
+    _ = CarSetup
+
+
+# =========================================================================== #
+# P7c 录制：旧（接收线程同步处理） vs 新（接收线程只入队）—— 同轮对比
+# =========================================================================== #
+def p7c_recorder_old_vs_new():
+    from setup_tuner.telemetry.packets import parse_packet
+    from setup_tuner.telemetry.recorder import TelemetryRecorder
+
+    frames = real_frames()
+    frames = [f for f in frames if len(f) > 900][:60]
+    parsed = [parse_packet(f) for f in frames]
+    pool = list(zip(frames, parsed))
+
+    # 新路径：接收线程只入队
+    with tempfile.TemporaryDirectory() as td_new:
+        rec_new = TelemetryRecorder(data_dir=td_new)
+        rec_new.start()
+        _, t_new = bench(lambda: [rec_new.on_raw_packet(r, p) for r, p in pool], 10)
+        summary = rec_new.stop()
+    per_new = t_new / len(pool)
+
+    # 旧路径：接收线程同步完成 zstd 压缩 + JSON 序列化 + 入批量缓冲
+    with tempfile.TemporaryDirectory() as td_old:
+        rec_old = TelemetryRecorder(data_dir=td_old)
+        rec_old.start()
+
+        def old_path() -> None:
+            for raw, p in pool:
+                raw_len, _ = rec_old._write_f1rec_record(0.0, raw)
+                rec_old._db_batch.append(rec_old._build_db_record(0.0, raw_len, p))
+        _, t_old = bench(old_path, 10)
+        rec_old.stop()
+    per_old = t_old / len(pool)
+
+    item("P7c.录制接收线程成本 旧 vs 新（同轮对比）", "PASS",
+         f"同样 {len(pool)} 包：旧实现 {per_old * 1e6:.1f} µs/包（全部在接收线程）→ "
+         f"新实现 {per_new * 1e6:.2f} µs/包（接收线程只入队），"
+         f"降低 {(1 - per_new / per_old) * 100:.1f}%（{per_old / per_new:.0f}×）；"
+         f"本批已录制 {summary.get('packet_count')}，丢弃 {summary.get('dropped_count')}")
+
+
 def main() -> int:
     print("=" * 78, flush=True)
     print("F1OPT 性能 & 个性化能力探针（云端只读）", flush=True)
@@ -452,11 +543,13 @@ def main() -> int:
     sections = [
         ("性能 P1 解析吞吐", p1_parse),
         ("性能 P2 引擎延迟", p2_engine),
+        ("性能 P2c 文案组装 旧vs新", p2c_detail_old_vs_new),
         ("性能 P3 Store 启动", p3_store),
         ("性能 P4 /suggest 伸缩", p4_suggest_scaling),
         ("性能 P5 当前弯修正代价", p5_corner_cost),
         ("性能 P6 遥测快照", p6_stream_alias),
         ("性能 P7 录制热路径", p7_recorder),
+        ("性能 P7c 录制 旧vs新", p7c_recorder_old_vs_new),
         ("个性化 Q1 赛道", q1_track_not_used),
         ("个性化 Q2 弯道级", q2_corner_dropped),
         ("个性化 Q3 饱和", q3_saturation),
