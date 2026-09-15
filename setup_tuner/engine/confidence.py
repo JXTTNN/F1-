@@ -27,6 +27,26 @@ _CONFLICT_PAIRS: frozenset[tuple[str, str]] = frozenset({
 })
 
 
+# 有效遥测佐证字段集合（模块级常量，避免每次调用重建集合）
+_TELEMETRY_EVIDENCE_KEYS: frozenset[str] = frozenset({
+    "m_tyresAgeLaps",
+    "tyres_age_laps",
+    "m_brake",
+    "brake",
+    "m_weather",
+    "weather",
+    "m_lastLapTimeInMS",
+    "last_lap_time_ms",
+    "m_sector1TimeInMS",
+    "sector1_time_ms",
+    "m_sector2TimeInMS",
+    "sector2_time_ms",
+    "tyres_surface_temperature",
+    "front_tyre_temp",
+    "rear_tyre_temp",
+})
+
+
 def _has_telemetry_evidence(telemetry: dict[str, Any] | None) -> bool:
     """判断遥测是否提供有效佐证。
 
@@ -34,24 +54,10 @@ def _has_telemetry_evidence(telemetry: dict[str, Any] | None) -> bool:
     """
     if not telemetry:
         return False
-    evidence_keys = {
-        "m_tyresAgeLaps",
-        "tyres_age_laps",
-        "m_brake",
-        "brake",
-        "m_weather",
-        "weather",
-        "m_lastLapTimeInMS",
-        "last_lap_time_ms",
-        "m_sector1TimeInMS",
-        "sector1_time_ms",
-        "m_sector2TimeInMS",
-        "sector2_time_ms",
-        "tyres_surface_temperature",
-        "front_tyre_temp",
-        "rear_tyre_temp",
-    }
-    return any(k in telemetry and telemetry[k] is not None for k in evidence_keys)
+    return any(
+        k in telemetry and telemetry[k] is not None
+        for k in _TELEMETRY_EVIDENCE_KEYS
+    )
 
 
 def _has_conflict(symptoms: list[tuple[str, int]]) -> bool:
