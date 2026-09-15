@@ -220,9 +220,10 @@ def check_real_packets():
             setups.append(parsed)
     dist = ", ".join(f"{packet_name(k)}={v}" for k, v in sorted(by_id.items()))
     item(
-        "A.真实抓包解析",
-        "PASS" if ok == total else "FAIL",
-        f"{ok}/{total} 解析成功, 短包={short}, 未知包={unknown}, 异常={other} | {dist}",
+        "A.真实抓包解析(受支持6类包)",
+        "PASS" if short == 0 and other == 0 else "FAIL",
+        f"受支持包 {ok}/{ok + short} 解析成功, 短包={short}, 解析异常={other}, "
+        f"未支持packetId(设计返回None)={unknown}, 全部记录={total} | {dist}",
     )
 
     # A2: 真实 Session 包里的 m_trackId
@@ -476,7 +477,8 @@ def check_ws_contract():
     # 后端 telemetry 事件 payload keys
     m = re.search(r"payload = \{(.*?)\n    \}", ws, re.S)
     backend = set(re.findall(r'"(\w+)":', m.group(1))) if m else set()
-    frontend = set(re.findall(r"t\.(\w+)", appjs))
+    fn = re.search(r"function onTelemetry\(t\) \{(.*?)\n  \}", appjs, re.S)
+    frontend = set(re.findall(r"t\.(\w+)", fn.group(1) if fn else ""))
     missing = sorted(frontend - backend - {"corner_number"})
     item("F1.WS telemetry 事件 payload", "INFO", ", ".join(sorted(backend)))
     item("F2.前端读取但后端不推送的字段", "FAIL" if missing else "PASS",
@@ -615,6 +617,116 @@ def check_dead_modules():
 
 
 # =========================================================================== #
+# =========================================================================== #
+# K. 每车结构步长(stride) 实测 —— 决定 _slice_player_car 偏移是否正确
+# =========================================================================== #
+def check_stride():
+    import struct as _s
+
+    fp = ROOT / "legacy" / "tests" / "data" / "real_f1_26_sample.jsonl"
+    if not fp.exists():
+        item("K.每车结构步长", "SKIP", "无真实样本")
+        return
+    want = {2: "LapData", 5: "CarSetups", 6: "CarTelemetry", 7: "CarStatus"}
+    blob: dict[int, bytes] = {}
+    for line in fp.read_text("utf-8").splitlines():
+        if not line.strip():
+            continue
+        rec = json.loads(line)
+        pid = rec.get("packetId")
+        if pid in want and pid not in blob:
+            blob[pid] = bytes.fromhex(rec["hex"])
+    from setup_tuner.telemetry.packets import (
+        NUM_CARS, _LAP_PER_STRUCT, _SETUP_PER_STRUCT, _STATUS_PER_STRUCT,
+        _TELEM_PER_STRUCT,
+    )
+    expect = {2: _LAP_PER_STRUCT.size, 5: _SETUP_PER_STRUCT.size,
+              6: _TELEM_PER_STRUCT.size, 7: _STATUS_PER_STRUCT.size}
+    for pid, data in sorted(blob.items()):
+        body = len(data) - 29
+        stride = body / NUM_CARS
+        ok = (body % NUM_CARS == 0) and (int(stride) == expect[pid])
+        item(f"K{pid}.{want[pid]} 每车步长", "PASS" if ok else "FAIL",
+             f"包长={len(data)} 体长={body} ÷ NUM_CARS({NUM_CARS})={stride:.4f}；"
+             f"代码常量={expect[pid]}B → "
+             + ("一致" if ok else "不一致！playerCarIndex>0 时切片错位"))
+    data5 = blob.get(5)
+    if data5:
+        hits = []
+        for o in range(29, len(data5) - 24):
+            try:
+                c1, c2, t1, t2 = _s.unpack_from("<ffff", data5, o + 4)
+            except _s.error:
+                continue
+            if (-3.6 <= c1 <= -2.4 and -2.1 <= c2 <= -0.9
+                    and 0.0 <= t1 <= 0.25 and 0.05 <= t2 <= 0.40):
+                hits.append(o)
+        diffs = sorted({hits[i + 1] - hits[i] for i in range(len(hits) - 1)}) \
+            if len(hits) > 1 else []
+        item("K5b.CarSetups 结构起点实测间距", "INFO",
+             f"候选起点 {len(hits)} 个, 间距集合={diffs} → 实测步长="
+             f"{diffs[0] if diffs else '无法判定'}，代码常量=50")
+    from setup_tuner.telemetry.packets import parse_packet
+    sectors: set = set()
+    for line in fp.read_text("utf-8").splitlines():
+        if not line.strip():
+            continue
+        rec = json.loads(line)
+        if rec.get("packetId") != 2:
+            continue
+        pr = parse_packet(bytes.fromhex(rec["hex"]))
+        if pr:
+            sectors.add(pr.get("m_sector"))
+    item("K6.真实 m_sector 取值", "FAIL" if sectors and max(sectors) <= 2 else "INFO",
+         f"实测集合={sorted(sectors)} → 确认 0 基(0/1/2)；engine 规则5 判断 "
+         "sector==3 永不成立，前端直接显示 'S'+sector")
+
+
+# =========================================================================== #
+# L. Packet5 UDP 原始值 → 车库值 换算是否合理（真实抓包判定）
+# =========================================================================== #
+def check_udp_remap():
+    fp = ROOT / "legacy" / "tests" / "data" / "real_f1_26_sample.jsonl"
+    from setup_tuner.domain.setup import ALL_SETUP_FIELDS
+    from setup_tuner.report.builder import (
+        _PACKET5_FIELD_MAP, convert_udp_to_game_value,
+    )
+    from setup_tuner.telemetry.packets import parse_car_setups, parse_header
+    if not fp.exists():
+        item("L.Packet5 值域换算", "SKIP", "无真实样本")
+        return
+    raw = None
+    for line in fp.read_text("utf-8").splitlines():
+        if not line.strip():
+            continue
+        rec = json.loads(line)
+        if rec.get("packetId") == 5:
+            data = bytes.fromhex(rec["hex"])
+            raw = parse_car_setups(data, parse_header(data).player_car_index)
+            break
+    if raw is None:
+        item("L.Packet5 值域换算", "SKIP", "无 CarSetups 包")
+        return
+    spec = {f.name: f for f in ALL_SETUP_FIELDS}
+    direct, remapped = [], []
+    for udp_name, param in _PACKET5_FIELD_MAP.items():
+        if udp_name not in raw:
+            continue
+        u = float(raw[udp_name])
+        mapped = convert_udp_to_game_value(param, u)
+        sp = spec[param]
+        in_domain = sp.min_val - 1e-9 <= u <= sp.max_val + 1e-9
+        line = (f"{param}: UDP原值={u:g} → 换算后={mapped:.2f} "
+                f"车库合法域=[{sp.min_val:g},{sp.max_val:g}]")
+        (direct if in_domain else remapped).append(line)
+    item("L1.Packet5 原值是否已在车库合法域内",
+         "FAIL" if len(direct) > len(remapped) else "PASS",
+         f"{len(direct)}/{len(direct) + len(remapped)} 个字段的 UDP 原值本身就落在车库域内 "
+         "→ EA 下发的是车库值，_UDP_VALUE_RANGE_MAP 的线性重映射会把它改错")
+    for line in direct:
+        print("     · " + line, flush=True)
+
+
 def main() -> int:
     print("=" * 78, flush=True)
     print("F1OPT 深度审计验证（云端只读）", flush=True)
@@ -622,7 +734,8 @@ def main() -> int:
     for fn in (check_real_packets, check_track_id_map, check_track_geometry,
                check_corner_mapping, check_telemetry_rule_coverage,
                check_ws_contract, check_param_count, check_workflows,
-               check_recordings, check_dead_modules):
+               check_recordings, check_dead_modules,
+               check_stride, check_udp_remap):
         print(f"\n--- {fn.__name__} ---", flush=True)
         try:
             fn()
