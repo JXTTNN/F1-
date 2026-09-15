@@ -10,14 +10,35 @@
 from __future__ import annotations
 
 import json
+import logging
 import sqlite3
+import sys
 import threading
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-# schema.sql 与本模块同目录
-_SCHEMA_PATH = Path(__file__).resolve().parent / "schema.sql"
+
+# schema.sql 路径定位 —— 多候选探测，兼容开发模式与 Nuitka 打包模式
+def _find_schema_path() -> Path:
+    """查找 schema.sql，兼容开发模式和 Nuitka onefile/standalone 模式。"""
+    candidates = [
+        # 1. 基于 __file__（开发模式：setup_tuner/db/store.py → setup_tuner/db/schema.sql）
+        Path(__file__).resolve().parent / "schema.sql",
+        # 2. 基于 sys.executable + setup_tuner/db/schema.sql（Nuitka onefile/standalone）
+        Path(sys.executable).resolve().parent / "setup_tuner" / "db" / "schema.sql",
+        # 3. 基于 sys.executable + db/schema.sql（Nuitka onefile 根目录极端情况）
+        Path(sys.executable).resolve().parent / "db" / "schema.sql",
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return candidates[0]
+
+
+_SCHEMA_PATH = _find_schema_path()
+
+logger = logging.getLogger(__name__)
 
 
 def _now_iso() -> str:
@@ -35,7 +56,7 @@ class Store:
         db_path: SQLite 数据库文件路径。使用 ``":memory:"`` 可创建内存库（测试用）。
     """
 
-    def __init__(self, db_path: str) -> None:
+    def __init__(self, db_path: str, *, seed: bool = True) -> None:
         self._db_path = db_path
         # check_same_thread=False 允许跨线程使用同一连接；
         # 线程安全由 self._lock 保证。
@@ -57,6 +78,8 @@ class Store:
         self._conn.row_factory = sqlite3.Row
         self._lock = threading.Lock()
         self._init_schema()
+        if seed:
+            self._seed_track_data()
 
     # ------------------------------------------------------------------
     # 初始化
@@ -67,6 +90,38 @@ class Store:
         with self._lock:
             self._conn.executescript(ddl)
             self._conn.commit()
+
+    def _seed_track_data(self) -> None:
+        """将 ALL_TRACKS 的 24 条赛道 + 弯道数据同步到数据库（幂等）。
+
+        应用启动时调用，确保 track / corner 表有静态数据。
+        使用 upsert 语义（ON CONFLICT DO UPDATE），重复启动不会产生重复记录。
+        """
+        from setup_tuner.domain.track import get_all_tracks
+
+        tracks = get_all_tracks()
+        for t in tracks:
+            self.upsert_track(
+                track_id=t.track_id,
+                official_name=t.official_name,
+                circuit_name=t.circuit_name,
+                track_type=t.track_type,
+                length_m=t.length_m,
+                corners=len(t.corners),
+                svg_path=t.svg_path,
+                udp_track_id=t.udp_track_id,
+            )
+            for c in t.corners:
+                self.upsert_corner(
+                    track_id=t.track_id,
+                    corner_number=c.number,
+                    corner_type=c.corner_type,
+                    anchor_x=c.anchor.anchor_x,
+                    anchor_y=c.anchor.anchor_y,
+                    name=c.name,
+                    speed_kmh=c.speed_kmh,
+                )
+        logger.debug("seeded %d tracks with corners into database", len(tracks))
 
     def close(self) -> None:
         """关闭数据库连接。"""
@@ -174,7 +229,7 @@ class Store:
 
         Args:
             track_id: 所属赛道标识。
-            params: 20 项参数字典（序列化为 JSON 存储）。
+            params: 21 项参数字典（序列化为 JSON 存储）。
 
         Returns:
             新插入的 setup.id。

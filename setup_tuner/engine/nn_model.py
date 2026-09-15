@@ -10,7 +10,7 @@
     - 20 维：当前调教参数（归一化到 0-1）
     - 24 维：赛道 one-hot 编码（24 条赛道）
 
-输出（20 维）：20 项调教参数的 delta 值（tanh 输出 -1~1，反归一化到 [-max_delta, +max_delta]）
+输出（21 维）：21 项调教参数的 delta 值（tanh 输出 -1~1，反归一化到 [-max_delta, +max_delta]）
 
 关键设计：
     1. **自动降级**：PyTorch 未安装或权重文件不存在时，``NNModelManager.available=False``，
@@ -121,7 +121,7 @@ if _TORCH_AVAILABLE:
             - 20 维：当前调教参数（归一化到 0-1）
             - 24 维：赛道 one-hot 编码（24 条赛道）
 
-        输出（20 维）：20 项调教参数的 delta 值（归一化到 -1 到 1）
+        输出（21 维）：21 项调教参数的 delta 值（归一化到 -1 到 1）
         """
 
         def __init__(self) -> None:

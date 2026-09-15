@@ -35,6 +35,9 @@ from collections.abc import Iterable
 # ---------------------------------------------------------------------------
 SOURCE_DX = "F1 25 官方调教指南"
 
+# 浮点零值判定 epsilon（用于 Dx 向量全零判断）
+ZERO_DX_EPSILON = 1e-12
+
 
 # ---------------------------------------------------------------------------
 # 9 个诊断维度定义
@@ -322,7 +325,7 @@ def is_zero_dx(dx: dict[str, float]) -> bool:
     Returns:
         全部分量绝对值 < 1e-12 时返回 True。
     """
-    return all(abs(v) < 1e-12 for v in dx.values())
+    return all(abs(v) < ZERO_DX_EPSILON for v in dx.values())
 
 
 def dx_to_vector(dx: dict[str, float]) -> list[float]:

@@ -137,10 +137,10 @@ class TestBuildReport:
         assert len(ts) == 20
 
     def test_report_parameters_count_23(self) -> None:
-        """参数列表 23 项。"""
+        """参数列表 21 项。"""
         result = self._make_suggestion_result()
         report = build_report(result, track_id="suzuka")
-        assert len(report["parameters"]) == 20
+        assert len(report["parameters"]) == 21
 
     def test_report_param_entry_fields(self) -> None:
         """每参数项含必要字段。"""
@@ -193,7 +193,7 @@ class TestExtractSetupFromPacket5:
     """从遥测 CarSetups 包提取 23 参数快照。"""
 
     def test_extract_all_23_params(self) -> None:
-        """提取结果覆盖全部 23 参数。"""
+        """提取结果覆盖全部 21 参数（uint8 字段经值域转换）。"""
         packet5 = {
             "m_frontWing": 7,
             "m_rearWing": 6,
@@ -215,10 +215,12 @@ class TestExtractSetupFromPacket5:
             "m_ballast": 50,
         }
         params = extract_setup_from_packet5(packet5)
-        assert len(params) == 20
-        assert params["front_wing"] == 7.0
-        assert params["rear_wing"] == 6.0
-        assert params["brake_pressure"] == 80.0
+        assert len(params) == 21
+        # uint8 字段经值域转换：UDP 0-250 → 游戏 0-50
+        assert params["front_wing"] == pytest.approx(7 / 250 * 50)
+        assert params["rear_wing"] == pytest.approx(6 / 250 * 50)
+        # uint8 字段经值域转换：UDP 0-200 → 游戏 80-100
+        assert params["brake_pressure"] == pytest.approx(80 / 200 * 20 + 80)
 
     def test_extract_missing_fields_use_default(self) -> None:
         """缺失字段取 SetupField.default。"""

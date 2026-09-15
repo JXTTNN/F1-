@@ -271,7 +271,7 @@ def test_full_workflow_with_setup_import():
         assert resp.status_code == 200
         report = resp.json()["data"]["report"]
         assert report["track_id"] == "silverstone"
-        assert len(report["parameters"]) == 20
+        assert len(report["parameters"]) == 21
 
         # 读取最新建议
         resp = client.get("/api/v1/suggest/latest", params={"track_id": "silverstone"})

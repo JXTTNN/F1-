@@ -16,6 +16,8 @@
     | POST | /api/v1/suggest               | 触发建议生成 |
     | GET  | /api/v1/suggest/latest        | 读取最新建议报告 |
     | GET  | /api/v1/iteration/history     | 历史反馈/建议对比 |
+    | POST | /api/v1/telemetry/import-file | 导入JSON遥测文件 |
+    | POST | /api/v1/telemetry/experiment  | 调教实验对比 |
 
 关键约定：
     - 所有入参出参用 pydantic BaseModel 强类型校验；
@@ -52,6 +54,11 @@ from setup_tuner.report.builder import (
     extract_setup_from_packet5,
     extract_telemetry_summary,
     feedbacks_to_symptoms,
+)
+from setup_tuner.telemetry.importer import (
+    LapTelemetrySummary,
+    import_lap_json,
+    import_laps_from_directory,
 )
 
 from .envelope import fail, ok
@@ -117,7 +124,7 @@ class SetupSnapshot(BaseModel):
     setup_id: int | None = None
     track_id: str
     imported_at: str | None = None
-    params: dict[str, float] = Field(..., description="20 项参数字典")
+    params: dict[str, float] = Field(..., description="21 项参数字典")
 
 
 class FeedbackItem(BaseModel):
@@ -232,7 +239,7 @@ class ManualSetupRequest(BaseModel):
     """手动设置调教请求。"""
 
     track_id: str = Field(..., description="赛道标识")
-    params: dict[str, float] = Field(..., description="20 项参数字典")
+    params: dict[str, float] = Field(..., description="21 项参数字典")
 
 
 class TelemetrySimulateRequest(BaseModel):
@@ -488,13 +495,13 @@ async def get_current_setup(
     return ok(data=data.model_dump())
 
 
-# setup/fields 响应缓存：20 项参数定义为静态数据，启动后不变。
+# setup/fields 响应缓存：21 项参数定义为静态数据，启动后不变。
 _SETUP_FIELDS_CACHE: dict[str, Any] | None = None
 
 
 @router.get("/setup/fields")
 async def list_setup_fields() -> dict[str, Any]:
-    """返回 20 项调教参数的完整定义（供前端渲染参数输入面板）。
+    """返回 21 项调教参数的完整定义（供前端渲染参数输入面板）。
 
     性能优化：参数定义为静态数据，首次请求后缓存响应 dict。
     """
@@ -520,7 +527,7 @@ async def list_setup_fields() -> dict[str, Any]:
 
 
 def _validate_manual_setup_params(params: dict[str, float]) -> None:
-    """校验手动调教参数：包含全部 20 项且每项在 [min, max] 范围内。"""
+    """校验手动调教参数：包含全部 21 项且每项在 [min, max] 范围内。"""
     expected_names = {f.name for f in ALL_SETUP_FIELDS}
     provided_names = set(params.keys())
 
@@ -554,9 +561,9 @@ def _validate_manual_setup_params(params: dict[str, float]) -> None:
 async def manual_setup(
     body: ManualSetupRequest, request: Request,
 ) -> dict[str, Any]:
-    """手动设置 20 参数调教快照。
+    """手动设置 21 参数调教快照。
 
-    校验 params 包含全部 20 项且每项在 [min, max] 范围内，
+    校验 params 包含全部 21 项且每项在 [min, max] 范围内，
     然后调用 store.import_setup 保存。
     """
     svc = _get_services(request)
@@ -783,10 +790,17 @@ def _safe_generate_suggestion(
 
 
 def _resolve_current_setup(store: Any, track_id: str) -> tuple[dict[str, float], int | None]:
-    """获取当前调教快照（无则用缺省）。"""
+    """获取当前调教快照（无则用缺省）。
+
+    对数据库中的 params 做格式归一化（CarSetup.from_dict → to_dict）：
+    - 忽略旧版多余字段（active_aero_x / ballast / damping / front_spring 等）；
+    - 用默认值补全新版缺失字段（front_suspension / rear_suspension / 四轮独立胎压等）。
+    这样无论数据库里存的是旧格式还是新格式，返回的都是完整 21 项参数。
+    """
     snapshot = store.get_latest_setup(track_id)
     if snapshot is not None:
-        return snapshot["params"], snapshot["id"]
+        params = CarSetup.from_dict(snapshot["params"]).to_dict()
+        return params, snapshot["id"]
     return CarSetup.default().to_dict(), None
 
 
@@ -974,7 +988,7 @@ async def iteration_history(
     return ok(data=data, message=f"共 {len(data)} 轮迭代")
 
 
-@router.post("/telemetry/simulate")
+
 def _validate_telemetry_simulate_request(body: TelemetrySimulateRequest) -> None:
     """校验 telemetry_simulate 请求的 action 与赛道。"""
     if body.action not in ("start", "stop"):
@@ -1037,6 +1051,7 @@ def _stop_telemetry_simulator(simulator: Any, track_id: str) -> dict[str, Any]:
     return ok(data=data.model_dump(), message="遥测模拟已停止")
 
 
+@router.post("/telemetry/simulate")
 async def telemetry_simulate(
     body: TelemetrySimulateRequest, request: Request,
 ) -> dict[str, Any]:
@@ -1061,6 +1076,64 @@ async def telemetry_simulate(
     if body.action == "start":
         return _start_telemetry_simulator(request, body.track_id)
     return _stop_telemetry_simulator(simulator, body.track_id)
+
+
+# =========================================================================== #
+# 遥测监听器开关端点
+# =========================================================================== #
+class ListenerToggleRequest(BaseModel):
+    """手动开关 UDP 遥测监听器请求。"""
+
+    action: str = Field(..., description="start | stop")
+
+
+class ListenerToggleResponse(BaseModel):
+    """监听器开关响应。"""
+
+    listening: bool
+    host: str
+    port: int
+
+
+@router.post("/telemetry/listener/toggle")
+async def telemetry_listener_toggle(
+    body: ListenerToggleRequest, request: Request,
+) -> dict[str, Any]:
+    """手动开关 UDP 遥测监听器。
+
+    - ``action=start``：启动监听器；若已在运行则返回当前状态（幂等）。
+    - ``action=stop``：停止监听器；若未运行则返回当前状态（幂等）。
+    """
+    if body.action not in ("start", "stop"):
+        raise fail(
+            message=f"action 必须为 'start' 或 'stop'，收到 {body.action!r}",
+            code=4011,
+        )
+
+    listener = getattr(request.app.state, "telemetry_listener", None)
+    if listener is None:
+        raise fail(
+            message="遥测监听器未初始化",
+            code=5001,
+            http_status=500,
+        )
+
+    if body.action == "start":
+        if not listener.is_running:
+            listener.start()
+    else:  # action == "stop"
+        if listener.is_running:
+            listener.stop()
+
+    data = ListenerToggleResponse(
+        listening=listener.is_running,
+        host=listener._host,
+        port=listener._port,
+    )
+    return ok(
+        data=data.model_dump(),
+        message=f"监听器已{'启动' if listener.is_running else '停止'}",
+    )
 
 
 # =========================================================================== #
@@ -1105,7 +1178,7 @@ class RecordingDetail(BaseModel):
     db_path: str | None = None
 
 
-@router.post("/telemetry/record/toggle")
+
 def _get_or_create_recorder(request: Request) -> Any:
     """从 app.state 获取或创建 TelemetryRecorder 实例。"""
     recorder = getattr(request.app.state, "telemetry_recorder", None)
@@ -1130,6 +1203,7 @@ def _validate_record_action(body: RecordToggleRequest) -> None:
         )
 
 
+@router.post("/telemetry/record/toggle")
 async def telemetry_record_toggle(
     body: RecordToggleRequest, request: Request,
 ) -> dict[str, Any]:
@@ -1241,9 +1315,18 @@ class ReplayResponse(BaseModel):
     speed: float = 1.0
 
 
-@router.post("/telemetry/replay/start")
+
 def _resolve_f1rec_path(request: Request, session_id: str) -> Path:
-    """查找录制文件路径，不存在则抛 404。"""
+    """查找录制文件路径，不存在则抛 404。
+
+    安全：验证 session_id 不含路径遍历字符（防止目录穿越攻击）。
+    """
+    if not session_id or "/" in session_id or "\\" in session_id or ".." in session_id:
+        raise fail(
+            message=f"非法的录制会话标识：{session_id!r}",
+            code=4044,
+            http_status=404,
+        )
     config = getattr(request.app.state, "config", None)
     data_dir = getattr(config, "data_dir", "data") if config else "data"
     recordings_dir = Path(data_dir) / "recordings"
@@ -1283,6 +1366,7 @@ def _build_replay_target(
     return _replay_target
 
 
+@router.post("/telemetry/replay/start")
 async def telemetry_replay_start(
     body: ReplayStartRequest, request: Request,
 ) -> dict[str, Any]:
@@ -1360,6 +1444,361 @@ async def telemetry_replay_status(request: Request) -> dict[str, Any]:
         session_id=getattr(request.app.state, "replay_session_id", None),
     )
     return ok(data=data.model_dump())
+# =========================================================================== #
+# 遥测文件导入端点
+# =========================================================================== #
+class TelemetryImportFileRequest(BaseModel):
+    """遥测文件导入请求（支持单文件或目录批量导入）。"""
+
+    path: str = Field(..., description="JSON 遥测文件路径或目录路径")
+
+
+class LapTelemetrySummaryView(BaseModel):
+    """整圈遥测统计摘要视图（对应 LapTelemetrySummary dataclass）。"""
+
+    # 圈基本信息
+    lap_number: int
+    lap_time_ms: int
+    lap_time_str: str
+    track_id: int
+    track_name: str
+    lap_valid: bool
+    sample_count: int
+    sector_times_ms: list[int]
+
+    # 天气
+    weather_code: int
+    weather_name: str
+    track_temp: float
+    air_temp: float
+
+    # 轮胎
+    tyre_compound: str
+    tyre_age_laps: int
+
+    # 速度统计 (km/h)
+    avg_speed: float
+    max_speed: float
+
+    # 油门/刹车/转向统计 (0-1)
+    avg_throttle: float
+    avg_brake: float
+    max_brake: float
+    avg_steer: float
+    max_steer: float
+
+    # 四轮温度/胎压统计 [FL, FR, RL, RR]
+    avg_tyre_surface_temp: list[float]
+    avg_tyre_inner_temp: list[float]
+    avg_brake_temp: list[float]
+    avg_tyre_pressure: list[float]
+    max_tyre_surface_temp: list[float]
+    max_brake_temp: list[float]
+    min_tyre_pressure: list[float]
+    max_tyre_pressure: list[float]
+
+    # 调教/燃油/驾驶风格
+    setup_raw: dict[str, float]
+    fuel_load_kg: float
+    fuel_in_tank_kg: float
+    driver_style: dict[str, Any]
+
+
+def _summary_to_view(summary: LapTelemetrySummary) -> LapTelemetrySummaryView:
+    """将 LapTelemetrySummary dataclass 转为 Pydantic 视图模型。"""
+    return LapTelemetrySummaryView(
+        lap_number=summary.lap_number,
+        lap_time_ms=summary.lap_time_ms,
+        lap_time_str=summary.lap_time_str,
+        track_id=summary.track_id,
+        track_name=summary.track_name,
+        lap_valid=summary.lap_valid,
+        sample_count=summary.sample_count,
+        sector_times_ms=summary.sector_times_ms,
+        weather_code=summary.weather_code,
+        weather_name=summary.weather_name,
+        track_temp=summary.track_temp,
+        air_temp=summary.air_temp,
+        tyre_compound=summary.tyre_compound,
+        tyre_age_laps=summary.tyre_age_laps,
+        avg_speed=summary.avg_speed,
+        max_speed=summary.max_speed,
+        avg_throttle=summary.avg_throttle,
+        avg_brake=summary.avg_brake,
+        max_brake=summary.max_brake,
+        avg_steer=summary.avg_steer,
+        max_steer=summary.max_steer,
+        avg_tyre_surface_temp=summary.avg_tyre_surface_temp,
+        avg_tyre_inner_temp=summary.avg_tyre_inner_temp,
+        avg_brake_temp=summary.avg_brake_temp,
+        avg_tyre_pressure=summary.avg_tyre_pressure,
+        max_tyre_surface_temp=summary.max_tyre_surface_temp,
+        max_brake_temp=summary.max_brake_temp,
+        min_tyre_pressure=summary.min_tyre_pressure,
+        max_tyre_pressure=summary.max_tyre_pressure,
+        setup_raw=summary.setup_raw,
+        fuel_load_kg=summary.fuel_load_kg,
+        fuel_in_tank_kg=summary.fuel_in_tank_kg,
+        driver_style=summary.driver_style,
+    )
+
+
+
+def _import_single_telemetry_file(path: Path) -> dict[str, Any]:
+    """导入单个 JSON 遥测文件，返回信封响应数据。"""
+    try:
+        summary = import_lap_json(str(path))
+    except (json.JSONDecodeError, KeyError) as e:
+        raise fail(
+            message=f"JSON 遥测文件解析失败：{e}",
+            code=4012,
+            http_status=400,
+        ) from e
+    data = _summary_to_view(summary).model_dump()
+    return ok(data=data, message=f"已导入圈 {summary.lap_number} 遥测数据")
+
+
+def _import_telemetry_directory(path: Path, raw_path: str) -> dict[str, Any]:
+    """批量导入目录下所有 lap_*.json 遥测文件，返回信封响应数据。"""
+    summaries = import_laps_from_directory(str(path))
+    if not summaries:
+        raise fail(
+            message=f"目录 {raw_path} 中未找到有效的 lap_*.json 文件",
+            code=4046,
+            http_status=404,
+        )
+    data = [_summary_to_view(s).model_dump() for s in summaries]
+    return ok(data=data, message=f"已导入 {len(summaries)} 圈遥测数据")
+
+
+@router.post("/telemetry/import-file")
+async def telemetry_import_file(
+    body: TelemetryImportFileRequest,
+) -> dict[str, Any]:
+    """导入 JSON 遥测文件并返回 LapTelemetrySummary 摘要。
+
+    支持两种模式：
+    - **单文件导入**：``path`` 指向 ``lap_xxx.json`` 文件，返回单条摘要；
+    - **目录批量导入**：``path`` 指向包含 ``lap_*.json`` 的目录，返回摘要列表。
+
+    请求体示例：
+        ``{"path": "D:\\\\F1TelemetryCollector\\\\dist\\\\data\\\\lap_001.json"}``
+        ``{"path": "D:\\\\F1TelemetryCollector\\\\dist\\\\data"}``
+    """
+    path = Path(body.path)
+
+    if not path.exists():
+        raise fail(
+            message=f"路径不存在：{body.path}",
+            code=4045,
+            http_status=404,
+        )
+
+    if path.is_file():
+        return _import_single_telemetry_file(path)
+
+    if path.is_dir():
+        return _import_telemetry_directory(path, body.path)
+
+    # 既不是文件也不是目录（如设备文件等）
+    raise fail(
+        message=f"路径类型不支持：{body.path}",
+        code=4013,
+        http_status=400,
+    )
+
+
+# =========================================================================== #
+# 调教实验对比端点
+# =========================================================================== #
+class TelemetryExperimentRequest(BaseModel):
+    """调教实验对比请求。
+
+    提供两份调教参数和遥测数据，分别生成建议并对比差异。
+    """
+
+    track_id: str = Field(..., description="赛道标识")
+    setup_a: dict[str, float] = Field(..., description="调教方案 A 的参数字典")
+    setup_b: dict[str, float] = Field(..., description="调教方案 B 的参数字典")
+    telemetry: dict[str, Any] = Field(
+        default_factory=dict,
+        description="遥测数据字典（avg_speed/max_speed/avg_throttle 等）",
+    )
+
+
+class ExperimentSuggestionView(BaseModel):
+    """单份调教方案的建议结果视图。"""
+
+    setup: dict[str, float] = Field(..., description="调教参数")
+    dx: dict[str, float] = Field(..., description="诊断向量")
+    setup_delta: dict[str, float] = Field(..., description="参数调整量")
+    confidence: str = Field(..., description="置信度：high|medium|low")
+    summary: str = Field(..., description="建议摘要")
+    model_type: str = Field(..., description="实际使用的模型类型")
+
+
+class ExperimentComparisonView(BaseModel):
+    """调教实验对比结果视图。"""
+
+    track_id: str
+    suggestion_a: ExperimentSuggestionView
+    suggestion_b: ExperimentSuggestionView
+    dx_diff: dict[str, float] = Field(
+        ..., description="Dx 向量差异（A - B），正值表示 A 更强",
+    )
+    setup_delta_diff: dict[str, float] = Field(
+        ..., description="SetupDelta 差异（A - B），正值表示 A 调整更大",
+    )
+    confidence_diff: str = Field(
+        ..., description="置信度差异描述",
+    )
+
+
+def _validate_experiment_setups(
+    setup_a: dict[str, float], setup_b: dict[str, float],
+) -> None:
+    """校验两份调教参数包含全部 21 项且在合法范围内。"""
+    _validate_manual_setup_params(setup_a)
+    _validate_manual_setup_params(setup_b)
+
+
+def _build_experiment_suggestion_view(
+    setup: dict[str, float],
+    suggestion: dict[str, Any],
+) -> ExperimentSuggestionView:
+    """从 generate_suggestion 结果构建单份方案视图。"""
+    return ExperimentSuggestionView(
+        setup=setup,
+        dx=suggestion["dx"],
+        setup_delta=suggestion["setup_delta"],
+        confidence=suggestion["confidence"],
+        summary=suggestion["summary"],
+        model_type=suggestion["model_type"],
+    )
+
+
+def _compute_dx_diff(
+    dx_a: dict[str, float], dx_b: dict[str, float],
+) -> dict[str, float]:
+    """计算 Dx 向量差异（A - B）。"""
+    all_dims = set(dx_a.keys()) | set(dx_b.keys())
+    return {dim: dx_a.get(dim, 0.0) - dx_b.get(dim, 0.0) for dim in all_dims}
+
+
+def _compute_setup_delta_diff(
+    delta_a: dict[str, float], delta_b: dict[str, float],
+) -> dict[str, float]:
+    """计算 SetupDelta 差异（A - B）。"""
+    all_params = set(delta_a.keys()) | set(delta_b.keys())
+    return {p: delta_a.get(p, 0.0) - delta_b.get(p, 0.0) for p in all_params}
+
+
+def _describe_confidence_diff(conf_a: str, conf_b: str) -> str:
+    """生成置信度差异描述。"""
+    if conf_a == conf_b:
+        return f"两份方案置信度相同（均为 {conf_a}）"
+    order = {"high": 3, "medium": 2, "low": 1}
+    rank_a = order.get(conf_a, 0)
+    rank_b = order.get(conf_b, 0)
+    if rank_a > rank_b:
+        return f"方案 A 置信度更高（{conf_a} > {conf_b}）"
+    return f"方案 B 置信度更高（{conf_b} > {conf_a})"
+
+
+@router.post("/telemetry/experiment")
+def _generate_experiment_suggestion(
+    setup: dict[str, float],
+    track_id: str,
+    telemetry: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """为实验对比生成单份调教建议（无车手反馈，仅遥测驱动）。
+
+    Args:
+        setup: 调教参数字典。
+        track_id: 赛道标识。
+        telemetry: 遥测数据字典（None 表示无遥测）。
+
+    Returns:
+        ``generate_suggestion`` 返回的建议结果字典。
+
+    Raises:
+        fail: 建议生成失败时抛出 HTTP 异常。
+    """
+    try:
+        return generate_suggestion(
+            symptoms=[],
+            current_setup=setup,
+            track_id=track_id,
+            telemetry=telemetry,
+            model_type="rule",
+        )
+    except Exception as e:
+        logger.exception("experiment generate_suggestion failed")
+        raise fail(
+            message=f"建议生成失败：{e}",
+            code=5002,
+            http_status=500,
+        ) from e
+
+
+def _build_experiment_comparison(
+    body: TelemetryExperimentRequest,
+    suggestion_a: dict[str, Any],
+    suggestion_b: dict[str, Any],
+) -> ExperimentComparisonView:
+    """构建调教实验对比结果视图。"""
+    view_a = _build_experiment_suggestion_view(body.setup_a, suggestion_a)
+    view_b = _build_experiment_suggestion_view(body.setup_b, suggestion_b)
+
+    return ExperimentComparisonView(
+        track_id=body.track_id,
+        suggestion_a=view_a,
+        suggestion_b=view_b,
+        dx_diff=_compute_dx_diff(suggestion_a["dx"], suggestion_b["dx"]),
+        setup_delta_diff=_compute_setup_delta_diff(
+            suggestion_a["setup_delta"], suggestion_b["setup_delta"],
+        ),
+        confidence_diff=_describe_confidence_diff(
+            suggestion_a["confidence"], suggestion_b["confidence"],
+        ),
+    )
+
+
+async def telemetry_experiment(
+    body: TelemetryExperimentRequest,
+) -> dict[str, Any]:
+    """调教实验对比：两份调教参数 + 遥测数据 → 效果分析。
+
+    分别用 setup_a 和 setup_b 作为当前调教，结合遥测数据调用
+    ``engine.generate_suggestion`` 生成建议，对比两份方案的
+    Dx 向量 / SetupDelta / 置信度差异。
+
+    请求体示例：
+        ``{"track_id": "abu_dhabi", "setup_a": {...}, "setup_b": {...}, "telemetry": {...}}``
+    """
+    # 校验赛道
+    if get_track_by_id(body.track_id) is None:
+        raise fail(
+            message=f"未知赛道标识：{body.track_id}",
+            code=4040,
+            http_status=404,
+        )
+
+    # 校验两份调教参数
+    _validate_experiment_setups(body.setup_a, body.setup_b)
+
+    # 遥测数据（空字典时传 None 给 engine）
+    telemetry = body.telemetry if body.telemetry else None
+
+    # 分别生成建议（无车手反馈，仅遥测驱动）
+    suggestion_a = _generate_experiment_suggestion(body.setup_a, body.track_id, telemetry)
+    suggestion_b = _generate_experiment_suggestion(body.setup_b, body.track_id, telemetry)
+
+    # 构建对比结果
+    data = _build_experiment_comparison(body, suggestion_a, suggestion_b)
+    return ok(data=data.model_dump(), message="调教实验对比完成")
+
+
 async def _push_suggestion_via_ws(
     request: Request, suggestion_id: int, report: dict[str, Any],
 ) -> None:

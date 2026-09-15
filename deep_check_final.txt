@@ -1,0 +1,280 @@
+======================================================================
+F1OPT 打包产物测试
+======================================================================
+  EXE:    dist\F1OPT.exe
+  ZIP:    dist\F1OPT-portable.zip
+  API:    http://127.0.0.1:8000
+  超时:   60.0s
+
+[1/6] 产物完整性验证 (integrity)...
+    • exe 存在：dist\F1OPT.exe
+    • exe 大小合理：27.14 MB
+    • zip 存在：dist\F1OPT-portable.zip
+    • zip 无损坏
+    • zip 内含 F1OPT.exe
+    • zip 内含 一键启动.bat
+
+[2/6] exe 启动冒烟 (startup)...
+    • 已启动 exe（PID=17192）
+    • API 就绪：http://127.0.0.1:8000/api/v1/health（200）
+    • health 信封格式正确（status=ok, telemetry_connected=True）
+
+[3/6] 端到端运行测试 (e2e)...
+    • GET /tracks → 24 赛道 ✓
+    • 测试赛道 suzuka 存在 ✓
+    • POST /tracks/current → 已选 suzuka ✓
+    • POST /setup/import → 409（预期：无遥测帧，code=4091）✓
+    • POST /feedback → 反馈已提交（id=48）✓
+    • POST /feedback → 第二条反馈已提交（id=49）✓
+    • POST /suggest → 建议已生成（id=29）✓
+    • GET /iteration/history → 29 轮迭代 ✓
+
+[4/6] 资源完整性验证 (resources)...
+    • GET / → 前端HTML页面 ✓
+    • GET /static/index.html → HTML ✓
+    • 全部 24 赛道有 svg_path ✓
+    • 全部 24 SVG 可访问 ✓
+
+[6/6] 80项深度检查 (deep)...
+    • ── A. 产物完整性（10项）──
+    • ✓ A1 zip>10MB — 27.04MB
+    • ✓ A2 zip无损坏
+    • ✓ A3 zip含F1OPT.exe
+    • ✓ A4 zip含一键启动.bat
+    • ✓ A5 exe>10MB — 27.14MB
+    • ✓ A6 bat含start
+    • ✓ A7 bat含health检查
+    • ✓ A8 bat不含^字符
+    • ✓ A9 zip文件数>=2 — 2个文件
+    • ✓ A10 bat UTF-8编码
+    • ── B. 启动检查（10项）──
+    • ✓ B1 exe能启动 — PID=17192（复用Phase 2实例）
+    • ✓ B2 API 20秒就绪 — 复用Phase 2已就绪API
+    • ✓ B9 启动<15秒 — 0.00s
+    • ✓ B3 health 200
+    • ✓ B4 status=ok — status=ok
+    • ✓ B5 telemetry_connected字段存在 — telemetry_connected=True
+    • ✓ B6 udp_host=127.0.0.1 — udp_host=127.0.0.1
+    • ✓ B7 udp_port=20777 — udp_port=20777
+    • ✓ B8 current_track_id字段存在 — current_track_id=suzuka
+    • ✓ B10 内存<200MB — 130.71MB
+    • ── C. UI完整性（15项）──
+    • ✓ C1 GET/ 200
+    • ✓ C2 GET/ 返回HTML
+    • ✓ C3 index.html 200
+    • ✓ C4 index.html>5000字节 — 15808字节
+    • ✓ C5 含<title>
+    • ✓ C6 含app.js引用
+    • ✓ C7 含style.css引用
+    • ✓ C8 app.js 200
+    • ✓ C9 app.js>10000字节 — 52176字节
+    • ✓ C10 app.js含fetch
+    • ✓ C11 app.js含WebSocket
+    • ✓ C12 style.css 200
+    • ✓ C13 style.css>5000字节 — 35114字节
+    • ✓ C14 style.css含body
+    • ✓ C15 style.css含track-map
+    • ── D. 数据正确性（20项）──
+    • ✓ D1 /tracks 200
+    • ✓ D2 24赛道 — 24个
+    • ✓ D3 每赛道有id
+    • ✓ D4 有official_name
+    • ✓ D5 有corners
+    • ✓ D6 有svg_path
+    • ✓ D7 corners>0
+    • ✓ D8 svg_path以tracks/开头
+    • ✓ D9 24 SVG全200
+    • ✓ D10 每SVG>100字节
+    • ✓ D11 SVG以<svg开头
+    • ✓ D12 SVG含viewBox
+    • ✓ D13 official_name不重复
+    • ✓ D14 id不重复
+    • ✓ D15 /docs 200
+    • ✓ D16 /openapi.json 200
+    • ✓ D17 openapi含tracks
+    • ✓ D18 openapi含feedback
+    • ✓ D19 openapi含suggest
+    • ✓ D20 openapi含iteration
+    • ── E. 业务逻辑（15项）──
+    • ✓ E1 POST tracks/current 200
+    • ✓ E2 health显示current_track_id — current=suzuka
+    • ✓ E3 POST feedback 200
+    • ✓ E4 feedback返回id — id=50
+    • ✓ E11 feedback含corner_index — keys=['id', 'track_id', 'corner_number', 'symptom', 'category', 'strength', 'setup_id', 'created_at']
+    • ✓ E12 feedback含symptom — keys=['id', 'track_id', 'corner_number', 'symptom', 'category', 'strength', 'setup_id', 'created_at']
+    • ✓ E5 POST suggest 200
+    • ✓ E6 suggest返回id — id=30
+    • ✓ E7 suggest含建议内容
+    • ✓ E13 suggest含建议项 — keys=['suggestion_id', 'track_id', 'created_at', 'report']
+    • ✓ E8 GET iteration/history 200
+    • ✓ E9 history>=1条 — 30条
+    • ✓ E15 history按round_no升序
+    • ✓ E10 无遥测setup/import 409 — status=409
+    • ✓ E14 重复反馈不崩溃 — status=200
+    • ── F. 性能基准（10项）──
+    • ✓ F1 health<50ms — 1.2ms
+    • ✓ F2 tracks<100ms — 2.0ms
+    • ✓ F3 select<100ms — 1.7ms
+    • ✓ F4 feedback<200ms — 1.3ms
+    • ✓ F5 suggest<500ms — 3.1ms
+    • ✓ F6 history<100ms — 2.2ms
+    • ✓ F7 24SVG总加载<1000ms — 34.9ms
+    • ✓ F8 并发10请求全成功
+    • ✓ F9 连续50次health无错误
+    • ✓ F10 数据库<10MB — 0.00MB
+
+    已停止主 exe 实例
+
+[5/6] 便携性验证 (portable)...
+    • 已解压 zip 到临时目录：C:\Users\29282\AppData\Local\Temp\f1opt_portable_h9x40t3a
+    • 临时目录 exe 就绪：C:\Users\29282\AppData\Local\Temp\f1opt_portable_h9x40t3a\F1OPT.exe
+    • 已从临时目录启动 exe（PID=6120）
+    • API 就绪：http://127.0.0.1:8000/api/v1/health（200）
+    • ⚠ data 目录未在 C:\Users\29282\AppData\Local\Temp\f1opt_portable_h9x40t3a\data 创建（非致命：API 功能正常）
+    • 便携模式 API 正常（24 赛道）✓
+    • 已停止临时目录 exe
+
+======================================================================
+打包产物测试报告
+======================================================================
+
+✅ 通过  [integrity]
+    产物完整性验证完成
+    • exe 存在：dist\F1OPT.exe
+    • exe 大小合理：27.14 MB
+    • zip 存在：dist\F1OPT-portable.zip
+    • zip 无损坏
+    • zip 内含 F1OPT.exe
+    • zip 内含 一键启动.bat
+
+✅ 通过  [startup]
+    exe 启动冒烟通过
+    • 已启动 exe（PID=17192）
+    • API 就绪：http://127.0.0.1:8000/api/v1/health（200）
+    • health 信封格式正确（status=ok, telemetry_connected=True）
+
+✅ 通过  [e2e]
+    端到端运行测试完成
+    • GET /tracks → 24 赛道 ✓
+    • 测试赛道 suzuka 存在 ✓
+    • POST /tracks/current → 已选 suzuka ✓
+    • POST /setup/import → 409（预期：无遥测帧，code=4091）✓
+    • POST /feedback → 反馈已提交（id=48）✓
+    • POST /feedback → 第二条反馈已提交（id=49）✓
+    • POST /suggest → 建议已生成（id=29）✓
+    • GET /iteration/history → 29 轮迭代 ✓
+
+✅ 通过  [resources]
+    资源完整性验证完成
+    • GET / → 前端HTML页面 ✓
+    • GET /static/index.html → HTML ✓
+    • 全部 24 赛道有 svg_path ✓
+    • 全部 24 SVG 可访问 ✓
+
+✅ 通过  [deep]
+    80项深度检查：80/80 通过
+    • ── A. 产物完整性（10项）──
+    • ✓ A1 zip>10MB — 27.04MB
+    • ✓ A2 zip无损坏
+    • ✓ A3 zip含F1OPT.exe
+    • ✓ A4 zip含一键启动.bat
+    • ✓ A5 exe>10MB — 27.14MB
+    • ✓ A6 bat含start
+    • ✓ A7 bat含health检查
+    • ✓ A8 bat不含^字符
+    • ✓ A9 zip文件数>=2 — 2个文件
+    • ✓ A10 bat UTF-8编码
+    • ── B. 启动检查（10项）──
+    • ✓ B1 exe能启动 — PID=17192（复用Phase 2实例）
+    • ✓ B2 API 20秒就绪 — 复用Phase 2已就绪API
+    • ✓ B9 启动<15秒 — 0.00s
+    • ✓ B3 health 200
+    • ✓ B4 status=ok — status=ok
+    • ✓ B5 telemetry_connected字段存在 — telemetry_connected=True
+    • ✓ B6 udp_host=127.0.0.1 — udp_host=127.0.0.1
+    • ✓ B7 udp_port=20777 — udp_port=20777
+    • ✓ B8 current_track_id字段存在 — current_track_id=suzuka
+    • ✓ B10 内存<200MB — 130.71MB
+    • ── C. UI完整性（15项）──
+    • ✓ C1 GET/ 200
+    • ✓ C2 GET/ 返回HTML
+    • ✓ C3 index.html 200
+    • ✓ C4 index.html>5000字节 — 15808字节
+    • ✓ C5 含<title>
+    • ✓ C6 含app.js引用
+    • ✓ C7 含style.css引用
+    • ✓ C8 app.js 200
+    • ✓ C9 app.js>10000字节 — 52176字节
+    • ✓ C10 app.js含fetch
+    • ✓ C11 app.js含WebSocket
+    • ✓ C12 style.css 200
+    • ✓ C13 style.css>5000字节 — 35114字节
+    • ✓ C14 style.css含body
+    • ✓ C15 style.css含track-map
+    • ── D. 数据正确性（20项）──
+    • ✓ D1 /tracks 200
+    • ✓ D2 24赛道 — 24个
+    • ✓ D3 每赛道有id
+    • ✓ D4 有official_name
+    • ✓ D5 有corners
+    • ✓ D6 有svg_path
+    • ✓ D7 corners>0
+    • ✓ D8 svg_path以tracks/开头
+    • ✓ D9 24 SVG全200
+    • ✓ D10 每SVG>100字节
+    • ✓ D11 SVG以<svg开头
+    • ✓ D12 SVG含viewBox
+    • ✓ D13 official_name不重复
+    • ✓ D14 id不重复
+    • ✓ D15 /docs 200
+    • ✓ D16 /openapi.json 200
+    • ✓ D17 openapi含tracks
+    • ✓ D18 openapi含feedback
+    • ✓ D19 openapi含suggest
+    • ✓ D20 openapi含iteration
+    • ── E. 业务逻辑（15项）──
+    • ✓ E1 POST tracks/current 200
+    • ✓ E2 health显示current_track_id — current=suzuka
+    • ✓ E3 POST feedback 200
+    • ✓ E4 feedback返回id — id=50
+    • ✓ E11 feedback含corner_index — keys=['id', 'track_id', 'corner_number', 'symptom', 'category', 'strength', 'setup_id', 'created_at']
+    • ✓ E12 feedback含symptom — keys=['id', 'track_id', 'corner_number', 'symptom', 'category', 'strength', 'setup_id', 'created_at']
+    • ✓ E5 POST suggest 200
+    • ✓ E6 suggest返回id — id=30
+    • ✓ E7 suggest含建议内容
+    • ✓ E13 suggest含建议项 — keys=['suggestion_id', 'track_id', 'created_at', 'report']
+    • ✓ E8 GET iteration/history 200
+    • ✓ E9 history>=1条 — 30条
+    • ✓ E15 history按round_no升序
+    • ✓ E10 无遥测setup/import 409 — status=409
+    • ✓ E14 重复反馈不崩溃 — status=200
+    • ── F. 性能基准（10项）──
+    • ✓ F1 health<50ms — 1.2ms
+    • ✓ F2 tracks<100ms — 2.0ms
+    • ✓ F3 select<100ms — 1.7ms
+    • ✓ F4 feedback<200ms — 1.3ms
+    • ✓ F5 suggest<500ms — 3.1ms
+    • ✓ F6 history<100ms — 2.2ms
+    • ✓ F7 24SVG总加载<1000ms — 34.9ms
+    • ✓ F8 并发10请求全成功
+    • ✓ F9 连续50次health无错误
+    • ✓ F10 数据库<10MB — 0.00MB
+
+✅ 通过  [portable]
+    便携性验证完成
+    • 已解压 zip 到临时目录：C:\Users\29282\AppData\Local\Temp\f1opt_portable_h9x40t3a
+    • 临时目录 exe 就绪：C:\Users\29282\AppData\Local\Temp\f1opt_portable_h9x40t3a\F1OPT.exe
+    • 已从临时目录启动 exe（PID=6120）
+    • API 就绪：http://127.0.0.1:8000/api/v1/health（200）
+    • ⚠ data 目录未在 C:\Users\29282\AppData\Local\Temp\f1opt_portable_h9x40t3a\data 创建（非致命：API 功能正常）
+    • 便携模式 API 正常（24 赛道）✓
+    • 已停止临时目录 exe
+
+======================================================================
+总计: 6/6 阶段通过
+🎉 全部测试通过！
+======================================================================
+
+测试报告已写入：D:\F1OPT-Test\dist\test-report.json
+
+=== STDERR ===

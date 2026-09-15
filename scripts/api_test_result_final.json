@@ -1,0 +1,38 @@
+﻿[
+    {
+        "name":  "健康检查",
+        "path":  "/api/v1/health",
+        "statusCode":  200,
+        "responseTimeMs":  56,
+        "success":  true,
+        "dataInfo":  "object keys=status,telemetry_connected,udp_host,udp_port,current_track_id",
+        "errorMessage":  null
+    },
+    {
+        "name":  "赛道列表",
+        "path":  "/api/v1/tracks",
+        "statusCode":  200,
+        "responseTimeMs":  25,
+        "success":  true,
+        "dataInfo":  "array count=24",
+        "errorMessage":  null
+    },
+    {
+        "name":  "调教参数定义",
+        "path":  "/api/v1/setup/fields",
+        "statusCode":  200,
+        "responseTimeMs":  24,
+        "success":  true,
+        "dataInfo":  "array count=21",
+        "errorMessage":  null
+    },
+    {
+        "name":  "症状列表",
+        "path":  "/api/v1/symptoms",
+        "statusCode":  404,
+        "responseTimeMs":  9,
+        "success":  true,
+        "dataInfo":  "端点在新版本中不存在(404),符合预期",
+        "errorMessage":  null
+    }
+]

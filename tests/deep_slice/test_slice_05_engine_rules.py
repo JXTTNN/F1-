@@ -58,7 +58,7 @@ class TestUnit:
         """get_rule 的 delta_table 应覆盖全部 23 参数。"""
         rule = get_rule("understeer")
         assert rule is not None
-        assert len(rule["delta_table"]) == 20
+        assert len(rule["delta_table"]) == 21
 
     def test_unit_get_all_rules_alias(self) -> None:
         """get_all_rules 应为 load_rules 的别名。"""
@@ -70,7 +70,7 @@ class TestUnit:
         dx = compute_dx([("understeer", 3)])
         setup = CarSetup.default().to_dict()
         delta = compute_setup_delta(dx, setup)
-        assert len(delta) == 20
+        assert len(delta) == 21
 
     def test_unit_assess_confidence_high(self) -> None:
         """assess_confidence 有遥测 + 明确反馈 → high。"""
@@ -111,7 +111,7 @@ class TestUnit:
         assert "parameters" in result
         assert "confidence" in result
         assert "summary" in result
-        assert len(result["parameters"]) == 20
+        assert len(result["parameters"]) == 21
 
     def test_unit_generate_suggestion_no_symptoms(self) -> None:
         """generate_suggestion 空症状应返回无调整建议。"""
@@ -363,8 +363,8 @@ class TestSmoke:
         )
         assert result["track_id"] == "suzuka"
         assert result["confidence"] == "high"
-        assert len(result["setup_delta"]) == 20
-        assert len(result["parameters"]) == 20
+        assert len(result["setup_delta"]) == 21
+        assert len(result["parameters"]) == 21
         # 至少有 1 个非零 delta
         nonzero = sum(1 for v in result["setup_delta"].values() if abs(v) > 1e-9)
         assert nonzero > 0
@@ -376,7 +376,7 @@ class TestSmoke:
             result = generate_suggestion(
                 [(symptom.value, 3)], setup, "suzuka", None,
             )
-            assert len(result["setup_delta"]) == 20
+            assert len(result["setup_delta"]) == 21
             assert result["confidence"] in ("high", "medium", "low")
 
     def test_smoke_suggestion_with_real_telemetry(self) -> None:
@@ -448,4 +448,4 @@ class TestSmoke:
                 [("understeer", 3)], setup, track.track_id, None,
             )
             assert result["track_id"] == track.track_id
-            assert len(result["setup_delta"]) == 20
+            assert len(result["setup_delta"]) == 21

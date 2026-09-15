@@ -117,7 +117,7 @@ class TestUnit:
     def test_unit_get_row(self) -> None:
         """get_row 应返回某诊断维度的整行（23 个参数）。"""
         row = get_row("front_grip_req")
-        assert len(row) == 20
+        assert len(row) == 21
 
     def test_unit_get_column(self) -> None:
         """get_column 应返回某参数的整列（9 个诊断维度）。"""
@@ -196,7 +196,7 @@ class TestBoundary:
     def test_boundary_get_row_unknown_diag_returns_empty_dict(self) -> None:
         """get_row 对未知诊断维度应返回全 None 的 23 槽字典。"""
         row = get_row("unknown_diag")
-        assert len(row) == 20
+        assert len(row) == 21
         assert all(v is None for v in row.values())
 
     def test_boundary_dx_to_vector_missing_dims_defaults_zero(self) -> None:
@@ -281,15 +281,15 @@ class TestStatic:
         """数量约束：DIAG_DIMS 恰好 9 维。"""
         assert len(DIAG_DIMS) == 9
 
-    def test_static_param_names_count_is_20(self) -> None:
-        """数量约束：PARAM_NAMES 恰好 23 项。"""
-        assert len(PARAM_NAMES) == 20
+    def test_static_param_names_count_is_21(self) -> None:
+        """数量约束：PARAM_NAMES 恰好 21 项。"""
+        assert len(PARAM_NAMES) == 21
 
-    def test_static_matrix_shape_9x20(self) -> None:
-        """形状约束：耦合矩阵为 9×20。"""
+    def test_static_matrix_shape_9x21(self) -> None:
+        """形状约束：耦合矩阵为 9×21。"""
         assert len(COUPLING_MATRIX) == 9
         for diag in DIAG_DIMS:
-            assert len(COUPLING_MATRIX[diag]) == 20
+            assert len(COUPLING_MATRIX[diag]) == 21
 
     def test_static_matrix_density_above_30_percent(self) -> None:
         """密度约束：矩阵非零密度 ≥ 30%。"""
@@ -406,8 +406,8 @@ class TestSmoke:
         """冒烟：matrix_stats 返回真实统计信息。"""
         stats = matrix_stats()
         assert stats["diag_dims"] == 9
-        assert stats["params"] == 20
-        assert stats["total_cells"] == 9 * 20
+        assert stats["params"] == 21
+        assert stats["total_cells"] == 9 * 21
         assert stats["nonzero_cells"] > 0
         assert stats["density"] > 0.0
         assert len(stats["sources_used"]) >= 1
@@ -430,7 +430,7 @@ class TestSmoke:
         """冒烟：遍历全部 9 行 23 列，所有单元可访问。"""
         for diag in DIAG_DIMS:
             row = get_row(diag)
-            assert len(row) == 20
+            assert len(row) == 21
         for param in PARAM_NAMES:
             col = get_column(param)
             assert len(col) == 9

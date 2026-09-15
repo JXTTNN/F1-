@@ -19,7 +19,6 @@ import pytest
 
 from setup_tuner.telemetry.packets import (
     HEADER_FORMAT,
-    HEADER_SIZE,
     NUM_CARS,
     PACKET_NAMES,
     SUPPORTED_PACKET_IDS,

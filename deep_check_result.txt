@@ -1,0 +1,278 @@
+﻿======================================================================
+F1OPT 鎵撳寘浜х墿娴嬭瘯
+======================================================================
+  EXE:    dist\F1OPT.exe
+  ZIP:    dist\F1OPT-portable.zip
+  API:    http://127.0.0.1:8000
+  瓒呮椂:   60.0s
+
+[1/6] 浜х墿瀹屾暣鎬ч獙璇?(integrity)...
+    鈥?exe 瀛樺湪锛歞ist\F1OPT.exe
+    鈥?exe 澶у皬鍚堢悊锛?7.14 MB
+    鈥?zip 瀛樺湪锛歞ist\F1OPT-portable.zip
+    鈥?zip 鏃犳崯鍧?
+    鈥?zip 鍐呭惈 F1OPT.exe
+    鈥?zip 鍐呭惈 涓€閿惎鍔?bat
+
+[2/6] exe 鍚姩鍐掔儫 (startup)...
+    鈥?宸插惎鍔?exe锛圥ID=16288锛?
+    鈥?API 灏辩华锛歨ttp://127.0.0.1:8000/api/v1/health锛?00锛?
+    鈥?health 淇″皝鏍煎紡姝ｇ‘锛坰tatus=ok, telemetry_connected=True锛?
+
+[3/6] 绔埌绔繍琛屾祴璇?(e2e)...
+    鈥?GET /tracks 鈫?24 璧涢亾 鉁?
+    鈥?娴嬭瘯璧涢亾 suzuka 瀛樺湪 鉁?
+    鈥?POST /tracks/current 鈫?宸查€?suzuka 鉁?
+    鈥?POST /setup/import 鈫?409锛堥鏈燂細鏃犻仴娴嬪抚锛宑ode=4091锛夆湏
+    鈥?POST /feedback 鈫?鍙嶉宸叉彁浜わ紙id=33锛夆湏
+    鈥?POST /feedback 鈫?绗簩鏉″弽棣堝凡鎻愪氦锛坕d=34锛夆湏
+    鈥?POST /suggest 鈫?寤鸿宸茬敓鎴愶紙id=20锛夆湏
+    鈥?GET /iteration/history 鈫?20 杞凯浠?鉁?
+
+[4/6] 璧勬簮瀹屾暣鎬ч獙璇?(resources)...
+    鈥?GET / 鈫?鍓嶇HTML椤甸潰 鉁?
+    鈥?GET /static/index.html 鈫?HTML 鉁?
+    鈥?鍏ㄩ儴 24 璧涢亾鏈?svg_path 鉁?
+    鈥?鍏ㄩ儴 24 SVG 鍙闂?鉁?
+
+[6/6] 80椤规繁搴︽鏌?(deep)...
+    鈥?鈹€鈹€ A. 浜х墿瀹屾暣鎬э紙10椤癸級鈹€鈹€
+    鈥?鉁?A1 zip>10MB 鈥?27.04MB
+    鈥?鉁?A2 zip鏃犳崯鍧?
+    鈥?鉁?A3 zip鍚獸1OPT.exe
+    鈥?鉁?A4 zip鍚竴閿惎鍔?bat
+    鈥?鉁?A5 exe>10MB 鈥?27.14MB
+    鈥?鉁?A6 bat鍚玸tart
+    鈥?鉁?A7 bat鍚玥ealth妫€鏌?
+    鈥?鉁?A8 bat涓嶅惈^瀛楃
+    鈥?鉁?A9 zip鏂囦欢鏁?=2 鈥?2涓枃浠?
+    鈥?鉁?A10 bat UTF-8缂栫爜
+    鈥?鈹€鈹€ B. 鍚姩妫€鏌ワ紙10椤癸級鈹€鈹€
+    鈥?鉁?B1 exe鑳藉惎鍔?鈥?PID=16288锛堝鐢≒hase 2瀹炰緥锛?
+    鈥?鉁?B2 API 20绉掑氨缁?鈥?澶嶇敤Phase 2宸插氨缁狝PI
+    鈥?鉁?B9 鍚姩<15绉?鈥?0.00s
+    鈥?鉁?B3 health 200
+    鈥?鉁?B4 status=ok 鈥?status=ok
+    鈥?鉁?B5 telemetry_connected瀛楁瀛樺湪 鈥?telemetry_connected=True
+    鈥?鉁?B6 udp_host=127.0.0.1 鈥?udp_host=127.0.0.1
+    鈥?鉁?B7 udp_port=20777 鈥?udp_port=20777
+    鈥?鉁?B8 current_track_id瀛楁瀛樺湪 鈥?current_track_id=suzuka
+    鈥?鉁?B10 鍐呭瓨<200MB 鈥?35.65MB
+    鈥?鈹€鈹€ C. UI瀹屾暣鎬э紙15椤癸級鈹€鈹€
+    鈥?鉁?C1 GET/ 200
+    鈥?鉁?C2 GET/ 杩斿洖HTML
+    鈥?鉁?C3 index.html 200
+    鈥?鉁?C4 index.html>5000瀛楄妭 鈥?15808瀛楄妭
+    鈥?鉁?C5 鍚?title>
+    鈥?鉁?C6 鍚玜pp.js寮曠敤
+    鈥?鉁?C7 鍚玸tyle.css寮曠敤
+    鈥?鉁?C8 app.js 200
+    鈥?鉁?C9 app.js>10000瀛楄妭 鈥?52176瀛楄妭
+    鈥?鉁?C10 app.js鍚玣etch
+    鈥?鉁?C11 app.js鍚玏ebSocket
+    鈥?鉁?C12 style.css 200
+    鈥?鉁?C13 style.css>5000瀛楄妭 鈥?35114瀛楄妭
+    鈥?鉁?C14 style.css鍚玝ody
+    鈥?鉁?C15 style.css鍚玹rack-map
+    鈥?鈹€鈹€ D. 鏁版嵁姝ｇ‘鎬э紙20椤癸級鈹€鈹€
+    鈥?鉁?D1 /tracks 200
+    鈥?鉁?D2 24璧涢亾 鈥?24涓?
+    鈥?鉁?D3 姣忚禌閬撴湁id
+    鈥?鉁?D4 鏈塷fficial_name
+    鈥?鉁?D5 鏈塩orners
+    鈥?鉁?D6 鏈塻vg_path
+    鈥?鉁?D7 corners>0
+    鈥?鉁?D8 svg_path浠racks/寮€澶?
+    鈥?鉁?D9 24 SVG鍏?00
+    鈥?鉁?D10 姣廠VG>100瀛楄妭
+    鈥?鉁?D11 SVG浠?svg寮€澶?
+    鈥?鉁?D12 SVG鍚玽iewBox
+    鈥?鉁?D13 official_name涓嶉噸澶?
+    鈥?鉁?D14 id涓嶉噸澶?
+    鈥?鉁?D15 /docs 200
+    鈥?鉁?D16 /openapi.json 200
+    鈥?鉁?D17 openapi鍚玹racks
+    鈥?鉁?D18 openapi鍚玣eedback
+    鈥?鉁?D19 openapi鍚玸uggest
+    鈥?鉁?D20 openapi鍚玦teration
+    鈥?鈹€鈹€ E. 涓氬姟閫昏緫锛?5椤癸級鈹€鈹€
+    鈥?鉁?E1 POST tracks/current 200
+    鈥?鉁?E2 health鏄剧ずcurrent_track_id 鈥?current=suzuka
+    鈥?鉁?E3 POST feedback 200
+    鈥?鉁?E4 feedback杩斿洖id 鈥?id=35
+    鈥?鉁?E11 feedback鍚玞orner_index 鈥?keys=['id', 'track_id', 'corner_number', 'symptom', 'category', 'strength', 'setup_id', 'created_at']
+    鈥?鉁?E12 feedback鍚玸ymptom 鈥?keys=['id', 'track_id', 'corner_number', 'symptom', 'category', 'strength', 'setup_id', 'created_at']
+    鈥?鉁?E5 POST suggest 200
+    鈥?鉁?E6 suggest杩斿洖id 鈥?id=21
+    鈥?鉁?E7 suggest鍚缓璁唴瀹?
+    鈥?鉁?E13 suggest鍚缓璁」 鈥?keys=['suggestion_id', 'track_id', 'created_at', 'report']
+    鈥?鉁?E8 GET iteration/history 200
+    鈥?鉁?E9 history>=1鏉?鈥?21鏉?
+    鈥?鉁?E15 history鎸塺ound_no鍗囧簭
+    鈥?鉁?E10 鏃犻仴娴媠etup/import 409 鈥?status=409
+    鈥?鉁?E14 閲嶅鍙嶉涓嶅穿婧?鈥?status=200
+    鈥?鈹€鈹€ F. 鎬ц兘鍩哄噯锛?0椤癸級鈹€鈹€
+    鈥?鉁?F1 health<50ms 鈥?0.8ms
+    鈥?鉁?F2 tracks<100ms 鈥?0.8ms
+    鈥?鉁?F3 select<100ms 鈥?0.9ms
+    鈥?鉁?F4 feedback<200ms 鈥?1.2ms
+    鈥?鉁?F5 suggest<500ms 鈥?1.8ms
+    鈥?鉁?F6 history<100ms 鈥?1.2ms
+    鈥?鉁?F7 24SVG鎬诲姞杞?1000ms 鈥?34.9ms
+    鈥?鉁?F8 骞跺彂10璇锋眰鍏ㄦ垚鍔?
+    鈥?鉁?F9 杩炵画50娆ealth鏃犻敊璇?
+    鈥?鉁?F10 鏁版嵁搴?10MB 鈥?0.00MB
+
+    宸插仠姝富 exe 瀹炰緥
+
+[5/6] 渚挎惡鎬ч獙璇?(portable)...
+    鈥?宸茶В鍘?zip 鍒颁复鏃剁洰褰曪細C:\Users\29282\AppData\Local\Temp\f1opt_portable_j7jchzv4
+    鈥?涓存椂鐩綍 exe 灏辩华锛欳:\Users\29282\AppData\Local\Temp\f1opt_portable_j7jchzv4\F1OPT.exe
+    鈥?宸蹭粠涓存椂鐩綍鍚姩 exe锛圥ID=3140锛?
+    鈥?API 灏辩华锛歨ttp://127.0.0.1:8000/api/v1/health锛?00锛?
+    鈥?鈿?data 鐩綍鏈湪 C:\Users\29282\AppData\Local\Temp\f1opt_portable_j7jchzv4\data 鍒涘缓锛堥潪鑷村懡锛欰PI 鍔熻兘姝ｅ父锛?
+    鈥?渚挎惡妯″紡 API 姝ｅ父锛?4 璧涢亾锛夆湏
+    鈥?宸插仠姝复鏃剁洰褰?exe
+
+======================================================================
+鎵撳寘浜х墿娴嬭瘯鎶ュ憡
+======================================================================
+
+鉁?閫氳繃  [integrity]
+    浜х墿瀹屾暣鎬ч獙璇佸畬鎴?
+    鈥?exe 瀛樺湪锛歞ist\F1OPT.exe
+    鈥?exe 澶у皬鍚堢悊锛?7.14 MB
+    鈥?zip 瀛樺湪锛歞ist\F1OPT-portable.zip
+    鈥?zip 鏃犳崯鍧?
+    鈥?zip 鍐呭惈 F1OPT.exe
+    鈥?zip 鍐呭惈 涓€閿惎鍔?bat
+
+鉁?閫氳繃  [startup]
+    exe 鍚姩鍐掔儫閫氳繃
+    鈥?宸插惎鍔?exe锛圥ID=16288锛?
+    鈥?API 灏辩华锛歨ttp://127.0.0.1:8000/api/v1/health锛?00锛?
+    鈥?health 淇″皝鏍煎紡姝ｇ‘锛坰tatus=ok, telemetry_connected=True锛?
+
+鉁?閫氳繃  [e2e]
+    绔埌绔繍琛屾祴璇曞畬鎴?
+    鈥?GET /tracks 鈫?24 璧涢亾 鉁?
+    鈥?娴嬭瘯璧涢亾 suzuka 瀛樺湪 鉁?
+    鈥?POST /tracks/current 鈫?宸查€?suzuka 鉁?
+    鈥?POST /setup/import 鈫?409锛堥鏈燂細鏃犻仴娴嬪抚锛宑ode=4091锛夆湏
+    鈥?POST /feedback 鈫?鍙嶉宸叉彁浜わ紙id=33锛夆湏
+    鈥?POST /feedback 鈫?绗簩鏉″弽棣堝凡鎻愪氦锛坕d=34锛夆湏
+    鈥?POST /suggest 鈫?寤鸿宸茬敓鎴愶紙id=20锛夆湏
+    鈥?GET /iteration/history 鈫?20 杞凯浠?鉁?
+
+鉁?閫氳繃  [resources]
+    璧勬簮瀹屾暣鎬ч獙璇佸畬鎴?
+    鈥?GET / 鈫?鍓嶇HTML椤甸潰 鉁?
+    鈥?GET /static/index.html 鈫?HTML 鉁?
+    鈥?鍏ㄩ儴 24 璧涢亾鏈?svg_path 鉁?
+    鈥?鍏ㄩ儴 24 SVG 鍙闂?鉁?
+
+鉁?閫氳繃  [deep]
+    80椤规繁搴︽鏌ワ細80/80 閫氳繃
+    鈥?鈹€鈹€ A. 浜х墿瀹屾暣鎬э紙10椤癸級鈹€鈹€
+    鈥?鉁?A1 zip>10MB 鈥?27.04MB
+    鈥?鉁?A2 zip鏃犳崯鍧?
+    鈥?鉁?A3 zip鍚獸1OPT.exe
+    鈥?鉁?A4 zip鍚竴閿惎鍔?bat
+    鈥?鉁?A5 exe>10MB 鈥?27.14MB
+    鈥?鉁?A6 bat鍚玸tart
+    鈥?鉁?A7 bat鍚玥ealth妫€鏌?
+    鈥?鉁?A8 bat涓嶅惈^瀛楃
+    鈥?鉁?A9 zip鏂囦欢鏁?=2 鈥?2涓枃浠?
+    鈥?鉁?A10 bat UTF-8缂栫爜
+    鈥?鈹€鈹€ B. 鍚姩妫€鏌ワ紙10椤癸級鈹€鈹€
+    鈥?鉁?B1 exe鑳藉惎鍔?鈥?PID=16288锛堝鐢≒hase 2瀹炰緥锛?
+    鈥?鉁?B2 API 20绉掑氨缁?鈥?澶嶇敤Phase 2宸插氨缁狝PI
+    鈥?鉁?B9 鍚姩<15绉?鈥?0.00s
+    鈥?鉁?B3 health 200
+    鈥?鉁?B4 status=ok 鈥?status=ok
+    鈥?鉁?B5 telemetry_connected瀛楁瀛樺湪 鈥?telemetry_connected=True
+    鈥?鉁?B6 udp_host=127.0.0.1 鈥?udp_host=127.0.0.1
+    鈥?鉁?B7 udp_port=20777 鈥?udp_port=20777
+    鈥?鉁?B8 current_track_id瀛楁瀛樺湪 鈥?current_track_id=suzuka
+    鈥?鉁?B10 鍐呭瓨<200MB 鈥?35.65MB
+    鈥?鈹€鈹€ C. UI瀹屾暣鎬э紙15椤癸級鈹€鈹€
+    鈥?鉁?C1 GET/ 200
+    鈥?鉁?C2 GET/ 杩斿洖HTML
+    鈥?鉁?C3 index.html 200
+    鈥?鉁?C4 index.html>5000瀛楄妭 鈥?15808瀛楄妭
+    鈥?鉁?C5 鍚?title>
+    鈥?鉁?C6 鍚玜pp.js寮曠敤
+    鈥?鉁?C7 鍚玸tyle.css寮曠敤
+    鈥?鉁?C8 app.js 200
+    鈥?鉁?C9 app.js>10000瀛楄妭 鈥?52176瀛楄妭
+    鈥?鉁?C10 app.js鍚玣etch
+    鈥?鉁?C11 app.js鍚玏ebSocket
+    鈥?鉁?C12 style.css 200
+    鈥?鉁?C13 style.css>5000瀛楄妭 鈥?35114瀛楄妭
+    鈥?鉁?C14 style.css鍚玝ody
+    鈥?鉁?C15 style.css鍚玹rack-map
+    鈥?鈹€鈹€ D. 鏁版嵁姝ｇ‘鎬э紙20椤癸級鈹€鈹€
+    鈥?鉁?D1 /tracks 200
+    鈥?鉁?D2 24璧涢亾 鈥?24涓?
+    鈥?鉁?D3 姣忚禌閬撴湁id
+    鈥?鉁?D4 鏈塷fficial_name
+    鈥?鉁?D5 鏈塩orners
+    鈥?鉁?D6 鏈塻vg_path
+    鈥?鉁?D7 corners>0
+    鈥?鉁?D8 svg_path浠racks/寮€澶?
+    鈥?鉁?D9 24 SVG鍏?00
+    鈥?鉁?D10 姣廠VG>100瀛楄妭
+    鈥?鉁?D11 SVG浠?svg寮€澶?
+    鈥?鉁?D12 SVG鍚玽iewBox
+    鈥?鉁?D13 official_name涓嶉噸澶?
+    鈥?鉁?D14 id涓嶉噸澶?
+    鈥?鉁?D15 /docs 200
+    鈥?鉁?D16 /openapi.json 200
+    鈥?鉁?D17 openapi鍚玹racks
+    鈥?鉁?D18 openapi鍚玣eedback
+    鈥?鉁?D19 openapi鍚玸uggest
+    鈥?鉁?D20 openapi鍚玦teration
+    鈥?鈹€鈹€ E. 涓氬姟閫昏緫锛?5椤癸級鈹€鈹€
+    鈥?鉁?E1 POST tracks/current 200
+    鈥?鉁?E2 health鏄剧ずcurrent_track_id 鈥?current=suzuka
+    鈥?鉁?E3 POST feedback 200
+    鈥?鉁?E4 feedback杩斿洖id 鈥?id=35
+    鈥?鉁?E11 feedback鍚玞orner_index 鈥?keys=['id', 'track_id', 'corner_number', 'symptom', 'category', 'strength', 'setup_id', 'created_at']
+    鈥?鉁?E12 feedback鍚玸ymptom 鈥?keys=['id', 'track_id', 'corner_number', 'symptom', 'category', 'strength', 'setup_id', 'created_at']
+    鈥?鉁?E5 POST suggest 200
+    鈥?鉁?E6 suggest杩斿洖id 鈥?id=21
+    鈥?鉁?E7 suggest鍚缓璁唴瀹?
+    鈥?鉁?E13 suggest鍚缓璁」 鈥?keys=['suggestion_id', 'track_id', 'created_at', 'report']
+    鈥?鉁?E8 GET iteration/history 200
+    鈥?鉁?E9 history>=1鏉?鈥?21鏉?
+    鈥?鉁?E15 history鎸塺ound_no鍗囧簭
+    鈥?鉁?E10 鏃犻仴娴媠etup/import 409 鈥?status=409
+    鈥?鉁?E14 閲嶅鍙嶉涓嶅穿婧?鈥?status=200
+    鈥?鈹€鈹€ F. 鎬ц兘鍩哄噯锛?0椤癸級鈹€鈹€
+    鈥?鉁?F1 health<50ms 鈥?0.8ms
+    鈥?鉁?F2 tracks<100ms 鈥?0.8ms
+    鈥?鉁?F3 select<100ms 鈥?0.9ms
+    鈥?鉁?F4 feedback<200ms 鈥?1.2ms
+    鈥?鉁?F5 suggest<500ms 鈥?1.8ms
+    鈥?鉁?F6 history<100ms 鈥?1.2ms
+    鈥?鉁?F7 24SVG鎬诲姞杞?1000ms 鈥?34.9ms
+    鈥?鉁?F8 骞跺彂10璇锋眰鍏ㄦ垚鍔?
+    鈥?鉁?F9 杩炵画50娆ealth鏃犻敊璇?
+    鈥?鉁?F10 鏁版嵁搴?10MB 鈥?0.00MB
+
+鉁?閫氳繃  [portable]
+    渚挎惡鎬ч獙璇佸畬鎴?
+    鈥?宸茶В鍘?zip 鍒颁复鏃剁洰褰曪細C:\Users\29282\AppData\Local\Temp\f1opt_portable_j7jchzv4
+    鈥?涓存椂鐩綍 exe 灏辩华锛欳:\Users\29282\AppData\Local\Temp\f1opt_portable_j7jchzv4\F1OPT.exe
+    鈥?宸蹭粠涓存椂鐩綍鍚姩 exe锛圥ID=3140锛?
+    鈥?API 灏辩华锛歨ttp://127.0.0.1:8000/api/v1/health锛?00锛?
+    鈥?鈿?data 鐩綍鏈湪 C:\Users\29282\AppData\Local\Temp\f1opt_portable_j7jchzv4\data 鍒涘缓锛堥潪鑷村懡锛欰PI 鍔熻兘姝ｅ父锛?
+    鈥?渚挎惡妯″紡 API 姝ｅ父锛?4 璧涢亾锛夆湏
+    鈥?宸插仠姝复鏃剁洰褰?exe
+
+======================================================================
+鎬昏: 6/6 闃舵閫氳繃
+馃帀 鍏ㄩ儴娴嬭瘯閫氳繃锛?
+======================================================================
+
+娴嬭瘯鎶ュ憡宸插啓鍏ワ細D:\F1OPT-Test\dist\test-report.json

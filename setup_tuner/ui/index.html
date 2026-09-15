@@ -3,19 +3,22 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>F1OPT 赛车调教优化助手 · F1 Broadcast Telemetry</title>
+  <meta name="color-scheme" content="dark" />
+  <meta name="theme-color" content="#0a0e14" />
+  <meta name="description" content="F1OPT 赛车调教优化助手 — 基于 F1 转播遥测数据的赛车调教参数优化工具" />
+  <title>F1OPT · 赛车调教优化助手</title>
   <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
   <!-- ==================== 顶部栏 ==================== -->
-  <header class="topbar">
+  <header class="topbar" role="banner">
     <div class="topbar-title">
       <span class="logo-mark" aria-hidden="true">F1</span>
       <h1>F1OPT <span class="topbar-sub">赛车调教优化助手</span></h1>
     </div>
-    <div class="topbar-status">
-      <span id="ws-dot" class="status-dot status-offline" role="status" aria-label="遥测连接状态" title="遥测连接状态"></span>
-      <span id="ws-status-text" class="status-text" aria-live="polite">遥测未连接</span>
+    <div class="topbar-status" role="status" aria-live="polite">
+      <span id="ws-dot" class="status-dot status-offline" aria-label="遥测连接状态" title="遥测连接状态"></span>
+      <span id="ws-status-text" class="status-text">遥测未连接</span>
       <span class="topbar-sep" aria-hidden="true">|</span>
       <span class="topbar-mode" id="topbar-mode">HYBRID</span>
     </div>
@@ -38,7 +41,10 @@
       <div class="card track-map-card">
         <div class="card-head">
           <h2>赛道图</h2>
-          <span class="card-hint">点击弯道圆点录入反馈，未点击的弯道默认正常</span>
+          <div class="track-map-head-actions">
+            <span class="card-hint">点击弯道圆点录入反馈，未点击的弯道默认正常</span>
+            <button id="track-feedback-btn" class="btn btn-ghost btn-sm" type="button" aria-label="录入赛道级反馈">赛道反馈</button>
+          </div>
         </div>
         <div id="track-map-wrap" class="track-map-wrap" role="region" aria-label="赛道图区域">
           <div id="track-map-empty" class="track-map-empty">请先选择赛道</div>
@@ -51,6 +57,9 @@
           <h2>实时遥测</h2>
           <div class="telemetry-head-actions">
             <span id="telemetry-sector-tag" class="sector-tag" aria-live="polite">—</span>
+            <button id="btn-listener-toggle" class="btn btn-ghost btn-sm" type="button" aria-label="开关遥测收集">
+              <span class="listener-label">收集</span>
+            </button>
             <button id="btn-record-toggle" class="btn btn-record" type="button" aria-label="开始/停止遥测录制">
               <span class="record-dot" aria-hidden="true"></span>
               <span class="record-label">录制</span>
@@ -87,12 +96,13 @@
 
     <!-- ---------- 中栏：调教参数输入面板 + 反馈面板 ---------- -->
     <section class="col-mid" aria-label="调教参数与反馈区">
-      <!-- 20项调教参数手动输入面板 -->
+      <!-- 21项调教参数手动输入面板 -->
       <div class="card setup-panel-card">
         <div class="card-head">
           <h2>调教参数输入</h2>
           <div class="setup-panel-actions">
             <button id="btn-import-current" class="btn btn-ghost btn-sm" type="button" aria-label="导入当前调教">导入当前</button>
+            <button id="btn-import-telemetry" class="btn btn-ghost btn-sm" type="button" aria-label="从遥测导入调教">从遥测导入</button>
             <button id="btn-reset-default" class="btn btn-ghost btn-sm" type="button" aria-label="重置默认值">重置默认</button>
             <button id="btn-save-setup" class="btn btn-primary btn-sm" type="button" aria-label="保存调教">保存调教</button>
           </div>
@@ -101,7 +111,7 @@
         <div id="setup-tabs" class="setup-tabs" role="tablist" aria-label="调教参数分类">
           <!-- tab 按钮由 JS 动态注入 -->
         </div>
-        <div id="setup-fields-wrap" class="setup-fields-wrap" role="region" aria-label="20项调教参数输入区">
+        <div id="setup-fields-wrap" class="setup-fields-wrap" role="region" aria-label="21项调教参数输入区">
           <!-- 参数字段由 JS 动态注入 -->
           <div class="setup-empty">参数定义加载中…</div>
         </div>
@@ -170,9 +180,9 @@
           <span id="fb-corner-number" class="fb-corner-num">—</span>
           <span id="fb-corner-name" class="fb-corner-name"></span>
         </div>
-        <p class="fb-tip">可同时勾选多个症状（checkbox 多选）。入弯/弯中/出弯类症状绑定当前弯道；全局类症状作用于整条赛道（corner_number=null）。每个选中症状都有独立的强度滑块（0-5）。</p>
+        <p id="fb-tip" class="fb-tip">可同时勾选多个症状（checkbox 多选）。入弯/弯中/出弯类症状绑定当前弯道；全局类症状作用于整条赛道（corner_number=null）。每个选中症状都有独立的强度滑块（0-5）。</p>
 
-        <!-- 12 症状分 4 类，每类可展开；checkbox 多选 -->
+        <!-- 15 症状分 4 类，每类可展开；checkbox 多选 -->
         <div id="fb-symptom-groups" class="fb-symptom-groups" role="group" aria-label="症状多选">
           <!-- 入弯 entry -->
           <div class="sym-group" data-category="entry">
@@ -248,13 +258,13 @@
   <div id="toast-container" class="toast-container" aria-live="polite" aria-atomic="false"></div>
 
   <!-- ==================== Footer ==================== -->
-  <footer class="app-footer">
+  <footer class="app-footer" role="contentinfo">
     <span class="footer-version">F1OPT v1.0.0</span>
-    <span class="footer-sep">·</span>
+    <span class="footer-sep" aria-hidden="true">·</span>
     <span>数据基准：F1 25</span>
-    <span class="footer-sep">·</span>
-    <span>24 赛道 · 20 调教参数 · 12 症状模型</span>
-    <span class="footer-sep">·</span>
+    <span class="footer-sep" aria-hidden="true">·</span>
+    <span>24 赛道 · 21 调教参数 · 15 症状模型</span>
+    <span class="footer-sep" aria-hidden="true">·</span>
     <span class="footer-theme">F1 BROADCAST</span>
   </footer>
 

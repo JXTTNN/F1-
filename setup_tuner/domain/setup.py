@@ -1,16 +1,16 @@
-"""F1 25 (2026 赛季) 调教参数全集（20 项，6 大类）。
+"""F1 25 (2026 赛季) 调教参数全集（21 项，6 大类）。
 
 本模块定义调教参数的取值范围、步长、缺省值、单次建议最大调整量。
 参数严格对齐 EA F1 游戏（F1 25，UDP format=2026）CarSetups 包（Packet 5）
-的真实字段，去掉早期版本中臆造的参数（active_aero_z/x、damping、engine_braking 等）。
+的真实字段，去掉早期版本中臆造的参数（active_aero_z/x、damping 等）。
 
-6 大类 20 项（与游戏 Garage 调教界面一一对应）：
+6 大类 21 项（与游戏 Garage 调教界面一一对应）：
 - 空气动力学 Aerodynamics: front_wing / rear_wing
 - 变速箱 Transmission: on_throttle_diff / off_throttle_diff
 - 悬挂几何 Suspension Geometry: front_camber / rear_camber / front_toe / rear_toe
 - 悬挂 Suspension: front_suspension / rear_suspension / front_anti_roll_bar /
   rear_anti_roll_bar / front_ride_height / rear_ride_height
-- 刹车 Brakes: brake_pressure / brake_bias
+- 刹车 Brakes: brake_pressure / brake_bias / engine_braking
 - 轮胎 Tyres: front_left_tyre_pressure / front_right_tyre_pressure /
   rear_left_tyre_pressure / rear_right_tyre_pressure
 
@@ -24,6 +24,9 @@ from typing import Any
 
 # 官方出处常量（EA F1 UDP Telemetry Specification, Packet 5 CarSetups）
 SRC_UDP_PACKET5 = "EA F1 UDP Spec, Packet 5 (CarSetups)"
+
+# 浮点比较 epsilon（用于步长档位对齐校验）
+FLOAT_COMPARE_EPSILON = 1e-6
 
 # group（英文大类）→ category（中文类别名）映射
 _GROUP_TO_CATEGORY: dict[str, str] = {
@@ -79,7 +82,7 @@ class SetupField:
 
 
 # ---------------------------------------------------------------------------
-# 20 项调教参数定义（按 6 大类顺序排列）
+# 21 项调教参数定义（按 6 大类顺序排列）
 # ---------------------------------------------------------------------------
 _FIELD_DEFS: list[SetupField] = [
     # 1. 空气动力学 Aerodynamics (2)
@@ -88,11 +91,11 @@ _FIELD_DEFS: list[SetupField] = [
         group="Aerodynamics",
         label="前翼",
         min_val=0.0,
-        max_val=10.0,
+        max_val=50.0,
         step=1.0,
-        default=5.0,
+        default=25.0,
         unit="级",
-        max_delta=2.0,
+        max_delta=5.0,
         source=SRC_UDP_PACKET5,
     ),
     SetupField(
@@ -100,11 +103,11 @@ _FIELD_DEFS: list[SetupField] = [
         group="Aerodynamics",
         label="后翼",
         min_val=0.0,
-        max_val=11.0,
+        max_val=50.0,
         step=1.0,
-        default=5.0,
+        default=25.0,
         unit="级",
-        max_delta=2.0,
+        max_delta=5.0,
         source=SRC_UDP_PACKET5,
     ),
     # 2. 变速箱 Transmission (2)
@@ -112,10 +115,10 @@ _FIELD_DEFS: list[SetupField] = [
         name="on_throttle_diff",
         group="Transmission",
         label="差速器（开油门）",
-        min_val=50.0,
+        min_val=10.0,
         max_val=100.0,
         step=1.0,
-        default=75.0,
+        default=50.0,
         unit="%",
         max_delta=10.0,
         source=SRC_UDP_PACKET5,
@@ -124,10 +127,10 @@ _FIELD_DEFS: list[SetupField] = [
         name="off_throttle_diff",
         group="Transmission",
         label="差速器（松油门）",
-        min_val=50.0,
+        min_val=10.0,
         max_val=100.0,
         step=1.0,
-        default=75.0,
+        default=50.0,
         unit="%",
         max_delta=10.0,
         source=SRC_UDP_PACKET5,
@@ -140,9 +143,9 @@ _FIELD_DEFS: list[SetupField] = [
         min_val=-3.5,
         max_val=-2.5,
         step=0.1,
-        default=-3.0,
+        default=-3.5,
         unit="°",
-        max_delta=0.2,
+        max_delta=0.5,
         source=SRC_UDP_PACKET5,
     ),
     SetupField(
@@ -154,7 +157,7 @@ _FIELD_DEFS: list[SetupField] = [
         step=0.1,
         default=-1.5,
         unit="°",
-        max_delta=0.2,
+        max_delta=0.5,
         source=SRC_UDP_PACKET5,
     ),
     SetupField(
@@ -162,11 +165,11 @@ _FIELD_DEFS: list[SetupField] = [
         group="Suspension Geometry",
         label="前束角",
         min_val=0.0,
-        max_val=0.1,
+        max_val=0.2,
         step=0.01,
-        default=0.05,
+        default=0.0,
         unit="°",
-        max_delta=0.02,
+        max_delta=0.05,
         source=SRC_UDP_PACKET5,
     ),
     SetupField(
@@ -174,11 +177,11 @@ _FIELD_DEFS: list[SetupField] = [
         group="Suspension Geometry",
         label="后束角",
         min_val=0.1,
-        max_val=0.6,
+        max_val=0.35,
         step=0.01,
-        default=0.35,
+        default=0.2,
         unit="°",
-        max_delta=0.1,
+        max_delta=0.05,
         source=SRC_UDP_PACKET5,
     ),
     # 4. 悬挂 Suspension (6)
@@ -187,11 +190,11 @@ _FIELD_DEFS: list[SetupField] = [
         group="Suspension",
         label="前悬挂",
         min_val=1.0,
-        max_val=6.0,
+        max_val=41.0,
         step=1.0,
-        default=3.0,
+        default=6.0,
         unit="级",
-        max_delta=1.0,
+        max_delta=2.0,
         source=SRC_UDP_PACKET5,
     ),
     SetupField(
@@ -199,11 +202,11 @@ _FIELD_DEFS: list[SetupField] = [
         group="Suspension",
         label="后悬挂",
         min_val=1.0,
-        max_val=6.0,
+        max_val=41.0,
         step=1.0,
-        default=3.0,
+        default=6.0,
         unit="级",
-        max_delta=1.0,
+        max_delta=2.0,
         source=SRC_UDP_PACKET5,
     ),
     SetupField(
@@ -211,7 +214,7 @@ _FIELD_DEFS: list[SetupField] = [
         group="Suspension",
         label="前防倾杆",
         min_val=1.0,
-        max_val=11.0,
+        max_val=21.0,
         step=1.0,
         default=6.0,
         unit="级",
@@ -223,7 +226,7 @@ _FIELD_DEFS: list[SetupField] = [
         group="Suspension",
         label="后防倾杆",
         min_val=1.0,
-        max_val=11.0,
+        max_val=21.0,
         step=1.0,
         default=6.0,
         unit="级",
@@ -234,27 +237,27 @@ _FIELD_DEFS: list[SetupField] = [
         name="front_ride_height",
         group="Suspension",
         label="前行驶高度",
-        min_val=2.0,
-        max_val=7.0,
+        min_val=15.0,
+        max_val=35.0,
         step=1.0,
-        default=4.0,
+        default=25.0,
         unit="级",
-        max_delta=1.0,
+        max_delta=2.0,
         source=SRC_UDP_PACKET5,
     ),
     SetupField(
         name="rear_ride_height",
         group="Suspension",
         label="后行驶高度",
-        min_val=2.0,
-        max_val=7.0,
+        min_val=40.0,
+        max_val=60.0,
         step=1.0,
-        default=4.0,
+        default=50.0,
         unit="级",
-        max_delta=1.0,
+        max_delta=2.0,
         source=SRC_UDP_PACKET5,
     ),
-    # 5. 刹车 Brakes (2)
+    # 5. 刹车 Brakes (3)
     SetupField(
         name="brake_pressure",
         group="Brakes",
@@ -279,59 +282,71 @@ _FIELD_DEFS: list[SetupField] = [
         max_delta=2.0,
         source=SRC_UDP_PACKET5,
     ),
+    SetupField(
+        name="engine_braking",
+        group="Brakes",
+        label="引擎制动",
+        min_val=0.0,
+        max_val=100.0,
+        step=1.0,
+        default=50.0,
+        unit="%",
+        max_delta=10.0,
+        source=SRC_UDP_PACKET5,
+    ),
     # 6. 轮胎 Tyres (4 个独立胎压)
     SetupField(
         name="front_left_tyre_pressure",
         group="Tyres",
         label="前左胎压",
-        min_val=22.0,
-        max_val=25.0,
+        min_val=22.5,
+        max_val=29.5,
         step=0.1,
         default=23.5,
         unit="psi",
-        max_delta=0.5,
+        max_delta=1.0,
         source=SRC_UDP_PACKET5,
     ),
     SetupField(
         name="front_right_tyre_pressure",
         group="Tyres",
         label="前右胎压",
-        min_val=22.0,
-        max_val=25.0,
+        min_val=22.5,
+        max_val=29.5,
         step=0.1,
         default=23.5,
         unit="psi",
-        max_delta=0.5,
+        max_delta=1.0,
         source=SRC_UDP_PACKET5,
     ),
     SetupField(
         name="rear_left_tyre_pressure",
         group="Tyres",
         label="后左胎压",
-        min_val=21.0,
-        max_val=23.5,
+        min_val=20.5,
+        max_val=26.5,
         step=0.1,
         default=22.0,
         unit="psi",
-        max_delta=0.5,
+        max_delta=1.0,
         source=SRC_UDP_PACKET5,
     ),
     SetupField(
         name="rear_right_tyre_pressure",
         group="Tyres",
         label="后右胎压",
-        min_val=21.0,
-        max_val=23.5,
+        min_val=20.5,
+        max_val=26.5,
         step=0.1,
         default=22.0,
         unit="psi",
-        max_delta=0.5,
+        max_delta=1.0,
         source=SRC_UDP_PACKET5,
     ),
 ]
 
 
-# 全部 20 项调教参数（按定义顺序，分组连续）
+# 全部 21 项调教参数（按定义顺序，分组连续）
 ALL_SETUP_FIELDS: list[SetupField] = list(_FIELD_DEFS)
 
 # 名称 → SetupField 的快速索引
@@ -371,7 +386,7 @@ def validate_value(name: str, value: float) -> float:
         )
     steps = round((value - spec.min_val) / spec.step)
     snapped = spec.min_val + steps * spec.step
-    if abs(snapped - value) > 1e-6:
+    if abs(snapped - value) > FLOAT_COMPARE_EPSILON:
         raise ValueError(
             f"{name}={value!r} 不符合档位步长 {spec.step:g} {spec.unit} "
             f"(最近合法值 {snapped:g})",
@@ -380,33 +395,34 @@ def validate_value(name: str, value: float) -> float:
 
 
 # ---------------------------------------------------------------------------
-# CarSetup：一份完整调教（20 字段 + 校验）
+# CarSetup：一份完整调教（21 字段 + 校验）
 # ---------------------------------------------------------------------------
 @dataclass(slots=True)
 class CarSetup:
-    """一份完整的 F1 25 调教（20 项参数，与游戏 Garage 一一对应）。"""
+    """一份完整的 F1 25 调教（21 项参数，与游戏 Garage 一一对应）。"""
 
     # 1. 空气动力学 Aerodynamics
-    front_wing: float = 5.0
-    rear_wing: float = 5.0
+    front_wing: float = 25.0
+    rear_wing: float = 25.0
     # 2. 变速箱 Transmission
-    on_throttle_diff: float = 75.0
-    off_throttle_diff: float = 75.0
+    on_throttle_diff: float = 50.0
+    off_throttle_diff: float = 50.0
     # 3. 悬挂几何 Suspension Geometry
-    front_camber: float = -3.0
+    front_camber: float = -3.5
     rear_camber: float = -1.5
-    front_toe: float = 0.05
-    rear_toe: float = 0.35
+    front_toe: float = 0.0
+    rear_toe: float = 0.2
     # 4. 悬挂 Suspension
-    front_suspension: float = 3.0
-    rear_suspension: float = 3.0
+    front_suspension: float = 6.0
+    rear_suspension: float = 6.0
     front_anti_roll_bar: float = 6.0
     rear_anti_roll_bar: float = 6.0
-    front_ride_height: float = 4.0
-    rear_ride_height: float = 4.0
+    front_ride_height: float = 25.0
+    rear_ride_height: float = 50.0
     # 5. 刹车 Brakes
     brake_pressure: float = 90.0
     brake_bias: float = 58.0
+    engine_braking: float = 50.0
     # 6. 轮胎 Tyres
     front_left_tyre_pressure: float = 23.5
     front_right_tyre_pressure: float = 23.5
@@ -414,7 +430,7 @@ class CarSetup:
     rear_right_tyre_pressure: float = 22.0
 
     def validate(self) -> CarSetup:
-        """校验全部 20 字段的范围与步长档位对齐。"""
+        """校验全部 21 字段的范围与步长档位对齐。"""
         for spec in ALL_SETUP_FIELDS:
             validate_value(spec.name, getattr(self, spec.name))
         return self
@@ -461,5 +477,5 @@ class CarSetup:
         return changes
 
     def field_names(self) -> list[str]:
-        """返回全部 20 个字段名（按定义顺序）。"""
+        """返回全部 21 个字段名（按定义顺序）。"""
         return [spec.name for spec in ALL_SETUP_FIELDS]

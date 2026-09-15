@@ -29,9 +29,14 @@ from typing import Any
 
 from setup_tuner.domain.setup import ALL_SETUP_FIELDS
 
+# 浮点比较 epsilon（用于 delta 零值判定与边界容差）
+DELTA_ZERO_EPSILON = 1e-12
+BOUND_TOLERANCE_EPSILON = 1e-6
+
 from .confidence import assess_confidence
 from .coupling import nonzero_cells_for_param_cached
 from .diagnostic import (
+    DIAG_DIMS,
     DIAG_DIMS_POSITIVE_SEMANTICS,
     DIAG_DIMS_ZH,
     compute_dx,
@@ -146,6 +151,240 @@ def _derive_telemetry_gain(telemetry: dict[str, Any] | None) -> dict[str, float]
     _apply_tyre_temp_gain(telemetry, gain)
     _apply_throttle_brake_gain(telemetry, gain)
     return gain
+
+
+# ---------------------------------------------------------------------------
+# 遥测诊断向量提取（遥测数据作为诊断输入）
+# ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# 遥测诊断向量提取辅助函数（task-104：15条规则覆盖全9维Dx + 方向修正因子）
+# ---------------------------------------------------------------------------
+def _apply_tyre_temperature_rules(
+    telemetry: dict[str, Any], dx: dict[str, float],
+) -> None:
+    """规则1/2/12/13：胎温相关规则（原地修改 dx）。
+
+    规则1 - 胎温过高（均值 > 100°C）：
+        tyre_life_req += 0.3，前轮更高时 front_grip_req += 0.2，反之 rear_grip_req += 0.2。
+    规则2 - 胎温过低（均值 < 80°C）：
+        front_grip_req += 0.3, rear_grip_req += 0.3。
+    规则12 - 胎温不均（四轮偏差 > 15°C）：
+        tyre_life_req += 0.2。出处：Pirelli官方——胎温不均加速轮胎磨损。
+    规则13 - 胎温严重不足（湿地，均值 < 60°C 且 weather_code >= 1）：
+        front_grip_req += 0.4, rear_grip_req += 0.4。
+        出处：Pirelli官方——湿地条件下胎温严重不足需大幅增加抓地力。
+    """
+    tyre_temps = telemetry.get("m_tyresSurfaceTemperature")
+    if not (isinstance(tyre_temps, list) and len(tyre_temps) >= 4):
+        return
+    temps = tyre_temps[:4]
+    avg_tyre_temp = sum(temps) / 4.0
+    front_avg = (temps[0] + temps[1]) / 2.0  # FL, FR
+    rear_avg = (temps[2] + temps[3]) / 2.0   # RL, RR
+
+    # 规则1：胎温过高
+    if avg_tyre_temp > 100.0:
+        dx["tyre_life_req"] += 0.3
+        if front_avg > rear_avg:
+            dx["front_grip_req"] += 0.2
+        else:
+            dx["rear_grip_req"] += 0.2
+    # 规则2：胎温过低
+    elif avg_tyre_temp < 80.0:
+        dx["front_grip_req"] += 0.3
+        dx["rear_grip_req"] += 0.3
+
+    # 规则12：胎温不均（四轮最大偏差 > 15°C）
+    temp_spread = max(temps) - min(temps)
+    if temp_spread > 15.0:
+        dx["tyre_life_req"] += 0.2
+
+    # 规则13：胎温严重不足（湿地条件）
+    if avg_tyre_temp < 60.0 and _is_wet_weather(telemetry):
+        dx["front_grip_req"] += 0.4
+        dx["rear_grip_req"] += 0.4
+
+
+def _apply_tyre_pressure_rules(
+    telemetry: dict[str, Any], dx: dict[str, float],
+) -> None:
+    """规则3：胎压异常（原地修改 dx）。
+
+    m_tyresPressure 任一轮胎 > 26.0 或 < 22.0 psi：
+        前轮异常 front_grip_req += 0.15，后轮异常 rear_grip_req += 0.15。
+    出处：Pirelli官方胎压工作窗口 22-26 psi。
+    """
+    tyre_pressures = telemetry.get("m_tyresPressure")
+    if not (isinstance(tyre_pressures, list) and len(tyre_pressures) >= 4):
+        return
+    front_abnormal = any(p > 26.0 or p < 22.0 for p in tyre_pressures[:2])
+    rear_abnormal = any(p > 26.0 or p < 22.0 for p in tyre_pressures[2:4])
+    if front_abnormal:
+        dx["front_grip_req"] += 0.15
+    if rear_abnormal:
+        dx["rear_grip_req"] += 0.15
+
+
+def _apply_brake_rules(
+    telemetry: dict[str, Any], dx: dict[str, float],
+) -> None:
+    """规则4/8/14：刹车相关规则（原地修改 dx）。
+
+    规则4 - 刹车温度过高（m_brakesTemperature 均值 > 500°C）：
+        brake_stab_req += 0.3。出处：F1官方刹车温度工作窗口 200-500°C。
+    规则8 - 制动力不足（m_brake > 0.8，高刹车输入但减速不明显）：
+        brake_power_req += 0.3。出处：F1官方调教指南。
+        注意：整圈统计摘要无逐帧 speed 变化率，仅用高刹车输入作为简化条件。
+    规则14 - 刹车持续过热（均值 > 600°C，比规则4更严格）：
+        brake_stab_req += 0.4, brake_power_req -= 0.2（方向修正因子——过热需减弱刹车压力）。
+    """
+    brake_temps = telemetry.get("m_brakesTemperature")
+    if isinstance(brake_temps, list) and len(brake_temps) >= 4:
+        avg_brake_temp = sum(brake_temps[:4]) / 4.0
+        # 规则4：刹车温度过高
+        if avg_brake_temp > 500.0:
+            dx["brake_stab_req"] += 0.3
+        # 规则14：刹车持续过热（更严格阈值 + 方向修正因子）
+        if avg_brake_temp > 600.0:
+            dx["brake_stab_req"] += 0.4
+            dx["brake_power_req"] -= 0.2
+
+    # 规则8：制动力不足（高刹车输入）
+    brake = telemetry.get("m_brake")
+    if isinstance(brake, (int, float)) and brake > 0.8:
+        dx["brake_power_req"] += 0.3
+
+
+def _apply_corner_rules(
+    telemetry: dict[str, Any], dx: dict[str, float],
+) -> None:
+    """规则5/7/10/11：弯道相关规则（原地修改 dx）。
+
+    规则5 - 出弯段油门低（sector == 3 且 m_throttle < 0.3）：
+        exit_traction_req += 0.3。出处：F1官方调教指南。
+    规则7 - 入弯响应差（max_steer > 0.3，转向幅度大）：
+        turnin_req += 0.3。出处：F1官方调教指南。
+        注意：整圈统计摘要无逐帧 speed 变化率，仅用转向幅度作为简化条件。
+    规则10 - 弯中不稳定（avg_steer > 0.2，转向反复修正的简化条件）：
+        hi_speed_stab_req += 0.3。
+        注意：逐帧 steer 符号变化频率在整圈统计中难以实现，暂用 avg_steer 近似。
+    规则11 - 出弯打滑（m_throttle > 0.7 且 m_speed < 150，高油门但速度低）：
+        exit_traction_req += 0.3。出处：F1官方调教指南。
+        注意：整圈统计摘要无逐帧 speed 变化率，用高油门+低速度近似。
+    """
+    # 规则5：出弯段油门低
+    sector = telemetry.get("sector") or telemetry.get("m_sector")
+    throttle = telemetry.get("m_throttle")
+    if (isinstance(sector, (int, float)) and sector == 3
+            and isinstance(throttle, (int, float)) and throttle < 0.3):
+        dx["exit_traction_req"] += 0.3
+
+    # 规则7：入弯响应差（转向幅度大）
+    max_steer = telemetry.get("max_steer") or telemetry.get("m_max_steer")
+    if isinstance(max_steer, (int, float)) and max_steer > 0.3:
+        dx["turnin_req"] += 0.3
+
+    # 规则10：弯中不稳定（平均转向绝对值大）
+    avg_steer = telemetry.get("avg_steer") or telemetry.get("m_avg_steer")
+    if isinstance(avg_steer, (int, float)) and avg_steer > 0.2:
+        dx["hi_speed_stab_req"] += 0.3
+
+    # 规则11：出弯打滑（高油门但速度低）
+    if isinstance(throttle, (int, float)) and throttle > 0.7:
+        speed = telemetry.get("speed") or telemetry.get("m_speed")
+        if isinstance(speed, (int, float)) and speed < 150:
+            dx["exit_traction_req"] += 0.3
+
+
+def _apply_speed_rules(
+    telemetry: dict[str, Any], dx: dict[str, float],
+) -> None:
+    """规则6/15：速度相关规则（原地修改 dx）。
+
+    规则6 - 直道速度低（speed < 200 且在直道）：
+        hi_speed_stab_req -= 0.3（方向修正因子——需减阻/减翼）。
+        若无法判断 sector 类型，保守地不触发。出处：F1官方调教指南。
+    规则15 - 直道极速低（max_speed < 280 干地 / < 200 湿地）：
+        hi_speed_stab_req -= 0.3（方向修正因子——下压力过大或齿比不当）。
+        出处：F1官方调教指南。
+    """
+    # 规则6：直道速度低
+    speed = telemetry.get("speed") or telemetry.get("m_speed")
+    if isinstance(speed, (int, float)) and speed < 200:
+        on_straight = (
+            telemetry.get("m_on_straight")
+            or telemetry.get("on_straight")
+            or telemetry.get("is_straight")
+        )
+        sector_type = (
+            telemetry.get("sector_type")
+            or telemetry.get("m_sector_type")
+        )
+        is_on_straight = False
+        if isinstance(on_straight, bool):
+            is_on_straight = on_straight
+        elif isinstance(on_straight, (int, float)) and on_straight == 1:
+            is_on_straight = True
+        elif isinstance(sector_type, str) and sector_type.lower() in ("straight", "straightaway"):
+            is_on_straight = True
+        if is_on_straight:
+            dx["hi_speed_stab_req"] -= 0.3
+
+    # 规则15：直道极速低
+    max_speed = telemetry.get("max_speed") or telemetry.get("m_max_speed")
+    if isinstance(max_speed, (int, float)):
+        threshold = 200 if _is_wet_weather(telemetry) else 280
+        if max_speed < threshold:
+            dx["hi_speed_stab_req"] -= 0.3
+
+
+def _apply_ride_height_rules(
+    telemetry: dict[str, Any], dx: dict[str, float],
+) -> None:
+    """规则9：刮底检测（占位，原地修改 dx）。
+
+    条件：speed < 100 且 ride_height 相关信号。
+    影响：ride_height_req += 0.4。
+    注意：遥测数据中无直接刮底信号，此规则暂不实现具体检测逻辑，只保留占位。
+    """
+    # 占位：遥测中无直接刮底信号，暂不触发
+    pass
+
+
+def _derive_telemetry_dx(telemetry: dict[str, Any] | None) -> dict[str, float]:
+    """从遥测性能数据提取诊断向量贡献（9维Dx，15条规则）。
+
+    与车手反馈Dx叠加后共同驱动调教优化模型。所有规则基于官方数据，
+    覆盖全部9维Dx并引入方向修正因子（负值表示该能力过强需减弱）。
+
+    15条规则分组：
+        - 胎温规则（1/2/12/13）：胎温过高/过低/不均/湿地严重不足
+        - 胎压规则（3）：胎压异常
+        - 刹车规则（4/8/14）：刹车过热/制动力不足/持续过热+方向修正
+        - 弯道规则（5/7/10/11）：出弯油门低/入弯响应差/弯中不稳定/出弯打滑
+        - 速度规则（6/15）：直道速度低/直道极速低（均含方向修正因子）
+        - 底盘规则（9）：刮底检测（占位）
+
+    方向修正因子：
+        hi_speed_stab_req 取负值 = 需减阻/减翼（下压力过大）
+        brake_power_req 取负值 = 制动力过强需减弱
+
+    Args:
+        telemetry: 遥测字典；None 时返回全 0.0 的 Dx。
+
+    Returns:
+        9 维 Dx 字典 {dim_key: value}，覆盖全部 DIAG_DIMS，无触发维度为 0.0。
+    """
+    dx: dict[str, float] = dict.fromkeys(DIAG_DIMS, 0.0)
+    if not telemetry:
+        return dx
+    _apply_tyre_temperature_rules(telemetry, dx)
+    _apply_tyre_pressure_rules(telemetry, dx)
+    _apply_brake_rules(telemetry, dx)
+    _apply_corner_rules(telemetry, dx)
+    _apply_speed_rules(telemetry, dx)
+    _apply_ride_height_rules(telemetry, dx)
+    return dx
 
 
 # ---------------------------------------------------------------------------
@@ -284,6 +523,10 @@ _TRADEOFF_NOTES: dict[str, dict[str, str]] = {
         "increase": "可能增加前轮锁死倾向",
         "decrease": "可能增加后轮锁死倾向",
     },
+    "engine_braking": {
+        "increase": "可能增加弯中后轴扰动但助减速",
+        "decrease": "可能减少弯中后轴扰动但降减速辅助",
+    },
     "front_left_tyre_pressure": {
         "increase": "可能减小轮胎接触面积但增响应",
         "decrease": "可能增大轮胎接触面积但降响应",
@@ -345,7 +588,7 @@ def _build_param_detail(
     source = ",".join(sources) if sources else ""
 
     tradeoff: str | None = None
-    if abs(delta) > 1e-12:
+    if abs(delta) > DELTA_ZERO_EPSILON:
         direction = "increase" if delta > 0 else "decrease"
         tradeoff = _TRADEOFF_NOTES.get(spec_name, {}).get(direction)
 
@@ -391,7 +634,7 @@ def _build_suggestion_summary(
     final_delta: dict[str, float], dx: dict, parameters: list[dict[str, Any]],
 ) -> str:
     """构造建议摘要文本。"""
-    nonzero_count = sum(1 for d in final_delta.values() if abs(d) > 1e-12)
+    nonzero_count = sum(1 for d in final_delta.values() if abs(d) > DELTA_ZERO_EPSILON)
     if is_zero_dx(dx):
         return "未检测到有效症状，本次无调整建议"
     return (
@@ -419,6 +662,13 @@ _GENERATE_SUGGESTION_DOC = """完整建议生成（Dx → SetupDelta → 报告�
         - 二元组 ``(symptom, strength)``：使用症状的默认阶段（向后兼容）；
         - 三元组 ``(symptom, strength, stage)``：使用指定阶段的 Dx 映射。
 
+遥测诊断叠加（task-89）：
+    遥测数据不仅用于增益校准（``_derive_telemetry_gain``），还独立产生
+    诊断向量贡献（``_derive_telemetry_dx``）。车手反馈Dx与遥测Dx按维度
+    代数叠加后共同驱动调教优化模型：
+        ``dx[dim] = feedback_dx[dim] + telemetry_dx[dim]``
+    遥测Dx规则基于Pirelli官方轮胎数据与F1官方调教指南。
+
 Args:
     symptoms: 症状列表，每项为二元组或三元组：
         - ``(symptom_key, strength)``：使用默认阶段；
@@ -436,7 +686,7 @@ Returns:
           "track_id": str,
           "dx": {{dim: value}},
           "setup_delta": {{param: delta}},
-          "parameters": [param_detail, ...],   # 20 项
+          "parameters": [param_detail, ...],   # 21 项
           "confidence": "high|medium|low",
           "summary": str,
           "model_type": str,            # 实际使用的模型类型
@@ -453,7 +703,9 @@ def generate_suggestion(
     model_type: str = "hybrid",
 ) -> dict[str, Any]:
     """完整建议生成（Dx → SetupDelta → 报告组装）。详见模块级文档。"""
-    dx = compute_dx(symptoms)
+    feedback_dx = compute_dx(symptoms)
+    telemetry_dx = _derive_telemetry_dx(telemetry)
+    dx = {dim: feedback_dx[dim] + telemetry_dx[dim] for dim in DIAG_DIMS}
     telemetry_gain = _derive_telemetry_gain(telemetry)
     rule_delta = compute_setup_delta(dx, current_setup, telemetry_gain)
 
@@ -582,16 +834,16 @@ def _validate_param_in_bounds(
     current = default_setup[p]
     delta = result1["setup_delta"][p]
     next_val = current + delta
-    assert next_val >= spec.min_val - 1e-6, (
+    assert next_val >= spec.min_val - BOUND_TOLERANCE_EPSILON, (
         f"症状 {symptom!r} 参数 {p!r} next={next_val} < min={spec.min_val}"
     )
-    assert next_val <= spec.max_val + 1e-6, (
+    assert next_val <= spec.max_val + BOUND_TOLERANCE_EPSILON, (
         f"症状 {symptom!r} 参数 {p!r} next={next_val} > max={spec.max_val}"
     )
-    assert abs(delta) <= spec.max_delta + 1e-6, (
+    assert abs(delta) <= spec.max_delta + BOUND_TOLERANCE_EPSILON, (
         f"症状 {symptom!r} 参数 {p!r} |delta|={abs(delta)} > max_delta={spec.max_delta}"
     )
-    if abs(delta) > 1e-6:
+    if abs(delta) > BOUND_TOLERANCE_EPSILON:
         detail = next(pd for pd in result1["parameters"] if pd["param"] == p)
         assert detail["source"], (
             f"症状 {symptom!r} 参数 {p!r} 非零 delta 但 source 为空"

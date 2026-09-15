@@ -156,26 +156,29 @@ def build_setup_per_car(
     rear_toe: float = 0.25,
     brake_pressure: int = 75,
     brake_bias: int = 65,
+    engine_braking: int = 50,
     front_left_press: float = 25.5,
     rear_left_press: float = 25.5,
     ballast: int = 50,
     fuel_load: float = 100.0,
 ) -> bytes:
-    """构造单辆车的 CarSetups 段（49 字节）。
+    """构造单辆车的 CarSetups 段（50 字节）。
 
     格式与 packets.py 中 _SETUP_PER_FMT 完全一致：
-        BBBB ffff BBBBBBBB ffff B f
+        BBBB ffff BBBBBBBB B ffff B f
     字段顺序：frontWing rearWing onThrottle offThrottle
               frontCamber rearCamber frontToe rearToe
               frontSusp rearSusp frontARB rearARB frontHeight rearHeight brakePressure brakeBias
+              engineBraking
               rearLeftPress rearRightPress frontLeftPress frontRightPress
               ballast fuelLoad
     """
     return struct.pack(
-        "<BBBBffffBBBBBBBBffffBf",
+        "<BBBBffffBBBBBBBBBffffBf",
         front_wing, rear_wing, on_throttle, off_throttle,
         front_camber, rear_camber, front_toe, rear_toe,
         1, 1, 1, 1, 1, 1, brake_pressure, brake_bias,
+        engine_braking,
         rear_left_press, 25.5, front_left_press, 25.5,
         ballast, fuel_load,
     )
@@ -400,7 +403,7 @@ def store() -> Iterator[Store]:  # type: ignore[name-defined]  # noqa: F821
     """
     from setup_tuner.db.store import Store
 
-    s = Store(":memory:")
+    s = Store(":memory:", seed=False)
     yield s
     s.close()
 
@@ -414,7 +417,7 @@ def store_file(tmp_path: Path) -> Iterator[Store]:  # type: ignore[name-defined]
     from setup_tuner.db.store import Store
 
     db_path = tmp_path / "test_deep_slice.db"
-    s = Store(str(db_path))
+    s = Store(str(db_path), seed=False)
     yield s
     s.close()
 

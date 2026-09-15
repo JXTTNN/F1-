@@ -1,0 +1,38 @@
+﻿[
+    {
+        "name":  "健康检查",
+        "path":  "/api/v1/health",
+        "statusCode":  200,
+        "responseTimeMs":  60,
+        "success":  false,
+        "dataInfo":  "object keys=code,message,data",
+        "errorMessage":  "缺少键: status"
+    },
+    {
+        "name":  "赛道列表",
+        "path":  "/api/v1/tracks",
+        "statusCode":  200,
+        "responseTimeMs":  25,
+        "success":  false,
+        "dataInfo":  "array count=1",
+        "errorMessage":  "数量不足: 实际=1, 期望\u003e=24"
+    },
+    {
+        "name":  "调教参数定义",
+        "path":  "/api/v1/setup/fields",
+        "statusCode":  200,
+        "responseTimeMs":  26,
+        "success":  false,
+        "dataInfo":  "array count=1",
+        "errorMessage":  "数量不足: 实际=1, 期望\u003e=21"
+    },
+    {
+        "name":  "症状列表",
+        "path":  "/api/v1/symptoms",
+        "statusCode":  null,
+        "responseTimeMs":  null,
+        "success":  false,
+        "dataInfo":  null,
+        "errorMessage":  "请求失败: {\"code\":404,\"message\":\"Not Found\",\"data\":null}"
+    }
+]

@@ -116,7 +116,7 @@ class TestTelemetryToEngine:
     """
 
     def test_packet5_to_setup_dict_covers_23_params(self) -> None:
-        """Packet 5 解析后经 extract_setup_from_packet5 应覆盖全部 23 参数。
+        """Packet 5 解析后经 extract_setup_from_packet5 应覆盖全部 21 参数。
 
         链路：parse_packet → extract_setup_from_packet5 → CarSetup.from_dict
         """
@@ -127,16 +127,17 @@ class TestTelemetryToEngine:
         assert parsed is not None
         assert parsed["packet_id"] == 5
 
-        # 解析结果 → 23 参数字典
+        # 解析结果 → 21 参数字典
         setup_params = extract_setup_from_packet5(parsed)
         assert set(setup_params.keys()) == {f.name for f in ALL_SETUP_FIELDS}
-        assert len(setup_params) == 20
+        assert len(setup_params) == 21
 
         # 23 参数字典 → CarSetup 领域对象（不抛异常即合法）
         setup = CarSetup.from_dict(setup_params)
-        assert setup.front_wing == 7
-        assert setup.rear_wing == 3
-        assert setup.brake_pressure == 85
+        # uint8 字段经过值域转换：front_wing 7→0+7*50/250=1.4
+        assert setup.front_wing == pytest.approx(7 * 50 / 250)
+        assert setup.rear_wing == pytest.approx(3 * 50 / 250)
+        assert setup.brake_pressure == pytest.approx(80 + 85 * 20 / 200)
 
     def test_packet5_field_values_preserved_through_pipeline(self) -> None:
         """Packet 5 关键字段值经整条链路传递后不变形。
@@ -154,16 +155,16 @@ class TestTelemetryToEngine:
         setup_params = extract_setup_from_packet5(parsed)
         setup = CarSetup.from_dict(setup_params)
 
-        # 逐字段断言：UDP 解析值与领域对象值一致
+        # uint8 字段经值域转换，float 字段直接透传
         assert parsed["m_frontWing"] == 9
-        assert setup.front_wing == 9
+        assert setup.front_wing == pytest.approx(9 * 50 / 250)
         assert parsed["m_rearWing"] == 2
-        assert setup.rear_wing == 2
+        assert setup.rear_wing == pytest.approx(2 * 50 / 250)
         assert parsed["m_brakePressure"] == 90
-        assert setup.brake_pressure == 90
+        assert setup.brake_pressure == pytest.approx(80 + 90 * 20 / 200)
         assert parsed["m_brakeBias"] == 70
-        assert setup.brake_bias == 70
-        # float 字段用 approx 容忍浮点误差
+        assert setup.brake_bias == pytest.approx(50 + 70 * 20 / 200)
+        # float 字段无需转换，直接透传
         assert setup.front_camber == pytest.approx(-3.0)
         assert setup.rear_camber == pytest.approx(-1.5)
 
@@ -185,8 +186,8 @@ class TestTelemetryToEngine:
             telemetry=None,
         )
         assert "setup_delta" in result
-        assert len(result["setup_delta"]) == 20
-        assert len(result["parameters"]) == 20
+        assert len(result["setup_delta"]) == 21
+        assert len(result["parameters"]) == 21
 
 
 # ===========================================================================
@@ -231,7 +232,7 @@ class TestDxToSetupDelta:
 
         # SetupDelta 必须覆盖全部 23 参数
         assert set(setup_delta.keys()) == {f.name for f in ALL_SETUP_FIELDS}
-        assert len(setup_delta) == 20
+        assert len(setup_delta) == 21
 
     def test_dx_to_setup_delta_respects_bounds(self) -> None:
         """SetupDelta 每参数必须满足 |delta| <= max_delta 且 next ∈ [min, max]。
@@ -402,8 +403,8 @@ class TestFeedbackToReport:
             telemetry=None,
         )
         assert suggestion["track_id"] == track_id
-        assert len(suggestion["setup_delta"]) == 20
-        assert len(suggestion["parameters"]) == 20
+        assert len(suggestion["setup_delta"]) == 21
+        assert len(suggestion["parameters"]) == 21
         # 多症状非零 Dx → 应有非零调整
         assert not is_zero_dx(suggestion["dx"])
 
@@ -415,7 +416,7 @@ class TestFeedbackToReport:
         )
         assert report["track_id"] == track_id
         assert "generated_at" in report
-        assert len(report["parameters"]) == 20
+        assert len(report["parameters"]) == 21
         assert report["confidence"] in {"high", "medium", "low"}
         # 报告 setup_delta 与引擎 setup_delta 一致（不变形）
         assert report["setup_delta"] == suggestion["setup_delta"]
@@ -455,7 +456,7 @@ class TestFeedbackToReport:
         retrieved_report = json.loads(retrieved["report_json"])
         assert retrieved_report["track_id"] == track_id
         assert retrieved_report["setup_delta"] == report["setup_delta"]
-        assert len(retrieved_report["parameters"]) == 20
+        assert len(retrieved_report["parameters"]) == 21
 
 
 # ===========================================================================
@@ -518,7 +519,7 @@ class TestTrackSetupConsistency:
                 track_id=track.track_id,
             )
             assert suggestion["track_id"] == track.track_id
-            assert len(suggestion["setup_delta"]) == 20
+            assert len(suggestion["setup_delta"]) == 21
 
     def test_track_lookup_by_id_consistent(self) -> None:
         """get_track_by_id 返回的赛道与 get_all_tracks 中的一致。"""
@@ -579,7 +580,7 @@ class TestTelemetrySummaryFlow:
             track_id="suzuka",
             telemetry=summary,
         )
-        assert len(result["setup_delta"]) == 20
+        assert len(result["setup_delta"]) == 21
 
         # 对比：无遥测 vs 有遥测，雨天增益应使调整幅度更保守
         result_no_telemetry = generate_suggestion(

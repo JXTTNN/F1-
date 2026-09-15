@@ -19,6 +19,7 @@
 from __future__ import annotations
 
 import logging
+import sys
 from collections.abc import Callable
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -41,7 +42,34 @@ from setup_tuner.telemetry.stream import TelemetryStream
 logger = logging.getLogger(__name__)
 
 # UI 静态资源目录（setup_tuner/ui/）
-_UI_DIR = Path(__file__).resolve().parent / "ui"
+# 多候选路径探测，兼容开发模式与 Nuitka onefile/standalone 模式
+def _find_ui_dir() -> Path:
+    """查找 UI 静态资源目录，兼容开发模式和 Nuitka 打包模式。
+
+    在 Nuitka onefile 模式下，__file__ 可能指向临时解压目录中的虚拟路径，
+    数据文件实际位于 <temp_dir>/setup_tuner/ui/。
+    通过多候选路径探测确保在所有模式下都能正确定位。
+    """
+    candidates = [
+        # 1. 基于 __file__（开发模式：setup_tuner/app.py → setup_tuner/ui/）
+        Path(__file__).resolve().parent / "ui",
+        # 2. 基于 sys.executable + setup_tuner/ui（Nuitka onefile/standalone）
+        Path(sys.executable).resolve().parent / "setup_tuner" / "ui",
+        # 3. 基于 sys.executable + ui（Nuitka onefile 根目录极端情况）
+        Path(sys.executable).resolve().parent / "ui",
+    ]
+    for candidate in candidates:
+        if (candidate / "index.html").exists():
+            logger.debug("UI 目录定位成功: %s", candidate)
+            return candidate
+    logger.warning(
+        "UI 目录未找到，尝试过的路径: %s",
+        [str(c) for c in candidates],
+    )
+    return candidates[0]
+
+
+_UI_DIR = _find_ui_dir()
 
 
 # =========================================================================== #

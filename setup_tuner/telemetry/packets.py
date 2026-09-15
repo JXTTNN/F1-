@@ -372,12 +372,13 @@ def parse_lap_data(data: bytes, player_car_index: int) -> dict[str, Any]:
 # Packet 5 — CarSetups（按车分组，只解玩家车）
 # --------------------------------------------------------------------------- #
 # Source: EA F1 25 UDP Telemetry Specification, Packet 5 (CarSetups)
-# 每车 49 字节：
+# 每车 50 字节：
 #   uint8 m_frontWing / m_rearWing / m_onThrottleDiff / m_offThrottleDiff  (game clicks)
 #   float m_frontCamber / m_rearCamber / m_frontToe / m_rearToe
 #   uint8 m_frontSuspension / m_rearSuspension / m_frontAntiRollBar /
 #         m_rearAntiRollBar / m_frontSuspensionHeight / m_rearSuspensionHeight /
 #         m_brakePressure / m_brakeBias
+#   uint8 m_engineBraking                                          (F1 24/25 新增)
 #   float m_rearLeftTyrePressure / m_rearRightTyrePressure /
 #         m_frontLeftTyrePressure / m_frontRightTyrePressure
 #   uint8 m_ballast
@@ -386,7 +387,8 @@ _SETUP_PER_FMT = (
     "<"
     "BBBB"        # frontWing, rearWing, onThrottleDiff, offThrottleDiff
     "ffff"        # frontCamber, rearCamber, frontToe, rearToe
-    "BBBBBBBB"    # 8 × uint8 (悬挂/防倾杆/行驶高度/刹车压力/配比)
+    "BBBBBBBB"    # 8 × uint8 (悬挂/防倾杆/行驶高度/刹车压力/刹车偏置)
+    "B"           # engineBraking (F1 24/25 新增字段)
     "ffff"        # 4 × float 胎压
     "B"           # ballast
     "f"           # fuelLoad
@@ -419,12 +421,13 @@ def parse_car_setups(data: bytes, player_car_index: int) -> dict[str, Any]:
         "m_rearSuspensionHeight": c[13],     # uint8 — 后行驶高度
         "m_brakePressure": c[14],            # uint8 — 刹车压力
         "m_brakeBias": c[15],                # uint8 — 刹车配比
-        "m_rearLeftTyrePressure": c[16],     # float — 后左胎压 (PSI)
-        "m_rearRightTyrePressure": c[17],    # float — 后右胎压
-        "m_frontLeftTyrePressure": c[18],    # float — 前左胎压
-        "m_frontRightTyrePressure": c[19],   # float — 前右胎压
-        "m_ballast": c[20],                  # uint8 — 配重
-        "m_fuelLoad": c[21],                 # float — 燃油量 (kg)
+        "m_engineBraking": c[16],            # uint8 — 引擎制动 (F1 24/25 新增)
+        "m_rearLeftTyrePressure": c[17],     # float — 后左胎压 (PSI)
+        "m_rearRightTyrePressure": c[18],    # float — 后右胎压
+        "m_frontLeftTyrePressure": c[19],    # float — 前左胎压
+        "m_frontRightTyrePressure": c[20],   # float — 前右胎压
+        "m_ballast": c[21],                  # uint8 — 配重
+        "m_fuelLoad": c[22],                 # float — 燃油量 (kg)
     }
 
 

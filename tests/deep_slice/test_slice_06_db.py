@@ -488,8 +488,8 @@ class TestSmoke:
         )
         store_file.close()
 
-        # 重新打开同一文件
-        s2 = Store(db_path)
+        # 重新打开同一文件（seed=False 避免覆盖测试写入的数据）
+        s2 = Store(db_path, seed=False)
         try:
             row = s2.get_track("suzuka")
             assert row is not None

@@ -40,9 +40,9 @@ from setup_tuner.domain.symptoms import (
 class TestSetupSchema:
     """20 8调教参数 / 6 大类 schema 校验。"""
 
-    def test_field_count_is_20(self) -> None:
-        """ALL_SETUP_FIELDS 必须恰好 20 项。"""
-        assert len(ALL_SETUP_FIELDS) == 20
+    def test_field_count_is_21(self) -> None:
+        """ALL_SETUP_FIELDS 必须恰好 21 项。"""
+        assert len(ALL_SETUP_FIELDS) == 21
 
     def test_group_count_is_6(self) -> None:
         """ALL_GROUPS 必须恰好 6 大类。"""
@@ -103,13 +103,13 @@ class TestSetupSchema:
             assert f.source, f"参数 {f.name!r} source 为空"
 
     def test_group_field_counts(self) -> None:
-        """6 大类参数数量分布：2/2/4/6/2/4 = 20。"""
+        """6 大类参数数量分布：2/2/4/6/3/4 = 21。"""
         expected = {
             "Aerodynamics": 2,
             "Transmission": 2,
             "Suspension Geometry": 4,
             "Suspension": 6,
-            "Brakes": 2,
+            "Brakes": 3,
             "Tyres": 4,
         }
         for group, count in expected.items():
@@ -124,7 +124,7 @@ class TestSetupSchema:
         assert f.name == "front_wing"
         assert f.label == "前翼"
         assert f.min_val == 0.0
-        assert f.max_val == 10.0
+        assert f.max_val == 50.0
 
     def test_get_field_unknown_raises(self) -> None:
         """get_field 未知名抛 KeyError。"""
@@ -149,7 +149,7 @@ class TestValidateValue:
         with pytest.raises(ValueError):
             validate_value("front_wing", -1.0)
         with pytest.raises(ValueError):
-            validate_value("front_wing", 12.0)
+            validate_value("front_wing", 51.0)
 
     def test_step_misalignment_raises(self) -> None:
         """不符合步长抛 ValueError。"""
@@ -175,11 +175,11 @@ class TestValidateValue:
 class TestCarSetup:
     """CarSetup 数据类。"""
 
-    def test_default_has_23_fields(self) -> None:
-        """default() 产出 23 字段。"""
+    def test_default_has_21_fields(self) -> None:
+        """default() 产出 21 字段。"""
         cs = CarSetup.default()
         d = cs.to_dict()
-        assert len(d) == 20
+        assert len(d) == 21
 
     def test_default_values_match_spec(self) -> None:
         """default() 各字段值与 SetupField.default 一致。"""
@@ -198,16 +198,16 @@ class TestCarSetup:
         cs2 = CarSetup.from_dict(d)
         assert cs2.to_dict() == d
 
-    def test_field_names_count_20(self) -> None:
-        """field_names() 返回 20 个字段名。"""
+    def test_field_names_count_21(self) -> None:
+        """field_names() 返回 21 个字段名。"""
         cs = CarSetup.default()
-        assert len(cs.field_names()) == 20
+        assert len(cs.field_names()) == 21
 
     def test_diff_detects_changes(self) -> None:
         """diff 应检测出变更字段。"""
         cs1 = CarSetup.default()
         cs2 = CarSetup.default()
-        cs2.front_wing = 7.0
+        cs2.front_wing = 27.0
         changes = cs1.diff(cs2)
         assert len(changes) == 1
         assert changes[0]["name"] == "front_wing"

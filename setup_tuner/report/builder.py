@@ -20,6 +20,9 @@ from typing import Any
 
 from setup_tuner.domain.setup import ALL_SETUP_FIELDS
 
+# 浮点比较 epsilon（用于 delta 零值判定）
+DELTA_ZERO_EPSILON = 1e-12
+
 # ---------------------------------------------------------------------------
 # Packet 5 字段映射（UDP 字段名 → domain.setup 参数名）
 # 对照 design 1.2.1 Packet 5 与 domain/setup.py 20 参数定义
@@ -41,10 +44,48 @@ _PACKET5_FIELD_MAP: dict[str, str] = {
     "m_rearSuspensionHeight": "rear_ride_height",
     "m_brakePressure": "brake_pressure",
     "m_brakeBias": "brake_bias",
+    "m_engineBraking": "engine_braking",
     "m_rearLeftTyrePressure": "rear_left_tyre_pressure",
     "m_rearRightTyrePressure": "rear_right_tyre_pressure",
     "m_frontLeftTyrePressure": "front_left_tyre_pressure",
     "m_frontRightTyrePressure": "front_right_tyre_pressure",
+}
+
+# ---------------------------------------------------------------------------
+# UDP 值域转换映射（UDP原始值 → 游戏内参数范围）
+# 对照 D 盘真实遥测数据反推与 domain/setup.py min_val/max_val 定义
+# uint8 字段：wing/suspension 类 UDP 0-250，diff/brake 类 UDP 0-200
+# float32 字段（camber/toe/tyre_pressure）：恒等映射
+# 格式：{param_name: (udp_min, udp_max, game_min, game_max)}
+# ---------------------------------------------------------------------------
+_UDP_VALUE_RANGE_MAP: dict[str, tuple[float, float, float, float]] = {
+    # --- 空气动力学 Aerodynamics (uint8, UDP 0-250) ---
+    "front_wing": (0, 250, 0, 50),
+    "rear_wing": (0, 250, 0, 50),
+    # --- 变速箱 Transmission (uint8, UDP 0-200) ---
+    "on_throttle_diff": (0, 200, 10, 100),
+    "off_throttle_diff": (0, 200, 10, 100),
+    # --- 悬挂几何 Suspension Geometry (float32, 恒等映射) ---
+    "front_camber": (-3.5, -2.5, -3.5, -2.5),
+    "rear_camber": (-2.0, -1.0, -2.0, -1.0),
+    "front_toe": (0.0, 0.2, 0.0, 0.2),
+    "rear_toe": (0.1, 0.35, 0.1, 0.35),
+    # --- 悬挂 Suspension (uint8, UDP 0-250) ---
+    "front_suspension": (0, 250, 1, 41),
+    "rear_suspension": (0, 250, 1, 41),
+    "front_anti_roll_bar": (0, 250, 1, 21),
+    "rear_anti_roll_bar": (0, 250, 1, 21),
+    "front_ride_height": (0, 250, 15, 35),
+    "rear_ride_height": (0, 250, 40, 60),
+    # --- 刹车 Brakes (uint8, UDP 0-200) ---
+    "brake_pressure": (0, 200, 80, 100),
+    "brake_bias": (0, 200, 50, 70),
+    "engine_braking": (0, 200, 0, 100),
+    # --- 轮胎 Tyres (float32, 恒等映射) ---
+    "front_left_tyre_pressure": (22.5, 29.5, 22.5, 29.5),
+    "front_right_tyre_pressure": (22.5, 29.5, 22.5, 29.5),
+    "rear_left_tyre_pressure": (20.5, 26.5, 20.5, 26.5),
+    "rear_right_tyre_pressure": (20.5, 26.5, 20.5, 26.5),
 }
 
 
@@ -101,7 +142,7 @@ def build_summary(parameters: list[dict[str, Any]]) -> str:
     """
     total = len(parameters)
     nonzero = sum(
-        1 for p in parameters if abs(float(p.get("setup_delta", 0.0))) > 1e-12
+        1 for p in parameters if abs(float(p.get("setup_delta", 0.0))) > DELTA_ZERO_EPSILON
     )
     if total == 0:
         return "本次建议无参数"
@@ -211,19 +252,51 @@ def _assemble_report_dict(
 
 
 # ---------------------------------------------------------------------------
-# 辅助：从 CarSetups 包（遥测 Packet 5）提取 20 参数快照
+# UDP 值域转换：将 Packet 5 原始值映射为游戏 Garage 参数值
+# ---------------------------------------------------------------------------
+def convert_udp_to_game_value(param_name: str, udp_value: float) -> float:
+    """将UDP原始值转换为游戏内参数值（线性映射）。
+
+    根据 _UDP_VALUE_RANGE_MAP 中定义的映射关系，将 UDP Packet 5
+    中的原始编码值线性映射为游戏内参数值。对于不在映射表中的参数，
+    直接返回原始值（恒等映射）。
+
+    转换公式：game = (udp - udp_min) / (udp_max - udp_min)
+                       * (game_max - game_min) + game_min
+
+    Args:
+        param_name: 参数标识符（与 domain.setup 中的 name 一致）。
+        udp_value: UDP Packet 5 中的原始值。
+
+    Returns:
+        游戏内参数值。
+    """
+    mapping = _UDP_VALUE_RANGE_MAP.get(param_name)
+    if mapping is None:
+        return udp_value
+    udp_min, udp_max, game_min, game_max = mapping
+    udp_span = udp_max - udp_min
+    if udp_span == 0:
+        return game_min
+    game_span = game_max - game_min
+    return (udp_value - udp_min) / udp_span * game_span + game_min
+
+
+# ---------------------------------------------------------------------------
+# 辅助：从 CarSetups 包（遥测 Packet 5）提取 21 参数快照
 # ---------------------------------------------------------------------------
 def extract_setup_from_packet5(packet5: dict[str, Any]) -> dict[str, float]:
-    """从遥测 CarSetups 包（packet_id=5）提取 20 项调教参数快照。
+    """从遥测 CarSetups 包（packet_id=5）提取 21 项调教参数快照。
 
-    对齐 design 1.2.1 Packet 5 字段映射与 domain.setup 20 参数全集。
+    对齐 design 1.2.1 Packet 5 字段映射与 domain.setup 21 参数全集。
     缺失字段取 SetupField.default。
+    uint8 字段经值域转换（UDP原始值 → 游戏内参数范围），float32 字段恒等映射。
 
     Args:
         packet5: ``parse_car_setups`` 返回的字典（含 m_frontWing 等字段）。
 
     Returns:
-        20 参数扁平字典 ``{param_name: value}``。
+        21 参数扁平字典 ``{param_name: value}``。
     """
     result: dict[str, float] = {}
     for spec in ALL_SETUP_FIELDS:
@@ -231,7 +304,8 @@ def extract_setup_from_packet5(packet5: dict[str, Any]) -> dict[str, float]:
             (u for u, d in _PACKET5_FIELD_MAP.items() if d == spec.name), None,
         )
         if udp_name is not None and udp_name in packet5:
-            result[spec.name] = float(packet5[udp_name])
+            udp_value = float(packet5[udp_name])
+            result[spec.name] = convert_udp_to_game_value(spec.name, udp_value)
         else:
             result[spec.name] = spec.default
 

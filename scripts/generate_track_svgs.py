@@ -18,9 +18,14 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "legacy"))
 
 from f1opt.data.track_maps import TRACK_MAPS, TrackMapData  # noqa: E402
+from setup_tuner.domain.track import ALL_TRACKS  # noqa: E402
+
+# track.py 中 Track 对象的 corners 类型
+from setup_tuner.domain.track import Corner as DomainCorner  # noqa: E402
 
 OUT_DIR = ROOT / "setup_tuner" / "ui" / "tracks"
 
@@ -90,10 +95,58 @@ def _offset_path(pts: list[tuple[float, float]], offset: float) -> list[tuple[fl
 
 
 # --------------------------------------------------------------------------- #
+# 赛道轮廓插值（替代椭圆估算）
+# --------------------------------------------------------------------------- #
+
+def _interpolate_position_on_track(
+    control_points: list[tuple[float, float, float]],
+    corner_number: int,
+    total_corners: int,
+) -> tuple[float, float]:
+    """沿赛道轮廓 control_points 插值估算弯道像素坐标。
+
+    用弯道编号在赛道上的相对位置（均匀分布假设）映射到 control_points
+    的 distance→pixel 曲线上，得到比椭圆估算更贴合赛道形状的坐标。
+
+    Args:
+        control_points: [(distance_m, x_px, y_px), ...] 按 distance 升序排列。
+        corner_number: 弯道编号（1-based）。
+        total_corners: 赛道弯道总数。
+
+    Returns:
+        (x_px, y_px) 估算的弯道像素坐标。
+    """
+    if not control_points:
+        return (400.0, 300.0)
+
+    # 弯道在赛道上的相对位置（均匀分布假设）
+    t = (corner_number - 0.5) / total_corners
+    max_dist = control_points[-1][0]
+    target_dist = t * max_dist
+
+    # 在 control_points 上线性插值
+    for i in range(len(control_points) - 1):
+        d0, x0, y0 = control_points[i]
+        d1, x1, y1 = control_points[i + 1]
+        if d0 <= target_dist <= d1:
+            if d1 - d0 < 1e-6:
+                return (x0, y0)
+            ratio = (target_dist - d0) / (d1 - d0)
+            return (x0 + ratio * (x1 - x0), y0 + ratio * (y1 - y0))
+
+    # 超出范围：返回最后一个 control_point
+    return (control_points[-1][1], control_points[-1][2])
+
+
+# --------------------------------------------------------------------------- #
 # SVG 生成
 # --------------------------------------------------------------------------- #
 
-def _build_svg(track: TrackMapData, track_label: str) -> str:
+def _build_svg(
+    track: TrackMapData,
+    track_label: str,
+    domain_corners: list[DomainCorner] | None = None,
+) -> str:
     canvas_w = track.canvas_width
     canvas_h = track.canvas_height
     pts = [(cp[1], cp[2]) for cp in track.control_points]
@@ -109,6 +162,11 @@ def _build_svg(track: TrackMapData, track_label: str) -> str:
     center_path = _catmull_rom_to_bezier(dedup)
     outer_path = _catmull_rom_to_bezier(outer)
     inner_path = _catmull_rom_to_bezier(inner)
+
+    # 构建 track_maps 真实坐标查找表: {corner_id: (x_px, y_px)}
+    real_corner_map: dict[int, tuple[float, float]] = {
+        c.corner_id: (c.x_px, c.y_px) for c in track.corners
+    }
 
     lines: list[str] = []
     lines.append('<?xml version="1.0" encoding="UTF-8"?>')
@@ -147,16 +205,37 @@ def _build_svg(track: TrackMapData, track_label: str) -> str:
         f'fill="{START_LINE}" rx="1"/>'
     )
 
-    for c in track.corners:
-        cx, cy = c.x_px, c.y_px
-        lines.append(
-            f'  <circle cx="{cx:.1f}" cy="{cy:.1f}" r="6" fill="none" '
-            f'stroke="{CORNER_RING}" stroke-width="1.5" opacity="0.85"/>'
-        )
-        lines.append(
-            f'  <text x="{cx:.1f}" y="{cy - 9:.1f}" text-anchor="middle" '
-            f'fill="{CORNER_TEXT}" font-size="9" font-family="monospace">{c.corner_id}</text>'
-        )
+    # 确定要绘制的弯道列表：优先用 track.py 的完整弯道列表
+    if domain_corners is not None:
+        total = len(domain_corners)
+        for dc in domain_corners:
+            if dc.number in real_corner_map:
+                cx, cy = real_corner_map[dc.number]
+            else:
+                # 缺失弯道：用赛道轮廓插值估算坐标（比椭圆更贴合赛道形状）
+                cx, cy = _interpolate_position_on_track(
+                    track.control_points, dc.number, total,
+                )
+            lines.append(
+                f'  <circle cx="{cx:.1f}" cy="{cy:.1f}" r="6" fill="none" '
+                f'stroke="{CORNER_RING}" stroke-width="1.5" opacity="0.85"/>'
+            )
+            lines.append(
+                f'  <text x="{cx:.1f}" y="{cy - 9:.1f}" text-anchor="middle" '
+                f'fill="{CORNER_TEXT}" font-size="9" font-family="monospace">{dc.number}</text>'
+            )
+    else:
+        # fallback: 只用 track_maps 的 corners
+        for c in track.corners:
+            cx, cy = c.x_px, c.y_px
+            lines.append(
+                f'  <circle cx="{cx:.1f}" cy="{cy:.1f}" r="6" fill="none" '
+                f'stroke="{CORNER_RING}" stroke-width="1.5" opacity="0.85"/>'
+            )
+            lines.append(
+                f'  <text x="{cx:.1f}" y="{cy - 9:.1f}" text-anchor="middle" '
+                f'fill="{CORNER_TEXT}" font-size="9" font-family="monospace">{c.corner_id}</text>'
+            )
 
     lines.append(
         f'  <text x="{canvas_w / 2}" y="{canvas_h - 12}" text-anchor="middle" '
@@ -172,7 +251,13 @@ def _build_svg(track: TrackMapData, track_label: str) -> str:
 # --------------------------------------------------------------------------- #
 
 def _export_anchors_module() -> str:
-    """生成 setup_tuner/domain/_track_anchors.py 源码。"""
+    """生成 setup_tuner/domain/_track_anchors.py 源码。
+
+    对 track_maps 中缺失的弯道，用椭圆估算坐标补充，
+    确保 _track_anchors.py 包含 track.py 中定义的所有弯道。
+    """
+    domain_by_id = {t.track_id: t for t in ALL_TRACKS}
+
     lines: list[str] = []
     lines.append('"""从 legacy track_maps 提取的真实弯道像素坐标。')
     lines.append("")
@@ -193,8 +278,22 @@ def _export_anchors_module() -> str:
     for tid in sorted(TRACK_MAPS):
         tm = TRACK_MAPS[tid]
         lines.append(f'    "{tid}": {{')
-        for c in tm.corners:
-            lines.append(f"        {c.corner_id}: ({c.x_px}, {c.y_px}),")
+        real_map = {c.corner_id: (c.x_px, c.y_px) for c in tm.corners}
+        # 从 track.py 获取完整弯道列表，为缺失弯道补充插值坐标
+        domain_track = domain_by_id.get(tid)
+        if domain_track is not None:
+            total = len(domain_track.corners)
+            for dc in domain_track.corners:
+                if dc.number in real_map:
+                    lines.append(f"        {dc.number}: ({real_map[dc.number][0]}, {real_map[dc.number][1]}),")
+                else:
+                    cx, cy = _interpolate_position_on_track(
+                        tm.control_points, dc.number, total,
+                    )
+                    lines.append(f"        {dc.number}: ({cx:.1f}, {cy:.1f}),")
+        else:
+            for c in tm.corners:
+                lines.append(f"        {c.corner_id}: ({c.x_px}, {c.y_px}),")
         lines.append("    },")
     lines.append("}")
     lines.append("")
@@ -207,10 +306,13 @@ def _export_anchors_module() -> str:
 
 def main() -> int:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
+    domain_by_id = {t.track_id: t for t in ALL_TRACKS}
     count = 0
     for tid, tm in TRACK_MAPS.items():
         label = tid.replace("_", " ").upper()
-        svg = _build_svg(tm, label)
+        domain_track = domain_by_id.get(tid)
+        domain_corners = domain_track.corners if domain_track is not None else None
+        svg = _build_svg(tm, label, domain_corners)
         out_path = OUT_DIR / f"{tid}.svg"
         out_path.write_text(svg, encoding="utf-8")
         count += 1

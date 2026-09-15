@@ -21,7 +21,6 @@ from setup_tuner.telemetry.packets import (
     HEADER_FORMAT,
     HEADER_SIZE,
     NUM_CARS,
-    PACKET_NAMES,
     SUPPORTED_PACKET_IDS,
     PacketHeader,
     PacketTooShortError,
@@ -403,6 +402,7 @@ class TestCarSetupsPacket:
         rear_ride_height: int = 1,
         brake_pressure: int = 75,
         brake_bias: int = 65,
+        engine_braking: int = 50,
         rear_left_press: float = 25.5,
         rear_right_press: float = 25.5,
         front_left_press: float = 25.5,
@@ -410,15 +410,16 @@ class TestCarSetupsPacket:
         ballast: int = 50,
         fuel_load: float = 100.0,
     ) -> bytes:
-        """构造单辆车的 CarSetups 段（49 字节，与 packets.py _SETUP_PER_FMT 一致）。"""
+        """构造单辆车的 CarSetups 段（50 字节，与 packets.py _SETUP_PER_FMT 一致）。"""
         return struct.pack(
-            "<BBBBffffBBBBBBBBffffBf",
+            "<BBBBffffBBBBBBBBBffffBf",
             front_wing, rear_wing, on_throttle, off_throttle,
             front_camber, rear_camber, front_toe, rear_toe,
             front_suspension, rear_suspension,
             front_anti_roll_bar, rear_anti_roll_bar,
             front_ride_height, rear_ride_height,
             brake_pressure, brake_bias,
+            engine_braking,
             rear_left_press, rear_right_press,
             front_left_press, front_right_press,
             ballast, fuel_load,
@@ -431,6 +432,7 @@ class TestCarSetupsPacket:
             front_camber=-3.0, rear_camber=-2.0,
             front_toe=0.20, rear_toe=0.30,
             brake_pressure=80, brake_bias=70,
+            engine_braking=55,
             rear_left_press=25.0, rear_right_press=24.0,
             front_left_press=26.0, front_right_press=25.5,
             ballast=55, fuel_load=110.0,
@@ -448,6 +450,7 @@ class TestCarSetupsPacket:
         assert result["m_rearToe"] == pytest.approx(0.30)
         assert result["m_brakePressure"] == 80
         assert result["m_brakeBias"] == 70
+        assert result["m_engineBraking"] == 55
         assert result["m_rearLeftTyrePressure"] == pytest.approx(25.0)
         assert result["m_rearRightTyrePressure"] == pytest.approx(24.0)
         assert result["m_frontLeftTyrePressure"] == pytest.approx(26.0)
@@ -457,7 +460,7 @@ class TestCarSetupsPacket:
 
     def test_car_setups_player_car_index_2(self) -> None:
         """playerCarIndex=2 时应解析第 3 辆车。"""
-        per_size = struct.calcsize("<BBBBffffBBBBBBBBffffBf")
+        per_size = struct.calcsize("<BBBBffffBBBBBBBBBffffBf")
         target = self._build_setup_per_car(front_wing=9)
         body = b"\x00" * per_size * 2 + target
         data = build_header(packet_id=5, player_car_index=2) + body

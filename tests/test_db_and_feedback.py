@@ -26,7 +26,7 @@ from setup_tuner.feedback.service import FeedbackService
 @pytest.fixture
 def store() -> Store:
     """每个测试用独立的内存 SQLite 库。"""
-    s = Store(":memory:")
+    s = Store(":memory:", seed=False)
     yield s
     s.close()
 
@@ -346,7 +346,7 @@ class TestThreadSafety:
         """多线程并发写入不报错（Lock 串行化）。"""
         import threading
 
-        s = Store(":memory:")
+        s = Store(":memory:", seed=False)
         errors: list[Exception] = []
 
         def worker():

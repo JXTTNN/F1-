@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS setup (
   id                INTEGER PRIMARY KEY AUTOINCREMENT,
   track_id          TEXT NOT NULL,
   imported_at       TEXT NOT NULL,         -- ISO8601
-  params_json       TEXT NOT NULL          -- 20 项参数 JSON 快照
+  params_json       TEXT NOT NULL          -- 21 项参数 JSON 快照
 );
 
 -- feedback：玩家弯道反馈

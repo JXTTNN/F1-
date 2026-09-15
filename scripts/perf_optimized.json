@@ -1,0 +1,176 @@
+{
+  "label": "optimized",
+  "timestamp": "2026-09-11T15:27:22",
+  "repo_root": "D:\\IDEProjects\\demo\\f1opt-work",
+  "process_rss_kb_before_engine": 38,
+  "engine": {
+    "compute_dx": {
+      "count": 200,
+      "mean_ms": 0.0018,
+      "p50_ms": 0.0018,
+      "p95_ms": 0.0019,
+      "min_ms": 0.0016,
+      "max_ms": 0.0081
+    },
+    "matrix_mul_only": {
+      "count": 200,
+      "mean_ms": 0.0195,
+      "p50_ms": 0.0194,
+      "p95_ms": 0.0195,
+      "min_ms": 0.0192,
+      "max_ms": 0.0283
+    },
+    "compute_setup_delta": {
+      "count": 200,
+      "mean_ms": 0.0286,
+      "p50_ms": 0.0269,
+      "p95_ms": 0.0433,
+      "min_ms": 0.0263,
+      "max_ms": 0.0512
+    },
+    "generate_suggestion_full": {
+      "count": 200,
+      "mean_ms": 0.1307,
+      "p50_ms": 0.1273,
+      "p95_ms": 0.1448,
+      "min_ms": 0.1255,
+      "max_ms": 0.2627
+    }
+  },
+  "sqlite": {
+    "get_feedbacks_50rows": {
+      "count": 200,
+      "mean_ms": 0.1,
+      "p50_ms": 0.0969,
+      "p95_ms": 0.1103,
+      "min_ms": 0.0955,
+      "max_ms": 0.2015
+    },
+    "has_feedback": {
+      "count": 200,
+      "mean_ms": 0.0049,
+      "p50_ms": 0.0045,
+      "p95_ms": 0.0052,
+      "min_ms": 0.0044,
+      "max_ms": 0.0529
+    },
+    "get_latest_suggestion": {
+      "count": 200,
+      "mean_ms": 0.0066,
+      "p50_ms": 0.0062,
+      "p95_ms": 0.0067,
+      "min_ms": 0.006,
+      "max_ms": 0.0524
+    },
+    "get_iterations_20rows": {
+      "count": 200,
+      "mean_ms": 0.0515,
+      "p50_ms": 0.0552,
+      "p95_ms": 0.0591,
+      "min_ms": 0.0316,
+      "max_ms": 0.0863
+    },
+    "get_latest_setup_empty": {
+      "count": 200,
+      "mean_ms": 0.0072,
+      "p50_ms": 0.0067,
+      "p95_ms": 0.0081,
+      "min_ms": 0.0065,
+      "max_ms": 0.0847
+    }
+  },
+  "api": {
+    "health": {
+      "method": "GET",
+      "path": "/api/v1/health",
+      "count": 10,
+      "mean_ms": 0.6979,
+      "p50_ms": 0.613,
+      "p95_ms": 1.4963,
+      "min_ms": 0.5477,
+      "max_ms": 1.4963,
+      "status_codes": [
+        200,
+        200,
+        200
+      ]
+    },
+    "tracks_list": {
+      "method": "GET",
+      "path": "/api/v1/tracks",
+      "count": 10,
+      "mean_ms": 0.6474,
+      "p50_ms": 0.6025,
+      "p95_ms": 1.0427,
+      "min_ms": 0.5558,
+      "max_ms": 1.0427,
+      "status_codes": [
+        200,
+        200,
+        200
+      ]
+    },
+    "select_track": {
+      "method": "POST",
+      "path": "/api/v1/tracks/current",
+      "count": 10,
+      "mean_ms": 0.865,
+      "p50_ms": 0.6747,
+      "p95_ms": 2.5025,
+      "min_ms": 0.6244,
+      "max_ms": 2.5025,
+      "status_codes": [
+        200,
+        200,
+        200
+      ]
+    },
+    "submit_feedback": {
+      "method": "POST",
+      "path": "/api/v1/feedback",
+      "count": 10,
+      "mean_ms": 0.8621,
+      "p50_ms": 0.7805,
+      "p95_ms": 1.1035,
+      "min_ms": 0.7536,
+      "max_ms": 1.1035,
+      "status_codes": [
+        200,
+        200,
+        200
+      ]
+    },
+    "suggest": {
+      "method": "POST",
+      "path": "/api/v1/suggest",
+      "count": 10,
+      "mean_ms": 2.0505,
+      "p50_ms": 1.9071,
+      "p95_ms": 3.6055,
+      "min_ms": 1.4526,
+      "max_ms": 3.6055,
+      "status_codes": [
+        200,
+        200,
+        200
+      ]
+    },
+    "iteration_history": {
+      "method": "GET",
+      "path": "/api/v1/iteration/history?track_id=suzuka",
+      "count": 10,
+      "mean_ms": 0.861,
+      "p50_ms": 0.7228,
+      "p95_ms": 1.8041,
+      "min_ms": 0.6775,
+      "max_ms": 1.8041,
+      "status_codes": [
+        200,
+        200,
+        200
+      ]
+    }
+  },
+  "server_rss_kb": 57,
+  "process_rss_kb_after": 48
+}
