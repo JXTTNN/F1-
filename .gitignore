@@ -77,3 +77,8 @@ coverage.xml
 # 本地 UI 审计产物（task-62）
 shots/
 reports/
+
+# 历史测试/审计输出（不入库）
+test_result.txt
+deep_check_*.txt
+api_test_result*.json
