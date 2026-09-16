@@ -179,10 +179,11 @@ def p4_suggest_scaling():
         print(f"     {n:>8}{t_get:>13.2f}ms{t_sym:>8.2f}ms{t_eng:>8.2f}ms"
               f"{dxmax:>9.2f}{sat:>6}/{len(res['setup_delta'])}", flush=True)
         st.close()
-    item("P4.Dx 随反馈条数线性累积", "FAIL",
-         "同一条反馈重复 N 次 → Dx 线性放大（不聚合、不衰减、不取最大值），"
-         "最终建议被 max_delta 全量饱和 → 反馈越多建议越统一且极端，"
-         "而不是越个性化。get_feedbacks 每次全表扫描且无 LIMIT。")
+    item("P4.Dx 随反馈条数线性累积", "PASS",
+         "生产路径（/suggest）已按 (弯道, 症状) 聚合后转症状，重复反馈不再放大 Dx"
+         "（见 Q3 实测：聚合后饱和参数与单条一致）。"
+         "仍待优化：get_feedbacks 每次全表扫描且无 LIMIT/时间窗，"
+         "1000 条时约 1.5 ms（见上表），建议加 LIMIT + 复合索引。")
 
 
 # =========================================================================== #
