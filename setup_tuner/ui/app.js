@@ -1129,6 +1129,41 @@
    *  @param {Object} report — 建议报告对象
    *  @returns {void}
    */
+  /** task-62 M4：拉取车手风格画像并渲染 12 维条形 + 调制状态。
+   *  数据源：GET /api/v1/driver/style（样本 ≥3 圈才启用调制）。
+   *  @returns {Promise<void>}
+   */
+  async function loadStyleProfile() {
+    const wrap = document.getElementById("style-profile");
+    if (!wrap) return;
+    try {
+      const res = await fetchJSON("/driver/style");
+      const d = res.data || res;
+      const dims = d.dims || [];
+      const vector = d.vector || [];
+      const zh = {
+        steer_aggression: "攻弯强度", steer_smoothness: "转向平滑度",
+        throttle_aggression: "油门激进", brake_aggression: "刹车激进",
+        trail_braking: "循迹刹车", throttle_onset: "出弯给油",
+        tyre_management: "轮胎管理", slip_ratio: "滑移迹象",
+        straight_speed_ratio: "直道末速", brake_thermal: "制动热负荷",
+        slow_corner_ratio: "慢弯占比", lap_consistency: "圈速一致",
+      };
+      const badge = d.style_applied
+        ? `<span class="style-badge on">已应用风格调制（${d.sample_count} 圈样本）</span>`
+        : `<span class="style-badge off">风格采集中（${d.sample_count}/3 圈，暂用规则引擎）</span>`;
+      const rows = dims.map((dim, i) => {
+        const v = Math.round((vector[i] ?? 0.5) * 100);
+        return `<div class="style-row"><span class="style-name">${esc(zh[dim] || dim)}</span>`
+          + `<span class="style-bar"><span class="style-bar-fill" style="width:${v}%"></span></span>`
+          + `<span class="style-val">${v}</span></div>`;
+      }).join("");
+      wrap.innerHTML = `<div class="style-head">${badge}</div>${rows}`;
+    } catch (e) {
+      wrap.innerHTML = "";
+    }
+  }
+
   function renderReportSummary(report) {
     if (report.summary) {
       dom.reportSummary.innerHTML = `<div>${esc(report.summary)}</div>` +
@@ -1187,6 +1222,7 @@
     }
 
     renderReportSummary(report);
+    void loadStyleProfile();
 
     // 使用 DocumentFragment 批量插入表格行
     const table = document.createElement("table");
