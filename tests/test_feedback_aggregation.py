@@ -84,7 +84,7 @@ class TestDxNoLongerExplodes:
         """对照：不做聚合时 Dx 会线性放大（记录该问题已修复）。"""
         raw_one = compute_dx(feedbacks_to_symptoms([_fb(1, "understeer", 3)]))
         raw_many = compute_dx(feedbacks_to_symptoms([_fb(1, "understeer", 3)] * 20))
-        assert raw_many["front_grip_req"] == raw_one["front_grip_req"] * 20
+        assert raw_many["front_grip_req"] == pytest.approx(raw_one["front_grip_req"] * 20)
 
     def test_suggestion_not_saturated_by_duplicates(self) -> None:
         """重复反馈不再把参数全部顶到 max_delta。"""
