@@ -30,6 +30,7 @@ PyTorch 为可选依赖（optional），本模块在无 PyTorch 环境下可安�
 from __future__ import annotations
 
 import logging
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -432,13 +433,17 @@ class NNModelManager:
 # 模块级单例（延迟初始化，供 engine.py 使用）
 # ---------------------------------------------------------------------------
 _NN_MANAGER: NNModelManager | None = None
+# 初始化锁：FastAPI 默认线程池会并发处理请求，若不串行化，
+# 两个线程可能同时进入 ``_NN_MANAGER is None`` 分支，各自构造一次
+# NNModelManager（含 F1SetupNet 构建 / torch.load），造成重复开销。
+_NN_MANAGER_LOCK = threading.Lock()
 
 
 def get_nn_manager(weights_path: str | Path = "data/nn_weights.pt") -> NNModelManager:
     """获取神经网络模型管理器单例。
 
-    延迟初始化，首次调用时构造 NNModelManager。
-    后续调用返回同一实例（忽略 weights_path 参数变化）。
+    延迟初始化，首次调用时构造 NNModelManager，此后复用。
+    首次初始化受模块级锁保护，并发调用不会重复构造。
 
     Args:
         weights_path: 权重文件路径（仅首次调用生效）。
@@ -448,14 +453,18 @@ def get_nn_manager(weights_path: str | Path = "data/nn_weights.pt") -> NNModelMa
     """
     global _NN_MANAGER
     if _NN_MANAGER is None:
-        _NN_MANAGER = NNModelManager(weights_path)
+        with _NN_MANAGER_LOCK:
+            # 双重检查：等待锁期间可能已有线程完成初始化
+            if _NN_MANAGER is None:
+                _NN_MANAGER = NNModelManager(weights_path)
     return _NN_MANAGER
 
 
 def reset_nn_manager() -> None:
     """重置神经网络模型管理器单例（供测试使用）。"""
     global _NN_MANAGER
-    _NN_MANAGER = None
+    with _NN_MANAGER_LOCK:
+        _NN_MANAGER = None
 
 
 def is_torch_available() -> bool:

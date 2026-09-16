@@ -25,9 +25,13 @@
 
 from __future__ import annotations
 
+import logging
+import threading
 from typing import Any
 
 from setup_tuner.domain.setup import ALL_SETUP_FIELDS
+
+logger = logging.getLogger(__name__)
 
 # 浮点比较 epsilon（用于 delta 零值判定与边界容差）
 DELTA_ZERO_EPSILON = 1e-12
@@ -865,31 +869,48 @@ def _blend_delta(
 # ---------------------------------------------------------------------------
 # 神经网络管理器单例（延迟加载，PyTorch 不可用时返回 None）
 # ---------------------------------------------------------------------------
+# 哨兵：表示"已尝试加载且失败"，用于区分"尚未尝试"（None）。
+# 若失败后置回 None，则每个请求都会重新 import + 构造 NNModelManager
+# （PyTorch 可用但权重缺失时仍会构造完整 F1SetupNet），造成反复开销。
+_LOAD_FAILED: Any = object()
 _NN_MANAGER: Any = None
+# 初始化锁：FastAPI 默认线程池并发处理请求，串行化首次加载
+_NN_MANAGER_LOCK = threading.Lock()
 
 
 def _get_nn_manager() -> Any:
     """获取神经网络模型管理器单例（延迟加载）。
 
-    PyTorch 不可用或加载失败时返回 None，引擎自动降级为纯规则引擎。
+    PyTorch 不可用或首次加载失败时返回 None，引擎自动降级为纯规则引擎；
+    加载结果（成功或失败）均被缓存，不在每次请求时重试。
 
     Returns:
         NNModelManager 实例或 None。
     """
     global _NN_MANAGER
     if _NN_MANAGER is None:
-        try:
-            from .nn_model import NNModelManager
-            _NN_MANAGER = NNModelManager()
-        except Exception:
-            _NN_MANAGER = None
+        with _NN_MANAGER_LOCK:
+            # 双重检查：等待锁期间可能已有线程完成加载
+            if _NN_MANAGER is None:
+                try:
+                    from .nn_model import NNModelManager
+                    _NN_MANAGER = NNModelManager()
+                except Exception:
+                    logger.warning(
+                        "神经网络管理器加载失败，降级为纯规则引擎", exc_info=True,
+                    )
+                    _NN_MANAGER = _LOAD_FAILED
+    # 失败哨兵对外统一表现为 None
+    if _NN_MANAGER is _LOAD_FAILED:
+        return None
     return _NN_MANAGER
 
 
 def reset_nn_manager() -> None:
     """重置神经网络管理器单例（供测试使用）。"""
     global _NN_MANAGER
-    _NN_MANAGER = None
+    with _NN_MANAGER_LOCK:
+        _NN_MANAGER = None
 
 
 # ---------------------------------------------------------------------------

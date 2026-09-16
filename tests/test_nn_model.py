@@ -13,7 +13,9 @@
 
 from __future__ import annotations
 
+import threading
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -415,6 +417,33 @@ class TestSingletonManager:
         reset_nn_manager()
         mgr2 = get_nn_manager(weights_path=tmp_path / "w.pt")
         assert mgr1 is not mgr2
+        reset_nn_manager()
+
+    def test_get_nn_manager_concurrent_single_instance(self, tmp_path: Path) -> None:
+        """并发首调只构造一个实例（锁 + 双重检查）。
+
+        FastAPI 默认线程池会并发处理请求；若无锁，
+        多个线程可能同时进入 ``_NN_MANAGER is None`` 分支各构造一次。
+        """
+        reset_nn_manager()
+        barrier = threading.Barrier(8)
+        results: list[Any] = []
+        lock = threading.Lock()
+
+        def worker() -> None:
+            barrier.wait()  # 尽量让 8 个线程同时冲进 get_nn_manager
+            mgr = get_nn_manager(weights_path=tmp_path / "w.pt")
+            with lock:
+                results.append(mgr)
+
+        threads = [threading.Thread(target=worker) for _ in range(8)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert len(results) == 8
+        assert all(r is results[0] for r in results), "并发首调返回了不同实例"
         reset_nn_manager()
 
 
