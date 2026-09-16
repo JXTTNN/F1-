@@ -935,6 +935,39 @@ async def suggest(
     return ok(data=data.model_dump(), message="建议已生成")
 
 
+@router.get("/driver/style")
+async def get_driver_style_profile(
+    request: Request,
+    track_id: str | None = Query(default=None, description="赛道标识；缺省用当前赛道"),
+) -> dict[str, Any]:
+    """读取车手风格画像（12 维，含样本数与是否已启用调制）。
+
+    task-62 M4：报告页"风格画像"的数据源。样本 <3 圈时 style_applied=False
+    （引擎自动退化为 L0，不臆测）。
+    """
+    svc = _get_services(request)
+    store = svc["store"]
+    if store is None:
+        raise fail(message="服务未初始化", code=5001, http_status=500)
+    tid = track_id or svc["current_track_id"]
+    if tid is None:
+        raise fail(message="未指定赛道，且无当前赛道", code=4093, http_status=409)
+    from setup_tuner.domain.style_coefficients import STYLE_VECTOR_LEN
+    from setup_tuner.telemetry.style_extractor import STYLE_DIMS
+
+    entry = store.get_driver_style(1, tid)
+    sample_count = entry["sample_count"] if entry else 0
+    vector = entry["vector"] if entry else [0.5] * len(STYLE_DIMS)
+    return ok(data={
+        "track_id": tid,
+        "dims": STYLE_DIMS,
+        "vector": vector,
+        "sample_count": sample_count,
+        "style_applied": sample_count >= 3 and len(vector) == STYLE_VECTOR_LEN,
+        "min_samples": 3,
+    })
+
+
 @router.get("/suggest/latest")
 async def get_latest_suggestion(
     request: Request,
