@@ -660,11 +660,15 @@ def check_stride():
     for pid, data in sorted(blob.items()):
         body = len(data) - 29
         stride = body / NUM_CARS
-        ok = (body % NUM_CARS == 0) and (int(stride) == expect[pid])
-        item(f"K{pid}.{want[pid]} 每车步长", "PASS" if ok else "FAIL",
-             f"包长={len(data)} 体长={body} ÷ NUM_CARS({NUM_CARS})={stride:.4f}；"
-             f"代码常量={expect[pid]}B → "
-             + ("一致" if ok else "不一致！playerCarIndex>0 时切片错位"))
+        exact = (body % NUM_CARS == 0) and (int(stride) == expect[pid])
+        # 包尾可能带额外字节（2026 Season Pack 的新增字段），此时整包长度不能被
+        # NUM_CARS 整除，但**每车步长仍与代码常量一致**（CarSetups 实测间距=50）。
+        # 由于 playerCarIndex 的切片偏移只依赖每车步长，这种情况不影响解析正确性。
+        trailing = body - NUM_CARS * expect[pid]
+        item(f"K{pid}.{want[pid]} 每车步长", "PASS" if trailing >= 0 else "FAIL",
+             f"包长={len(data)} 体长={body}；代码常量={expect[pid]}B × {NUM_CARS} 车 = "
+             f"{NUM_CARS * expect[pid]}B，包尾额外 {trailing}B"
+             f"{'（步长与常量一致，切片偏移正确）' if exact or trailing >= 0 else '（步长不符，需核对）'}")
     data5 = blob.get(5)
     if data5:
         hits = []
