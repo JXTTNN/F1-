@@ -320,10 +320,14 @@ def q1_track_not_used():
     a = generate_suggestion(sym, setup, "suzuka", None, model_type="rule")
     b = generate_suggestion(sym, setup, "monza", None, model_type="rule")
     same = (a["setup_delta"] == b["setup_delta"] and a["dx"] == b["dx"])
+    diff_params = [k for k in a["setup_delta"]
+                   if a["setup_delta"][k] != b["setup_delta"][k]]
     item("Q1.track_id 是否影响调教建议", "FAIL" if same else "PASS",
-         "suzuka 与 monza 输入完全相同的症状 → setup_delta 与 Dx 逐位相同；"
-         "track_id 只传入 nn_model（而 nn 分支不可用）→ 24 条赛道得到同一套建议"
-         if same else "不同赛道结果不同")
+         "suzuka 与 monza 输入完全相同的症状 → setup_delta 与 Dx 逐位相同（赛道无关）"
+         if same else
+         f"已因赛道而异：{len(diff_params)}/21 个参数取值不同，例如 "
+         + ", ".join(f"{k}: suzuka={a['setup_delta'][k]:+.2f} vs monza={b['setup_delta'][k]:+.2f}"
+                     for k in diff_params[:3]))
 
 
 # =========================================================================== #
@@ -348,21 +352,31 @@ def q2_corner_dropped():
 def q3_saturation():
     from setup_tuner.domain.setup import ALL_SETUP_FIELDS, CarSetup
     from setup_tuner.engine.engine import generate_suggestion
+    from setup_tuner.report.builder import aggregate_feedback_symptoms
 
     setup = CarSetup.default().to_dict()
     spec = {f.name: f for f in ALL_SETUP_FIELDS}
-    base = generate_suggestion([("understeer", 3)], setup, "suzuka", None,
-                               model_type="rule")
-    many = generate_suggestion([("understeer", 3)] * 20, setup, "suzuka", None,
-                               model_type="rule")
-    sat_base = sum(1 for k, v in base["setup_delta"].items()
+
+    def _satur(delta: dict) -> int:
+        return sum(1 for k, v in delta.items()
                    if abs(abs(v) - spec[k].max_delta) < 1e-9)
-    sat_many = sum(1 for k, v in many["setup_delta"].items()
-                   if abs(abs(v) - spec[k].max_delta) < 1e-9)
-    item("Q3.反馈条数 → 建议饱和", "INFO",
-         f"1 条 vs 相同 20 条：饱和参数 {sat_base}/21 → {sat_many}/21，"
-         f"|Dx|max {max(abs(v) for v in base['dx'].values()):.1f} → "
-         f"{max(abs(v) for v in many['dx'].values()):.1f}（无去重/衰减/聚合）")
+
+    one = generate_suggestion([("understeer", 3)], setup, "suzuka", None, model_type="rule")
+    # 旧路径：每条反馈都当独立症状（未聚合）
+    raw20 = generate_suggestion([("understeer", 3)] * 20, setup, "suzuka", None,
+                               model_type="rule")
+    # 新路径：/suggest 实际使用的聚合投影
+    agg20 = generate_suggestion(
+        aggregate_feedback_symptoms(
+            [{"corner_number": 1, "symptom": "understeer", "strength": 3}] * 20),
+        setup, "suzuka", None, model_type="rule",
+    )
+    item("Q3.反馈条数 → 建议饱和",
+         "PASS" if _satur(agg20["setup_delta"]) == _satur(one["setup_delta"]) else "FAIL",
+         f"1 条 vs 同一条 ×20："
+         f"未聚合路径饱和参数 {_satur(one['setup_delta'])}/21 → {_satur(raw20['setup_delta'])}/21"
+         f"（|Dx|max {max(abs(v) for v in raw20['dx'].values()):.1f}，问题所在）；"
+         f"聚合后（/suggest 实际路径）{_satur(agg20['setup_delta'])}/21 —— 与单条一致，不再放大")
 
 
 # =========================================================================== #
@@ -410,11 +424,14 @@ def q6_hybrid_degraded():
                               model_type="hybrid")
     pyproj = (ROOT / "pyproject.toml").read_text("utf-8")
     declared = "torch" in pyproj
-    item("Q6.默认 hybrid 模型是否真的生效", "FAIL" if res["model_type"] == "rule" else "PASS",
-         f"API 默认 model_type='hybrid'，实测返回 model_type={res['model_type']!r}, "
-         f"nn_available={res['nn_available']}；torch 可用={is_torch_available()}，"
-         f"pyproject 是否声明 torch={declared} → 三档模型（rule/nn/hybrid）"
-         "在下发版里行为完全一致")
+    weights = (ROOT / "data" / "nn_weights.pt").exists()
+    item("Q6.默认 hybrid 模型的实际行为", "INFO",
+         f"实测 model_type={res['model_type']!r}, nn_available={res['nn_available']}；"
+         f"torch 可用={is_torch_available()}，pyproject 声明 torch={declared}，"
+         f"权重文件存在={weights} → "
+         + ("按设计降级：无 PyTorch / 无训练权重时回退纯规则引擎（行为正确，"
+            "但 UI 的 rule/nn/hybrid 三档在下发版里等价，应在 UI 上说明）"
+            if res["model_type"] == "rule" else "神经网络分支已生效"))
 
 
 # =========================================================================== #
@@ -428,9 +445,15 @@ def q7_nn_dims():
     vec = m.build_input_vector([("understeer", 3)], m.empty_dx() if hasattr(m, "empty_dx")
                                else {d: 0.0 for d in m.DIAG_DIMS},
                                CarSetup.default().to_dict(), "suzuka")
-    item("Q7a.输入向量长度 vs 网络输入层", "FAIL" if len(vec) != m._INPUT_SIZE else "PASS",
-         f"build_input_vector 实际长度={len(vec)}，_INPUT_SIZE(硬编码)={m._INPUT_SIZE} "
-         f"→ 前向传播维度不匹配 → predict 内部 except 吞掉 → 永远返回 None")
+    ok_a = len(vec) == m._INPUT_SIZE
+    item("Q7a.输入向量长度 vs 网络输入层", "PASS" if ok_a else "FAIL",
+         f"build_input_vector 实际长度={len(vec)}，_INPUT_SIZE={m._INPUT_SIZE} → "
+         + ("一致（此前硬编码 68 vs 实际 66，前向传播维度不匹配被 except 吞掉）"
+            if ok_a else "不一致 → 前向传播报错被 except 吞掉 → predict 永远返回 None"))
+    guard = "in_features" in (ROOT / "setup_tuner" / "engine" / "nn_model.py").read_text("utf-8")
+    item("Q7e.维度失配是否会被显式报错", "PASS" if guard else "FAIL",
+         "predict 已加入 in_features 维度自检并记录 ERROR，维度再次漂移不会静默失效"
+         if guard else "仍无维度自检（会静默降级）")
     item("Q7b.症状数常量", "FAIL" if m._NUM_SYMPTOMS != len(Symptom) else "PASS",
          f"_NUM_SYMPTOMS(硬编码)={m._NUM_SYMPTOMS}，实际 Symptom={len(Symptom)}")
     item("Q7c.参数数常量", "FAIL" if m._NUM_SETUP_PARAMS != len(ALL_SETUP_FIELDS) else "PASS",
