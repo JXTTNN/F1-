@@ -50,10 +50,10 @@ from setup_tuner.domain.track import (
 )
 from setup_tuner.engine.engine import generate_suggestion
 from setup_tuner.report.builder import (
+    aggregate_feedback_symptoms,
     build_report,
     extract_setup_from_packet5,
     extract_telemetry_summary,
-    feedbacks_to_symptoms,
 )
 from setup_tuner.telemetry.importer import (
     LapTelemetrySummary,
@@ -271,6 +271,7 @@ def _get_services(request: Request) -> dict[str, Any]:
         "iteration_service": getattr(state, "iteration_service", None),
         "telemetry_listener": getattr(state, "telemetry_listener", None),
         "telemetry_stream": getattr(state, "telemetry_stream", None),
+        "lap_aggregator": getattr(state, "lap_aggregator", None),
         "current_track_id": getattr(state, "current_track_id", None),
         "current_track_source": getattr(state, "current_track_source", "manual"),
     }
@@ -804,12 +805,20 @@ def _resolve_current_setup(store: Any, track_id: str) -> tuple[dict[str, float],
     return CarSetup.default().to_dict(), None
 
 
-def _extract_telemetry_summary(stream: Any) -> dict[str, Any] | None:
-    """从遥测流提取摘要，stream 为 None 时返回 None。"""
+def _extract_telemetry_summary(stream: Any, aggregator: Any = None) -> dict[str, Any] | None:
+    """从遥测流 + 整圈聚合器提取摘要，stream 为 None 时返回 None。
+
+    ``aggregator`` 为 ``LapAggregator`` 时，会带上整圈统计
+    （max_speed / avg_steer / max_steer / on_straight / 四轮均值 …），
+    这是遥测规则 6/7/10/15 能生效的前提。
+    """
     if stream is None:
         return None
     all_latest = stream.get_all_latest()
-    return extract_telemetry_summary(all_latest)
+    lap_stats = None
+    if aggregator is not None:
+        lap_stats = aggregator.best_snapshot()
+    return extract_telemetry_summary(all_latest, lap_stats)
 
 
 def _invoke_generate_suggestion(
@@ -882,9 +891,12 @@ async def suggest(
     _validate_suggest_request(body)
     _validate_feedback_available(feedback_service, body.track_id)
 
-    symptoms = feedbacks_to_symptoms(feedback_service.get_feedbacks(body.track_id))
+    # 反馈按 (弯道, 症状) 聚合后再转症状：同一条反馈重复提交不再线性放大 Dx
+    symptoms = aggregate_feedback_symptoms(feedback_service.get_feedbacks(body.track_id))
     current_setup, setup_id = _resolve_current_setup(store, body.track_id)
-    telemetry_summary = _extract_telemetry_summary(svc["telemetry_stream"])
+    telemetry_summary = _extract_telemetry_summary(
+        svc["telemetry_stream"], svc.get("lap_aggregator"),
+    )
 
     suggestion_result = _safe_generate_suggestion(
         symptoms, current_setup, body.track_id, telemetry_summary, body.model_type,
