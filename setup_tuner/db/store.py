@@ -100,6 +100,9 @@ class Store:
         from setup_tuner.domain.track import get_all_tracks
 
         tracks = get_all_tracks()
+        # 性能：所有 track/corner 的 upsert 共用一个事务，最后统一 commit。
+        # 原实现每条记录 commit 一次（24 + 404 = 428 次），WAL 下每次 commit
+        # 都要走一次事务边界；合并为单事务后启动路径只提交一次。
         for t in tracks:
             self.upsert_track(
                 track_id=t.track_id,
@@ -110,6 +113,7 @@ class Store:
                 corners=len(t.corners),
                 svg_path=t.svg_path,
                 udp_track_id=t.udp_track_id,
+                commit=False,
             )
             for c in t.corners:
                 self.upsert_corner(
@@ -120,7 +124,10 @@ class Store:
                     anchor_y=c.anchor.anchor_y,
                     name=c.name,
                     speed_kmh=c.speed_kmh,
+                    commit=False,
                 )
+        with self._lock:
+            self._conn.commit()
         logger.debug("seeded %d tracks with corners into database", len(tracks))
 
     def close(self) -> None:
@@ -150,8 +157,13 @@ class Store:
         corners: int,
         svg_path: str,
         udp_track_id: int | None = None,
+        commit: bool = True,
     ) -> None:
-        """插入或更新赛道主表记录（按 track_id 幂等）。"""
+        """插入或更新赛道主表记录（按 track_id 幂等）。
+
+        Args:
+            commit: 是否立即提交事务。批量 seed 时传 False，由调用方统一提交。
+        """
         with self._lock:
             self._conn.execute(
                 """
@@ -173,7 +185,8 @@ class Store:
                     length_m, corners, udp_track_id, svg_path,
                 ),
             )
-            self._conn.commit()
+            if commit:
+                self._conn.commit()
 
     def get_track(self, track_id: str) -> dict[str, Any] | None:
         """按 track_id 查询赛道主表。"""
@@ -192,8 +205,13 @@ class Store:
         anchor_y: float,
         name: str | None = None,
         speed_kmh: float | None = None,
+        commit: bool = True,
     ) -> None:
-        """插入或更新弯道记录（按 (track_id, corner_number) 幂等）。"""
+        """插入或更新弯道记录（按 (track_id, corner_number) 幂等）。
+
+        Args:
+            commit: 是否立即提交事务。批量 seed 时传 False，由调用方统一提交。
+        """
         with self._lock:
             self._conn.execute(
                 """
@@ -210,7 +228,8 @@ class Store:
                 """,
                 (track_id, corner_number, name, corner_type, speed_kmh, anchor_x, anchor_y),
             )
-            self._conn.commit()
+            if commit:
+                self._conn.commit()
 
     def get_corners(self, track_id: str) -> list[dict[str, Any]]:
         """查询某赛道的全部弯道（按 corner_number 升序）。"""

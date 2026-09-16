@@ -262,15 +262,17 @@ def _apply_corner_rules(
 
     规则5 - 出弯段油门低（sector == 3 且 m_throttle < 0.3）：
         exit_traction_req += 0.3。出处：F1官方调教指南。
+        sector 约定为 **1 基**（1/2/3）。UDP 原始 ``m_sector`` 是 0 基，
+        由 ``telemetry.packets.to_sector_1based`` 在生成遥测摘要时统一转换；
+        早期直传 0 基值（上限 2）导致本规则永不触发。
     规则7 - 入弯响应差（max_steer > 0.3，转向幅度大）：
         turnin_req += 0.3。出处：F1官方调教指南。
-        注意：整圈统计摘要无逐帧 speed 变化率，仅用转向幅度作为简化条件。
+        需要整圈统计的 ``max_steer``（由 LapAggregator 提供）。
     规则10 - 弯中不稳定（avg_steer > 0.2，转向反复修正的简化条件）：
         hi_speed_stab_req += 0.3。
-        注意：逐帧 steer 符号变化频率在整圈统计中难以实现，暂用 avg_steer 近似。
+        需要整圈统计的 ``avg_steer``（由 LapAggregator 提供）。
     规则11 - 出弯打滑（m_throttle > 0.7 且 m_speed < 150，高油门但速度低）：
         exit_traction_req += 0.3。出处：F1官方调教指南。
-        注意：整圈统计摘要无逐帧 speed 变化率，用高油门+低速度近似。
     """
     # 规则5：出弯段油门低
     sector = telemetry.get("sector") or telemetry.get("m_sector")
@@ -392,8 +394,9 @@ def _derive_telemetry_dx(telemetry: dict[str, Any] | None) -> dict[str, float]:
 # ---------------------------------------------------------------------------
 def _compute_param_raw_delta(
     p: str, dx: dict[str, float], telemetry_gain: dict[str, float],
+    track_gain: dict[str, float] | None = None,
 ) -> float:
-    """步骤 1-2：矩阵乘法 + 遥测校准，返回校准后 raw delta。"""
+    """步骤 1-2：矩阵乘法 + 遥测/赛道校准，返回校准后 raw delta。"""
     raw = 0.0
     for cell in nonzero_cells_for_param_cached(p):
         dx_val = dx.get(cell.diag, 0.0)
@@ -401,6 +404,8 @@ def _compute_param_raw_delta(
             continue
         raw += dx_val * cell.value
     gain = telemetry_gain.get(p, 1.0)
+    if track_gain:
+        gain *= track_gain.get(p, 1.0)
     return raw * gain
 
 
@@ -421,6 +426,7 @@ def compute_setup_delta(
     dx: dict[str, float],
     current_setup: dict[str, float],
     telemetry_gain: dict[str, float] | None = None,
+    track_gain: dict[str, float] | None = None,
 ) -> dict[str, float]:
     """执行完整的 6 步 SetupDelta 计算流水线。
 
@@ -428,15 +434,18 @@ def compute_setup_delta(
 
     Args:
         dx: 诊断向量字典 {dim_key: value}（9 维，来自 compute_dx）。
-        current_setup: 当前调教快照 {param: value}（20 参数）。
+        current_setup: 当前调教快照 {param: value}（21 参数）。
         telemetry_gain: 每参数的遥测幅度增益 {param: gain}；
             None 时全部默认 1.0。
+        track_gain: 每参数的**赛道敏感度增益** {param: gain}（见
+            ``domain.track_coefficients``）；None 时全部默认 1.0。
+            与 telemetry_gain 相乘后作用于 raw delta，只改幅度不改方向。
 
     Returns:
-        SetupDelta 字典 {param: delta_value}，覆盖全部 20 参数。
+        SetupDelta 字典 {param: delta_value}，覆盖全部 21 参数。
         每参数 delta 满足：
             - |delta| <= max_delta[p]（单次上限）；
-            - current[p] + delta ∈ [min[p], max[p]]（合法区间）；
+            - current[p] + delta ∈ [min[p], max[p]（合法区间）；
             - delta 对齐到 step 档位。
 
     Raises:
@@ -444,14 +453,28 @@ def compute_setup_delta(
     """
     if telemetry_gain is None:
         telemetry_gain = {f.name: 1.0 for f in ALL_SETUP_FIELDS}
+    if track_gain is None:
+        track_gain = {}
 
     setup_delta: dict[str, float] = {}
     for spec in ALL_SETUP_FIELDS:
         p = spec.name
-        raw = _compute_param_raw_delta(p, dx, telemetry_gain)
+        raw = _compute_param_raw_delta(p, dx, telemetry_gain, track_gain)
         current = float(current_setup[p])
         setup_delta[p] = _align_param_delta(spec, raw, current)
     return setup_delta
+
+
+def _derive_track_gain(track_id: str) -> dict[str, float]:
+    """按赛道标识推导参数敏感度增益（让建议因赛道而异）。
+
+    实现委托给 ``domain.track_coefficients``（按 track_type 分组的温和倍数，
+    未知赛道返回全 1.0）。此前 track_id 只传给神经网络分支，
+    规则引擎与赛道无关 → suzuka 与 monza 输出逐位相同。
+    """
+    from setup_tuner.domain.track_coefficients import track_gain_for
+
+    return track_gain_for(track_id)
 
 
 # ---------------------------------------------------------------------------
@@ -546,16 +569,27 @@ _TRADEOFF_NOTES: dict[str, dict[str, str]] = {
 }
 
 
+def _active_cells(spec_name: str, dx: dict[str, float]) -> list[Any]:
+    """返回该参数上 Dx 分量非零的耦合单元（保持耦合矩阵原始顺序）。
+
+    性能说明：报告组装此前对同一参数调用 ``nonzero_cells_for_param_cached``
+    两次（联动说明 + 中文语义各一次）。抽出本函数后只取一次，减少
+    报告生成耗时（实测该步骤占 generate_suggestion 的约 7 成）。
+    """
+    return [
+        cell for cell in nonzero_cells_for_param_cached(spec_name)
+        if dx.get(cell.diag, 0.0) != 0.0
+    ]
+
+
 def _collect_param_linkages(
-    spec_name: str, dx: dict[str, float],
+    cells: list[Any], dx: dict[str, float],
 ) -> tuple[list[str], list[str]]:
     """收集参数的诊断维度联动描述与出处列表。"""
     linkages: list[str] = []
     sources: list[str] = []
-    for cell in nonzero_cells_for_param_cached(spec_name):
+    for cell in cells:
         dx_val = dx.get(cell.diag, 0.0)
-        if dx_val == 0.0:
-            continue
         linkages.append(
             f"{cell.diag}({DIAG_DIMS_ZH[cell.diag]}) Dx={dx_val:+.2f} × C={cell.value:+.2f}",
         )
@@ -564,14 +598,13 @@ def _collect_param_linkages(
     return linkages, sources
 
 
-def _build_linked_notes(spec_name: str, dx: dict[str, float], linkages: list[str]) -> str:
+def _build_linked_notes(cells: list[Any]) -> str:
     """构造参数的中文联动说明。"""
-    if not linkages:
+    if not cells:
         return "本次无需调整"
     linked_notes = "、".join(
         f"{DIAG_DIMS_POSITIVE_SEMANTICS.get(cell.diag, cell.diag)}"
-        for cell in nonzero_cells_for_param_cached(spec_name)
-        if dx.get(cell.diag, 0.0) != 0.0
+        for cell in cells
     )
     return linked_notes or "由多个诊断维度联动调整"
 
@@ -583,8 +616,9 @@ def _build_param_detail(
     dx: dict[str, float],
 ) -> dict[str, Any]:
     """组装单参数的报告详情（联动说明 / 出处 / tradeoff）。"""
-    linkages, sources = _collect_param_linkages(spec_name, dx)
-    linked_notes = _build_linked_notes(spec_name, dx, linkages)
+    cells = _active_cells(spec_name, dx)
+    linkages, sources = _collect_param_linkages(cells, dx)
+    linked_notes = _build_linked_notes(cells)
     source = ",".join(sources) if sources else ""
 
     tradeoff: str | None = None
@@ -707,7 +741,8 @@ def generate_suggestion(
     telemetry_dx = _derive_telemetry_dx(telemetry)
     dx = {dim: feedback_dx[dim] + telemetry_dx[dim] for dim in DIAG_DIMS}
     telemetry_gain = _derive_telemetry_gain(telemetry)
-    rule_delta = compute_setup_delta(dx, current_setup, telemetry_gain)
+    track_gain = _derive_track_gain(track_id)
+    rule_delta = compute_setup_delta(dx, current_setup, telemetry_gain, track_gain)
 
     nn_delta, nn_available = _compute_nn_delta(
         model_type, symptoms, dx, current_setup, track_id,

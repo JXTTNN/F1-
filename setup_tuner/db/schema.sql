@@ -68,6 +68,9 @@ CREATE TABLE IF NOT EXISTS iteration (
 
 -- 索引：加速按赛道查询反馈/建议/迭代历史
 CREATE INDEX IF NOT EXISTS idx_feedback_track ON feedback(track_id);
+-- 复合索引：加速 get_feedbacks 的 WHERE track_id=? ORDER BY created_at
+-- （/suggest 每次都会拉取该赛道全部反馈，原实现只命中 track_id 后需再排序）
+CREATE INDEX IF NOT EXISTS idx_feedback_track_created ON feedback(track_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_feedback_setup ON feedback(setup_id);
 CREATE INDEX IF NOT EXISTS idx_setup_track ON setup(track_id);
 CREATE INDEX IF NOT EXISTS idx_suggestion_track ON suggestion(track_id);
