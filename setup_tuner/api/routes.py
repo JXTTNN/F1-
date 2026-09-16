@@ -989,11 +989,11 @@ async def get_latest_suggestion(
 
     row = store.get_latest_suggestion(tid)
     if row is None:
-        raise fail(
-            message=f"赛道 {tid} 无建议报告",
-            code=4042,
-            http_status=404,
-        )
+        # task-62：改为探测语义（200 + data=null）。
+        # 前端在选赛道/加载后会轮询本端点；全新环境下"还没有建议"是常态，
+        # 用 404 会让浏览器 console 持续出现资源加载错误（前端虽已 catch，
+        # 但网络层 404 无法静默）。data=null 由前端判空跳过渲染。
+        return ok(data=None, message="暂无建议报告")
 
     try:
         report = json.loads(row["report_json"])

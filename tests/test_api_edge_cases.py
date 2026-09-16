@@ -204,12 +204,13 @@ def test_get_current_setup_no_data():
 # 8. suggest/latest 无数据 → 404
 # ===========================================================================
 def test_get_latest_suggestion_no_data():
-    """GET /suggest/latest 无数据 → 404。"""
+    """task-62：无数据 → 200 + data=null（探测语义）。"""
     with make_client() as client:
         resp = client.get("/api/v1/suggest/latest", params={"track_id": "monza"})
-        assert resp.status_code == 404
+        assert resp.status_code == 200
         body = resp.json()
-        assert body["code"] != 0
+        assert body["code"] == 0
+        assert body["data"] is None
 
 
 # ===========================================================================

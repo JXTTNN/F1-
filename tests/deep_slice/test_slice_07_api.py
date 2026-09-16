@@ -140,11 +140,12 @@ class TestUnit:
         assert len(body["data"]) == 1
 
     def test_get_latest_suggestion_empty(self, app_client: TestClient) -> None:
-        """GET /api/v1/suggest/latest 无建议时返回 404。"""
+        """task-62：无建议时返回 200 + data=null（探测语义，前端轮询不产生 404 噪声）。"""
         resp = app_client.get("/api/v1/suggest/latest", params={"track_id": "suzuka"})
-        assert resp.status_code == 404
+        assert resp.status_code == 200
         body = resp.json()
-        assert body["code"] != 0
+        assert body["code"] == 0
+        assert body["data"] is None
 
     def test_iteration_history_empty(self, app_client: TestClient) -> None:
         """GET /api/v1/iteration/history 无迭代时返回空列表。"""
