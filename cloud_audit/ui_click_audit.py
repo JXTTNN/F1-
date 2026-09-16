@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """云端真人式 UI 审计 —— 针对现役 UI（index.html）的完整主流程。
 
 2026-09-16 重写：旧版指向已废弃的 /dashboard.html 与 #predict-btn 等

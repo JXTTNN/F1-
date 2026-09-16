@@ -49,6 +49,7 @@ class LapAggregator:
     def __init__(self) -> None:
         self._lock = threading.Lock()
         self._reset_acc()
+        self._lap_time_ms: int | None = None
         self._lap_number: int | None = None
         self._sector: int | None = None
         self._on_straight: bool = False
@@ -105,6 +106,7 @@ class LapAggregator:
             "lap_number": self._lap_number,
             "lap_frames": self._n,
             "sector": self._sector,
+            "lap_time_ms": self._lap_time_ms,
         }
         for key, target in self._wheel_sum.items():
             count = self._wheel_n[key]
@@ -127,11 +129,16 @@ class LapAggregator:
         with self._lock:
             if sector is not None:
                 self._sector = sector
+            # 记录最近一次"上圈完成圈时"（m_lastLapTimeInMS），圈号变化时归入上一圈
+            last_lap_ms = lap.get("m_lastLapTimeInMS")
+            if isinstance(last_lap_ms, (int, float)):
+                self._lap_time_ms = int(last_lap_ms)
             if lap_no is not None and self._lap_number is not None and lap_no != self._lap_number:
                 # 完成一圈：固化快照并重置累积
                 if self._n > 0:
                     self._last_completed = self._build_snapshot_locked()
                 self._reset_acc()
+                self._lap_time_ms = None
             if lap_no is not None:
                 self._lap_number = lap_no
 
