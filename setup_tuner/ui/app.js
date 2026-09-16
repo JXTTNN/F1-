@@ -1037,7 +1037,6 @@
     // 后端字段名为 engine_rpm（原实现误读 t.rpm → 转速恒为 "—"）
     if (t.engine_rpm != null) { updateTelValue(dom.telRpm, String(Math.round(t.engine_rpm))); }
     if (t.lap_time_ms != null) { updateTelValue(dom.telLaptime, fmtLapTime(t.lap_time_ms)); }
-    else if (t.last_lap_time_ms != null) { updateTelValue(dom.telLaptime, fmtLapTime(t.last_lap_time_ms)); }
     // sector 由后端统一转为 1 基（S1/S2/S3）
     if (t.sector != null) updateSectorDisplay(t.sector);
   }
