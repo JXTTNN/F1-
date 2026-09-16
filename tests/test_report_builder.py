@@ -190,10 +190,10 @@ class TestBuildReport:
 # 4. extract_setup_from_packet5
 # ===========================================================================
 class TestExtractSetupFromPacket5:
-    """从遥测 CarSetups 包提取 23 参数快照。"""
+    """从遥测 CarSetups 包提取 21 参数快照。"""
 
-    def test_extract_all_23_params(self) -> None:
-        """提取结果覆盖全部 21 参数（uint8 字段经值域转换）。"""
+    def test_extract_all_21_params(self) -> None:
+        """提取结果覆盖全部 21 参数（2026-09 修正：值域为恒等映射）。"""
         packet5 = {
             "m_frontWing": 7,
             "m_rearWing": 6,
@@ -216,11 +216,10 @@ class TestExtractSetupFromPacket5:
         }
         params = extract_setup_from_packet5(packet5)
         assert len(params) == 21
-        # uint8 字段经值域转换：UDP 0-250 → 游戏 0-50
-        assert params["front_wing"] == pytest.approx(7 / 250 * 50)
-        assert params["rear_wing"] == pytest.approx(6 / 250 * 50)
-        # uint8 字段经值域转换：UDP 0-200 → 游戏 80-100
-        assert params["brake_pressure"] == pytest.approx(80 / 200 * 20 + 80)
+        # EA 下发即车库值 → 恒等映射（不再线性压缩）
+        assert params["front_wing"] == pytest.approx(7.0)
+        assert params["rear_wing"] == pytest.approx(6.0)
+        assert params["brake_pressure"] == pytest.approx(80.0)
 
     def test_extract_missing_fields_use_default(self) -> None:
         """缺失字段取 SetupField.default。"""
@@ -316,7 +315,8 @@ class TestExtractTelemetrySummary:
             },
         })
         assert summary["lap_distance"] == 1500.0
-        assert summary["sector"] == 1
+        # UDP m_sector 是 0 基，摘要统一转 1 基：1 → 2
+        assert summary["sector"] == 2
         assert summary["current_lap_num"] == 3
         assert summary["last_lap_time_ms"] == 90000
 
