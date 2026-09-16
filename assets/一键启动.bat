@@ -2,14 +2,17 @@
 chcp 65001 >nul
 title F1OPT 赛车调教优化助手
 
-REM 自动定位 F1OPT.exe 所在目录
-set "EXE_DIR=%~dp0"
-if not exist "%EXE_DIR%\F1OPT.exe" (
-    set "EXE_DIR=%~dp0..\dist"
-)
-if not exist "%EXE_DIR%\F1OPT.exe" (
-    echo [失败] 未找到 F1OPT.exe
-    echo 请确保 F1OPT.exe 在同一目录或 dist 目录中。
+REM ── 自动定位仓库根目录（本脚本位于 assets\ 内，路径无关）──
+set "ROOT=%~dp0.."
+cd /d "%ROOT%"
+
+REM ── 定位虚拟环境 Python ──
+set "PY=%ROOT%\.venv\Scripts\python.exe"
+if not exist "%PY%" (
+    echo [失败] 未找到虚拟环境 Python：%PY%
+    echo 请先完成安装（在仓库根目录）：
+    echo   python -m venv .venv
+    echo   .venv\Scripts\pip install -e ".[dev]"
     echo.
     pause
     exit /b 1
@@ -17,10 +20,12 @@ if not exist "%EXE_DIR%\F1OPT.exe" (
 
 echo ============================================
 echo   F1OPT 赛车调教优化助手
+echo   地址：http://127.0.0.1:8000（浏览器将自动打开）
+echo   关闭本窗口即停止服务
 echo ============================================
 echo.
 
-REM 检查端口 8000 是否已被占用
+REM ── 端口 8000 占用清理 ──
 netstat -ano | findstr ":8000 " | findstr "LISTENING" >nul 2>nul
 if %ERRORLEVEL% EQU 0 (
     echo [警告] 端口 8000 已被占用，正在尝试关闭旧进程...
@@ -40,12 +45,6 @@ if %ERRORLEVEL% EQU 0 (
     echo.
 )
 
-echo 正在启动 F1OPT，请稍候...
-echo.
-
-REM 切换到 exe 所在目录（Nuitka onefile 需要正确的工作目录）
-cd /d "%EXE_DIR%"
-
-REM 直接调用 exe（不使用 start，因为 start 与 Nuitka onefile GUI exe 不兼容）
-REM BAT 窗口会保持打开，关闭窗口即停止 F1OPT
-F1OPT.exe
+REM ── 启动（cli 会自动打开浏览器）──
+"%PY%" -m setup_tuner.cli
+pause
