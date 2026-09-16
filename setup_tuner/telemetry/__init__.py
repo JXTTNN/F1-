@@ -11,6 +11,7 @@
 
 from __future__ import annotations
 
+from .lap_aggregator import LapAggregator
 from .listener import (
     DEFAULT_HOST,
     DEFAULT_PORT,
@@ -59,6 +60,8 @@ __all__ = [
     "DEFAULT_PORT",
     # stream
     "TelemetryStream",
+    # lap aggregator
+    "LapAggregator",
     # simulator
     "TelemetrySimulator",
     "generate_lap_snapshot",
