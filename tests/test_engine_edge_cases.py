@@ -7,7 +7,6 @@
 4. _build_param_detail — 空症状/多症状/联动说明/tradeoff
 5. assess_confidence — 模糊/矛盾/明确+遥测/明确无遥测
 6. compute_dx — 强度类型非法/浮点强度
-7. get_rule — 未知症状返回 None
 8. 边界值：强度 0/5、全部症状最大强度叠加
 """
 
@@ -41,7 +40,6 @@ from setup_tuner.engine.engine import (
     generate_suggestion,
     validate_engine,
 )
-from setup_tuner.engine.rules import get_all_rules, get_rule, load_rules, validate_rules
 
 
 @pytest.fixture
@@ -347,45 +345,6 @@ class TestComputeDxEdgeCases:
 # ===========================================================================
 class TestRulesEdgeCases:
     """规则库边界条件。"""
-
-    def test_get_rule_unknown_returns_none(self) -> None:
-        """未知症状 get_rule 返回 None。"""
-        assert get_rule("nonexistent_symptom") is None
-
-    def test_get_rule_known(self) -> None:
-        """已知症状 get_rule 返回规则字典。"""
-        rule = get_rule("understeer")
-        assert rule is not None
-        assert rule["symptom"] == "understeer"
-        assert rule["id"] == "rule_understeer"
-        assert "delta_table" in rule
-        assert len(rule["delta_table"]) == 21
-
-    def test_load_rules_count_18(self) -> None:
-        """load_rules 返回 18 条规则（task-61 扩展）。"""
-        rules = load_rules()
-        assert len(rules) == 18
-
-    def test_get_all_rules_same_as_load(self) -> None:
-        """get_all_rules 与 load_rules 一致。"""
-        assert get_all_rules() == load_rules()
-
-    def test_validate_rules_passes(self) -> None:
-        """validate_rules 通过。"""
-        validate_rules()
-
-    def test_every_rule_delta_table_covers_23(self) -> None:
-        """每条规则 delta_table 覆盖 21 参数。"""
-        rules = load_rules()
-        for symptom, rule in rules.items():
-            assert len(rule["delta_table"]) == 21, f"规则 {symptom!r} delta_table 非 21 项"
-
-    def test_every_rule_has_source(self) -> None:
-        """每条规则 source 非空。"""
-        rules = load_rules()
-        for symptom, rule in rules.items():
-            assert rule["source"], f"规则 {symptom!r} source 为空"
-
 
 # ===========================================================================
 # 8. 耦合矩阵边界

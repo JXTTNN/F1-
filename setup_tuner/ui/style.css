@@ -1401,6 +1401,11 @@ h1, h2, h3 {
   border-color: rgba(0, 255, 157, 0.3);
   color: var(--success);
 }
+
+.toast.toast-info {
+  border-color: var(--info, #378ADD);
+  color: var(--info, #378ADD);
+}
 .toast.toast-leaving { animation: toast-slide-out 0.24s ease-in forwards; }
 @keyframes toast-slide-in {
   from { opacity: 0; transform: translateY(-12px); }

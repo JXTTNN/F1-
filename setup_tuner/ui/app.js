@@ -1097,8 +1097,16 @@
       });
       // ★ Bug 修复：后端 SuggestionView 字段名为 report（非 report_json）
       const report = data && data.report ? data.report : data;
-      if (report) renderReport(report);
-      else loadLatestSuggestion(state.currentTrackId);
+      if (report) {
+        renderReport(report);
+        void loadStyleProfile();
+        // task-62：如实提示模型降级（请求了 nn/hybrid 但实际按规则引擎生成）
+        if (modelType !== "rule" && report.model_type === "rule") {
+          showToast("当前环境未启用神经网络（缺 PyTorch/权重），已按规则引擎生成", "info");
+        }
+      } else {
+        loadLatestSuggestion(state.currentTrackId);
+      }
       showToast("建议已生成", "success");
     } catch (e) {
       if (e.status === 400) {

@@ -214,9 +214,13 @@ def build_report(
     raw_params: list[dict[str, Any]] = suggestion_result.get("parameters", [])
     parameters = [_build_param_entry(pd, confidence) for pd in raw_params]
     summary = suggestion_result.get("summary") or build_summary(parameters)
-    return _assemble_report_dict(
+    report = _assemble_report_dict(
         track_id, setup_id, parameters, summary, confidence, suggestion_result,
     )
+    # task-62：报告带实际生效的模型类型（nn/hybrid 未装 torch 时会降级为 rule，
+    # 前端据此如实提示，不让用户误以为神经网络在跑）
+    report["model_type"] = str(suggestion_result.get("model_type", "rule"))
+    return report
 
 
 def _assemble_report_dict(

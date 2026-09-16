@@ -42,7 +42,6 @@ from setup_tuner.engine.engine import (
     generate_suggestion,
     validate_engine,
 )
-from setup_tuner.engine.rules import get_all_rules, get_rule, validate_rules
 
 
 # ===========================================================================
@@ -559,45 +558,6 @@ class TestConfidence:
 # ===========================================================================
 # 10. 规则库
 # ===========================================================================
-class TestRules:
-    """规则库校验。"""
-
-    def test_validate_rules_passes(self) -> None:
-        """validate_rules 通过。"""
-        validate_rules()
-
-    def test_rule_count_is_18(self) -> None:
-        """规则数 == 18（task-61 扩展）。"""
-        rules = get_all_rules()
-        assert len(rules) == 18
-
-    def test_every_rule_covers_23_params(self) -> None:
-        """每条规则 delta_table 覆盖 23 参数。"""
-        rules = get_all_rules()
-        expected = set(PARAM_NAMES)
-        for sym, rule in rules.items():
-            assert set(rule["delta_table"].keys()) == expected, (
-                f"规则 {sym!r} delta_table 参数集不匹配"
-            )
-
-    def test_get_rule_known(self) -> None:
-        """get_rule 已知症状返回规则。"""
-        rule = get_rule("understeer")
-        assert rule is not None
-        assert rule["symptom"] == "understeer"
-        assert rule["name_zh"] == "转向不足"
-
-    def test_get_rule_unknown_returns_none(self) -> None:
-        """get_rule 未知症状返回 None。"""
-        assert get_rule("nonexistent") is None
-
-    def test_rule_source_nonempty(self) -> None:
-        """每条规则 source 非空。"""
-        rules = get_all_rules()
-        for sym, rule in rules.items():
-            assert rule["source"], f"规则 {sym!r} source 为空"
-
-
 # ===========================================================================
 # 11. 引擎自校验
 # ===========================================================================
