@@ -33,6 +33,17 @@ from typing import Any
 _STRAIGHT_STEER_MAX = 0.05
 _STRAIGHT_THROTTLE_MIN = 0.9
 
+# 底板（plank）离地高度判定阈值，单位米。
+# Source: EA F1 25 UDP Telemetry Specification, Packet 13 (MotionEx) —
+# ``m_frontAeroHeight`` / ``m_rearAeroHeight`` 为 "plank edge height above road
+# surface"（底板前后缘离地高度）。
+# F1 规则要求底板磨块（skid block）厚度 10mm，且离地间隙被压到约 1"/5mm 量级
+# 即视为底板触地（bottoming / 刮底）；此处以「最小值落入该带内」作为触发信号。
+_PLANK_BOTTOMING_MIN_M = 0.002
+_PLANK_BOTTOMING_MAX_M = 0.012
+# 悬挂行程（m_suspensionPosition）被压到接近下限时同样视为触底迹象
+_SUSPENSION_BOTTOMING_MAX_M = 0.005
+
 
 class LapAggregator:
     """逐帧累积整圈遥测统计，并在圈号变化时固化上一圈快照。
@@ -76,6 +87,14 @@ class LapAggregator:
             "m_tyresPressure": [0.0, 0.0, 0.0, 0.0],
         }
         self._wheel_n = dict.fromkeys(self._wheel_sum, 0)
+        # Packet 13 累积量：底板离地高度极值 / 触底帧计数
+        self._motion_n = 0
+        self._front_height_min: float | None = None
+        self._rear_height_min: float | None = None
+        self._front_height_sum = 0.0
+        self._rear_height_sum = 0.0
+        self._plank_bottoming_frames = 0
+        self._suspension_height_min: float | None = None
 
     @staticmethod
     def _as_float(value: Any) -> float | None:
@@ -112,6 +131,22 @@ class LapAggregator:
             count = self._wheel_n[key]
             if count:
                 snapshot[key] = [round(v / count, 3) for v in target]
+        # Packet 13：底板离地高度统计（规则9 刮底检测的输入）
+        if self._motion_n:
+            n_motion = self._motion_n
+            snapshot["plank_front_height_min"] = round(self._front_height_min or 0.0, 5)
+            snapshot["plank_rear_height_min"] = round(self._rear_height_min or 0.0, 5)
+            snapshot["plank_front_height_avg"] = round(self._front_height_sum / n_motion, 5)
+            snapshot["plank_rear_height_avg"] = round(self._rear_height_sum / n_motion, 5)
+            snapshot["plank_bottoming_ratio"] = round(
+                self._plank_bottoming_frames / n_motion, 5,
+            )
+            snapshot["plank_bottoming"] = self._plank_bottoming_frames > 0
+            snapshot["motion_ex_frames"] = n_motion
+            if self._suspension_height_min is not None:
+                snapshot["suspension_height_min"] = round(
+                    self._suspension_height_min, 5,
+                )
         return snapshot
 
     # ------------------------------------------------------------------ #
@@ -175,6 +210,65 @@ class LapAggregator:
             else:
                 self._on_straight = False
             self._accumulate_wheels(frame)
+
+    def on_motion_ex(self, frame: dict[str, Any]) -> None:
+        """接收 Packet 13 (MotionEx)：累积底板离地高度与悬挂行程极值。
+
+        这是「规则9 刮底检测」唯一的真实信号源。规范中
+        ``m_frontAeroHeight`` / ``m_rearAeroHeight`` 即底板前/后缘离地高度，
+        悬挂位置 ``m_suspensionPosition`` 可佐证悬挂触底。
+
+        判定策略（保守，避免误报）：
+        - 只要某一帧底板前后缘**任一**最小值落入 ``[_PLANK_BOTTOMING_MIN_M,
+          _PLANK_BOTTOMING_MAX_M]`` 区间，即计一次触底帧；
+        - 整圈 ``plank_bottoming`` 为真，表示这一圈至少发生过一次底板触地。
+        """
+        front = self._as_float(frame.get("m_frontAeroHeight"))
+        rear = self._as_float(frame.get("m_rearAeroHeight"))
+
+        suspension_min: float | None = None
+        susp = frame.get("m_suspensionPosition")
+        if isinstance(susp, list) and susp:
+            candidates = [
+                float(v) for v in susp
+                if isinstance(v, (int, float)) and not isinstance(v, bool)
+            ]
+            if candidates:
+                suspension_min = min(candidates)
+
+        # 两个信号都没有 → 该帧无有效内容，不计入也不改变状态
+        if front is None and rear is None and suspension_min is None:
+            return
+
+        with self._lock:
+            self._motion_n += 1
+            if front is not None:
+                self._front_height_sum += front
+                if self._front_height_min is None or front < self._front_height_min:
+                    self._front_height_min = front
+            if rear is not None:
+                self._rear_height_sum += rear
+                if self._rear_height_min is None or rear < self._rear_height_min:
+                    self._rear_height_min = rear
+            if suspension_min is not None:
+                if (self._suspension_height_min is None
+                        or suspension_min < self._suspension_height_min):
+                    self._suspension_height_min = suspension_min
+            heights = [h for h in (front, rear) if h is not None]
+            if heights:
+                lowest = min(heights)
+                if _PLANK_BOTTOMING_MIN_M <= lowest <= _PLANK_BOTTOMING_MAX_M:
+                    self._plank_bottoming_frames += 1
+                elif lowest < _PLANK_BOTTOMING_MIN_M:
+                    # 离地高度低于物理下限（罕见，通常为悬空/异常数据）——
+                    # 若悬挂同时压到接近下限，仍判为触底。
+                    if (suspension_min is not None
+                            and suspension_min <= _SUSPENSION_BOTTOMING_MAX_M):
+                        self._plank_bottoming_frames += 1
+            elif (suspension_min is not None
+                    and suspension_min <= _SUSPENSION_BOTTOMING_MAX_M):
+                # 本帧无底板离地高度，但悬挂行程已压到接近下限 —— 视为触底迹象。
+                self._plank_bottoming_frames += 1
 
     # ------------------------------------------------------------------ #
     # 输出

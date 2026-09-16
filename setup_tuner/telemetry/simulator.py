@@ -319,7 +319,69 @@ class TelemetrySimulator:
             self._current_corner = new_corner
             self._dispatch(self._build_corner_event(track, frame, new_corner))
         self._dispatch(frame)
+        self._dispatch(self._build_motion_frame(frame, rng))
         self._advance_frame(n_frames_per_lap, track.track_id)
+
+    def _build_motion_frame(
+        self, telem_frame: dict[str, Any], rng: random.Random,
+    ) -> dict[str, Any]:
+        """由 CarTelemetry 帧派生一帧 MotionEx（对齐 Packet 13 解析后字段名）。
+
+        底板离地高度随速度/刹车/弯中状态变化：高速与刹车重压时底盘下沉，
+        弯中车身侧倾使单侧前缘更低。这样模拟数据能覆盖「刮底」与「正常」
+        两种情形，使规则9 在无真实 F1 游戏时同样可端到端验证。
+        """
+        speed = float(telem_frame.get("speed", 0.0))
+        brake = float(telem_frame.get("brake", 0.0))
+        steer = abs(float(telem_frame.get("steer", 0.0)))
+        in_corner = bool(telem_frame.get("in_corner"))
+
+        # 基准离地高度 25mm，随速度（气动下压）与刹车（俯仰）下沉
+        sink = speed / 350.0 * 0.012 + brake * 0.010 + (0.004 if in_corner else 0.0)
+        front = max(0.003, 0.030 - sink + rng.uniform(-0.002, 0.002))
+        rear = max(0.004, 0.034 - sink * 0.7 + rng.uniform(-0.002, 0.002))
+        # 弯中侧倾：单侧悬挂压缩更多
+        roll = 0.004 * steer
+        susp = [
+            round(0.030 - roll + rng.uniform(-0.001, 0.001), 5),  # RL
+            round(0.030 + roll + rng.uniform(-0.001, 0.001), 5),  # RR
+            round(0.032 - roll + rng.uniform(-0.001, 0.001), 5),  # FL
+            round(0.032 + roll + rng.uniform(-0.001, 0.001), 5),  # FR
+        ]
+        return {
+            "packet_id": 13,
+            "name": "MotionEx",
+            "m_suspensionPosition": susp,
+            "m_suspensionVelocity": [0.0] * 4,
+            "m_suspensionAcceleration": [0.0] * 4,
+            "m_wheelSpeed": [round(speed / 3.6, 3)] * 4,
+            "m_wheelSlipRatio": [0.0] * 4,
+            "m_wheelSlipAngle": [0.0] * 4,
+            "m_wheelLatForce": [0.0] * 4,
+            "m_wheelLongForce": [0.0] * 4,
+            "m_heightOfCOGAboveGround": 0.30,
+            "m_localVelocityX": round(speed / 3.6, 3),
+            "m_localVelocityY": 0.0,
+            "m_localVelocityZ": 0.0,
+            "m_angularVelocityX": 0.0,
+            "m_angularVelocityY": 0.0,
+            "m_angularVelocityZ": 0.0,
+            "m_angularAccelerationX": 0.0,
+            "m_angularAccelerationY": 0.0,
+            "m_angularAccelerationZ": 0.0,
+            "m_frontWheelsAngle": round(steer * 0.5, 4),
+            "m_wheelVertForce": [0.0] * 4,
+            "m_frontAeroHeight": round(front, 5),
+            "m_rearAeroHeight": round(rear, 5),
+            "m_frontRollAngle": round(roll, 5),
+            "m_rearRollAngle": round(roll * 0.8, 5),
+            "m_chassisYaw": 0.0,
+            "m_chassisPitch": round(-brake * 0.02, 5),
+            "m_wheelCamber": [0.0] * 4,
+            "m_wheelCamberGain": [0.0] * 4,
+            "lap_number": telem_frame.get("lap_number"),
+            "track_id": telem_frame.get("track_id"),
+        }
 
     def _build_corner_event(
         self, track: Track, frame: dict[str, Any], new_corner: int | None,

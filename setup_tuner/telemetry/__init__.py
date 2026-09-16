@@ -31,6 +31,7 @@ from .packets import (
     parse_car_telemetry,
     parse_header,
     parse_lap_data,
+    parse_motion_ex,
     parse_packet,
     parse_session,
 )
@@ -50,6 +51,7 @@ __all__ = [
     "parse_car_setups",
     "parse_car_telemetry",
     "parse_car_status",
+    "parse_motion_ex",
     "packet_name",
     "HEADER_SIZE",
     "NUM_CARS",

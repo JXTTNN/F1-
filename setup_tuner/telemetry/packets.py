@@ -1,13 +1,15 @@
 """F1 25 UDP 遥测包解析（纯 struct，零 numpy/torch）。
 
-本模块解析 EA F1 25（packetFormat=2026）UDP 遥测协议的 5 类核心包，
-**仅解析玩家车辆数据**（通过 ``playerCarIndex`` 索引），剥离全部 ML 依赖。
+本模块解析 EA F1 25（packetFormat=2026）UDP 遥测协议的 7 类核心包，
+**仅解析玩家车辆数据**（通过 ``playerCarIndex`` 索引，或如 MotionEx 般本就
+只含玩家车），剥离全部 ML 依赖。
 
 协议特征：
 - 小端（little-endian）、紧凑（无填充）。
 - Header 固定 29 字节。
 - 按车分包（LapData/CarSetups/CarTelemetry/CarStatus）含 24 个
   车位固定数组（``NUM_CARS = 24``）；本版只解包玩家那一段，避免 60Hz 全量解包开销。
+- MotionEx（13）非按车分组，包体直接为玩家车 244 字节结构。
 - 容错：短包抛 :class:`PacketTooShortError`；未知 packetId 跳过不崩溃。
 
 官方规范出处（每条字段映射均在行内注释中标注）：
@@ -588,17 +590,117 @@ def parse_car_status(data: bytes, player_car_index: int) -> dict[str, Any]:
 
 
 # --------------------------------------------------------------------------- #
+# Packet 13 — MotionEx（玩家车专用，非按车分组）
+# --------------------------------------------------------------------------- #
+# Source: EA F1 25 UDP Telemetry Specification, Packet 13 (MotionEx)
+# 包体 244 字节 = 61 × float32，小端无填充。字段顺序（官方规范原文）：
+#   8 × float[4] 数组（车轮顺序统一 RL, RR, FL, FR）：
+#     m_suspensionPosition / m_suspensionVelocity / m_suspensionAcceleration /
+#     m_wheelSpeed / m_wheelSlipRatio / m_wheelSlipAngle /
+#     m_wheelLatForce / m_wheelLongForce
+#   11 × 标量：
+#     m_heightOfCOGAboveGround / m_localVelocityX/Y/Z /
+#     m_angularVelocityX/Y/Z / m_angularAccelerationX/Y/Z / m_frontWheelsAngle
+#   float[4]：m_wheelVertForce
+#   6 × 标量：
+#     m_frontAeroHeight(底板前缘离地高) / m_rearAeroHeight(底板后缘离地高) /
+#     m_frontRollAngle / m_rearRollAngle / m_chassisYaw / m_chassisPitch
+#   float[4] ×2：m_wheelCamber / m_wheelCamberGain
+#
+# 本包是「规则9 刮底检测」唯一的真实信号源：规范明确
+# ``m_frontAeroHeight`` / ``m_rearAeroHeight`` 为 "plank edge height above road
+# surface"（底板前后缘离地高度，单位米），采样频率与菜单设置一致（最高 60Hz）。
+# ``m_suspensionPosition`` 亦可用于识别悬挂触底（行程被压到下限）。
+_MOTIONEX_BODY = struct.Struct("<" + "4f" * 8 + "f" * 11 + "4f" + "f" * 6 + "4f" * 2)
+assert _MOTIONEX_BODY.size == 244, f"motionex body size mismatch: {_MOTIONEX_BODY.size}"
+
+# Packet 13 的 8 个车轮数组字段（顺序即规范顺序）
+_MOTIONEX_WHEEL_ARRAYS_HEAD = (
+    "m_suspensionPosition",
+    "m_suspensionVelocity",
+    "m_suspensionAcceleration",
+    "m_wheelSpeed",
+    "m_wheelSlipRatio",
+    "m_wheelSlipAngle",
+    "m_wheelLatForce",
+    "m_wheelLongForce",
+)
+# 中段 11 个标量字段（官方规范顺序，紧随 8 个车轮数组之后）
+_MOTIONEX_SCALARS_HEAD = (
+    "m_heightOfCOGAboveGround",
+    "m_localVelocityX",
+    "m_localVelocityY",
+    "m_localVelocityZ",
+    "m_angularVelocityX",
+    "m_angularVelocityY",
+    "m_angularVelocityZ",
+    "m_angularAccelerationX",
+    "m_angularAccelerationY",
+    "m_angularAccelerationZ",
+    "m_frontWheelsAngle",
+)
+# 夹在 m_wheelVertForce 之后的车轮数组字段
+_MOTIONEX_WHEEL_ARRAYS_TAIL = ("m_wheelCamber", "m_wheelCamberGain")
+# 中段标量（m_frontWheelsAngle 之后的 6 个）
+_MOTIONEX_SCALARS_TAIL = (
+    "m_frontAeroHeight",
+    "m_rearAeroHeight",
+    "m_frontRollAngle",
+    "m_rearRollAngle",
+    "m_chassisYaw",
+    "m_chassisPitch",
+)
+
+
+def parse_motion_ex(data: bytes, player_car_index: int = 0) -> dict[str, Any]:
+    """解析 Packet 13 (MotionEx) — 玩家车悬挂/姿态/离地高度。
+
+    **非按车分组**：包体只含玩家车一份数据，紧随 29 字节包头之后。
+    ``player_car_index`` 仅为与 :data:`_PARSERS` 统一调用签名而保留，
+    本包解析不使用该参数（与 ``parse_session`` 同模式）。
+
+    Raises:
+        PacketTooShortError: 包体不足以覆盖 244 字节 MotionEx 结构。
+    """
+    size = _MOTIONEX_BODY.size
+    end = HEADER_SIZE + size
+    if len(data) < end:
+        raise PacketTooShortError(
+            f"packet too short for MotionEx: {len(data)} bytes < {end}",
+        )
+    v = _MOTIONEX_BODY.unpack(data[HEADER_SIZE:end])
+
+    out: dict[str, Any] = {}
+    i = 0
+    for name in _MOTIONEX_WHEEL_ARRAYS_HEAD:
+        out[name] = list(v[i:i + 4])
+        i += 4
+    for name in _MOTIONEX_SCALARS_HEAD:
+        out[name] = v[i]
+        i += 1
+    out["m_wheelVertForce"] = list(v[i:i + 4])
+    i += 4
+    for name in _MOTIONEX_SCALARS_TAIL:
+        out[name] = v[i]
+        i += 1
+    for name in _MOTIONEX_WHEEL_ARRAYS_TAIL:
+        out[name] = list(v[i:i + 4])
+        i += 4
+    return out
+
+
+# --------------------------------------------------------------------------- #
 
 # 主入口：按 packetId 分发
 # --------------------------------------------------------------------------- #
-# 本版支持的 6 类包及其解析函数
+# 本版支持的 7 类包及其解析函数
 _PARSERS: dict[int, Any] = {
     1: parse_session,
     2: parse_lap_data,
     5: parse_car_setups,
     6: parse_car_telemetry,
     7: parse_car_status,
-
+    13: parse_motion_ex,
 }
 
 # 支持的 packetId 集合（供外部查询）
@@ -609,7 +711,7 @@ def parse_packet(data: bytes) -> dict[str, Any] | None:
     """解析一个完整 UDP 包，返回 ``{packet_id, name, header, **body}`` 或 ``None``。
 
     - 短包（< 29 字节或包体不足）抛 :class:`PacketTooShortError`。
-    - 未知 packetId（不在 6 类支持范围内）返回 ``None``，不抛错（跳过不崩溃）。
+    - 未知 packetId（不在 7 类支持范围内）返回 ``None``，不抛错（跳过不崩溃）。
     - ``player_car_index`` 从包头提取，自动传入各解析函数。
 
     返回结构::

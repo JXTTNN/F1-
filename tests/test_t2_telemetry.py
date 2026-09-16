@@ -161,8 +161,8 @@ class TestPacketDispatch:
         assert parse_packet(data) is None
 
     def test_supported_packet_ids(self) -> None:
-        """SUPPORTED_PACKET_IDS 应为 {1,2,5,6,7}。"""
-        assert SUPPORTED_PACKET_IDS == frozenset({1, 2, 5, 6, 7})
+        """SUPPORTED_PACKET_IDS 应为 {1,2,5,6,7,13}。"""
+        assert SUPPORTED_PACKET_IDS == frozenset({1, 2, 5, 6, 7, 13})
 
     def test_packet_name_known_and_unknown(self) -> None:
         """packet_name 已知返回名称，未知返回 Unknown(<id>)。"""

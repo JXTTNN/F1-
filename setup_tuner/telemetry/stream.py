@@ -26,13 +26,13 @@ class TelemetryStream:
     - ``get_latest(packet_id)``：读取该 packet_id 的最新帧（无则 ``None``）。
     - ``get_all_latest()``：返回所有已缓存 packet_id 的最新帧快照（dict 副本）。
 
-    只缓存 :data:`~setup_tuner.telemetry.packets.SUPPORTED_PACKET_IDS` 中的 6 类包；
+    只缓存 :data:`~setup_tuner.telemetry.packets.SUPPORTED_PACKET_IDS` 中的包类型；
     其他 packet_id 的 update 静默忽略（防御性）。
     """
 
     def __init__(self) -> None:
         self._lock = threading.Lock()
-        # 仅为支持的 6 类包预留槽位；value 为最新解析 dict 或 None
+        # 仅为支持的包类型预留槽位；value 为最新解析 dict 或 None
         self._cache: dict[int, dict[str, Any] | None] = dict.fromkeys(SUPPORTED_PACKET_IDS)
 
     def update(self, packet_id: int, data: dict[str, Any]) -> None:

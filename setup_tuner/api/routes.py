@@ -1074,7 +1074,13 @@ def _validate_telemetry_simulate_request(body: TelemetrySimulateRequest) -> None
 
 
 def _get_or_create_simulator(request: Request) -> Any:
-    """从 app.state 获取或创建 TelemetrySimulator 实例。"""
+    """从 app.state 获取或创建 TelemetrySimulator 实例。
+
+    创建时**必须把 ``app.state.packet_handler`` 注册为帧回调**，
+    否则模拟出的遥测帧只会在模拟器内部空转派发（无任何订阅者），
+    ``TelemetryStream`` / ``LapAggregator`` / ``StyleExtractor`` 全部收不到数据，
+    ``/suggest`` 便永远拿不到整圈统计 —— 模拟模式形同虚设。
+    """
     simulator = getattr(request.app.state, "telemetry_simulator", None)
     if simulator is None:
         try:
@@ -1087,6 +1093,10 @@ def _get_or_create_simulator(request: Request) -> Any:
                 http_status=500,
             ) from e
         request.app.state.telemetry_simulator = simulator
+
+    handler = getattr(request.app.state, "packet_handler", None)
+    if handler is not None:
+        simulator.add_handler(handler)
     return simulator
 
 

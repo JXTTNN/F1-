@@ -264,7 +264,7 @@ class TestStatic:
         assert MAX_PACKET_SIZE >= 1400
 
     def test_static_stream_only_caches_supported_ids(self) -> None:
-        """不变量约束：stream 仅缓存 SUPPORTED_PACKET_IDS 中的 6 类包。"""
+        """不变量约束：stream 仅缓存 SUPPORTED_PACKET_IDS 中的包类型。"""
         stream = TelemetryStream()
         # 内部 cache 的 key 集合应等于 SUPPORTED_PACKET_IDS
         assert set(stream._cache.keys()) == set(SUPPORTED_PACKET_IDS)  # noqa: SLF001

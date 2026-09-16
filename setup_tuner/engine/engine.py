@@ -33,6 +33,11 @@ from setup_tuner.domain.setup import ALL_SETUP_FIELDS
 DELTA_ZERO_EPSILON = 1e-12
 BOUND_TOLERANCE_EPSILON = 1e-6
 
+# 底板（plank）触地上限，单位米。与
+# ``setup_tuner.telemetry.lap_aggregator._PLANK_BOTTOMING_MAX_M`` 保持一致：
+# MotionEx 未提供布尔标志时，用最小离地高度兜底判断。
+_PLANK_BOTTOMING_MAX_M = 0.012
+
 from .confidence import assess_confidence
 from .coupling import nonzero_cells_for_param_cached
 from .diagnostic import (
@@ -343,14 +348,35 @@ def _apply_speed_rules(
 def _apply_ride_height_rules(
     telemetry: dict[str, Any], dx: dict[str, float],
 ) -> None:
-    """规则9：刮底检测（占位，原地修改 dx）。
+    """规则9：刮底（底板触地）检测，原地修改 ``dx``。
 
-    条件：speed < 100 且 ride_height 相关信号。
-    影响：ride_height_req += 0.4。
-    注意：遥测数据中无直接刮底信号，此规则暂不实现具体检测逻辑，只保留占位。
+    信号源：Packet 13 (MotionEx) 的 ``m_frontAeroHeight`` / ``m_rearAeroHeight``
+    —— 规范定义为底板前/后缘离地高度（plank edge height above road surface），
+    由 :class:`setup_tuner.telemetry.lap_aggregator.LapAggregator` 整圈累积后
+    以 ``plank_bottoming`` / ``plank_*_height_min`` 等键传入。
+
+    判定条件（满足其一）：
+    - 整圈 ``plank_bottoming`` 为真（该圈至少一帧底板离地高度落入触地带）；
+    - ``plank_*_height_min`` 低于触地上限（兜底：未累积布尔标志也能量化判断）。
+
+    影响：``ride_height_req += 0.4``（抬高底盘 / 加硬弹簧以缓解刮底）。
+    无 MotionEx 数据时不触发（保持既有行为，避免误报）。
     """
-    # 占位：遥测中无直接刮底信号，暂不触发
-    pass
+    bottoming = telemetry.get("plank_bottoming")
+    if bottoming is None:
+        # 退一步用最小离地高度判断（若提供方只给了量化值）
+        minima = [
+            telemetry.get("plank_front_height_min"),
+            telemetry.get("plank_rear_height_min"),
+        ]
+        numeric = [
+            float(m) for m in minima
+            if isinstance(m, (int, float)) and not isinstance(m, bool)
+        ]
+        if numeric and min(numeric) <= _PLANK_BOTTOMING_MAX_M:
+            bottoming = True
+    if bottoming:
+        dx["ride_height_req"] += 0.4
 
 
 def _derive_telemetry_dx(telemetry: dict[str, Any] | None) -> dict[str, float]:
@@ -365,7 +391,7 @@ def _derive_telemetry_dx(telemetry: dict[str, Any] | None) -> dict[str, float]:
         - 刹车规则（4/8/14）：刹车过热/制动力不足/持续过热+方向修正
         - 弯道规则（5/7/10/11）：出弯油门低/入弯响应差/弯中不稳定/出弯打滑
         - 速度规则（6/15）：直道速度低/直道极速低（均含方向修正因子）
-        - 底盘规则（9）：刮底检测（占位）
+        - 底盘规则（9）：刮底检测（底板离地高度，来自 Packet 13 MotionEx）
 
     方向修正因子：
         hi_speed_stab_req 取负值 = 需减阻/减翼（下压力过大）

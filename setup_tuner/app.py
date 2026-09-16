@@ -105,7 +105,10 @@ def _init_app_services(app: FastAPI, config: Config) -> tuple[Store, TelemetryLi
     listener = TelemetryListener(
         host=config.udp_host, port=config.udp_port,
     )
-    listener.add_handler(_make_packet_handler(app))
+    # 包处理函数同时存入 state：遥测模拟器（无真实 F1 游戏时）需要复用同一
+    # 处理链路，否则模拟帧无人消费，/suggest 永远拿不到整圈统计。
+    app.state.packet_handler = _make_packet_handler(app)
+    listener.add_handler(app.state.packet_handler)
     listener.add_raw_handler(_make_raw_packet_handler(app))
     app.state.telemetry_listener = listener
 
@@ -180,10 +183,12 @@ def _lap_writer_loop(app: FastAPI) -> None:
 def _make_packet_handler(app: FastAPI) -> Callable[[dict[str, Any]], None]:
     """构造 UDP 包处理函数：写入 TelemetryStream，并喂给整圈聚合器。
 
-    - Packet 6 (CarTelemetry) → ``LapAggregator.on_telemetry``
-    - Packet 2 (LapData)      → ``LapAggregator.on_lap_data``
+    - Packet 6 (CarTelemetry)  → ``LapAggregator.on_telemetry``
+    - Packet 2 (LapData)       → ``LapAggregator.on_lap_data``
+    - Packet 13 (MotionEx)     → ``LapAggregator.on_motion_ex``
     这样 ``/suggest`` 才能拿到 ``max_speed`` / ``avg_steer`` / ``max_steer`` /
-    ``on_straight`` 等整圈统计（此前只喂单帧，导致 5 条遥测规则永不触发）。
+    ``on_straight`` 等整圈统计（此前只喂单帧，导致 5 条遥测规则永不触发），
+    以及底板离地高度（规则9 刮底检测的唯一信号源）。
     """
     def _on_packet(parsed: dict[str, Any]) -> None:
         packet_id = parsed.get("packet_id")
@@ -203,6 +208,8 @@ def _make_packet_handler(app: FastAPI) -> Callable[[dict[str, Any]], None]:
             extractor = getattr(app.state, "style_extractor", None)
             if extractor is not None:
                 extractor.on_lap_data(parsed)
+        elif packet_id == 13:
+            aggregator.on_motion_ex(parsed)
         # task-62 M1：一圈结束时把整圈快照与风格向量交给落库线程
         completed = aggregator.take_completed_lap()
         if completed is not None:
