@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """task-62 落库线程端到端验收：喂 3000+ 帧 → 圈结束 → lap_record/driver_style 落库。"""
 from __future__ import annotations
 

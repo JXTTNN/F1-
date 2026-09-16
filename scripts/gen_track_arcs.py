@@ -36,6 +36,12 @@ _CUBIC_SAMPLES = 10
 _QUAD_SAMPLES = 8
 _ARC_SAMPLES = 10
 
+# 闭合回路起跑线归一化容差（见 :func:`nearest_arc_fraction`）：
+#   CLOSURE_ANCHOR_TOL —— 锚点与回路闭合点的像素距离上限（锚点坐标保留 1 位小数）
+#   CLOSURE_ARC_TOL    —— 最近点弧长与回路总长的相对偏差上限
+CLOSURE_ANCHOR_TOL = 0.5
+CLOSURE_ARC_TOL = 5e-4
+
 
 def load_anchors() -> dict[str, dict[int, tuple[float, float]]]:
     """加载 ``_track_anchors.TRACK_ANCHORS``（按文件路径导入，不触发包导入副作用）。"""
@@ -281,7 +287,17 @@ def nearest_arc_fraction(
     point: tuple[float, float], poly: list[tuple[float, float]],
     cum: list[float], total: float,
 ) -> float:
-    """锚点投影到折线后的累计弧长占比。"""
+    """锚点投影到折线后的累计弧长占比。
+
+    .. note::
+        赛道 SVG 是**闭合回路**（折线终点 == 起点）。当锚点恰好落在
+        起跑线/终点线（即折线首尾重合点）时，最近点在数值上会命中
+        最后一段的末端，返回 1.0 而非 0.0 —— 这会让 T1 被判定为全圈
+        最后一个弯，造成整条赛道的弯号整体错位。
+
+        因此这里对"投影到回路闭合点"的情况做归一化：若最近点落在
+        折线末端且与起点重合（闭合回路），视其弧长为 0。
+    """
     px, py = point
     best_d, best_s = float("inf"), 0.0
     for k in range(len(poly) - 1):
@@ -294,6 +310,23 @@ def nearest_arc_fraction(
         if dist < best_d:
             best_d = dist
             best_s = cum[k] + t * math.hypot(dx, dy)
+
+    # 闭合回路归一化：锚点落在起跑线（回路闭合点）时，最近点在数值上
+    # 会命中最后一段末端，返回 ≈1.0。此时应视其弧长为 0（起跑线）。
+    #
+    # 判据：
+    #   - 折线首尾重合（闭合回路）
+    #   - 投影点距离闭合点足够近（像素级容差，锚点本身有小数截断）
+    #   - 弧长落在回路末端附近（而非起点附近的普通弯）
+    is_closed = math.hypot(poly[0][0] - poly[-1][0], poly[0][1] - poly[-1][1]) < 1e-6
+    if is_closed:
+        d_start = math.hypot(px - poly[0][0], py - poly[0][1])
+        near_closure = (
+            (d_start <= CLOSURE_ANCHOR_TOL and best_s <= CLOSURE_ARC_TOL * total)
+            or best_s >= (1.0 - CLOSURE_ARC_TOL) * total
+        )
+        if near_closure and d_start <= CLOSURE_ANCHOR_TOL:
+            return 0.0
     return best_s / total
 
 

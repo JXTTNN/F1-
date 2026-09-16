@@ -178,7 +178,7 @@ TRACK_CORNER_ARCS: dict[str, dict[int, float]] = {
         22: 0.995215,
     },
     "melbourne": {
-        1: 2.2e-05,
+        1: 0.0,
         2: 0.149476,
         3: 0.249382,
         4: 0.28921,
@@ -194,7 +194,7 @@ TRACK_CORNER_ARCS: dict[str, dict[int, float]] = {
         14: 0.961732,
     },
     "mexico_city": {
-        1: 0.999954,
+        1: 0.0,
         2: 0.278964,
         3: 0.314785,
         4: 0.469943,
@@ -271,7 +271,7 @@ TRACK_CORNER_ARCS: dict[str, dict[int, float]] = {
         14: 0.974292,
     },
     "monza": {
-        1: 0.999971,
+        1: 0.0,
         2: 0.06048,
         3: 0.12538,
         4: 0.189166,
@@ -398,7 +398,7 @@ TRACK_CORNER_ARCS: dict[str, dict[int, float]] = {
         19: 0.920228,
     },
     "spielberg": {
-        1: 0.999996,
+        1: 0.0,
         2: 0.11728,
         3: 0.174405,
         4: 0.246165,

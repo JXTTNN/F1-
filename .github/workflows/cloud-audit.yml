@@ -136,7 +136,7 @@ jobs:
         run: |
           python -m pip install -q ruff
           mkdir -p reports
-          ruff check setup_tuner/ cloud_audit/ --output-format concise > reports/ruff.txt 2>&1 || true
+          ruff check setup_tuner/ tests/ cloud_audit/ --output-format concise > reports/ruff.txt 2>&1 || true
           echo "ruff lines: $(wc -l < reports/ruff.txt)"
           head -n 60 reports/ruff.txt
 

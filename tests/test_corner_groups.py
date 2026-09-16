@@ -1,8 +1,5 @@
-# -*- coding: utf-8 -*-
 """弯道段（corner group）单元测试 —— 连续弯整改（task-63）的数据层验收。"""
 from __future__ import annotations
-
-import pytest
 
 from setup_tuner.domain._track_arcs import TRACK_CORNER_ARCS
 from setup_tuner.domain.corner_groups import (

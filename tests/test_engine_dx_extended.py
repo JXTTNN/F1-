@@ -19,8 +19,8 @@ from __future__ import annotations
 
 import pytest
 
-from setup_tuner.engine.engine import _derive_telemetry_dx
 from setup_tuner.engine.diagnostic import DIAG_DIMS
+from setup_tuner.engine.engine import _derive_telemetry_dx
 
 
 # ===========================================================================

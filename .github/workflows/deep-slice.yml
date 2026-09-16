@@ -40,7 +40,7 @@ jobs:
 
       - name: Ruff static analysis
         run: |
-          ruff check setup_tuner/ tests/deep_slice/ tests/deep_integration/
+          ruff check setup_tuner/ tests/
           echo "✅ ruff 全部通过"
 
       - name: Mypy type check

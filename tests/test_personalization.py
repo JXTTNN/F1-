@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """task-62 个性化（M1–M3）验收测试。
 
 覆盖：
@@ -13,8 +12,6 @@ from __future__ import annotations
 import pytest
 
 from setup_tuner.db.store import Store
-
-import pytest
 
 
 @pytest.fixture

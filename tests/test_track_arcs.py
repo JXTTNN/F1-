@@ -65,7 +65,12 @@ class TestArcTableConsistency:
                 )
 
     def test_known_corner_positions(self) -> None:
-        """抽查若干已知弯位（同时锁定"路径起点不在 T1 前"这一已知特性）。"""
+        """抽查若干已知弯位。
+
+        注：melbourne / mexico_city / monza / spielberg 的 SVG 路径闭合点
+        即起跑线，锚点投影会命中回路末端；``nearest_arc_fraction`` 已做
+        闭合归一化，统一返回 0.0，故这 4 条赛道的 T1 同样 ≈ 0。
+        """
         suzuka = TRACK_CORNER_ARCS["suzuka"]
         assert suzuka[1] == pytest.approx(0.0, abs=0.02)
         # task-63：F1 26 弯号 —— Dunlop=T7、Degner 1=T8
@@ -73,9 +78,9 @@ class TestArcTableConsistency:
         assert suzuka[8] == pytest.approx(0.265, abs=0.03)
         melbourne = TRACK_CORNER_ARCS["melbourne"]
         assert melbourne[1] == pytest.approx(0.0, abs=0.02)
-        # mexico_city / monza / spielberg 的 SVG 路径起点落在 T1 附近 → T1 ≈ 1.0
+        # 闭合回路归一化后，这 3 条赛道的 T1 也落在起跑线（而非圈末）
         for track_id in ("monza", "mexico_city", "spielberg"):
-            assert TRACK_CORNER_ARCS[track_id][1] > 0.98
+            assert TRACK_CORNER_ARCS[track_id][1] == pytest.approx(0.0, abs=1e-6)
 
 
 # ===========================================================================
@@ -148,3 +153,74 @@ class TestCornerMapping:
         assert _map_corner(100.0, 0.0, track.corners, "suzuka") is None
         assert _map_corner(100.0, track.length_m, [], "suzuka") is None
         assert _map_corner(100.0, track.length_m, track.corners, "unknown_track") is not None
+
+
+# ===========================================================================
+# 3. 闭合回路起跑线归一化（回归：T1 曾被判为全圈最后一个弯）
+# ===========================================================================
+class TestClosedLoopNormalization:
+    """赛道 SVG 是闭合回路，锚点落在起跑线时必须归一化为 0 而非 ≈1。
+
+    历史缺陷：``nearest_arc_fraction`` 在锚点投影到回路闭合点时，最近点命中
+    折线最后一段末端，返回 ≈1.0，使 T1 成为全圈最末弯、整条赛道弯号错位。
+    受影响赛道：melbourne / mexico_city / monza / spielberg。
+    """
+
+    # 曾经 T1 ≈ 1.0 的赛道（现应 ≈ 0）
+    REGRESSED = ["melbourne", "mexico_city", "monza", "spielberg"]
+
+    def test_no_track_has_t1_at_lap_end(self) -> None:
+        """没有任何赛道的 T1 落在圈末（否则弯号会整体错位）。"""
+        bad = {
+            tid: arcs[1]
+            for tid, arcs in TRACK_CORNER_ARCS.items()
+            if arcs.get(1) is not None and arcs[1] > 0.5
+        }
+        assert not bad, f"T1 落在圈末的赛道: {bad}"
+
+    @pytest.mark.parametrize("track_id", REGRESSED)
+    def test_t1_normalized_to_start_line(self, track_id: str) -> None:
+        """曾回归的 4 条赛道，T1 必须严格归一化为 0.0（起跑线）。"""
+        assert TRACK_CORNER_ARCS[track_id][1] == 0.0
+
+    @pytest.mark.parametrize("track_id", sorted(TRACK_CORNER_ARCS))
+    def test_arc_table_is_monotonic(self, track_id: str) -> None:
+        """弧长表必须随弯号严格递增（同一圈内弯道位置不可回退）。"""
+        arcs = TRACK_CORNER_ARCS[track_id]
+        values = [arcs[k] for k in sorted(arcs)]
+        for i in range(len(values) - 1):
+            assert values[i] < values[i + 1], (
+                f"{track_id} 弧长表在 T{i + 1}->T{i + 2} 非单调: "
+                f"{values[i]:.6f} >= {values[i + 1]:.6f}"
+            )
+
+    @pytest.mark.parametrize("track_id", sorted(TRACK_CORNER_ARCS))
+    def test_arc_values_in_unit_interval(self, track_id: str) -> None:
+        """全部弧长占比必须落在 [0, 1) 区间。"""
+        for number, value in TRACK_CORNER_ARCS[track_id].items():
+            assert 0.0 <= value < 1.0, f"{track_id} T{number} 弧长越界: {value}"
+
+    @pytest.mark.parametrize(
+        "track_id", ["monza", "mexico_city", "spielberg", "melbourne", "suzuka", "spa"]
+    )
+    def test_start_of_lap_maps_to_turn_1(self, track_id: str) -> None:
+        """圈初（0.1% 圈长）必须判定为 T1。"""
+        track = get_track_by_id(track_id)
+        assert track is not None
+        distance = 0.001 * track.length_m
+        assert _map_corner(distance, track.length_m, track.corners, track_id) == 1
+
+    def test_full_lap_sweep_hits_every_turn(self) -> None:
+        """每圈扫描必须覆盖该赛道所有弯号（无弯被跳过）。"""
+        for track in ALL_TRACKS:
+            expected = {c.number for c in track.corners}
+            seen = set()
+            for i in range(2000):
+                progress = i / 2000
+                got = _map_corner(
+                    progress * track.length_m, track.length_m, track.corners, track.track_id
+                )
+                if got is not None:
+                    seen.add(got)
+            missing = expected - seen
+            assert not missing, f"{track.track_id} 圈内扫描遗漏弯号: {sorted(missing)}"
