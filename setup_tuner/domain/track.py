@@ -15,19 +15,28 @@
       （弯角编号 / 名称 / 类型 / apex 速度）。
     - 其余 18 条赛道的弯道序列由 :func:`_synthesize_corners` 基于赛道特征合成
       （量级准确，弯角名称用编号占位）。
-    - ``udp_track_id`` 为 F1 25 UDP Session 包 ``m_trackId`` 枚举值；
-      legacy 无明确映射表，本版按赛历轮次顺序分配（round_number - 1），
-      **需对照 F1 25 官方 UDP 规范 m_trackId 枚举校准**。
+    - ``udp_track_id`` 为 EA UDP 规范 Session 包 ``m_trackId`` 枚举值。
+      取值来自官方枚举（F1 22–25 一致，由 f1-game-packet-parser 的 ``TrackId``
+      枚举、raweceek f1-22-udp 附录、f1-telemetry-go ``tracks.md`` 三处交叉核对）：
+      ``0 Melbourne / 2 Shanghai / 3 Sakhir / 4 Catalunya / 5 Monaco / 6 Montreal /
+      7 Silverstone / 9 Hungaroring / 10 Spa / 11 Monza / 12 Marina Bay /
+      13 Suzuka / 14 Yas Marina / 15 COTA / 16 Interlagos / 17 Red Bull Ring /
+      19 Mexico City / 20 Baku / 26 Zandvoort / 29 Jeddah / 30 Miami /
+      31 Las Vegas / 32 Losail``。
+      **不再使用「赛历轮次 - 1」的占位分配**（那会让 24 条赛道里 20 条认错赛道）。
+      ``madrid``（F1 25 2026 Season Pack 新增的 Madring）官方枚举尚无公开值，
+      暂按 33 并记入 ``UDP_TRACK_ID_UNVERIFIED``，待官方规范确认后更正。
     - 弯道锚点 (anchor_x / anchor_y) 优先取自
       ``legacy/f1opt/data/track_maps/__init__.py`` 中各赛道 ``corners`` 的真实
       像素坐标（由 :func:`_apply_real_anchors` 用 ``x_px/canvas_width``、
       ``y_px/canvas_height`` 归一化到 [0, 1]）。未在 track_maps 中出现的弯道
       退回 :func:`_estimate_anchor` 的椭圆分布估算。
  
- SVG 资产：24 条赛道 SVG 由 ``scripts/generate_track_svgs.py`` 从
- ``legacy/f1opt/data/track_maps`` 的 ``control_points`` / ``corners`` 重新生成
- （Catmull-Rom 平滑 path + 内外偏移线 + 起点红块 + 弯道圆圈），输出到
- ``setup_tuner/ui/tracks/``，文件名 = track_id（如 ``suzuka.svg``）。
+SVG 资产：24 条赛道 SVG 由 ``scripts/convert_track_svgs.py`` 从
+``julesr0y/f1-circuits-svg`` 的真实赛道 SVG 提取并归一化到 800×600 画布，
+输出到 ``setup_tuner/ui/tracks/``，文件名 = track_id（如 ``suzuka.svg``）；
+对应的弯道锚点像素坐标由同一脚本生成到 ``_track_anchors.py``。
+各弯道在路径上的弧长占比由 ``scripts/gen_track_arcs.py`` 生成到 ``_track_arcs.py``。
 """
 
 from __future__ import annotations
@@ -38,6 +47,9 @@ from dataclasses import dataclass
 from typing import Literal
 
 from ._track_anchors import TRACK_ANCHORS, TRACK_CANVAS
+
+# UDP m_trackId 尚未经官方规范确认的赛道（用于测试与文档显式标注，避免"看起来已校准"）
+UDP_TRACK_ID_UNVERIFIED: frozenset[str] = frozenset({"madrid"})
 
 # --------------------------------------------------------------------------- #
 # 数据类定义
@@ -443,7 +455,7 @@ ALL_TRACKS: list[Track] = [
         track_type="medium",
         length_m=5451.0,
         corners=_make_corners("shanghai", "medium", 16),
-        udp_track_id=1,
+        udp_track_id=2,
         svg_path="tracks/shanghai.svg",
     ),
     Track(
@@ -455,7 +467,7 @@ ALL_TRACKS: list[Track] = [
         track_type="mixed",
         length_m=5807.0,
         corners=_make_corners("suzuka", "mixed", 18),
-        udp_track_id=2,
+        udp_track_id=13,
         svg_path="tracks/suzuka.svg",
     ),
     Track(
@@ -479,7 +491,7 @@ ALL_TRACKS: list[Track] = [
         track_type="high_speed_low_downforce",
         length_m=6174.0,
         corners=_make_corners("jeddah", "high_speed_low_downforce", 27),
-        udp_track_id=4,
+        udp_track_id=29,
         svg_path="tracks/jeddah.svg",
     ),
     Track(
@@ -491,7 +503,7 @@ ALL_TRACKS: list[Track] = [
         track_type="street",
         length_m=5412.0,
         corners=_make_corners("miami", "street", 19),
-        udp_track_id=5,
+        udp_track_id=30,
         svg_path="tracks/miami.svg",
     ),
     Track(
@@ -515,7 +527,7 @@ ALL_TRACKS: list[Track] = [
         track_type="street",
         length_m=3337.0,
         corners=_make_corners("monaco", "street", 19),
-        udp_track_id=7,
+        udp_track_id=5,
         svg_path="tracks/monaco.svg",
     ),
     Track(
@@ -527,7 +539,7 @@ ALL_TRACKS: list[Track] = [
         track_type="medium",
         length_m=4657.0,
         corners=_make_corners("barcelona", "medium", 14),
-        udp_track_id=8,
+        udp_track_id=4,
         svg_path="tracks/barcelona.svg",
     ),
     Track(
@@ -539,7 +551,7 @@ ALL_TRACKS: list[Track] = [
         track_type="medium",
         length_m=4318.0,
         corners=_make_corners("spielberg", "medium", 10),
-        udp_track_id=9,
+        udp_track_id=17,
         svg_path="tracks/spielberg.svg",
     ),
     Track(
@@ -551,7 +563,7 @@ ALL_TRACKS: list[Track] = [
         track_type="mixed",
         length_m=5891.0,
         corners=_make_corners("silverstone", "mixed", 18),
-        udp_track_id=10,
+        udp_track_id=7,
         svg_path="tracks/silverstone.svg",
     ),
     Track(
@@ -563,7 +575,7 @@ ALL_TRACKS: list[Track] = [
         track_type="mixed",
         length_m=7004.0,
         corners=_make_corners("spa", "mixed", 19),
-        udp_track_id=11,
+        udp_track_id=10,
         svg_path="tracks/spa.svg",
     ),
     Track(
@@ -575,7 +587,7 @@ ALL_TRACKS: list[Track] = [
         track_type="high_downforce",
         length_m=4381.0,
         corners=_make_corners("hungaroring", "high_downforce", 14),
-        udp_track_id=12,
+        udp_track_id=9,
         svg_path="tracks/hungaroring.svg",
     ),
     Track(
@@ -587,7 +599,7 @@ ALL_TRACKS: list[Track] = [
         track_type="high_downforce",
         length_m=4259.0,
         corners=_make_corners("zandvoort", "high_downforce", 14),
-        udp_track_id=13,
+        udp_track_id=26,
         svg_path="tracks/zandvoort.svg",
     ),
     Track(
@@ -599,7 +611,7 @@ ALL_TRACKS: list[Track] = [
         track_type="high_speed_low_downforce",
         length_m=5793.0,
         corners=_make_corners("monza", "high_speed_low_downforce", 11),
-        udp_track_id=14,
+        udp_track_id=11,
         svg_path="tracks/monza.svg",
     ),
     Track(
@@ -611,7 +623,7 @@ ALL_TRACKS: list[Track] = [
         track_type="street",
         length_m=5416.0,
         corners=_make_corners("madrid", "street", 22),
-        udp_track_id=15,
+        udp_track_id=33,
         svg_path="tracks/madrid.svg",
     ),
     Track(
@@ -623,7 +635,7 @@ ALL_TRACKS: list[Track] = [
         track_type="high_speed_low_downforce",
         length_m=6003.0,
         corners=_make_corners("baku", "high_speed_low_downforce", 20),
-        udp_track_id=16,
+        udp_track_id=20,
         svg_path="tracks/baku.svg",
     ),
     Track(
@@ -635,7 +647,7 @@ ALL_TRACKS: list[Track] = [
         track_type="street",
         length_m=4940.0,
         corners=_make_corners("singapore", "street", 19),
-        udp_track_id=17,
+        udp_track_id=12,
         svg_path="tracks/singapore.svg",
     ),
     Track(
@@ -647,7 +659,7 @@ ALL_TRACKS: list[Track] = [
         track_type="mixed",
         length_m=5513.0,
         corners=_make_corners("austin", "mixed", 20),
-        udp_track_id=18,
+        udp_track_id=15,
         svg_path="tracks/austin.svg",
     ),
     Track(
@@ -671,7 +683,7 @@ ALL_TRACKS: list[Track] = [
         track_type="mixed",
         length_m=4309.0,
         corners=_make_corners("sao_paulo", "mixed", 15),
-        udp_track_id=20,
+        udp_track_id=16,
         svg_path="tracks/sao_paulo.svg",
     ),
     Track(
@@ -683,7 +695,7 @@ ALL_TRACKS: list[Track] = [
         track_type="high_speed_low_downforce",
         length_m=6201.0,
         corners=_make_corners("las_vegas", "high_speed_low_downforce", 17),
-        udp_track_id=21,
+        udp_track_id=31,
         svg_path="tracks/las_vegas.svg",
     ),
     Track(
@@ -695,7 +707,7 @@ ALL_TRACKS: list[Track] = [
         track_type="medium",
         length_m=5419.0,
         corners=_make_corners("lusail", "medium", 16),
-        udp_track_id=22,
+        udp_track_id=32,
         svg_path="tracks/lusail.svg",
     ),
     Track(
@@ -707,7 +719,7 @@ ALL_TRACKS: list[Track] = [
         track_type="medium",
         length_m=5281.0,
         corners=_make_corners("yas_marina", "medium", 16),
-        udp_track_id=23,
+        udp_track_id=14,
         svg_path="tracks/yas_marina.svg",
     ),
 ]
