@@ -244,24 +244,42 @@ def _apply_brake_rules(
 ) -> None:
     """规则4/8/14：刹车相关规则（原地修改 dx）。
 
-    规则4 - 刹车温度过高（m_brakesTemperature 均值 > 500°C）：
-        brake_stab_req += 0.3。出处：F1官方刹车温度工作窗口 200-500°C。
+    规则4 - 刹车温度过高（``m_brakesTemperature`` 均值超阈值）：
+        brake_stab_req += 0.3。
+        阈值随轮胎配方浮动：软胎 450°C / 中性 500°C / 硬胎 550°C
+        （配方来自 Packet 7 ``m_actualTyreCompound``）。出处：F1 官方刹车
+        工作窗口 200-500°C，软胎工作窗口整体偏低。
     规则8 - 制动力不足（m_brake > 0.8，高刹车输入但减速不明显）：
         brake_power_req += 0.3。出处：F1官方调教指南。
         注意：整圈统计摘要无逐帧 speed 变化率，仅用高刹车输入作为简化条件。
-    规则14 - 刹车持续过热（均值 > 600°C，比规则4更严格）：
+    规则14 - 刹车持续过热（均值超严格阈值）：
         brake_stab_req += 0.4, brake_power_req -= 0.2（方向修正因子——过热需减弱刹车压力）。
+        阈值同样随配方浮动：软胎 550°C / 中性 600°C / 硬胎 660°C。
+    规则4b - 前后轴刹车温度失衡（单轴均值差 > 120°C）：
+        brake_stab_req += 0.2 —— 提示刹车平衡或前后制动分配需要复核。
     """
     brake_temps = telemetry.get("m_brakesTemperature")
     if isinstance(brake_temps, list) and len(brake_temps) >= 4:
         avg_brake_temp = sum(brake_temps[:4]) / 4.0
-        # 规则4：刹车温度过高
-        if avg_brake_temp > 500.0:
+        # 阈值按轮胎配方调整：软胎升温快、工作窗口低 → 更早告警；
+        # 硬胎工作窗口更高 → 阈值上调，避免把正常高温误判为过热。
+        # 配方来自 Packet 7 m_actualTyreCompound（聚合器换算为布尔标记）。
+        warn_temp = 500.0
+        severe_temp = 600.0
+        if telemetry.get("is_soft_compound"):
+            warn_temp, severe_temp = 450.0, 550.0
+        elif telemetry.get("is_hard_compound"):
+            warn_temp, severe_temp = 550.0, 660.0
+        if avg_brake_temp > warn_temp:
             dx["brake_stab_req"] += 0.3
-        # 规则14：刹车持续过热（更严格阈值 + 方向修正因子）
-        if avg_brake_temp > 600.0:
+        if avg_brake_temp > severe_temp:
             dx["brake_stab_req"] += 0.4
             dx["brake_power_req"] -= 0.2
+        # 刹车温度前后轴严重失衡（单轴 > 另一轴 120°C）→ 刹车平衡偏置
+        front_bt = (brake_temps[2] + brake_temps[3]) / 2.0  # 官方顺序 RL,RR,FL,FR
+        rear_bt = (brake_temps[0] + brake_temps[1]) / 2.0
+        if abs(front_bt - rear_bt) > 120.0:
+            dx["brake_stab_req"] += 0.2
 
     # 规则8：制动力不足（高刹车输入）
     brake = telemetry.get("m_brake")
@@ -389,18 +407,22 @@ def _apply_ride_height_rules(
 
 
 def _derive_telemetry_dx(telemetry: dict[str, Any] | None) -> dict[str, float]:
-    """从遥测性能数据提取诊断向量贡献（9维Dx，15条规则）。
+    """从遥测性能数据提取诊断向量贡献（9维Dx，16条规则）。
 
     与车手反馈Dx叠加后共同驱动调教优化模型。所有规则基于官方数据，
     覆盖全部9维Dx并引入方向修正因子（负值表示该能力过强需减弱）。
 
-    15条规则分组：
+    16条规则分组：
         - 胎温规则（1/2/12/13）：胎温过高/过低/不均/湿地严重不足
         - 胎压规则（3）：胎压异常
-        - 刹车规则（4/8/14）：刹车过热/制动力不足/持续过热+方向修正
+        - 刹车规则（4/4b/8/14）：刹车过热/前后轴失衡/制动力不足/持续过热+方向修正
+        - 刹车平衡规则（16）：游戏内实际读数与写入调教不一致
         - 弯道规则（5/7/10/11）：出弯油门低/入弯响应差/弯中不稳定/出弯打滑
         - 速度规则（6/15）：直道速度低/直道极速低（均含方向修正因子）
         - 底盘规则（9）：刮底检测（底板离地高度，来自 Packet 13 MotionEx）
+
+    配方相关阈值：刹车温度告警阈值随 Packet 7 ``m_actualTyreCompound``
+    换算的软/硬标记浮动（软胎更早告警、硬胎阈值上调）。
 
     方向修正因子：
         hi_speed_stab_req 取负值 = 需减阻/减翼（下压力过大）
@@ -418,10 +440,36 @@ def _derive_telemetry_dx(telemetry: dict[str, Any] | None) -> dict[str, float]:
     _apply_tyre_temperature_rules(telemetry, dx)
     _apply_tyre_pressure_rules(telemetry, dx)
     _apply_brake_rules(telemetry, dx)
+    _apply_brake_bias_consistency(telemetry, dx)
     _apply_corner_rules(telemetry, dx)
     _apply_speed_rules(telemetry, dx)
     _apply_ride_height_rules(telemetry, dx)
     return dx
+
+
+def _apply_brake_bias_consistency(
+    telemetry: dict[str, Any], dx: dict[str, float],
+) -> None:
+    """规则16：刹车平衡实际生效核对。
+
+    遥测字典里同时可能带两个量：
+    - ``front_brake_bias``：游戏内实际读数（Packet 7 ``m_frontBrakeBias``）；
+    - ``brake_bias_setup``：本工具写入调教的前轴刹车平衡值。
+
+    若两者偏差 > 2 个百分点，说明调教未真正生效（例如游戏内手动覆盖、
+    或赛车不允许该设置）——此时不应继续基于差值调参，而是抬高
+    ``brake_stab_req`` 提示用户先在游戏内确认设置。
+
+    任一侧缺失时不做任何判断（避免在无遥测时误报）。
+    """
+    actual = telemetry.get("front_brake_bias")
+    setting = telemetry.get("brake_bias_setup")
+    if not isinstance(actual, (int, float)) or isinstance(actual, bool):
+        return
+    if not isinstance(setting, (int, float)) or isinstance(setting, bool):
+        return
+    if abs(float(actual) - float(setting)) > 2.0:
+        dx["brake_stab_req"] += 0.25
 
 
 # ---------------------------------------------------------------------------

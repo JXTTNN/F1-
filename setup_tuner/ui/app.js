@@ -175,6 +175,12 @@
     // 遥测录制
     btnRecord: $("btn-record-toggle"),
     btnListenerToggle: $("btn-listener-toggle"),
+    // 录制库（列表 + 回放）
+    btnRecordings: $("btn-recordings"),
+    recOverlay: $("rec-overlay"), recClose: $("rec-close"),
+    recList: $("rec-list"), recStatus: $("rec-status"),
+    recError: $("rec-error"), recCount: $("rec-count"),
+    recRefresh: $("rec-refresh"), recReplayStop: $("rec-replay-stop"),
   };
 
   /* ---------- 运行时状态 ---------- */
@@ -207,6 +213,8 @@
     // 遥测录制状态
     isRecording: false,
     isListening: true,  // 默认监听器已启动
+    isReplaying: false, // 回放中
+    replaySessionId: null,
   };
 
   /* ---------- 工具函数 ---------- */
@@ -920,6 +928,260 @@
     dom.btnRecord.classList.toggle("recording", state.isRecording);
     const label = dom.btnRecord.querySelector(".record-label");
     if (label) label.textContent = state.isRecording ? "停止" : "录制";
+  }
+
+  /* ========================================================================
+     3.6 录制库（GET /api/v1/telemetry/recordings + 回放控制）
+     ======================================================================== */
+
+  /** 打开录制库面板并加载列表。
+   *  @returns {Promise<void>}
+   */
+  async function openRecordings() {
+    if (!dom.recOverlay) return;
+    dom.recOverlay.hidden = false;
+    setRecError("");
+    await refreshRecordings();
+  }
+
+  /** 关闭录制库面板。
+   *  @returns {void}
+   */
+  function closeRecordings() {
+    if (dom.recOverlay) dom.recOverlay.hidden = true;
+  }
+
+  /** 设置录制库错误提示。
+   *  @param {string} msg
+   *  @returns {void}
+   */
+  function setRecError(msg) {
+    if (dom.recError) dom.recError.textContent = msg || "";
+  }
+
+  /** 加载并渲染录制会话列表。
+   *  @returns {Promise<void>}
+   */
+  async function refreshRecordings() {
+    if (!dom.recList) return;
+    dom.recList.innerHTML = '<div class="fb-strength-empty">正在加载…</div>';
+    try {
+      const [list, status] = await Promise.all([
+        fetchJSON("/telemetry/recordings"),
+        fetchJSON("/telemetry/replay/status").catch(() => null),
+      ]);
+      renderReplayStatus(status);
+      renderRecordingList(Array.isArray(list) ? list : []);
+    } catch (e) {
+      dom.recList.innerHTML = '<div class="fb-strength-empty">加载失败</div>';
+      setRecError("加载录制列表失败：" + e.message);
+    }
+  }
+
+  /** 渲染回放状态行 + 停止按钮可见性。
+   *  @param {object|null} status — {replaying, session_id, packet_count?}
+   *  @returns {void}
+   */
+  function renderReplayStatus(status) {
+    const replaying = !!(status && status.replaying);
+    state.isReplaying = replaying;
+    state.replaySessionId = (status && status.session_id) || null;
+    if (dom.recStatus) {
+      if (replaying) {
+        const n = status && status.packet_count != null ? `（${status.packet_count} 包）` : "";
+        dom.recStatus.textContent = `回放中：${state.replaySessionId || "—"}${n}`;
+        dom.recStatus.classList.add("active");
+      } else {
+        dom.recStatus.textContent = "未在回放";
+        dom.recStatus.classList.remove("active");
+      }
+    }
+    if (dom.recReplayStop) dom.recReplayStop.hidden = !replaying;
+    // 回放中禁用各会话的回放按钮
+    if (dom.recList) {
+      dom.recList.querySelectorAll("button[data-replay]").forEach((b) => {
+        b.disabled = replaying;
+      });
+    }
+  }
+
+  /** 渲染录制会话列表。
+   *  @param {Array<object>} items
+   *  @returns {void}
+   */
+  function renderRecordingList(items) {
+    if (dom.recCount) dom.recCount.textContent = `共 ${items.length} 个会话`;
+    if (!items.length) {
+      dom.recList.innerHTML =
+        '<div class="fb-strength-empty">暂无录制会话。点击「录制」开始采集，停止后此处会出现记录。</div>';
+      return;
+    }
+    dom.recList.innerHTML = "";
+    items.forEach((it) => {
+      const row = document.createElement("div");
+      row.className = "rec-item";
+      row.setAttribute("role", "listitem");
+
+      const line = document.createElement("div");
+      line.className = "rec-line";
+
+      const meta = document.createElement("div");
+      meta.className = "rec-meta";
+      const name = document.createElement("span");
+      name.className = "rec-name";
+      name.textContent = it.session_id || "—";
+      const sub = document.createElement("span");
+      sub.className = "rec-sub";
+      const parts = [];
+      if (it.start_time) parts.push(it.start_time);
+      if (it.packet_count != null) parts.push(`${it.packet_count} 包`);
+      if (it.file_size != null) parts.push(formatBytes(it.file_size));
+      sub.textContent = parts.join(" · ") || "无元数据";
+      meta.appendChild(name);
+      meta.appendChild(sub);
+
+      const actions = document.createElement("div");
+      actions.className = "rec-actions";
+
+      const btnDetail = document.createElement("button");
+      btnDetail.className = "btn btn-ghost btn-sm";
+      btnDetail.type = "button";
+      btnDetail.textContent = "详情";
+      btnDetail.setAttribute("aria-label", `查看会话 ${it.session_id} 详情`);
+      btnDetail.setAttribute("aria-expanded", "false");
+      btnDetail.addEventListener("click", () => toggleRecordingDetail(it.session_id, row, btnDetail));
+
+      const btnReplay = document.createElement("button");
+      btnReplay.className = "btn btn-ghost btn-sm";
+      btnReplay.type = "button";
+      btnReplay.dataset.replay = it.session_id || "";
+      btnReplay.textContent = "回放";
+      btnReplay.disabled = !!state.isReplaying;
+      btnReplay.setAttribute("aria-label", `回放会话 ${it.session_id}`);
+      btnReplay.addEventListener("click", () => startReplay(it.session_id, btnReplay));
+
+      actions.appendChild(btnDetail);
+      actions.appendChild(btnReplay);
+      line.appendChild(meta);
+      line.appendChild(actions);
+      row.appendChild(line);
+      dom.recList.appendChild(row);
+    });
+  }
+
+  /** 展开/收起单个会话的详情（包类型统计）。
+   *  @param {string} sessionId
+   *  @param {HTMLElement} row
+   *  @param {HTMLButtonElement} btn
+   *  @returns {Promise<void>}
+   */
+  async function toggleRecordingDetail(sessionId, row, btn) {
+    const existing = row.querySelector(".rec-detail");
+    if (existing) {
+      existing.remove();
+      btn.setAttribute("aria-expanded", "false");
+      btn.textContent = "详情";
+      return;
+    }
+    btn.disabled = true;
+    btn.textContent = "加载中";
+    try {
+      const d = await fetchJSON(`/telemetry/recordings/${encodeURIComponent(sessionId)}`);
+      const box = document.createElement("div");
+      box.className = "rec-detail";
+
+      const lines = [];
+      if (d.start_time) lines.push(`开始：${d.start_time}`);
+      if (d.end_time) lines.push(`结束：${d.end_time}`);
+      if (d.packet_count != null) lines.push(`包数：${d.packet_count}`);
+
+      const head = document.createElement("div");
+      head.className = "rec-detail-head";
+      head.textContent = lines.join("　·　") || "无元数据";
+      box.appendChild(head);
+
+      const types = Array.isArray(d.by_packet_type) ? d.by_packet_type : [];
+      if (types.length) {
+        const ul = document.createElement("div");
+        ul.className = "rec-detail-types";
+        types.forEach((t) => {
+          const chip = document.createElement("span");
+          chip.className = "rec-chip";
+          chip.textContent = `${t.packet_name || "?"} × ${t.count}`;
+          ul.appendChild(chip);
+        });
+        box.appendChild(ul);
+      } else {
+        const empty = document.createElement("div");
+        empty.className = "fb-strength-empty";
+        empty.textContent = "无按类型统计（可能未写入 SQLite 索引）";
+        box.appendChild(empty);
+      }
+
+      row.appendChild(box);
+      btn.setAttribute("aria-expanded", "true");
+      btn.textContent = "收起";
+    } catch (e) {
+      setRecError("加载会话详情失败：" + e.message);
+      btn.textContent = "详情";
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  /** 字节数人类可读化。
+   *  @param {number} n
+   *  @returns {string}
+   */
+  function formatBytes(n) {
+    if (!Number.isFinite(n) || n < 0) return "—";
+    if (n < 1024) return `${n} B`;
+    if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+    if (n < 1024 * 1024 * 1024) return `${(n / 1024 / 1024).toFixed(1)} MB`;
+    return `${(n / 1024 / 1024 / 1024).toFixed(2)} GB`;
+  }
+
+  /** 开始回放指定会话 → POST /api/v1/telemetry/replay/start
+   *  @param {string} sessionId
+   *  @param {HTMLButtonElement} btn
+   *  @returns {Promise<void>}
+   */
+  async function startReplay(sessionId, btn) {
+    if (!sessionId) return;
+    if (btn) btn.disabled = true;
+    setRecError("");
+    try {
+      await fetchJSON("/telemetry/replay/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_id: sessionId }),
+      });      showToast(`开始回放 ${sessionId}`, "success");
+      await refreshRecordings();
+    } catch (e) {
+      setRecError("回放启动失败：" + e.message);
+      showToast("回放启动失败：" + e.message, "error");
+      if (btn) btn.disabled = false;
+    }
+  }
+
+  /** 停止回放 → POST /api/v1/telemetry/replay/stop
+   *  @returns {Promise<void>}
+   */
+  async function stopReplay() {
+    if (dom.recReplayStop) dom.recReplayStop.disabled = true;
+    try {
+      await fetchJSON("/telemetry/replay/stop", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      showToast("回放已停止", "success");
+      await refreshRecordings();
+    } catch (e) {
+      setRecError("停止回放失败：" + e.message);
+    } finally {
+      if (dom.recReplayStop) dom.recReplayStop.disabled = false;
+    }
   }
 
   /** 切换遥测收集开关 → POST /api/v1/telemetry/listener/toggle
@@ -1765,6 +2027,16 @@
   function bindFeedbackEvents() {
     // 遥测录制
     if (dom.btnRecord) dom.btnRecord.addEventListener("click", toggleRecording);
+    // 录制库（列表 + 回放）
+    if (dom.btnRecordings) dom.btnRecordings.addEventListener("click", openRecordings);
+    if (dom.recClose) dom.recClose.addEventListener("click", closeRecordings);
+    if (dom.recRefresh) dom.recRefresh.addEventListener("click", refreshRecordings);
+    if (dom.recReplayStop) dom.recReplayStop.addEventListener("click", stopReplay);
+    if (dom.recOverlay) {
+      dom.recOverlay.addEventListener("click", (e) => {
+        if (e.target === dom.recOverlay) closeRecordings();
+      });
+    }
     // 遥测收集开关
     if (dom.btnListenerToggle) dom.btnListenerToggle.addEventListener("click", toggleListener);
 
@@ -1789,6 +2061,10 @@
       if (e.target === dom.fbOverlay) closeFeedbackPanel();
     });
     document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && dom.recOverlay && !dom.recOverlay.hidden) {
+        closeRecordings();
+        return;
+      }
       if (e.key === "Escape" && !dom.fbOverlay.hidden) closeFeedbackPanel();
     });
 

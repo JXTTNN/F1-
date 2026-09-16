@@ -379,12 +379,19 @@ def _merge_telemetry_summary(
 def _merge_status_summary(
     summary: dict[str, Any], status: dict[str, Any] | None,
 ) -> None:
-    """从 Packet 7 CarStatus 提取轮胎配方/胎龄/燃油。"""
+    """从 Packet 7 CarStatus 提取轮胎配方/胎龄/燃油/刹车平衡。
+
+    ``front_brake_bias``（游戏内实际读数）供引擎规则16 与写入调教比对：
+    两者偏差过大说明设置未生效，此时继续调参无意义。
+    """
     if not status:
         return
     summary["tyre_compound"] = status.get("m_visualTyreCompound")
     summary["tyres_age_laps"] = status.get("m_tyresAgeLaps")
     summary["fuel_in_tank"] = status.get("m_fuelInTank")
+    summary["fuel_remaining_laps"] = status.get("m_fuelRemainingLaps")
+    # 实际刹车平衡（Packet 7 字段名 m_frontBrakeBias；模拟器直接沿用该键）
+    summary["front_brake_bias"] = status.get("m_frontBrakeBias")
 
 
 def _merge_lap_summary(

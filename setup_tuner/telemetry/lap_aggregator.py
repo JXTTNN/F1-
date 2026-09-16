@@ -46,6 +46,45 @@ _PLANK_BOTTOMING_MAX_M = 0.012
 # 悬挂行程（m_suspensionPosition）被压到接近下限时同样视为触底迹象
 _SUSPENSION_BOTTOMING_MAX_M = 0.005
 
+# ── Packet 7 (CarStatus) 轮胎配方枚举 ───────────────────────────────────
+# Source: EA F1 25 UDP Telemetry Specification — m_actualTyreCompound
+#   16 = C5（最软） 17 = C4  18 = C3  19 = C2  20 = C1（最硬）
+#   21 = C0（超硬） 22 = C6（超软）
+#   7  = Inter（中性胎） 8 = Wet（全雨胎）
+#   9/10/11 = 经典软/中/硬（F1 经典配方）
+# 软胎工作窗口低、升温快 → 胎温告警阈值应下调；
+# 硬胎工作窗口高、升温慢 → 阈值应上调。
+_SOFT_COMPOUNDS = frozenset({16, 17, 22, 9})
+_HARD_COMPOUNDS = frozenset({20, 21, 19, 11})
+_WET_COMPOUNDS = frozenset({7, 8})
+
+_COMPOUND_NAMES: dict[int, str] = {
+    7: "Inter", 8: "Wet",
+    9: "Soft(Classic)", 10: "Medium(Classic)", 11: "Hard(Classic)",
+    16: "C5", 17: "C4", 18: "C3", 19: "C2", 20: "C1", 21: "C0", 22: "C6",
+}
+
+
+def _compound_label(code: int | None) -> str:
+    """轮胎配方代码 → 可读名称（未知代码返回 ``Unknown(n)``）。"""
+    if code is None:
+        return "Unknown"
+    return _COMPOUND_NAMES.get(code, f"Unknown({code})")
+
+
+def _pick_int(value: Any, fallback: int | None) -> int | None:
+    """取整数状态量：非法值（None/bool/非数值）时保留上一次有效值。"""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return fallback
+    return int(value)
+
+
+def _pick_float(value: Any, fallback: float | None) -> float | None:
+    """取浮点状态量：非法值时保留上一次有效值。"""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return fallback
+    return float(value)
+
 
 class LapAggregator:
     """逐帧累积整圈遥测统计，并在圈号变化时固化上一圈快照。
@@ -97,6 +136,22 @@ class LapAggregator:
         self._rear_height_sum = 0.0
         self._plank_bottoming_frames = 0
         self._suspension_height_min: float | None = None
+        # Packet 7 累积量：轮胎配方/胎龄/燃油/ERS/刹车平衡
+        # 这些是"整圈不变或单调变化"的状态量，取最后一次有效值即可。
+        self._status_frames = 0
+        self._tyre_compound: int | None = None
+        self._visual_tyre_compound: int | None = None
+        self._tyres_age_laps: int | None = None
+        self._fuel_in_tank: float | None = None
+        self._fuel_remaining_laps: float | None = None
+        self._front_brake_bias: float | None = None
+        self._ers_store_energy: float | None = None
+        self._ers_deploy_mode: int | None = None
+        self._traction_control: int | None = None
+        self._anti_lock_brakes: int | None = None
+        self._fuel_mix: int | None = None
+        self._max_rpm: int | None = None
+        self._drs_allowed: int | None = None
 
     @staticmethod
     def _as_float(value: Any) -> float | None:
@@ -149,6 +204,40 @@ class LapAggregator:
                 snapshot["suspension_height_min"] = round(
                     self._suspension_height_min, 5,
                 )
+        # Packet 7：车辆状态（轮胎配方/胎龄/燃油/ERS/刹车平衡）
+        if self._status_frames:
+            snapshot["car_status_frames"] = self._status_frames
+            if self._tyre_compound is not None:
+                snapshot["tyre_compound"] = self._tyre_compound
+                snapshot["tyre_compound_name"] = _compound_label(self._tyre_compound)
+                # 碳陶瓷/软胎等工作窗口差异由引擎侧按配方选择阈值
+                snapshot["is_soft_compound"] = self._tyre_compound in _SOFT_COMPOUNDS
+                snapshot["is_hard_compound"] = self._tyre_compound in _HARD_COMPOUNDS
+            if self._visual_tyre_compound is not None:
+                snapshot["visual_tyre_compound"] = self._visual_tyre_compound
+            if self._tyres_age_laps is not None:
+                snapshot["tyres_age_laps"] = self._tyres_age_laps
+            if self._fuel_in_tank is not None:
+                snapshot["fuel_in_tank"] = round(self._fuel_in_tank, 3)
+            if self._fuel_remaining_laps is not None:
+                snapshot["fuel_remaining_laps"] = round(self._fuel_remaining_laps, 3)
+            if self._front_brake_bias is not None:
+                # 游戏内实际刹车平衡（% 前轴）：判断调教写入值是否真被生效
+                snapshot["front_brake_bias"] = round(self._front_brake_bias, 3)
+            if self._ers_store_energy is not None:
+                snapshot["ers_store_energy"] = round(self._ers_store_energy, 3)
+            if self._ers_deploy_mode is not None:
+                snapshot["ers_deploy_mode"] = self._ers_deploy_mode
+            if self._traction_control is not None:
+                snapshot["traction_control"] = self._traction_control
+            if self._anti_lock_brakes is not None:
+                snapshot["anti_lock_brakes"] = self._anti_lock_brakes
+            if self._fuel_mix is not None:
+                snapshot["fuel_mix"] = self._fuel_mix
+            if self._max_rpm is not None:
+                snapshot["max_rpm"] = self._max_rpm
+            if self._drs_allowed is not None:
+                snapshot["drs_allowed"] = self._drs_allowed
         return snapshot
 
     # ------------------------------------------------------------------ #
@@ -270,6 +359,54 @@ class LapAggregator:
                     and suspension_min <= _SUSPENSION_BOTTOMING_MAX_M):
                 # 本帧无底板离地高度，但悬挂行程已压到接近下限 —— 视为触底迹象。
                 self._plank_bottoming_frames += 1
+
+    def on_car_status(self, frame: dict[str, Any]) -> None:
+        """接收 Packet 7 (CarStatus)：累积轮胎配方 / 胎龄 / 燃油 / ERS / 刹车平衡。
+
+        这些字段此前被 ``parse_car_status`` 解析出来却无人消费，导致：
+        - 胎温/胎压阈值无法按配方（软/中/硬/雨胎）区分；
+        - 游戏内实际刹车平衡（``m_frontBrakeBias``）无从核对调教是否生效；
+        - 燃油与 ERS 状态在报告中完全缺失。
+
+        状态量多为"整圈不变或单调变化"，取最后一次有效值即可。
+        """
+        with self._lock:
+            self._status_frames += 1
+            self._tyre_compound = _pick_int(
+                frame.get("m_actualTyreCompound"), self._tyre_compound,
+            )
+            self._visual_tyre_compound = _pick_int(
+                frame.get("m_visualTyreCompound"), self._visual_tyre_compound,
+            )
+            self._tyres_age_laps = _pick_int(
+                frame.get("m_tyresAgeLaps"), self._tyres_age_laps,
+            )
+            self._fuel_in_tank = _pick_float(
+                frame.get("m_fuelInTank"), self._fuel_in_tank,
+            )
+            self._fuel_remaining_laps = _pick_float(
+                frame.get("m_fuelRemainingLaps"), self._fuel_remaining_laps,
+            )
+            self._front_brake_bias = _pick_float(
+                frame.get("m_frontBrakeBias"), self._front_brake_bias,
+            )
+            self._ers_store_energy = _pick_float(
+                frame.get("m_ersStoreEnergy"), self._ers_store_energy,
+            )
+            self._ers_deploy_mode = _pick_int(
+                frame.get("m_ersDeployMode"), self._ers_deploy_mode,
+            )
+            self._traction_control = _pick_int(
+                frame.get("m_tractionControl"), self._traction_control,
+            )
+            self._anti_lock_brakes = _pick_int(
+                frame.get("m_antiLockBrakes"), self._anti_lock_brakes,
+            )
+            self._fuel_mix = _pick_int(frame.get("m_fuelMix"), self._fuel_mix)
+            self._max_rpm = _pick_int(frame.get("m_maxRPM"), self._max_rpm)
+            self._drs_allowed = _pick_int(
+                frame.get("m_drsAllowed"), self._drs_allowed,
+            )
 
     # ------------------------------------------------------------------ #
     # 输出

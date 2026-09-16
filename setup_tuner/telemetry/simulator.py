@@ -320,7 +320,70 @@ class TelemetrySimulator:
             self._dispatch(self._build_corner_event(track, frame, new_corner))
         self._dispatch(frame)
         self._dispatch(self._build_motion_frame(frame, rng))
+        self._dispatch(
+            self._build_car_status_frame(frame, setup, rng, n_frames_per_lap),
+        )
         self._advance_frame(n_frames_per_lap, track.track_id)
+
+    def _build_car_status_frame(
+        self, telem_frame: dict[str, Any], setup: CarSetup,
+        rng: random.Random, n_frames_per_lap: int,
+    ) -> dict[str, Any]:
+        """由 CarTelemetry 帧与当前调教派生一帧 CarStatus（对齐 Packet 7 字段名）。
+
+        模拟数据需覆盖 Packet 7 的状态量，否则聚合器的 ``on_car_status``
+        在无真实 F1 游戏时永远收不到帧（与 MotionEx 同一类问题）。
+
+        - 轮胎配方取 ``setup`` 的胎压倾向，使配方相关的阈值分支可被端到端验证；
+        - 刹车平衡直接读 ``setup.brake_bias``，保证「写入值 == 游戏内读数」；
+        - 燃油随圈内进度线性消耗。
+        """
+        frame_idx = self._current_frame
+        lap_progress = (frame_idx % max(1, n_frames_per_lap)) / max(
+            1, n_frames_per_lap,
+        )
+        # 配方：默认 C3(18)；胎压偏低时倾向软胎、偏高时倾向硬胎，覆盖分支
+        compound = 18
+        try:
+            front_pressure = float(setup.front_left_tyre_pressure)
+        except (AttributeError, TypeError, ValueError):
+            front_pressure = 23.0
+        if front_pressure < 22.0:
+            compound = 16  # C5 软胎
+        elif front_pressure > 25.0:
+            compound = 20  # C1 硬胎
+
+        fuel_capacity = 110.0
+        remaining = max(0.0, fuel_capacity * (1.0 - 0.35 * lap_progress))
+
+        return {
+            "packet_id": 7,
+            "name": "CarStatus",
+            # 轮胎配方与胎龄
+            "m_actualTyreCompound": compound,
+            "m_visualTyreCompound": compound,
+            "m_tyresAgeLaps": rng.randint(0, 5),
+            # 燃油
+            "m_fuelInTank": round(remaining, 3),
+            "m_fuelCapacity": fuel_capacity,
+            "m_fuelRemainingLaps": round(remaining / 2.4, 3),
+            # 刹车平衡（与调教写入值一致，供核对）
+            "m_frontBrakeBias": float(getattr(setup, "brake_bias", 58.0)),
+            # ERS
+            "m_ersStoreEnergy": round(
+                3_000_000.0 + 1_000_000.0 * (1 - lap_progress), 1,
+            ),
+            "m_ersDeployMode": 2,
+            # 辅助电子系统
+            "m_tractionControl": 1,
+            "m_antiLockBrakes": 1,
+            "m_fuelMix": 1,
+            "m_maxRPM": 15000,
+            "m_idleRPM": 4000,
+            "m_drsAllowed": 1,
+            "m_pitLimiterStatus": 0,
+            "m_maxGears": 8,
+        }
 
     def _build_motion_frame(
         self, telem_frame: dict[str, Any], rng: random.Random,

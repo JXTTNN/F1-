@@ -215,6 +215,11 @@ def _make_packet_handler(app: FastAPI) -> Callable[[dict[str, Any]], None]:
                 extractor.on_lap_data(parsed)
         elif packet_id == 13:
             aggregator.on_motion_ex(parsed)
+        elif packet_id == 7:
+            # Packet 7 (CarStatus)：轮胎配方/胎龄/燃油/ERS/刹车平衡。
+            # parse_car_status 早已实现但此前从未分发，导致这些状态量
+            # 解析出来即丢弃（配方相关的阈值区分、刹车平衡核对全部失效）。
+            aggregator.on_car_status(parsed)
         # task-62 M1：一圈结束时把整圈快照与风格向量交给落库线程
         completed = aggregator.take_completed_lap()
         if completed is not None:

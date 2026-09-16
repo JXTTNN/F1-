@@ -66,6 +66,7 @@
               <span class="record-dot" aria-hidden="true"></span>
               <span class="record-label">录制</span>
             </button>
+            <button id="btn-recordings" class="btn btn-ghost btn-sm" type="button" aria-label="打开录制库">录制库</button>
           </div>
         </div>
         <div class="telemetry-grid" role="region" aria-label="实时遥测数据">
@@ -257,6 +258,29 @@
         <span id="fb-error" class="fb-error" role="alert" aria-live="assertive"></span>
         <span id="fb-selected-count" class="fb-selected-count">已选 0 个症状</span>
         <button id="fb-submit" class="btn btn-primary" type="button" aria-label="批量提交反馈">提交反馈</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== 录制库面板（列表 + 回放） ==================== -->
+  <div id="rec-overlay" class="fb-overlay" hidden>
+    <div class="fb-panel rec-panel" role="dialog" aria-modal="true" aria-labelledby="rec-title">
+      <div class="fb-header">
+        <h3 id="rec-title">录制库 · 回放</h3>
+        <button id="rec-close" class="fb-close" type="button" aria-label="关闭录制库">&times;</button>
+      </div>
+      <div class="fb-body">
+        <p id="rec-tip" class="fb-tip">录制文件保存在 data/recordings/。回放会把历史遥测按原时间轴重新送入分析链路，用于复盘调教改动前后的差异。</p>
+        <div id="rec-status" class="rec-status" aria-live="polite">未在回放</div>
+        <div id="rec-list" class="rec-list" role="list" aria-label="录制会话列表">
+          <div class="fb-strength-empty">正在加载…</div>
+        </div>
+      </div>
+      <div class="fb-footer">
+        <span id="rec-error" class="fb-error" role="alert" aria-live="assertive"></span>
+        <span id="rec-count" class="fb-selected-count">—</span>
+        <button id="rec-replay-stop" class="btn btn-ghost btn-sm" type="button" aria-label="停止回放" hidden>停止回放</button>
+        <button id="rec-refresh" class="btn btn-ghost btn-sm" type="button" aria-label="刷新列表">刷新</button>
       </div>
     </div>
   </div>
