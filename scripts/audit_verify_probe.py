@@ -696,9 +696,10 @@ def check_stride():
         pr = parse_packet(bytes.fromhex(rec["hex"]))
         if pr:
             sectors.add(pr.get("m_sector"))
-    item("K6.真实 m_sector 取值", "FAIL" if sectors and max(sectors) <= 2 else "INFO",
-         f"实测集合={sorted(sectors)} → 确认 0 基(0/1/2)；engine 规则5 判断 "
-         "sector==3 永不成立，前端直接显示 'S'+sector")
+    item("K6.真实 m_sector 取值", "INFO",
+         f"实测集合={sorted(sectors)} → 确认 UDP 为 0 基(0/1/2)。"
+         "本探针写于修复前；现 sector 已由 to_sector_1based 统一转 1 基，"
+         "规则 5 与前端显示均已正确（见 F3 断言）")
 
 
 # =========================================================================== #
@@ -739,9 +740,10 @@ def check_udp_remap():
                 f"车库合法域=[{sp.min_val:g},{sp.max_val:g}]")
         (direct if in_domain else remapped).append(line)
     item("L1.Packet5 原值是否已在车库合法域内",
-         "FAIL" if len(direct) > len(remapped) else "PASS",
+         "PASS" if len(direct) == len(direct) + len(remapped) else "FAIL",
          f"{len(direct)}/{len(direct) + len(remapped)} 个字段的 UDP 原值本身就落在车库域内 "
-         "→ EA 下发的是车库值，_UDP_VALUE_RANGE_MAP 的线性重映射会把它改错")
+         "（EA 下发即车库值）。本探针写于修复前：convert_udp_to_game_value 现为恒等映射，"
+         "原值与换算后一致即验证通过；若某字段需要重映射则此断言会转 FAIL 提醒补实测依据")
     for line in direct:
         print("     · " + line, flush=True)
 
