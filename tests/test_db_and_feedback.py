@@ -164,10 +164,10 @@ class TestStoreCrud:
 class TestFeedbackWrite:
     def test_submit_and_get_feedback(self, feedback_service: FeedbackService) -> None:
         """反馈写入后可查询。"""
-        rec = feedback_service.submit_feedback("suzuka", 3, "understeer", strength=4)
+        rec = feedback_service.submit_feedback("suzuka", 3, "understeer", strength=3)
         assert rec["symptom"] == "understeer"
         assert rec["category"] == "entry"
-        assert rec["strength"] == 4
+        assert rec["strength"] == 3
         assert rec["corner_number"] == 3
 
         feedbacks = feedback_service.get_feedbacks("suzuka")
@@ -176,7 +176,7 @@ class TestFeedbackWrite:
 
     def test_submit_global_symptom(self, feedback_service: FeedbackService) -> None:
         """全局症状 corner_number=None。"""
-        rec = feedback_service.submit_feedback("suzuka", None, "bottoming", strength=5)
+        rec = feedback_service.submit_feedback("suzuka", None, "bottoming", strength=3)
         assert rec["corner_number"] is None
         assert rec["category"] == "global"
 
@@ -192,10 +192,10 @@ class TestFeedbackWrite:
         with pytest.raises(ValueError, match="越界"):
             feedback_service.submit_feedback("suzuka", 1, "understeer", strength=-1)
 
-    def test_default_strength_is_three(self, feedback_service: FeedbackService) -> None:
-        """默认强度为 3。"""
+    def test_default_strength_is_two(self, feedback_service: FeedbackService) -> None:
+        """默认强度为 2（明显，task-61 三档制）。"""
         rec = feedback_service.submit_feedback("suzuka", 1, "understeer")
-        assert rec["strength"] == 3
+        assert rec["strength"] == 2
 
     def test_get_corner_feedbacks_grouped(self, feedback_service: FeedbackService) -> None:
         """按弯道分组查询。"""

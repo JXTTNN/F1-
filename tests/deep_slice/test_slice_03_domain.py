@@ -129,7 +129,7 @@ class TestUnit:
 
     def test_unit_validate_intensity_in_range(self) -> None:
         """validate_intensity 对合法值应原样返回。"""
-        for v in (0, 1, 3, 5):
+        for v in (1, 2, 3):
             assert validate_intensity(v) == v
 
     def test_unit_get_track_by_id(self) -> None:
@@ -313,9 +313,9 @@ class TestStatic:
             "Suspension", "Brakes", "Tyres",
         ]
 
-    def test_static_symptom_count_is_15(self) -> None:
-        """数量约束：Symptom 枚举恰好 15 项（task-60 扩展）。"""
-        assert len(list(Symptom)) == 15
+    def test_static_symptom_count_is_18(self) -> None:
+        """数量约束：Symptom 枚举恰好 18 项（task-61 扩展）。"""
+        assert len(list(Symptom)) == 18
 
     def test_static_track_count_is_24(self) -> None:
         """数量约束：ALL_TRACKS 恰好 24 条赛道。"""
@@ -337,10 +337,10 @@ class TestStatic:
         assert field.step > 0
 
     def test_static_intensity_constants(self) -> None:
-        """值域约束：强度常量 INTENSITY_MIN=0, MAX=5, DEFAULT=3。"""
-        assert INTENSITY_MIN == 0
-        assert INTENSITY_MAX == 5
-        assert DEFAULT_INTENSITY == 3
+        """值域约束：强度常量 INTENSITY_MIN=1, MAX=3, DEFAULT=2（task-61）。"""
+        assert INTENSITY_MIN == 1
+        assert INTENSITY_MAX == 3
+        assert DEFAULT_INTENSITY == 2
 
     @pytest.mark.parametrize("sym", list(Symptom))
     def test_static_each_symptom_has_info(self, sym: Symptom) -> None:
@@ -415,12 +415,12 @@ class TestSmoke:
             assert fetched.track_id == track.track_id
             assert fetched.udp_track_id == track.udp_track_id
 
-    def test_smoke_all_15_symptoms_categorized(self) -> None:
-        """冒烟：全部 15 症状可按类别检索（task-60 扩展）。"""
+    def test_smoke_all_18_symptoms_categorized(self) -> None:
+        """冒烟：全部 18 症状可按类别检索（task-61 扩展）。"""
         all_categorized: list[Symptom] = []
         for cat in SymptomCategory:
             all_categorized.extend(get_symptoms_by_category(cat))
-        assert len(all_categorized) == 15
+        assert len(all_categorized) == 18
         assert set(all_categorized) == set(Symptom)
 
     def test_smoke_setup_roundtrip_with_modifications(self) -> None:

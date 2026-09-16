@@ -182,9 +182,9 @@
           <span id="fb-corner-number" class="fb-corner-num">—</span>
           <span id="fb-corner-name" class="fb-corner-name"></span>
         </div>
-        <p id="fb-tip" class="fb-tip">可同时勾选多个症状（checkbox 多选）。入弯/弯中/出弯类症状绑定当前弯道；全局类症状作用于整条赛道（corner_number=null）。每个选中症状都有独立的强度滑块（0-5）。</p>
+        <p id="fb-tip" class="fb-tip">可同时勾选多个症状（checkbox 多选）。入弯/弯中/出弯类症状绑定当前弯道；全局类症状作用于整条赛道（corner_number=null）。每个选中症状都有独立的强度档位（1-3：轻微/明显/严重）。</p>
 
-        <!-- 15 症状分 4 类，每类可展开；checkbox 多选 -->
+        <!-- 18 症状分 4 类（UI 展示 17 项：lap_slow 降级为综合结论）；checkbox 多选 -->
         <div id="fb-symptom-groups" class="fb-symptom-groups" role="group" aria-label="症状多选">
           <!-- 入弯 entry -->
           <div class="sym-group" data-category="entry">
@@ -218,12 +218,14 @@
           <div class="sym-group" data-category="exit">
             <div class="sym-group-head" role="button" tabindex="0" aria-label="出弯症状组">
               <span class="sym-group-arrow" aria-hidden="true">▶</span>
-              <span class="sym-group-title">出弯（2）</span>
+              <span class="sym-group-title">出弯（4）</span>
               <span class="sym-group-count" data-count-for="exit">0</span>
             </div>
             <div class="sym-group-body">
               <label class="sym-option"><input type="checkbox" name="symptom" value="exit_wheelspin" aria-label="出弯打滑" /><span class="sym-name">出弯打滑</span><span class="sym-desc">出弯加速时车轮空转打滑。</span></label>
               <label class="sym-option"><input type="checkbox" name="symptom" value="exit_oversteer" aria-label="出弯甩尾" /><span class="sym-name">出弯甩尾</span><span class="sym-desc">出弯加速时车尾外甩，后轮抓地不足。</span></label>
+              <label class="sym-option"><input type="checkbox" name="symptom" value="exit_understeer" aria-label="出弯转向不足" /><span class="sym-name">出弯转向不足</span><span class="sym-desc">出弯给油后车头推向外侧，前轴抓地不足。</span></label>
+              <label class="sym-option"><input type="checkbox" name="symptom" value="exit_unstable" aria-label="出弯车身不稳" /><span class="sym-name">出弯车身不稳</span><span class="sym-desc">出弯阶段车身姿态晃动，难以保持线路。</span></label>
             </div>
           </div>
           <!-- 全局 global -->
@@ -237,7 +239,7 @@
               <label class="sym-option"><input type="checkbox" name="symptom" value="bottoming" aria-label="直道刮底" /><span class="sym-name">直道刮底</span><span class="sym-desc">底盘在直道或颠簸处触地刮底。</span></label>
               <label class="sym-option"><input type="checkbox" name="symptom" value="tyre_wear" aria-label="胎耗偏高" /><span class="sym-name">胎耗偏高</span><span class="sym-desc">轮胎磨损速率偏高（轮胎寿命维度，非胎温）。</span></label>
               <label class="sym-option"><input type="checkbox" name="symptom" value="straight_slow" aria-label="直道速度低" /><span class="sym-name">直道速度低</span><span class="sym-desc">直道尾速不足。</span></label>
-              <label class="sym-option"><input type="checkbox" name="symptom" value="lap_slow" aria-label="圈速不高" /><span class="sym-name">圈速不高</span><span class="sym-desc">整体圈速未达预期。</span></label>
+              <label class="sym-option"><input type="checkbox" name="symptom" value="tyre_overheat" aria-label="胎温过高" /><span class="sym-name">胎温过高</span><span class="sym-desc">轮胎工作温度超出最佳窗口，抓地力衰减。</span></label>
               <label class="sym-option"><input type="checkbox" name="symptom" value="high_speed_instability" aria-label="高速不稳" /><span class="sym-name">高速不稳</span><span class="sym-desc">高速段方向不稳定，车身抖动。</span></label>
             </div>
           </div>

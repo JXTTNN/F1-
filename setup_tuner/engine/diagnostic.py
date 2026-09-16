@@ -123,12 +123,25 @@ SYMPTOM_STAGE_TO_DX: dict[str, dict[str, dict[str, float]]] = {
     "exit_oversteer": {
         "exit": {"rear_grip_req": 0.60, "exit_traction_req": 0.30, "hi_speed_stab_req": 0.10},
     },
+    "exit_understeer": {
+        # task-61：出弯给油推头 = 牵引与前轴平衡（出弯原仅 2 项，补齐）
+        "exit": {"front_grip_req": 0.50, "exit_traction_req": 0.30, "hi_speed_stab_req": 0.20},
+    },
+    "exit_unstable": {
+        # task-61：出弯姿态晃动
+        "exit": {"hi_speed_stab_req": 0.50, "rear_grip_req": 0.30, "exit_traction_req": 0.20},
+    },
     # 全局 global
     "bottoming": {
         "global": {"ride_height_req": 0.90, "hi_speed_stab_req": 0.10},
     },
     "tyre_wear": {
         "global": {"tyre_life_req": 0.80, "brake_stab_req": 0.10, "exit_traction_req": 0.10},
+    },
+    "tyre_overheat": {
+        # task-61：胎温过高 —— 补上"有规则（1/2/12）没反馈入口"的缺口
+        "global": {"tyre_life_req": 0.60, "front_grip_req": 0.20, "rear_grip_req": 0.20},
+        "apex": {"tyre_life_req": 0.40, "front_grip_req": 0.40, "hi_speed_stab_req": 0.20},
     },
     "straight_slow": {
         "global": {"front_grip_req": -0.50, "rear_grip_req": -0.50, "hi_speed_stab_req": -0.20},
@@ -157,6 +170,9 @@ SYMPTOM_DEFAULT_STAGE: dict[str, str] = {
     "midcorner_traction": "apex",
     "exit_wheelspin": "exit",
     "exit_oversteer": "exit",
+    "exit_understeer": "exit",
+    "exit_unstable": "exit",
+    "tyre_overheat": "global",
     "bottoming": "global",
     "tyre_wear": "global",
     "straight_slow": "global",

@@ -96,7 +96,7 @@ class TestUnit:
         """add_feedback → get_feedbacks 往返正确（含 category 与 strength）。"""
         fid = store.add_feedback(
             track_id="suzuka", corner_number=1, symptom="understeer",
-            category="entry", strength=4, setup_id=None,
+            category="entry", strength=2, setup_id=None,
         )
         assert fid >= 1
         rows = store.get_feedbacks("suzuka")
@@ -104,7 +104,7 @@ class TestUnit:
         assert rows[0]["id"] == fid
         assert rows[0]["symptom"] == "understeer"
         assert rows[0]["category"] == "entry"
-        assert rows[0]["strength"] == 4
+        assert rows[0]["strength"] == 2
         assert rows[0]["corner_number"] == 1
 
     def test_has_feedback(self, store: Store) -> None:
@@ -193,11 +193,11 @@ class TestBoundary:
         assert rows[0]["category"] == "global"
 
     def test_add_feedback_strength_boundary(self, store: Store) -> None:
-        """strength=0 与 strength=5（CHECK 边界）应正常入库。"""
-        store.add_feedback("suzuka", 1, "understeer", "entry", 0)
-        store.add_feedback("suzuka", 2, "oversteer", "entry", 5)
+        """strength=1 与 strength=3（CHECK 边界）应正常入库（task-61）。"""
+        store.add_feedback("suzuka", 1, "understeer", "entry", 1)
+        store.add_feedback("suzuka", 2, "oversteer", "entry", 3)
         rows = store.get_feedbacks("suzuka")
-        assert {r["strength"] for r in rows} == {0, 5}
+        assert {r["strength"] for r in rows} == {1, 3}
 
     def test_add_feedback_strength_out_of_range(self, store: Store) -> None:
         """strength=6 越界应触发 CHECK 约束 IntegrityError。"""
@@ -524,7 +524,7 @@ class TestSmoke:
 
         # 4. 反馈
         fb_id = store.add_feedback(
-            "suzuka", 1, "understeer", "entry", 4, setup_id=setup_id,
+            "suzuka", 1, "understeer", "entry", 3, setup_id=setup_id,
         )
 
         # 5. 建议

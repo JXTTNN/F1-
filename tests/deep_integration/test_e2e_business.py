@@ -233,13 +233,13 @@ class TestSubmitFeedback:
                     "track_id": "suzuka",
                     "corner_number": 1,
                     "symptom": "understeer",
-                    "strength": 4,
+                    "strength": 3,
                 },
             )
             assert resp.status_code == 200
             data = _assert_envelope(resp.json())
             assert data["symptom"] == "understeer"
-            assert data["strength"] == 4
+            assert data["strength"] == 3
             assert data["corner_number"] == 1
             assert data["id"] > 0
 
@@ -251,7 +251,7 @@ class TestSubmitFeedback:
             )
 
             feedbacks = [
-                {"track_id": "suzuka", "corner_number": 1, "symptom": "understeer", "strength": 4},
+                {"track_id": "suzuka", "corner_number": 1, "symptom": "understeer", "strength": 3},
                 {"track_id": "suzuka", "corner_number": 5, "symptom": "brake_long", "strength": 3},
                 {"track_id": "suzuka", "corner_number": 10, "symptom": "oversteer", "strength": 3},
                 {"track_id": "suzuka", "corner_number": None, "symptom": "bottoming", "strength": 2},
@@ -325,7 +325,7 @@ class TestGenerateSuggestion:
                 "/api/v1/feedback",
                 json={
                     "track_id": "suzuka", "corner_number": 1,
-                    "symptom": "understeer", "strength": 4,
+                    "symptom": "understeer", "strength": 3,
                 },
             )
 
@@ -454,7 +454,7 @@ class TestMultiRoundConvergence:
                 "/api/v1/feedback",
                 json={
                     "track_id": "monza", "corner_number": 1,
-                    "symptom": "oversteer", "strength": 4,
+                    "symptom": "oversteer", "strength": 3,
                 },
             )
 
@@ -543,7 +543,7 @@ class TestFullClosedLoop:
 
             # ③ 提交多弯道反馈
             for corner, symptom, strength in [
-                (1, "understeer", 4),
+                (1, "understeer", 3),
                 (5, "brake_long", 3),
                 (10, "oversteer", 3),
             ]:

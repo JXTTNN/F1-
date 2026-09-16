@@ -118,13 +118,13 @@ class TestUnit:
             "track_id": "suzuka",
             "corner_number": 1,
             "symptom": "understeer",
-            "strength": 4,
+            "strength": 3,
         })
         assert resp.status_code == 200
         body = resp.json()
         assert body["code"] == 0
         assert body["data"]["symptom"] == "understeer"
-        assert body["data"]["strength"] == 4
+        assert body["data"]["strength"] == 3
         assert body["data"]["category"] == "entry"
 
     def test_list_feedbacks(self, app_client: TestClient) -> None:
@@ -352,7 +352,7 @@ class TestProperty:
         """提交反馈后查询列表应包含该反馈（读写一致）。"""
         resp = app_client.post("/api/v1/feedback", json={
             "track_id": "suzuka", "corner_number": 1,
-            "symptom": "understeer", "strength": 4,
+            "symptom": "understeer", "strength": 3,
         })
         fb_id = resp.json()["data"]["id"]
         lst = app_client.get("/api/v1/feedback", params={"track_id": "suzuka"}).json()["data"]
@@ -464,7 +464,7 @@ class TestSmoke:
         # 2. 提交反馈
         r = app_client.post("/api/v1/feedback", json={
             "track_id": "suzuka", "corner_number": 1,
-            "symptom": "understeer", "strength": 4,
+            "symptom": "understeer", "strength": 3,
         })
         assert r.status_code == 200
 
@@ -486,7 +486,7 @@ class TestSmoke:
         """多条反馈 → 建议生成（含不同弯道与症状）。"""
         app_client.post("/api/v1/feedback", json={
             "track_id": "suzuka", "corner_number": 1,
-            "symptom": "understeer", "strength": 4,
+            "symptom": "understeer", "strength": 3,
         })
         app_client.post("/api/v1/feedback", json={
             "track_id": "suzuka", "corner_number": 2,

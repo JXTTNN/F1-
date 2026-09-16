@@ -329,7 +329,7 @@ class TestFeedbackToReport:
 
         # 提交 3 条反馈
         submitted = [
-            svc.submit_feedback(track_id, 1, "understeer", 4),
+            svc.submit_feedback(track_id, 1, "understeer", 3),
             svc.submit_feedback(track_id, 5, "brake_long", 3),
             svc.submit_feedback(track_id, None, "bottoming", 2),
         ]
@@ -356,9 +356,9 @@ class TestFeedbackToReport:
         svc = FeedbackService(store)
         track_id = "monza"
 
-        svc.submit_feedback(track_id, 1, "understeer", 4)
+        svc.submit_feedback(track_id, 1, "understeer", 3)
         svc.submit_feedback(track_id, 3, "oversteer", 2)
-        svc.submit_feedback(track_id, None, "tyre_wear", 5)
+        svc.submit_feedback(track_id, None, "tyre_wear", 1)
 
         feedbacks = svc.get_feedbacks(track_id)
         symptoms = feedbacks_to_symptoms(feedbacks)
@@ -366,9 +366,9 @@ class TestFeedbackToReport:
         assert len(symptoms) == 3
         # 验证 (symptom, strength) 二元组完整保留
         sym_map = dict(symptoms)
-        assert sym_map["understeer"] == 4
+        assert sym_map["understeer"] == 3
         assert sym_map["oversteer"] == 2
-        assert sym_map["tyre_wear"] == 5
+        assert sym_map["tyre_wear"] == 1
 
     def test_full_pipeline_feedback_to_report(self, store: Store) -> None:
         """完整链路：提交反馈 → 检索 → 引擎生成建议 → 组装报告。
@@ -384,8 +384,8 @@ class TestFeedbackToReport:
         track_id = "suzuka"
 
         # 提交多弯道多症状反馈
-        svc.submit_feedback(track_id, 1, "understeer", 4)
-        svc.submit_feedback(track_id, 5, "brake_long", 3)
+        svc.submit_feedback(track_id, 1, "understeer", 3)
+        svc.submit_feedback(track_id, 5, "brake_long", 2)
         svc.submit_feedback(track_id, 10, "oversteer", 3)
         svc.submit_feedback(track_id, None, "bottoming", 2)
 

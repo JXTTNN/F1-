@@ -1,7 +1,13 @@
-"""F1 2026 调教症状枚举（15 项，4 类）。
+"""F1 2026 调教症状枚举（18 项，4 类）。
 
 逐字对齐 spec FR-FBK-02：15 种症状分入弯/弯中/出弯/全局四类，
-每项含中文标签、类别与描述。强度 0–5，默认 3。
+每项含中文标签、类别与描述。强度 1–3（轻微/明显/严重），默认 2。
+
+task-61 扩展（2026-09-16）：
+- 新增 3 项：exit_understeer（出弯转向不足）/ exit_unstable（出弯车身不稳）/
+  tyre_overheat（胎温过高）—— 补齐出弯阶段（原仅 2 项）与"有规则没入口"的胎温缺口；
+- ``lap_slow``（圈速不高）从 UI 可勾列表降级为报告综合结论：其 Dx 弥散在 5 个维度，
+  属于"其他症状的结果"；枚举与 Dx 映射保留以兼容旧数据，UI 不再展示。
 
 关键：tyre_wear 中文标签为「胎耗偏高」（非「胎温」），对应轮胎寿命维度，
 与胎温（tyre temperature）是不同概念。
@@ -37,12 +43,15 @@ class Symptom(StrEnum):
     MIDCORNER_UNDERSTEER = "midcorner_understeer"  # 弯中推头（task-60 新增）
     MIDCORNER_UNSTABLE = "midcorner_unstable"    # 车身不稳定
     MIDCORNER_TRACTION = "midcorner_traction"    # 弯中不能稳定加速
-    # 出弯 exit (2)
+    # 出弯 exit (4)
     EXIT_WHEELSPIN = "exit_wheelspin"      # 出弯打滑
     EXIT_OVERSTEER = "exit_oversteer"      # 出弯甩尾（task-60 新增）
+    EXIT_UNDERSTEER = "exit_understeer"    # 出弯转向不足（task-61 新增）
+    EXIT_UNSTABLE = "exit_unstable"        # 出弯车身不稳（task-61 新增）
     # 全局 global (5)
     BOTTOMING = "bottoming"                # 直道刮底
     TYRE_WEAR = "tyre_wear"                # 胎耗偏高（非胎温！）
+    TYRE_OVERHEAT = "tyre_overheat"        # 胎温过高（task-61 新增）
     STRAIGHT_SLOW = "straight_slow"        # 直道速度低
     LAP_SLOW = "lap_slow"                  # 圈速不高
     HIGH_SPEED_INSTABILITY = "high_speed_instability"  # 高速不稳（task-60 新增）
@@ -103,6 +112,16 @@ SYMPTOM_INFO: dict[Symptom, dict[str, str]] = {
         "category": SymptomCategory.EXIT.value,
         "description": "出弯加速时车尾外甩。",
     },
+    Symptom.EXIT_UNDERSTEER: {
+        "label": "出弯转向不足",
+        "category": SymptomCategory.EXIT.value,
+        "description": "出弯给油后车头推向外侧，前轴抓地不足。",
+    },
+    Symptom.EXIT_UNSTABLE: {
+        "label": "出弯车身不稳",
+        "category": SymptomCategory.EXIT.value,
+        "description": "出弯阶段车身姿态晃动，难以保持线路。",
+    },
     # 全局 global
     Symptom.BOTTOMING: {
         "label": "直道刮底",
@@ -113,6 +132,11 @@ SYMPTOM_INFO: dict[Symptom, dict[str, str]] = {
         "label": "胎耗偏高",  # 逐字对齐 spec FR-FBK-02，非「胎温」
         "category": SymptomCategory.GLOBAL.value,
         "description": "轮胎磨损速率偏高（轮胎寿命维度，非胎温）。",
+    },
+    Symptom.TYRE_OVERHEAT: {
+        "label": "胎温过高",
+        "category": SymptomCategory.GLOBAL.value,
+        "description": "轮胎工作温度超出最佳窗口，抓地力衰减。",
     },
     Symptom.STRAIGHT_SLOW: {
         "label": "直道速度低",
@@ -133,9 +157,12 @@ SYMPTOM_INFO: dict[Symptom, dict[str, str]] = {
 
 
 # 强度范围 0–5，默认 3
-INTENSITY_MIN = 0
-INTENSITY_MAX = 5
-DEFAULT_INTENSITY = 3
+INTENSITY_MIN = 1
+INTENSITY_MAX = 3
+DEFAULT_INTENSITY = 2
+
+# 强度档位锚定文案（task-61：0–5 过细，收敛为 3 档）
+INTENSITY_LABELS: dict[int, str] = {1: "轻微", 2: "明显", 3: "严重"}
 
 
 def get_symptoms_by_category(category: SymptomCategory | str) -> list[Symptom]:

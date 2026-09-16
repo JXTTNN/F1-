@@ -361,10 +361,10 @@ class TestRulesEdgeCases:
         assert "delta_table" in rule
         assert len(rule["delta_table"]) == 21
 
-    def test_load_rules_count_15(self) -> None:
-        """load_rules 返回 15 条规则（task-60 扩展）。"""
+    def test_load_rules_count_18(self) -> None:
+        """load_rules 返回 18 条规则（task-61 扩展）。"""
         rules = load_rules()
-        assert len(rules) == 15
+        assert len(rules) == 18
 
     def test_get_all_rules_same_as_load(self) -> None:
         """get_all_rules 与 load_rules 一致。"""

@@ -256,7 +256,7 @@ def test_full_workflow_with_setup_import():
                     "track_id": "silverstone",
                     "corner_number": i + 1,
                     "symptom": "understeer",
-                    "strength": i + 2,
+                    "strength": (i % 3) + 1,
                 },
             )
             assert resp.status_code == 200
@@ -291,7 +291,7 @@ def test_feedback_with_global_symptom():
             json={
                 "track_id": "suzuka",
                 "symptom": "bottoming",
-                "strength": 4,
+                "strength": 3,
             },
         )
         assert resp.status_code == 200

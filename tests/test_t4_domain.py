@@ -219,11 +219,11 @@ class TestCarSetup:
 # 4. 症状枚举
 # ===========================================================================
 class TestSymptoms:
-    """12 项症状 / 4 类枚举校验。"""
+    """18 项症状 / 4 类枚举校验。"""
 
-    def test_symptom_count_is_15(self) -> None:
-        """Symptom 枚举必须恰好 15 项（task-60 扩展）。"""
-        assert len(list(Symptom)) == 15
+    def test_symptom_count_is_18(self) -> None:
+        """Symptom 枚举必须恰好 18 项（task-61 扩展）。"""
+        assert len(list(Symptom)) == 18
 
     def test_category_count_is_4(self) -> None:
         """SymptomCategory 必须恰好 4 类。"""
@@ -258,11 +258,11 @@ class TestSymptoms:
         assert get_symptom_category(Symptom.TYRE_WEAR) == "global"
 
     def test_get_symptoms_by_category_counts(self) -> None:
-        """4 类症状数量分布：entry=5, apex=3, exit=2, global=5（task-60 扩展）。"""
+        """4 类症状数量分布：entry=5, apex=3, exit=4, global=6（task-61 扩展）。"""
         assert len(get_symptoms_by_category(SymptomCategory.ENTRY)) == 5
         assert len(get_symptoms_by_category(SymptomCategory.APEX)) == 3
-        assert len(get_symptoms_by_category(SymptomCategory.EXIT)) == 2
-        assert len(get_symptoms_by_category(SymptomCategory.GLOBAL)) == 5
+        assert len(get_symptoms_by_category(SymptomCategory.EXIT)) == 4
+        assert len(get_symptoms_by_category(SymptomCategory.GLOBAL)) == 6
 
     def test_get_symptoms_by_category_string_arg(self) -> None:
         """get_symptoms_by_category 接受字符串参数。"""
@@ -271,16 +271,16 @@ class TestSymptoms:
         assert len(entry) == 5
 
     def test_intensity_constants(self) -> None:
-        """强度范围 0-5，默认 3。"""
-        assert INTENSITY_MIN == 0
-        assert INTENSITY_MAX == 5
-        assert DEFAULT_INTENSITY == 3
+        """强度范围 1-3，默认 2（task-61 三档制）。"""
+        assert INTENSITY_MIN == 1
+        assert INTENSITY_MAX == 3
+        assert DEFAULT_INTENSITY == 2
 
     def test_validate_intensity_valid(self) -> None:
-        """合法强度返回原值。"""
-        assert validate_intensity(0) == 0
+        """合法强度返回原值（1/2/3）。"""
+        assert validate_intensity(1) == 1
+        assert validate_intensity(2) == 2
         assert validate_intensity(3) == 3
-        assert validate_intensity(5) == 5
 
     def test_validate_intensity_invalid(self) -> None:
         """越界强度抛 ValueError。"""

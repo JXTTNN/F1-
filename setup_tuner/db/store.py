@@ -80,6 +80,7 @@ class Store:
         self._init_schema()
         if seed:
             self._seed_track_data()
+        self._migrate_feedback_strength()
 
     # ------------------------------------------------------------------
     # 初始化
@@ -90,6 +91,25 @@ class Store:
         with self._lock:
             self._conn.executescript(ddl)
             self._conn.commit()
+
+    def _migrate_feedback_strength(self) -> None:
+        """一次性迁移：强度档位 0–5 → 1–3（task-61）。
+
+        归并规则：{1}→1、{2,3}→2、{4,5}→3；0（=未反馈）保持不变。
+        幂等：已迁移的数据再跑一遍不会有任何变化。
+        """
+        with self._lock:
+            cur = self._conn.execute(
+                "SELECT COUNT(*) FROM feedback WHERE strength >= 4"
+            )
+            if cur.fetchone()[0] == 0:
+                return
+            self._conn.execute(
+                "UPDATE feedback SET strength = CASE "
+                "WHEN strength >= 4 THEN 3 ELSE 2 END WHERE strength >= 2"
+            )
+            self._conn.commit()
+            logger.info("feedback strength 迁移完成（0-5 → 1-3）")
 
     def _seed_track_data(self) -> None:
         """将 ALL_TRACKS 的 24 条赛道 + 弯道数据同步到数据库（幂等）。
@@ -301,7 +321,7 @@ class Store:
         corner_number: int | None,
         symptom: str,
         category: str,
-        strength: int = 3,
+        strength: int = 2,
         setup_id: int | None = None,
     ) -> int:
         """录入一条玩家反馈。
@@ -311,7 +331,7 @@ class Store:
             corner_number: 弯道编号（1-based）；None 表示全局症状。
             symptom: 12 症状标识之一。
             category: entry|apex|exit|global。
-            strength: 强度 0–5，默认 3。
+            strength: 强度 1–3（1 轻微 / 2 明显 / 3 严重），默认 2。
             setup_id: 关联的调教快照 id（可选）。
 
         Returns:

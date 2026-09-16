@@ -3,7 +3,7 @@
    -------------------------------------------------------------------------
    职责：
       1. 赛道选择 → 加载 SVG + 弯道热区（SVG 缓存）
-      2. 热区点击 → 反馈面板（15 症状 4 类 checkbox 多选 + 每症状独立强度 0-5）
+      2. 热区点击 → 反馈面板（17 症状 4 类 checkbox 多选 + 每症状独立强度 1-3）
        3. 21 项调教参数手动输入面板（6 大类分组，滑块+数值输入，保存/重置/导入）
        4. WebSocket 订阅遥测/当前弯高亮/建议结果/连接状态（指数退避重连）
        5. 建议报告渲染（21 参数表格 + 可视化条形图 + 中文参数名映射）
@@ -45,8 +45,8 @@
   const FLASH_DURATION_MS = 200;
   // 热区 pulse 动画持续时间（ms）
   const PULSE_DURATION_MS = 1000;
-  // 默认症状强度（0-5 滑块初始值）
-  const DEFAULT_STRENGTH = 3;
+  // 默认症状强度（1-3 档位初始值：2=明显）
+  const DEFAULT_STRENGTH = 2;
   // 速度仪表盘最大值（km/h，用于进度条计算）
   const SPEED_MAX = 350;
   // 调整量条形图缩放因子与半宽百分比
@@ -59,8 +59,9 @@
   // 默认锚点位置（弯道锚点缺失时的归一化中心位置）
   const DEFAULT_ANCHOR = 0.5;
   // 症状强度滑块范围
-  const STRENGTH_MIN = 0;
-  const STRENGTH_MAX = 5;
+  // task-61：强度收敛为 1-3（轻微/明显/严重）
+  const STRENGTH_MIN = 1;
+  const STRENGTH_MAX = 3;
 
   // 症状 → 类别映射（与 domain/symptoms.py 逐字对齐）
   const SYMPTOM_CATEGORY = {
@@ -68,7 +69,10 @@
     brake_long: "entry", lockup: "entry",
     midcorner_understeer: "apex", midcorner_unstable: "apex", midcorner_traction: "apex",
     exit_wheelspin: "exit", exit_oversteer: "exit",
-    bottoming: "global", tyre_wear: "global", straight_slow: "global", lap_slow: "global", high_speed_instability: "global",
+    exit_understeer: "exit", exit_unstable: "exit",
+    bottoming: "global", tyre_wear: "global", straight_slow: "global",
+    // lap_slow 已降级为综合结论，不再出现在反馈面板；映射保留兼容旧数据
+    lap_slow: "global", high_speed_instability: "global", tyre_overheat: "global",
   };
   const GLOBAL_CATEGORY = "global";
 
@@ -78,7 +82,10 @@
     brake_long: "刹车距离长", lockup: "轮胎锁死",
     midcorner_understeer: "弯中推头", midcorner_unstable: "车身不稳定", midcorner_traction: "弯中不能稳定加速",
     exit_wheelspin: "出弯打滑", exit_oversteer: "出弯甩尾",
-    bottoming: "直道刮底", tyre_wear: "胎耗偏高", straight_slow: "直道速度低", lap_slow: "圈速不高", high_speed_instability: "高速不稳",
+    exit_understeer: "出弯转向不足", exit_unstable: "出弯车身不稳",
+    bottoming: "直道刮底", tyre_wear: "胎耗偏高", straight_slow: "直道速度低",
+    // lap_slow 已从 UI 可勾列表降级为综合结论；标签保留用于展示旧数据
+    lap_slow: "圈速不高", high_speed_instability: "高速不稳", tyre_overheat: "胎温过高",
   };
 
   // 21 参数中文显示名映射（前端 fallback，优先使用 GET /api/v1/setup/fields 返回的 label_zh）
@@ -569,7 +576,7 @@
     dom.fbCornerNum.textContent = `T${cornerNumber}`;
     dom.fbCornerName.textContent = cornerName || "";
     if (dom.fbTitle) dom.fbTitle.textContent = "弯道反馈 · 多症状录入";
-    if (dom.fbTip) dom.fbTip.textContent = "可同时勾选多个症状（checkbox 多选）。入弯/弯中/出弯类症状绑定当前弯道。每个选中症状都有独立的强度滑块（0-5）。";
+    if (dom.fbTip) dom.fbTip.textContent = "可同时勾选多个症状（checkbox 多选）。入弯/弯中/出弯类症状绑定当前弯道。每个选中症状都有独立的强度档位（1-3）。";
     dom.fbOverlay.querySelectorAll('.sym-group').forEach((g) => {
       g.style.display = g.dataset.category === 'global' ? 'none' : '';
     });
@@ -583,7 +590,7 @@
     dom.fbCornerNum.textContent = "—";
     dom.fbCornerName.textContent = "赛道级";
     if (dom.fbTitle) dom.fbTitle.textContent = "赛道反馈 · 全局症状";
-    if (dom.fbTip) dom.fbTip.textContent = "可同时勾选多个全局症状（checkbox 多选）。全局类症状作用于整条赛道（corner_number=null）。每个选中症状都有独立的强度滑块（0-5）。";
+    if (dom.fbTip) dom.fbTip.textContent = "可同时勾选多个全局症状（checkbox 多选）。全局类症状作用于整条赛道（corner_number=null）。每个选中症状都有独立的强度档位（1-3）。";
     dom.fbOverlay.querySelectorAll('.sym-group').forEach((g) => {
       g.style.display = g.dataset.category === 'global' ? '' : 'none';
     });

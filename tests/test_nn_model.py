@@ -54,31 +54,31 @@ class TestNormalizeSymptoms:
         """已知症状归一化到 [0, 1]。"""
         # 用前 12 个症状（索引 0-11，避免越界）
         symptom_keys = [s.value for s in Symptom][:12]
-        vec = _normalize_symptoms([(symptom_keys[0], 5)])
-        assert vec[0] == pytest.approx(1.0)  # 5/5
+        vec = _normalize_symptoms([(symptom_keys[0], 3)])
+        assert vec[0] == pytest.approx(1.0)  # 3/3
         # 其余为 0
         assert all(vec[i] == 0.0 for i in range(1, 12))
 
     def test_intensity_normalization(self) -> None:
-        """强度 0-5 归一化到 0-1。"""
+        """强度 1-3 归一化到 0-1（task-61）。"""
         symptom_keys = [s.value for s in Symptom][:12]
-        vec = _normalize_symptoms([(symptom_keys[0], 3)])
-        assert vec[0] == pytest.approx(0.6)  # 3/5
+        vec = _normalize_symptoms([(symptom_keys[0], 2)])
+        assert vec[0] == pytest.approx(2 / 3)  # 2/3
 
     def test_unknown_symptom_ignored(self) -> None:
         """未知症状 key 被忽略。"""
-        vec = _normalize_symptoms([("nonexistent", 5)])
+        vec = _normalize_symptoms([("nonexistent", 3)])
         assert all(v == 0.0 for v in vec)
 
     def test_multiple_symptoms(self) -> None:
         """多症状叠加到各自位置。"""
         symptom_keys = [s.value for s in Symptom][:12]
         vec = _normalize_symptoms([
-            (symptom_keys[0], 5), (symptom_keys[1], 2), (symptom_keys[5], 4),
+            (symptom_keys[0], 3), (symptom_keys[1], 1), (symptom_keys[5], 2),
         ])
         assert vec[0] == pytest.approx(1.0)
-        assert vec[1] == pytest.approx(0.4)
-        assert vec[5] == pytest.approx(0.8)
+        assert vec[1] == pytest.approx(1 / 3)
+        assert vec[5] == pytest.approx(2 / 3)
 
 
 # ===========================================================================
@@ -191,7 +191,7 @@ class TestBuildInputVector:
     def _sample_input() -> tuple:
         """构造样本输入。"""
         symptom_keys = [s.value for s in Symptom][:12]
-        symptoms = [(symptom_keys[0], 3), (symptom_keys[5], 4)]
+        symptoms = [(symptom_keys[0], 3), (symptom_keys[5], 2)]
         dx = {"front_grip_req": 5.0, "rear_grip_req": -3.0}
         setup = CarSetup.default().to_dict()
         track_id = "suzuka"
@@ -209,7 +209,7 @@ class TestBuildInputVector:
         symptoms, dx, setup, track_id = self._sample_input()
         vec = build_input_vector(symptoms, dx, setup, track_id)
         # 症状段（0 .. NUM_SYMPTOMS-1）
-        assert vec[0] == pytest.approx(0.6)  # 3/5
+        assert vec[0] == pytest.approx(1.0)  # 3/3
         # Dx 段紧随症状段
         assert vec[nn_model._NUM_SYMPTOMS] != 0.0  # front_grip_req
         # 赛道段（最后 24 维）含一个 1.0
@@ -440,7 +440,7 @@ class TestModuleConstants:
 
     def test_normalization_constants(self) -> None:
         """归一化常量。"""
-        assert nn_model._SYMPTOM_INTENSITY_MAX == 5.0
+        assert nn_model._SYMPTOM_INTENSITY_MAX == 3.0
         assert nn_model._DX_NORMALIZE_SCALE == 5.0
 
     def test_track_index_built(self) -> None:

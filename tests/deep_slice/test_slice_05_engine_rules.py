@@ -40,10 +40,10 @@ from setup_tuner.engine.rules import (
 class TestUnit:
     """单元测试：验证规则引擎公开函数的正常输入正确性。"""
 
-    def test_unit_load_rules_returns_15(self) -> None:
-        """load_rules 应返回 15 条规则（task-60 扩展）。"""
+    def test_unit_load_rules_returns_18(self) -> None:
+        """load_rules 应返回 18 条规则（task-61 扩展）。"""
         rules = load_rules()
-        assert len(rules) == 15
+        assert len(rules) == 18
 
     def test_unit_get_rule_returns_dict(self) -> None:
         """get_rule 应返回规则字典。"""
@@ -287,9 +287,9 @@ class TestProperty:
 class TestStatic:
     """静态分析：验证规则库数量与约束。"""
 
-    def test_static_rules_count_is_15(self) -> None:
-        """数量约束：规则库恰好 15 条（task-60 扩展）。"""
-        assert len(load_rules()) == 15
+    def test_static_rules_count_is_18(self) -> None:
+        """数量约束：规则库恰好 18 条（task-61 扩展）。"""
+        assert len(load_rules()) == 18
 
     def test_static_rule_source_is_f1_setup_domain(self) -> None:
         """枚举约束：RULE_SOURCE 为 F1_SETUP_DOMAIN。"""

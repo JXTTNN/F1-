@@ -95,8 +95,8 @@ _NUM_TRACKS = len(ALL_TRACKS)
 _INPUT_SIZE = _NUM_SYMPTOMS + _NUM_DIAG_DIMS + _NUM_SETUP_PARAMS + _NUM_TRACKS
 _OUTPUT_SIZE = _NUM_SETUP_PARAMS
 
-# 症状强度归一化因子（0-5 → 0-1）
-_SYMPTOM_INTENSITY_MAX = 5.0
+# 症状强度归一化因子（1-3 → 0-1；task-61 强度档位由 0-5 收敛为 1-3）
+_SYMPTOM_INTENSITY_MAX = 3.0
 
 # Dx 归一化因子（Dx 分量绝对值上限约 10，用 tanh 压缩；这里用线性归一化）
 _DX_NORMALIZE_SCALE = 5.0

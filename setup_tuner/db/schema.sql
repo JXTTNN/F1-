@@ -42,7 +42,7 @@ CREATE TABLE IF NOT EXISTS feedback (
   corner_number     INTEGER,               -- 点击弯道；NULL 表示「全局」症状
   symptom           TEXT NOT NULL,         -- 12 症状标识之一
   category          TEXT NOT NULL,         -- entry|apex|exit|global
-  strength          INTEGER NOT NULL DEFAULT 3 CHECK(strength BETWEEN 0 AND 5),
+  strength          INTEGER NOT NULL DEFAULT 2 CHECK(strength BETWEEN 1 AND 3),
   created_at        TEXT NOT NULL
 );
 

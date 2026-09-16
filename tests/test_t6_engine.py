@@ -566,10 +566,10 @@ class TestRules:
         """validate_rules 通过。"""
         validate_rules()
 
-    def test_rule_count_is_15(self) -> None:
-        """规则数 == 15（task-60 扩展）。"""
+    def test_rule_count_is_18(self) -> None:
+        """规则数 == 18（task-61 扩展）。"""
         rules = get_all_rules()
-        assert len(rules) == 15
+        assert len(rules) == 18
 
     def test_every_rule_covers_23_params(self) -> None:
         """每条规则 delta_table 覆盖 23 参数。"""
