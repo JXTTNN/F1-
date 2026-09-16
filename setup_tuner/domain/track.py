@@ -262,7 +262,7 @@ def _suzuka_corners() -> list[Corner]:
         (11, "Hairpin", "slow", 70),
         (12, "200R", "fast", 250),
         (13, "Spoon Curve", "medium", 140),
-        (14, "Spoon Exit", "medium", 155),
+        (14, "Spoon Curve 2", "medium", 155),
         (15, "130R", "fast", 295),
         (16, "Casio Triangle (Right)", "slow", 75),
         (17, "Casio Triangle (Left)", "slow", 80),
@@ -271,27 +271,39 @@ def _suzuka_corners() -> list[Corner]:
 
 
 def _monaco_corners() -> list[Corner]:
-    """Circuit de Monaco (3.337 km, 19 弯, street)。"""
+    """Circuit de Monaco (3.337 km, 19 弯, street)。
+
+    task-64：按 FIA 官方弯号重排 —— T1 Sainte Devote、T2 Beau Rivage、
+    T3 Massenet、T4 Casino Square、T5 Mirabeau Haute、
+    **T6 Grand Hotel Hairpin（全场最慢，45 km/h）**、T7 Mirabeau Bas、
+    T8 Portier、T9 Tunnel、T10/T11 Nouvelle Chicane、T12 Tabac、
+    T13-T16 Swimming Pool（两段 chicane，T13/14 = Louis Chiron）、
+    T17 La Rascasse、T18/T19 Anthony Noghes。
+
+    旧数据把 Mirabeau Bas 排在 T6、Hairpin 排到 T7，使 Portier 之后
+    全部弯号前移一位；并用 "Tunnel entry/exit"、"Piscine entry"、
+    "Rascasse entry" 等占位名替换官方弯名。
+    """
     return _build_corners([
-        (1, "Sainte-Devote", "slow", 80),
+        (1, "Sainte Devote", "slow", 80),
         (2, "Beau Rivage", "medium", 130),
         (3, "Massenet", "medium", 120),
-        (4, "Casino", "medium", 135),
-        (5, "Mirabeau Haut", "slow", 75),
-        (6, "Mirabeau Bas", "slow", 65),
-        (7, "Grand Hotel Hairpin", "slow", 45),
+        (4, "Casino Square", "medium", 135),
+        (5, "Mirabeau Haute", "slow", 75),
+        (6, "Grand Hotel Hairpin", "slow", 45),
+        (7, "Mirabeau Bas", "slow", 65),
         (8, "Portier", "slow", 80),
-        (9, "Tunnel entry", "medium", 145),
-        (10, "Tunnel", "fast", 200),
-        (11, "Tunnel exit", "medium", 155),
-        (12, "Chicane", "slow", 70),
-        (13, "Chicane exit", "slow", 75),
-        (14, "Tabac", "medium", 140),
-        (15, "Piscine entry", "medium", 150),
-        (16, "Piscine", "medium", 135),
-        (17, "Rascasse entry", "slow", 80),
-        (18, "Rascasse", "slow", 70),
-        (19, "Anthony Noghes", "medium", 125),
+        (9, "Tunnel", "fast", 200),
+        (10, "Nouvelle Chicane (Left)", "slow", 70),
+        (11, "Nouvelle Chicane (Right)", "slow", 75),
+        (12, "Tabac", "medium", 140),
+        (13, "Swimming Pool 1 (Louis Chiron)", "medium", 150),
+        (14, "Swimming Pool 2", "medium", 145),
+        (15, "Swimming Pool 3", "medium", 135),
+        (16, "Swimming Pool 4", "medium", 130),
+        (17, "La Rascasse", "slow", 70),
+        (18, "Anthony Noghes 1", "medium", 125),
+        (19, "Anthony Noghes 2", "medium", 120),
     ])
 
 
@@ -351,7 +363,7 @@ def _monza_corners() -> list[Corner]:
         (7, "Lesmo 2", "medium", 145),
         (8, "Variante Ascari (Left)", "slow", 115),
         (9, "Variante Ascari (Right)", "medium", 110),
-        (10, "Variante Ascari (Exit)", "medium", 120),
+        (10, "Variante Ascari (Left 2)", "medium", 120),
         (11, "Curva Alboreto (Parabolica)", "fast", 200),
     ])
 

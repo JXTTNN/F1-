@@ -150,13 +150,15 @@ TURNS: dict[str, list[tuple[str, str, float]]] = {
     ],
     # Interlagos：T1-T2 Senna S → Reta Oposta → Descida do Lago → Juncao
     "sao_paulo": [
+        # task-64：以官方弯名替换 "Descida do Lago exit"/"Subida dos Boxes
+        # exit" 的人造拆分（该处为同一连续弯的第二段，非独立弯位）
         ("Senna S", "slow", 90), ("Curva do Sol", "medium", 140),
-        ("Reta Oposta", "fast", 210), ("Descida do Lago", "medium", 145),
-        ("Descida do Lago exit", "medium", 150), ("Ferradura", "medium", 155),
+        ("Reta Oposta", "fast", 210), ("Descida do Lago 1", "medium", 145),
+        ("Descida do Lago 2", "medium", 150), ("Ferradura", "medium", 155),
         ("Laranjinha", "medium", 145), ("Pinheirinho", "slow", 90),
         ("Bico de Pato", "slow", 85), ("Mergulho", "medium", 140),
-        ("Juncao", "medium", 150), ("Subida dos Boxes", "fast", 200),
-        ("Subida dos Boxes exit", "fast", 210), ("Arquibancada 1", "fast", 220),
+        ("Juncao", "medium", 150), ("Subida dos Boxes 1", "fast", 200),
+        ("Subida dos Boxes 2", "fast", 210), ("Arquibancada 1", "fast", 220),
         ("Arquibancada 2", "fast", 230),
     ],
     # Sakhir：T1 重刹 → 连续中速段 → 发卡

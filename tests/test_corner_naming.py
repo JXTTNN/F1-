@@ -69,7 +69,7 @@ PLACEHOLDER_FORBIDDEN_TRACKS = {
     "spa",           # La Source / Eau Rouge / Pouhon / Blanchimont ...
     "monza",         # Rettifilo / Curva Grande / Lesmo / Ascari / Parabolica
     "suzuka",        # First Curve / Dunlop / Degner / Hairpin / Spoon / 130R
-    "monaco",        # Sainte-Devote / Massenet / Tabac / Rascasse ...
+    "monaco",        # Sainte Devote / Massenet / Tabac / La Rascasse ...
     "sao_paulo",     # Senna S / Curva do Sol / Ferradura / Mergulho ...
 }
 
@@ -96,6 +96,10 @@ AUTHORITATIVE_TURNS: dict[str, dict[int, str]] = {
                   14: "Luyendyk"},
     # T1 Jones、T2 Brabham、T13 Ascari、T14 Stewart
     "melbourne": {1: "Jones", 2: "Brabham", 13: "Ascari", 14: "Stewart"},
+    # T1 Sainte Devote、T4 Casino、T6 Grand Hotel Hairpin（全场最慢 45km/h）、
+    # T7 Mirabeau Bas、T8 Portier、T12 Tabac、T17 La Rascasse、T18/19 Noghes
+    "monaco": {1: "Sainte Devote", 4: "Casino", 6: "Grand Hotel Hairpin",
+               8: "Portier", 12: "Tabac", 17: "Rascasse", 18: "Noghes"},
 }
 
 
