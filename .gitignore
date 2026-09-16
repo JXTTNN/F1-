@@ -73,3 +73,7 @@ coverage.xml
 *.db-shm
 *.db-wal
 *.f1rec
+
+# 本地 UI 审计产物（task-62）
+shots/
+reports/
