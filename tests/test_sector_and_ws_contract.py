@@ -104,7 +104,11 @@ class TestWsPayloadContract:
         source = _APP_JS.read_text(encoding="utf-8")
         match = re.search(r"function onTelemetry\(t\) \{(.*?)\n  \}", source, re.S)
         assert match is not None, "未找到 onTelemetry 函数"
-        reads = set(re.findall(r"t\.(\w+)", match.group(1)))
+        # 去掉注释行再提取，避免注释里的示例（如 t.rpm）被误判为读取
+        body = "\n".join(
+            line for line in match.group(1).splitlines() if "//" not in line
+        )
+        reads = set(re.findall(r"t\.(\w+)", body))
         payload = self._payload()
         allowed = set(payload) | {"last_lap_time_ms"}
         assert reads <= allowed, f"前端读取了后端不推送的字段：{sorted(reads - allowed)}"
