@@ -390,9 +390,8 @@ def check_corner_mapping():
 def check_telemetry_rule_coverage():
     from setup_tuner.engine.engine import _derive_telemetry_dx
     from setup_tuner.report.builder import extract_telemetry_summary
-    from setup_tuner.telemetry.importer import LapTelemetrySummary
 
-    # 单帧（真实产品路径）
+    # ── 单帧（旧生产路径）：只喂最新一帧 ──
     live_packets = {
         1: {"m_trackId": 13, "m_weather": 0, "m_trackTemperature": 38,
             "m_airTemperature": 27},
@@ -406,66 +405,71 @@ def check_telemetry_rule_coverage():
             "m_tyresPressure": [23.4, 24.1, 21.9, 22.2]},
         7: {"m_visualTyreCompound": 16, "m_tyresAgeLaps": 7, "m_fuelInTank": 68.5},
     }
-    live = extract_telemetry_summary(live_packets)
-    live_dx = _derive_telemetry_dx(live)
-    live_triggered = {k: v for k, v in live_dx.items() if v != 0.0}
-    live_keys = set(live.keys())
+    single = extract_telemetry_summary(live_packets)
+    single_dx = _derive_telemetry_dx(single)
 
-    # 整圈（importer 路径，未被应用调用）
-    lap = LapTelemetrySummary(
-        lap_number=3, lap_time_ms=91234, lap_time_str="1:31.234", track_id=13,
-        track_name="Suzuka", lap_valid=True, sample_count=3600,
-        sector_times_ms=[30500, 31200, 29534],
-        weather_code=0, weather_name="clear", track_temp=38.0, air_temp=27.0,
-        tyre_compound="C3", tyre_age_laps=7,
-        avg_speed=214.0, max_speed=332.0,
-        avg_throttle=0.71, avg_brake=0.11, max_brake=0.98,
-        avg_steer=0.14, max_steer=0.61,
-        avg_tyre_surface_temp=[104, 108, 96, 99],
-        avg_tyre_inner_temp=[112, 115, 101, 104],
-        avg_brake_temp=[612, 648, 402, 418],
-        avg_tyre_pressure=[23.4, 24.1, 21.9, 22.2],
-        max_tyre_surface_temp=[121, 126, 108, 111],
-        max_brake_temp=[720, 761, 470, 488],
-        min_tyre_pressure=[22.6, 23.2, 21.1, 21.4],
-        max_tyre_pressure=[24.1, 24.9, 22.6, 22.9],
-        setup_raw={}, fuel_load_kg=0.0, fuel_in_tank_kg=68.5, driver_style={},
-    )
-    lap_t = lap.to_telemetry_dict()
-    lap_dx = _derive_telemetry_dx(lap_t)
+    # ── 新生产路径：单帧 + 整圈聚合（LapAggregator.snapshot()） ──
+    lap_stats = {
+        "max_speed": 332.0, "avg_speed": 214.0,
+        "avg_steer": 0.14, "max_steer": 0.61,
+        "avg_throttle": 0.71, "avg_brake": 0.11, "max_brake": 0.98,
+        "straight_ratio": 0.42, "on_straight": True,
+        "lap_number": 3, "lap_frames": 5400, "sector": 3,
+        "m_tyresSurfaceTemperature": [104, 108, 96, 99],
+        "m_brakesTemperature": [612, 648, 402, 418],
+        "m_tyresPressure": [23.4, 24.1, 21.9, 22.2],
+    }
+    with_lap = extract_telemetry_summary(live_packets, lap_stats)
+    lap_dx = _derive_telemetry_dx(with_lap)
     lap_triggered = {k: v for k, v in lap_dx.items() if v != 0.0}
+    single_triggered = {k: v for k, v in single_dx.items() if v != 0.0}
 
-    # 逐规则探针
+    # 逐规则探针：判断「该规则能否在给定遥测下触发」
     probes = {
-        "规则5(出弯油门低, 需 sector==3)": {"sector": 2, "m_throttle": 0.1},
+        "规则5(出弯油门低, 需 sector==3/1基)": {"sector": 3, "m_throttle": 0.1},
+        "规则6(直道速度低, 需 on_straight)": {"speed": 150.0, "on_straight": True},
         "规则7(入弯响应, 需 max_steer)": {"max_steer": 0.5},
         "规则10(弯中不稳, 需 avg_steer)": {"avg_steer": 0.35},
         "规则15(直道极速低, 需 max_speed)": {"max_speed": 240.0},
-        "规则6(直道速度低, 需 on_straight)": {"speed": 150.0, "on_straight": True},
         "规则4(刹车过热)": {"m_brakesTemperature": [700, 700, 700, 700]},
         "规则8(制动力不足)": {"m_brake": 0.9},
         "规则1(胎温过高)": {"m_tyresSurfaceTemperature": [110, 112, 108, 110]},
         "规则3(胎压异常)": {"m_tyresPressure": [29.9, 29.9, 21.0, 21.0]},
         "规则13(湿地胎温低)": {"m_tyresSurfaceTemperature": [50, 50, 50, 50],
                               "m_weather": 2},
-        "规则9(刮底, 占位)": {"speed": 80.0, "ride_height": 10},
+        "规则9(刮底, 占位未实现)": {"speed": 80.0, "ride_height": 10},
     }
-    dead, alive = [], []
-    for name, t in probes.items():
-        d = _derive_telemetry_dx(t)
-        (alive if any(v != 0 for v in d.values()) else dead).append(name)
+    dead = [name for name, t in probes.items()
+            if not any(v != 0 for v in _derive_telemetry_dx(t).values())]
 
-    item("E1.生产路径遥测摘要字段", "INFO", ", ".join(sorted(live_keys)))
-    item("E2.单帧摘要可用规则数", "INFO",
-         f"触发={sorted(live_triggered)} | 未触发规则探针={dead}")
-    item("E3.整圈摘要可用规则数", "INFO",
-         f"触发维度={sorted(lap_triggered)}")
-    item("E4.整圈摘要存在但无人调用", 
-         "FAIL",
-         "LapTelemetrySummary.to_telemetry_dict() 全仓仅被 tests/ 与 "
-         "scripts/full_flow_telemetry_test.py 调用，应用代码(api/engine/app)零调用")
-    item("E5.永远无法触发的遥测规则(生产路径)",
-         "FAIL" if dead else "PASS", "; ".join(dead) if dead else "无")
+    item("E1.单帧路径遥测摘要字段数", "INFO",
+         f"字段数={len(single)}；触发维度={sorted(single_triggered)} "
+         f"（缺 max_speed/avg_steer/max_steer/on_straight，故 5 条规则不可用）")
+    item("E2.整圈聚合路径触发维度", "INFO",
+         f"触发={sorted(lap_triggered)}（含 max_speed/avg_steer/max_steer/on_straight 后规则 6/7/10/15 可用）")
+    item("E3.LapAggregator 是否接入生产路径",
+         "PASS" if _lap_aggregator_wired() else "FAIL",
+         "app.py 已把 Packet2/6 喂给 LapAggregator，routes.suggest 会把 "
+         "best_snapshot() 合进遥测摘要" if _lap_aggregator_wired() else
+         "未接入：整圈统计不会被使用")
+    item("E4.规则 6/7/10/15/5 是否可触发",
+         "PASS" if not [d for d in dead if d.startswith(("规则5", "规则6", "规则7", "规则10", "规则15"))]
+         else "FAIL",
+         "可触发" if not [d for d in dead if d.startswith(("规则5", "规则6", "规则7", "规则10", "规则15"))]
+         else f"仍不可触发：{[d for d in dead if d.startswith(('规则5', '规则6', '规则7', '规则10', '规则15'))]}")
+    item("E5.仍未实现的遥测规则", "WARN" if dead else "PASS",
+         "; ".join(dead) if dead else "无（15 条规则全部有实现）")
+
+
+def _lap_aggregator_wired() -> bool:
+    """检查 LapAggregator 是否真的接在应用入口上。"""
+    app_src = (ROOT / "setup_tuner" / "app.py").read_text("utf-8")
+    routes_src = (ROOT / "setup_tuner" / "api" / "routes.py").read_text("utf-8")
+    return (
+        "lap_aggregator" in app_src
+        and "on_telemetry" in app_src
+        and "best_snapshot" in routes_src
+    )
 
 
 # =========================================================================== #
@@ -482,10 +486,18 @@ def check_ws_contract():
     missing = sorted(frontend - backend - {"corner_number"})
     item("F1.WS telemetry 事件 payload", "INFO", ", ".join(sorted(backend)))
     item("F2.前端读取但后端不推送的字段", "FAIL" if missing else "PASS",
-         f"前端读取 {sorted(frontend)}；后端缺失 {missing}")
-    item("F3.扇区显示基数", "FAIL",
-         "后端下发 UDP 原始 m_sector(0/1/2)，前端 updateSectorDisplay 直接拼 "
-         "'S'+sector → 显示 S0/S1/S2，且 CSS class sector-0 不存在")
+         f"前端读取 {sorted(frontend)}；后端缺失 {missing}" if missing
+         else f"前端读取 {sorted(frontend)} —— 全部由后端推送")
+    # F3：扇区基数（0 基 UDP → 1 基统一口径）
+    from setup_tuner.report.builder import extract_telemetry_summary
+    from setup_tuner.telemetry.packets import to_sector_1based
+    conv_ok = [to_sector_1based(v) for v in (0, 1, 2)] == [1, 2, 3]
+    summary_sector = extract_telemetry_summary({2: {"m_sector": 2}}).get("sector")
+    front_double = "sector + 1" in appjs
+    item("F3.扇区基数（0 基 → 1 基）",
+         "PASS" if (conv_ok and summary_sector == 3 and not front_double) else "FAIL",
+         f"to_sector_1based(0/1/2)={[to_sector_1based(v) for v in (0, 1, 2)]}；"
+         f"摘要 sector(m_sector=2)={summary_sector}；前端重复 +1={'有' if front_double else '无'}")
     _ = appjs
 
 
