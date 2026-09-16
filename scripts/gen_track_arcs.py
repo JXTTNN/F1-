@@ -208,14 +208,19 @@ def parse_path(d: str) -> list[tuple[float, float]]:
                         num(), num(), num(), num(), num(), num(),
                     )
                     if c == "c":
-                        x1 += cur[0]; y1 += cur[1]
-                        x2 += cur[0]; y2 += cur[1]
-                        x += cur[0]; y += cur[1]
+                        x1 += cur[0]
+                        y1 += cur[1]
+                        x2 += cur[0]
+                        y2 += cur[1]
+                        x += cur[0]
+                        y += cur[1]
                 else:
                     x2, y2, x, y = num(), num(), num(), num()
                     if c == "s":
-                        x2 += cur[0]; y2 += cur[1]
-                        x += cur[0]; y += cur[1]
+                        x2 += cur[0]
+                        y2 += cur[1]
+                        x += cur[0]
+                        y += cur[1]
                     if prev_cubic is not None:
                         x1 = 2 * cur[0] - prev_cubic[0]
                         y1 = 2 * cur[1] - prev_cubic[1]
@@ -229,8 +234,10 @@ def parse_path(d: str) -> list[tuple[float, float]]:
                 if c in "Qq":
                     x1, y1, x, y = num(), num(), num(), num()
                     if c == "q":
-                        x1 += cur[0]; y1 += cur[1]
-                        x += cur[0]; y += cur[1]
+                        x1 += cur[0]
+                        y1 += cur[1]
+                        x += cur[0]
+                        y += cur[1]
                 else:
                     x, y = num(), num()
                     if c == "t":
@@ -334,7 +341,8 @@ def render_module(arcs: dict[str, dict[int, float]]) -> str:
 
 def main() -> int:
     arcs = compute_arcs()
-    OUT_PATH.write_text(render_module(arcs), encoding="utf-8")
+    # newline 固定为 LF，避免 Windows 文本模式写出 CRLF 导致整文件 diff
+    OUT_PATH.write_text(render_module(arcs), encoding="utf-8", newline="\n")
     total = sum(len(v) for v in arcs.values())
     print(f"wrote {OUT_PATH} ({len(arcs)} tracks, {total} corners)")
     return 0
