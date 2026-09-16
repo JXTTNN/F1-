@@ -30,6 +30,12 @@ from typing import Any
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from setup_tuner.domain._track_arcs import TRACK_CORNER_ARCS
+from setup_tuner.domain.corner_groups import (
+    build_corner_groups,
+    group_for_progress,
+    nearest_member,
+)
+from setup_tuner.telemetry.packets import to_sector_1based
 
 logger = logging.getLogger(__name__)
 
@@ -114,8 +120,6 @@ def _arc_tables() -> dict[str, tuple[list[float], list[int]]]:
     """构建「弯道弧长占比」二分查找表（进程内缓存，仅首次调用有开销）。"""
     global _ARC_TABLES
     if _ARC_TABLES is None:
-        from setup_tuner.domain._track_arcs import TRACK_CORNER_ARCS
-
         tables: dict[str, tuple[list[float], list[int]]] = {}
         for track_id, corners in TRACK_CORNER_ARCS.items():
             ordered = sorted(corners.items(), key=lambda kv: kv[1])
@@ -224,17 +228,10 @@ async def _push_telemetry_frame(ws_manager: Any, all_latest: dict[int, dict[str,
         "engine_rpm": telemetry_data.get("m_engineRPM"),
         "drs": telemetry_data.get("m_drs"),
         "lap_time_ms": lap_data.get("m_lastLapTimeInMS"),
-        "sector": _sector_1based(lap_data.get("m_sector")),
+        "sector": to_sector_1based(lap_data.get("m_sector")),
     }
     if ws_manager is not None:
         await ws_manager.broadcast(event="telemetry", payload=payload)
-
-
-def _sector_1based(raw: Any) -> int | None:
-    """把 UDP 的 0 基 ``m_sector`` 统一转换为 1 基（见 ``packets.to_sector_1based``）。"""
-    from setup_tuner.telemetry.packets import to_sector_1based
-
-    return to_sector_1based(raw)
 
 
 _GROUPS_CACHE: dict[str, list[dict[str, Any]]] = {}
@@ -243,8 +240,6 @@ _GROUPS_CACHE: dict[str, list[dict[str, Any]]] = {}
 def _get_groups(track_id: str) -> list[dict[str, Any]]:
     """按赛道缓存弯道段（TRACK_CORNER_ARCS 静态，进程内缓存即可）。"""
     if track_id not in _GROUPS_CACHE:
-        from setup_tuner.domain.corner_groups import build_corner_groups
-
         _GROUPS_CACHE[track_id] = build_corner_groups(
             TRACK_CORNER_ARCS.get(track_id, {}),
         )
@@ -266,15 +261,8 @@ def _map_corner_segment(
         多弯段时非 None（单弯段无需段表达）。
     """
     arcs = TRACK_CORNER_ARCS.get(track_id)
-    if arcs is None:
-        from setup_tuner.domain._track_arcs import TRACK_CORNER_ARCS as _ARCS
-        arcs = _ARCS.get(track_id)
     if not arcs or track_length <= 0:
         return _map_corner(lap_distance, track_length, corners, track_id), None, None
-    from setup_tuner.domain.corner_groups import (
-        group_for_progress,
-        nearest_member,
-    )
 
     progress = (lap_distance / track_length) % 1.0
     group = group_for_progress(progress, _get_groups(track_id))
@@ -295,7 +283,7 @@ async def _push_corner_highlight(
     if lap_data is None:
         return last_corner
     lap_distance = lap_data.get("m_lapDistance")
-    sector = _sector_1based(lap_data.get("m_sector"))
+    sector = to_sector_1based(lap_data.get("m_sector"))
     current_track_id = getattr(app_state, "current_track_id", None)
     if lap_distance is None or current_track_id is None:
         return last_corner

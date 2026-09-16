@@ -29,6 +29,8 @@ from __future__ import annotations
 import threading
 from typing import Any
 
+from .packets import to_sector_1based
+
 # 判定「当前处于直道」的阈值（转向接近回正 + 大油门）
 _STRAIGHT_STEER_MAX = 0.05
 _STRAIGHT_THROTTLE_MIN = 0.9
@@ -154,10 +156,9 @@ class LapAggregator:
     # ------------------------------------------------------------------ #
     def on_lap_data(self, lap: dict[str, Any]) -> None:
         """接收 Packet 2 (LapData)：更新圈号 / 扇区，圈号变化时固化上一圈。"""
-        sector_raw = lap.get("m_sector")
-        sector = None
-        if isinstance(sector_raw, (int, float)):
-            sector = max(1, min(3, int(sector_raw) + 1))
+        # 扇区统一走 to_sector_1based（0 基 → 1 基），避免此处再次手写 +1
+        # 而与 ws.py / report.builder 的转换发生偏移。
+        sector = to_sector_1based(lap.get("m_sector"))
         lap_no = lap.get("m_currentLapNum")
         lap_no = int(lap_no) if isinstance(lap_no, (int, float)) else None
 

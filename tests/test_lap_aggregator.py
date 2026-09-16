@@ -8,6 +8,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from setup_tuner.engine.engine import _derive_telemetry_dx
 from setup_tuner.report.builder import extract_telemetry_summary
 from setup_tuner.telemetry.lap_aggregator import LapAggregator
@@ -140,3 +142,54 @@ class TestTelemetryRulesNowFire:
         assert dx["exit_traction_req"] == 0.3
         # 旧口径（0 基原始值 2）不触发
         assert _derive_telemetry_dx({"sector": 2, "m_throttle": 0.1})["exit_traction_req"] == 0.0
+
+
+# ===========================================================================
+# 扇区转换单点化（防再次分叉）
+# ===========================================================================
+class TestSectorConversionSingleSource:
+    """``m_sector`` 的 0 基→1 基转换必须只有 ``packets.to_sector_1based`` 一处实现。
+
+    历史背景：ws.py / report.builder.py / lap_aggregator.py 曾各自手写 ``+1``，
+    其中 lap_aggregator 还额外做了 ``min(3, ...)`` 截断，三处口径需人工对齐。
+    ``to_sector_1based`` 的文档字符串明确写了「统一在此转换，避免每个消费方
+    各自 +1 而再次错位」——本测试把这句话变成可执行约束。
+    """
+
+    @pytest.mark.parametrize("raw,expected", [
+        (0, 1), (1, 2), (2, 3),      # 规范值域 0/1/2 → 1/2/3
+        (3, 3),                       # 越界钳到上限
+        (-1, 1), (-99, 1),            # 越界钳到下限
+        (None, None),                 # 缺失
+    ])
+    def test_aggregator_matches_authoritative_conversion(self, raw, expected) -> None:
+        """聚合器的扇区结果必须与 ``to_sector_1based`` 逐值一致。"""
+        from setup_tuner.telemetry.packets import to_sector_1based
+
+        assert to_sector_1based(raw) == expected
+
+        agg = LapAggregator()
+        agg.on_lap_data({"m_currentLapNum": 1, "m_sector": raw})
+        assert agg.snapshot()["sector"] == expected
+
+    @pytest.mark.parametrize("raw", [True, False])
+    def test_bool_is_treated_as_missing(self, raw: bool) -> None:
+        """bool 是 int 的子类，但不得被当作扇区数值（避免 S2/S1 误判）。"""
+        from setup_tuner.telemetry.packets import to_sector_1based
+
+        assert to_sector_1based(raw) is None
+        agg = LapAggregator()
+        agg.on_lap_data({"m_currentLapNum": 1, "m_sector": raw})
+        assert agg.snapshot()["sector"] is None
+
+    def test_no_duplicate_conversion_in_ws_layer(self) -> None:
+        """ws.py 不得再定义自己的扇区转换包装函数（应直接用权威实现）。"""
+        import inspect
+
+        from setup_tuner.api import ws
+
+        assert not hasattr(ws, "_sector_1based"), (
+            "ws.py 重新引入了 _sector_1based 包装，请直接用 to_sector_1based"
+        )
+        source = inspect.getsource(ws)
+        assert "int(raw) + 1" not in source, "ws.py 出现手工 +1 扇区转换"

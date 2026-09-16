@@ -36,6 +36,7 @@ from typing import Any
 from fastapi import APIRouter, Query, Request
 from pydantic import BaseModel, Field
 
+from setup_tuner.domain._track_arcs import TRACK_CORNER_ARCS
 from setup_tuner.domain.setup import ALL_SETUP_FIELDS, CarSetup
 from setup_tuner.domain.symptoms import (
     DEFAULT_INTENSITY,
@@ -375,7 +376,6 @@ async def get_track(track_id: str) -> dict[str, Any]:
             code=4040,
             http_status=404,
         )
-    from setup_tuner.domain._track_arcs import TRACK_CORNER_ARCS
     from setup_tuner.domain.corner_groups import build_corner_groups
 
     data = TrackDetail(
