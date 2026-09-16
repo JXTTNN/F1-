@@ -36,6 +36,7 @@ from setup_tuner.config import Config, load_config
 from setup_tuner.db.store import Store
 from setup_tuner.feedback.iteration import IterationService
 from setup_tuner.feedback.service import FeedbackService
+from setup_tuner.telemetry.lap_aggregator import LapAggregator
 from setup_tuner.telemetry.listener import TelemetryListener
 from setup_tuner.telemetry.stream import TelemetryStream
 
@@ -90,6 +91,7 @@ def _init_app_services(app: FastAPI, config: Config) -> tuple[Store, TelemetryLi
 
     # ③ 遥测
     app.state.telemetry_stream = TelemetryStream()
+    app.state.lap_aggregator = LapAggregator()
     listener = TelemetryListener(
         host=config.udp_host, port=config.udp_port,
     )
@@ -107,11 +109,25 @@ def _init_app_services(app: FastAPI, config: Config) -> tuple[Store, TelemetryLi
 
 
 def _make_packet_handler(app: FastAPI) -> Callable[[dict[str, Any]], None]:
-    """构造 UDP 包处理函数：将解析结果写入 TelemetryStream。"""
+    """构造 UDP 包处理函数：写入 TelemetryStream，并喂给整圈聚合器。
+
+    - Packet 6 (CarTelemetry) → ``LapAggregator.on_telemetry``
+    - Packet 2 (LapData)      → ``LapAggregator.on_lap_data``
+    这样 ``/suggest`` 才能拿到 ``max_speed`` / ``avg_steer`` / ``max_steer`` /
+    ``on_straight`` 等整圈统计（此前只喂单帧，导致 5 条遥测规则永不触发）。
+    """
     def _on_packet(parsed: dict[str, Any]) -> None:
         packet_id = parsed.get("packet_id")
-        if packet_id is not None:
-            app.state.telemetry_stream.update(int(packet_id), parsed)
+        if packet_id is None:
+            return
+        app.state.telemetry_stream.update(int(packet_id), parsed)
+        aggregator = getattr(app.state, "lap_aggregator", None)
+        if aggregator is None:
+            return
+        if packet_id == 6:
+            aggregator.on_telemetry(parsed)
+        elif packet_id == 2:
+            aggregator.on_lap_data(parsed)
     return _on_packet
 
 
