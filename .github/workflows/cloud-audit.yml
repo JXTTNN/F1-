@@ -91,7 +91,7 @@ jobs:
           curl -s http://127.0.0.1:8000/api/v1/health || echo 'HEALTH UNAVAILABLE'
 
       - name: Run UI click audit
-        continue-on-error: true
+        # task-62：审计已重写为现役 UI 真实主流程 → 改为阻断（H4 修复）
         run: python -u cloud_audit/ui_click_audit.py
 
       - name: Dump server log tail
