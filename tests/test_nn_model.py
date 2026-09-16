@@ -198,20 +198,20 @@ class TestBuildInputVector:
         return symptoms, dx, setup, track_id
 
     def test_input_vector_length(self) -> None:
-        """输入向量长度 = 12 + 9 + 20 + 24 = 65。"""
+        """输入向量长度 = 症状数 + 9 Dx + 参数数 + 24 赛道（全部动态推导）。"""
         symptoms, dx, setup, track_id = self._sample_input()
         vec = build_input_vector(symptoms, dx, setup, track_id)
-        # 实际长度：12 症状 + 9 Dx + 20 参数 + 24 赛道 = 65
-        assert len(vec) == 12 + 9 + len(ALL_SETUP_FIELDS) + 24
+        # 长度随症状/参数枚举动态变化，避免实现演进后静默失配
+        assert len(vec) == nn_model._NUM_SYMPTOMS + 9 + len(ALL_SETUP_FIELDS) + 24
 
     def test_input_vector_components(self) -> None:
         """输入向量含症状、Dx、调教、赛道四段。"""
         symptoms, dx, setup, track_id = self._sample_input()
         vec = build_input_vector(symptoms, dx, setup, track_id)
-        # 症状段（0-11）
+        # 症状段（0 .. NUM_SYMPTOMS-1）
         assert vec[0] == pytest.approx(0.6)  # 3/5
-        # Dx 段（12-20）
-        assert vec[12] != 0.0  # front_grip_req
+        # Dx 段紧随症状段
+        assert vec[nn_model._NUM_SYMPTOMS] != 0.0  # front_grip_req
         # 赛道段（最后 24 维）含一个 1.0
         track_part = vec[-24:]
         assert sum(track_part) == 1.0
@@ -219,7 +219,7 @@ class TestBuildInputVector:
     def test_input_vector_empty_inputs(self) -> None:
         """空输入返回合法向量（全默认值）。"""
         vec = build_input_vector([], {}, {}, "suzuka")
-        assert len(vec) == 12 + 9 + len(ALL_SETUP_FIELDS) + 24
+        assert len(vec) == nn_model._NUM_SYMPTOMS + 9 + len(ALL_SETUP_FIELDS) + 24
 
 
 # ===========================================================================
@@ -373,7 +373,7 @@ class TestNNModelManagerInference:
 
     @pytest.mark.skipif(not _TORCH_AVAILABLE, reason="PyTorch 不可用")
     def test_f1setupnet_forward_shape(self) -> None:
-        """F1SetupNet 前向传播：输入 68 维 → 输出 23 维。"""
+        """F1SetupNet 前向传播：输入 _INPUT_SIZE 维 → 输出 _OUTPUT_SIZE 维。"""
         import torch  # type: ignore[import-not-found]
 
         net = F1SetupNet()
@@ -425,16 +425,18 @@ class TestModuleConstants:
     """模块级常量正确性。"""
 
     def test_input_output_sizes(self) -> None:
-        """输入 68 维，输出 23 维。"""
-        assert nn_model._INPUT_SIZE == 68
-        assert nn_model._OUTPUT_SIZE == 23
+        """输入/输出维度由领域枚举动态推导（症状 15 / 参数 21 / 赛道 24）。"""
+        assert nn_model._INPUT_SIZE == (
+            len(Symptom) + len(nn_model.DIAG_DIMS) + len(ALL_SETUP_FIELDS) + len(ALL_TRACKS)
+        )
+        assert nn_model._OUTPUT_SIZE == len(ALL_SETUP_FIELDS)
 
     def test_component_sizes(self) -> None:
-        """分量维度：12 + 9 + 23 + 24 = 68。"""
-        assert nn_model._NUM_SYMPTOMS == 12
-        assert nn_model._NUM_DIAG_DIMS == 9
-        assert nn_model._NUM_SETUP_PARAMS == 23
-        assert nn_model._NUM_TRACKS == 24
+        """分量维度全部与领域枚举一致（防止硬编码漂移导致 NN 静默失效）。"""
+        assert nn_model._NUM_SYMPTOMS == len(Symptom)
+        assert nn_model._NUM_DIAG_DIMS == len(nn_model.DIAG_DIMS)
+        assert nn_model._NUM_SETUP_PARAMS == len(ALL_SETUP_FIELDS)
+        assert nn_model._NUM_TRACKS == len(ALL_TRACKS)
 
     def test_normalization_constants(self) -> None:
         """归一化常量。"""
