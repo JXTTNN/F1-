@@ -132,10 +132,10 @@ class TestUnit:
         assert set(result.keys()) == {f.name for f in ALL_SETUP_FIELDS}
 
     def test_extract_setup_front_wing(self, sample_packet5: dict) -> None:
-        """extract_setup_from_packet5 正确映射 m_frontWing → front_wing（含值域转换）。"""
+        """extract_setup_from_packet5 正确映射 m_frontWing → front_wing（恒等映射）。"""
         result = extract_setup_from_packet5(sample_packet5)
-        # uint8 字段经值域转换：m_frontWing=6 → 0+6*50/250=1.2
-        assert result["front_wing"] == pytest.approx(6 * 50 / 250)
+        # 2026-09 修正：EA 下发即车库值，m_frontWing=6 → front_wing=6
+        assert result["front_wing"] == pytest.approx(6)
 
     def test_extract_setup_tyre_pressure(self, sample_packet5: dict) -> None:
         """extract_setup_from_packet5 胎压取4个独立字段。"""
@@ -236,14 +236,14 @@ class TestBoundary:
     def test_extract_setup_missing_fields(self) -> None:
         """extract_setup_from_packet5 缺部分字段取缺省。"""
         result = extract_setup_from_packet5({"m_frontWing": 7.0})
-        # uint8 字段经值域转换：UDP 7 → 7*50/250 = 1.4
-        assert result["front_wing"] == pytest.approx(7 * 50 / 250)
+        # 恒等映射：UDP 7 → front_wing 7
+        assert result["front_wing"] == pytest.approx(7.0)
         # rear_wing 缺省
         assert result["rear_wing"] == 25.0
 
     def test_extract_setup_out_of_range_clamped(self) -> None:
         """extract_setup_from_packet5 越界值被 clamp 到合法区间。"""
-        # front_wing UDP 0-250 → 游戏 0-50，传 999 → 999*50/250=199.8 → clamp 到 50
+        # front_wing 车库域 [0, 50]，传 999 → clamp 到 50
         result = extract_setup_from_packet5({"m_frontWing": 999.0})
         assert result["front_wing"] == 50.0
 
@@ -527,9 +527,9 @@ class TestSmoke:
         """完整 Packet 5 → 21 参数提取 → 可作为 CarSetup.from_dict 输入。"""
         params = extract_setup_from_packet5(sample_packet5)
         setup = CarSetup.from_dict(params)
-        # 验证可构造合法 CarSetup（uint8 字段经值域转换，UDP 0-250 → 游戏 0-50）
-        assert setup.front_wing == pytest.approx(6 * 50 / 250)
-        assert setup.rear_wing == pytest.approx(4 * 50 / 250)
+        # 恒等映射（EA 下发即车库值）
+        assert setup.front_wing == pytest.approx(6)
+        assert setup.rear_wing == pytest.approx(4)
 
     def test_report_roundtrip_via_json(self, sample_params: dict) -> None:
         """报告 JSON 往返：build_report → json.dumps → json.loads 结构一致。"""
