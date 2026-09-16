@@ -13,7 +13,7 @@
     - 6 条手工录入赛道的弯道序列（melbourne / suzuka / monaco / silverstone /
       monza / spa）核对自 ``legacy/f1opt/data/corners.py`` 的手填数据
       （弯角编号 / 名称 / 类型 / apex 速度）。
-    - 其余 18 条赛道的弯道序列由 :func:`_synthesize_corners` 基于赛道特征合成
+    - 其余 18 条赛道的逐弯元数据由 :mod:`_turn_data` 按游内弯号提供（task-63）
       （量级准确，弯角名称用编号占位）。
     - ``udp_track_id`` 为 EA UDP 规范 Session 包 ``m_trackId`` 枚举值。
       取值来自官方枚举（F1 22–25 一致，由 f1-game-packet-parser 的 ``TrackId``
@@ -47,6 +47,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from ._track_anchors import TRACK_ANCHORS, TRACK_CANVAS
+from ._turn_data import TURNS as _AUTHORED_TURN_DATA
 
 # UDP m_trackId 尚未经官方规范确认的赛道（用于测试与文档显式标注，避免"看起来已校准"）
 UDP_TRACK_ID_UNVERIFIED: frozenset[str] = frozenset({"madrid"})
@@ -204,67 +205,6 @@ def _build_corners(raw: list[_RawCorner]) -> list[Corner]:
     ]
 
 
-def _get_track_type_params(track_type: str) -> tuple[float, float, int]:
-    """根据赛道类型返回 (slow_frac, fast_frac, speed_max)。"""
-    if track_type == "high_speed_low_downforce":
-        return 0.25, 0.45, 280
-    if track_type == "street":
-        return 0.55, 0.10, 200
-    if track_type == "high_downforce":
-        return 0.40, 0.15, 230
-    if track_type == "mixed":
-        return 0.35, 0.25, 270
-    return 0.33, 0.22, 250  # medium
-
-
-def _synthesize_corners(track_type: str, n_corners: int) -> list[Corner]:
-    """为未手工录入的赛道合成弯道数据（基于赛道特征）。
-
-    核对自 legacy/f1opt/data/corners.py 的 :func:`generate_corner_profile`
-    合成逻辑（弯道类型分布 + apex 速度估算）。弯角名称用编号占位
-    （"Corner N"），非真实赛道图名称。
-
-    速度量级基于 F1 侧向加速度极限（~1.5g），量级准确但非 telemetry 实测。
-    """
-    # 赛道类型决定弯道速度分布（与 legacy generate_corner_profile 一致）
-    slow_frac, fast_frac, speed_max = _get_track_type_params(track_type)
-
-    n_slow = max(1, round(n_corners * slow_frac))
-    n_fast = max(1, round(n_corners * fast_frac))
-    n_med = max(1, n_corners - n_slow - n_fast)
-
-    # 交错分布弯道类型（避免同类聚集，与 legacy 一致）
-    types: list[str] = []
-    pool = (["slow"] * n_slow) + (["medium"] * n_med) + (["fast"] * n_fast)
-    while pool:
-        for t in ("slow", "medium", "fast"):
-            if t in pool:
-                types.append(t)
-                pool.remove(t)
-                break
-    types = types[:n_corners]
-    while len(types) < n_corners:
-        types.append("medium")
-
-    corners: list[Corner] = []
-    for i in range(n_corners):
-        t = types[i]
-        if t == "slow":
-            speed = 75 + (i * 7) % 30          # 75-105
-        elif t == "medium":
-            speed = 110 + (i * 13) % 80        # 110-190
-        else:
-            speed = 200 + (i * 17) % (speed_max - 200 + 1)  # 200-speed_max
-        corners.append(Corner(
-            number=i + 1,
-            name=f"Corner {i + 1}",
-            corner_type=t,  # type: ignore[arg-type]
-            speed_kmh=float(speed),
-            anchor=_estimate_anchor(i + 1, n_corners),
-        ))
-    return corners
-
-
 # --------------------------------------------------------------------------- #
 # 6 条手工录入赛道的弯道原始数据（核对自 legacy corners.py）
 # --------------------------------------------------------------------------- #
@@ -368,19 +308,25 @@ def _silverstone_corners() -> list[Corner]:
 
 
 def _monza_corners() -> list[Corner]:
-    """Autodromo Nazionale Monza (5.793 km, 11 弯, high_speed_low_downforce)。"""
+    """Autodromo Nazionale Monza (5.793 km, 11 弯, high_speed_low_downforce)。
+
+    task-63：按 F1 26 游内弯号重排 —— T1 Variante del Rettifilo、T2 Curva
+    Grande、T3 Variante della Roggia、T4/T5 Lesmo、T6 Serraglio、
+    T7-T9 Variante Ascari、T10/T11 Parabolica（旧版把 Curva Grande 排在
+    T10 且缺 Lesmo，与游内弯号不符）。
+    """
     return _build_corners([
-        (1, "Prima Variante", "slow", 85),
-        (2, "Variante della Roggia", "slow", 90),
-        (3, "Curva Biassono", "medium", 165),
-        (4, "Curva del Serraglio", "fast", 230),
-        (5, "Variante Ascari entry", "slow", 95),
-        (6, "Variante Ascari", "slow", 80),
-        (7, "Variante Ascari exit", "medium", 140),
-        (8, "Curva Parabolica entry", "medium", 175),
-        (9, "Curva Parabolica", "fast", 215),
-        (10, "Curva Grande", "fast", 250),
-        (11, "Prima Variante approach", "slow", 85),
+        (1, "Variante del Rettifilo", "slow", 80),
+        (2, "Curva Grande", "fast", 250),
+        (3, "Variante della Roggia", "slow", 85),
+        (4, "Lesmo 1", "medium", 145),
+        (5, "Lesmo 2", "medium", 150),
+        (6, "Serraglio", "fast", 230),
+        (7, "Variante Ascari entry", "slow", 90),
+        (8, "Variante Ascari", "slow", 85),
+        (9, "Variante Ascari exit", "medium", 140),
+        (10, "Parabolica entry", "medium", 160),
+        (11, "Parabolica", "medium", 200),
     ])
 
 
@@ -421,12 +367,22 @@ _MANUAL_CORNER_BUILDERS: dict[str, Callable[[], list[Corner]]] = {
 
 
 def _make_corners(track_id: str, track_type: str, n_corners: int) -> list[Corner]:
-    """获取赛道弯道列表：手工录入优先，否则合成；再用真实坐标校准锚点。"""
+    """获取赛道弯道列表：手工录入优先，其次逐弯元数据表；再用真实坐标校准锚点。
+
+    task-63：全部 24 条赛道的逐弯元数据均已真实化（:mod:`_turn_data`），
+    ``_synthesize_corners`` 合成路径已删除（"Corner N" 占位数据是
+    连续弯标号错误之外的另一处假数据源）。
+    """
     builder = _MANUAL_CORNER_BUILDERS.get(track_id)
     if builder is not None:
         corners = builder()
-    else:
-        corners = _synthesize_corners(track_type, n_corners)
+    elif track_id in _AUTHORED_TURN_DATA:
+        corners = _build_corners([
+            (i + 1, name, ct, spd)
+            for i, (name, ct, spd) in enumerate(_AUTHORED_TURN_DATA[track_id])
+        ])
+    else:  # pragma: no cover - 防御分支（24 赛道已全覆盖）
+        raise KeyError(f"赛道 {track_id!r} 缺少弯道元数据（_turn_data.TURNS）")
     return _apply_real_anchors(track_id, corners)
 
 
