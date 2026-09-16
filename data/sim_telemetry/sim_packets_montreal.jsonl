@@ -1,0 +1,66 @@
+{"packet_id": 1, "name": "Session", "frame_id": 0, "size_bytes": 156, "m_trackId": 6, "m_trackLength": 4361, "m_totalLaps": 16}
+{"packet_id": 2, "name": "LapData", "frame_id": 0, "lap_number": 1, "size_bytes": 1397, "m_lastLapTimeInMS": 76860, "m_sector1TimeInMS": 25212, "m_sector2TimeInMS": 25314, "m_speedTrapFastestSpeed": 340}
+{"packet_id": 6, "name": "CarTelemetry", "frame_id": 1, "lap_number": 1, "size_bytes": 1445, "m_speed": 336.35, "m_throttle": 0.274, "m_brake": 0.194, "m_gear": 8, "m_engineRPM": 11587, "m_drs": 0}
+{"packet_id": 6, "name": "CarTelemetry", "frame_id": 2, "lap_number": 1, "size_bytes": 1445, "m_speed": 333.3, "m_throttle": 0.293, "m_brake": 0.025, "m_gear": 8, "m_engineRPM": 10824, "m_drs": 0}
+{"packet_id": 6, "name": "CarTelemetry", "frame_id": 3, "lap_number": 1, "size_bytes": 1445, "m_speed": 329.37, "m_throttle": 0.251, "m_brake": 0.209, "m_gear": 8, "m_engineRPM": 9841, "m_drs": 0}
+{"packet_id": 2, "name": "LapData", "frame_id": 4, "lap_number": 2, "size_bytes": 1397, "m_lastLapTimeInMS": 77627, "m_sector1TimeInMS": 25375, "m_sector2TimeInMS": 25376, "m_speedTrapFastestSpeed": 340}
+{"packet_id": 6, "name": "CarTelemetry", "frame_id": 5, "lap_number": 2, "size_bytes": 1445, "m_speed": 331.38, "m_throttle": 0.582, "m_brake": 0.081, "m_gear": 8, "m_engineRPM": 10345, "m_drs": 0}
+{"packet_id": 6, "name": "CarTelemetry", "frame_id": 6, "lap_number": 2, "size_bytes": 1445, "m_speed": 335.22, "m_throttle": 0.525, "m_brake": 0.054, "m_gear": 8, "m_engineRPM": 11304, "m_drs": 0}
+{"packet_id": 6, "name": "CarTelemetry", "frame_id": 7, "lap_number": 2, "size_bytes": 1445, "m_speed": 332.01, "m_throttle": 0.467, "m_brake": 0.003, "m_gear": 8, "m_engineRPM": 10503, "m_drs": 0}
+{"packet_id": 2, "name": "LapData", "frame_id": 8, "lap_number": 3, "size_bytes": 1397, "m_lastLapTimeInMS": 76702, "m_sector1TimeInMS": 24968, "m_sector2TimeInMS": 25455, "m_speedTrapFastestSpeed": 340}
+{"packet_id": 6, "name": "CarTelemetry", "frame_id": 9, "lap_number": 3, "size_bytes": 1445, "m_speed": 336.97, "m_throttle": 0.356, "m_brake": 0.149, "m_gear": 8, "m_engineRPM": 11742, "m_drs": 0}
+{"packet_id": 6, "name": "CarTelemetry", "frame_id": 10, "lap_number": 3, "size_bytes": 1445, "m_speed": 333.5, "m_throttle": 0.316, "m_brake": 0.075, "m_gear": 8, "m_engineRPM": 10876, "m_drs": 0}
+{"packet_id": 6, "name": "CarTelemetry", "frame_id": 11, "lap_number": 3, "size_bytes": 1445, "m_speed": 337.11, "m_throttle": 0.656, "m_brake": 0.025, "m_gear": 8, "m_engineRPM": 11777, "m_drs": 0}
+{"packet_id": 2, "name": "LapData", "frame_id": 12, "lap_number": 4, "size_bytes": 1397, "m_lastLapTimeInMS": 77547, "m_sector1TimeInMS": 25973, "m_sector2TimeInMS": 25107, "m_speedTrapFastestSpeed": 340}
+{"packet_id": 6, "name": "CarTelemetry", "frame_id": 13, "lap_number": 4, "size_bytes": 1445, "m_speed": 331.95, "m_throttle": 0.539, "m_brake": 0.013, "m_gear": 8, "m_engineRPM": 10488, "m_drs": 0}
+{"packet_id": 6, "name": "CarTelemetry", "frame_id": 14, "lap_number": 4, "size_bytes": 1445, "m_speed": 338.57, "m_throttle": 0.547, "m_brake": 0.156, "m_gear": 8, "m_engineRPM": 12143, "m_drs": 0}
+{"packet_id": 6, "name": "CarTelemetry", "frame_id": 15, "lap_number": 4, "size_bytes": 1445, "m_speed": 331.61, "m_throttle": 0.608, "m_brake": 0.092, "m_gear": 8, "m_engineRPM": 10401, "m_drs": 0}
+{"packet_id": 2, "name": "LapData", "frame_id": 16, "lap_number": 5, "size_bytes": 1397, "m_lastLapTimeInMS": 76866, "m_sector1TimeInMS": 25552, "m_sector2TimeInMS": 25090, "m_speedTrapFastestSpeed": 340}
+{"packet_id": 6, "name": "CarTelemetry", "frame_id": 17, "lap_number": 5, "size_bytes": 1445, "m_speed": 328.14, "m_throttle": 0.692, "m_brake": 0.033, "m_gear": 8, "m_engineRPM": 9535, "m_drs": 0}
+{"packet_id": 6, "name": "CarTelemetry", "frame_id": 18, "lap_number": 5, "size_bytes": 1445, "m_speed": 330.06, "m_throttle": 0.58, "m_brake": 0.059, "m_gear": 8, "m_engineRPM": 10015, "m_drs": 0}
+{"packet_id": 6, "name": "CarTelemetry", "frame_id": 19, "lap_number": 5, "size_bytes": 1445, "m_speed": 335.72, "m_throttle": 0.514, "m_brake": 0.127, "m_gear": 8, "m_engineRPM": 11429, "m_drs": 0}
+{"packet_id": 2, "name": "LapData", "frame_id": 20, "lap_number": 6, "size_bytes": 1397, "m_lastLapTimeInMS": 77155, "m_sector1TimeInMS": 25480, "m_sector2TimeInMS": 25294, "m_speedTrapFastestSpeed": 340}
+{"packet_id": 6, "name": "CarTelemetry", "frame_id": 21, "lap_number": 6, "size_bytes": 1445, "m_speed": 337.44, "m_throttle": 0.635, "m_brake": 0.016, "m_gear": 8, "m_engineRPM": 11860, "m_drs": 0}
+{"packet_id": 6, "name": "CarTelemetry", "frame_id": 22, "lap_number": 6, "size_bytes": 1445, "m_speed": 337.1, "m_throttle": 0.462, "m_brake": 0.293, "m_gear": 8, "m_engineRPM": 11774, "m_drs": 0}
+{"packet_id": 6, "name": "CarTelemetry", "frame_id": 23, "lap_number": 6, "size_bytes": 1445, "m_speed": 334.76, "m_throttle": 0.343, "m_brake": 0.243, "m_gear": 8, "m_engineRPM": 11189, "m_drs": 0}
+{"packet_id": 2, "name": "LapData", "frame_id": 24, "lap_number": 7, "size_bytes": 1397, "m_lastLapTimeInMS": 77732, "m_sector1TimeInMS": 25897, "m_sector2TimeInMS": 25767, "m_speedTrapFastestSpeed": 340}
+{"packet_id": 6, "name": "CarTelemetry", "frame_id": 25, "lap_number": 7, "size_bytes": 1445, "m_speed": 330.36, "m_throttle": 0.342, "m_brake": 0.217, "m_gear": 8, "m_engineRPM": 10089, "m_drs": 0}
+{"packet_id": 6, "name": "CarTelemetry", "frame_id": 26, "lap_number": 7, "size_bytes": 1445, "m_speed": 332.02, "m_throttle": 0.437, "m_brake": 0.124, "m_gear": 8, "m_engineRPM": 10504, "m_drs": 0}
+{"packet_id": 6, "name": "CarTelemetry", "frame_id": 27, "lap_number": 7, "size_bytes": 1445, "m_speed": 329.24, "m_throttle": 0.202, "m_brake": 0.132, "m_gear": 8, "m_engineRPM": 9810, "m_drs": 0}
+{"packet_id": 2, "name": "LapData", "frame_id": 28, "lap_number": 8, "size_bytes": 1397, "m_lastLapTimeInMS": 78326, "m_sector1TimeInMS": 25361, "m_sector2TimeInMS": 25932, "m_speedTrapFastestSpeed": 340}
+{"packet_id": 6, "name": "CarTelemetry", "frame_id": 29, "lap_number": 8, "size_bytes": 1445, "m_speed": 331.5, "m_throttle": 0.367, "m_brake": 0.069, "m_gear": 8, "m_engineRPM": 10374, "m_drs": 0}
+{"packet_id": 6, "name": "CarTelemetry", "frame_id": 30, "lap_number": 8, "size_bytes": 1445, "m_speed": 336.06, "m_throttle": 0.445, "m_brake": 0.058, "m_gear": 8, "m_engineRPM": 11515, "m_drs": 0}
+{"packet_id": 6, "name": "CarTelemetry", "frame_id": 31, "lap_number": 8, "size_bytes": 1445, "m_speed": 335.17, "m_throttle": 0.689, "m_brake": 0.211, "m_gear": 8, "m_engineRPM": 11293, "m_drs": 0}
+{"packet_id": 2, "name": "LapData", "frame_id": 32, "lap_number": 9, "size_bytes": 1397, "m_lastLapTimeInMS": 76848, "m_sector1TimeInMS": 25071, "m_sector2TimeInMS": 25516, "m_speedTrapFastestSpeed": 340}
+{"packet_id": 6, "name": "CarTelemetry", "frame_id": 33, "lap_number": 9, "size_bytes": 1445, "m_speed": 330.95, "m_throttle": 0.598, "m_brake": 0.226, "m_gear": 8, "m_engineRPM": 10237, "m_drs": 0}
+{"packet_id": 6, "name": "CarTelemetry", "frame_id": 34, "lap_number": 9, "size_bytes": 1445, "m_speed": 331.35, "m_throttle": 0.258, "m_brake": 0.246, "m_gear": 8, "m_engineRPM": 10336, "m_drs": 0}
+{"packet_id": 6, "name": "CarTelemetry", "frame_id": 35, "lap_number": 9, "size_bytes": 1445, "m_speed": 336.36, "m_throttle": 0.236, "m_brake": 0.233, "m_gear": 8, "m_engineRPM": 11590, "m_drs": 0}
+{"packet_id": 2, "name": "LapData", "frame_id": 36, "lap_number": 10, "size_bytes": 1397, "m_lastLapTimeInMS": 76512, "m_sector1TimeInMS": 25073, "m_sector2TimeInMS": 25002, "m_speedTrapFastestSpeed": 340}
+{"packet_id": 6, "name": "CarTelemetry", "frame_id": 37, "lap_number": 10, "size_bytes": 1445, "m_speed": 331.63, "m_throttle": 0.462, "m_brake": 0.071, "m_gear": 8, "m_engineRPM": 10406, "m_drs": 0}
+{"packet_id": 6, "name": "CarTelemetry", "frame_id": 38, "lap_number": 10, "size_bytes": 1445, "m_speed": 333.33, "m_throttle": 0.316, "m_brake": 0.244, "m_gear": 8, "m_engineRPM": 10833, "m_drs": 0}
+{"packet_id": 6, "name": "CarTelemetry", "frame_id": 39, "lap_number": 10, "size_bytes": 1445, "m_speed": 330.7, "m_throttle": 0.372, "m_brake": 0.123, "m_gear": 8, "m_engineRPM": 10174, "m_drs": 0}
+{"packet_id": 2, "name": "LapData", "frame_id": 40, "lap_number": 11, "size_bytes": 1397, "m_lastLapTimeInMS": 76784, "m_sector1TimeInMS": 25247, "m_sector2TimeInMS": 25805, "m_speedTrapFastestSpeed": 340}
+{"packet_id": 6, "name": "CarTelemetry", "frame_id": 41, "lap_number": 11, "size_bytes": 1445, "m_speed": 329.47, "m_throttle": 0.362, "m_brake": 0.12, "m_gear": 8, "m_engineRPM": 9868, "m_drs": 0}
+{"packet_id": 6, "name": "CarTelemetry", "frame_id": 42, "lap_number": 11, "size_bytes": 1445, "m_speed": 331.31, "m_throttle": 0.46, "m_brake": 0.202, "m_gear": 8, "m_engineRPM": 10327, "m_drs": 0}
+{"packet_id": 6, "name": "CarTelemetry", "frame_id": 43, "lap_number": 11, "size_bytes": 1445, "m_speed": 336.51, "m_throttle": 0.256, "m_brake": 0.056, "m_gear": 8, "m_engineRPM": 11626, "m_drs": 0}
+{"packet_id": 2, "name": "LapData", "frame_id": 44, "lap_number": 12, "size_bytes": 1397, "m_lastLapTimeInMS": 78330, "m_sector1TimeInMS": 25935, "m_sector2TimeInMS": 25689, "m_speedTrapFastestSpeed": 340}
+{"packet_id": 6, "name": "CarTelemetry", "frame_id": 45, "lap_number": 12, "size_bytes": 1445, "m_speed": 330.4, "m_throttle": 0.443, "m_brake": 0.025, "m_gear": 8, "m_engineRPM": 10099, "m_drs": 0}
+{"packet_id": 6, "name": "CarTelemetry", "frame_id": 46, "lap_number": 12, "size_bytes": 1445, "m_speed": 331.81, "m_throttle": 0.239, "m_brake": 0.033, "m_gear": 8, "m_engineRPM": 10451, "m_drs": 0}
+{"packet_id": 6, "name": "CarTelemetry", "frame_id": 47, "lap_number": 12, "size_bytes": 1445, "m_speed": 333.97, "m_throttle": 0.438, "m_brake": 0.046, "m_gear": 8, "m_engineRPM": 10992, "m_drs": 0}
+{"packet_id": 2, "name": "LapData", "frame_id": 48, "lap_number": 13, "size_bytes": 1397, "m_lastLapTimeInMS": 77523, "m_sector1TimeInMS": 25563, "m_sector2TimeInMS": 25913, "m_speedTrapFastestSpeed": 340}
+{"packet_id": 6, "name": "CarTelemetry", "frame_id": 49, "lap_number": 13, "size_bytes": 1445, "m_speed": 329.55, "m_throttle": 0.441, "m_brake": 0.271, "m_gear": 8, "m_engineRPM": 9887, "m_drs": 0}
+{"packet_id": 6, "name": "CarTelemetry", "frame_id": 50, "lap_number": 13, "size_bytes": 1445, "m_speed": 329.51, "m_throttle": 0.236, "m_brake": 0.167, "m_gear": 8, "m_engineRPM": 9876, "m_drs": 0}
+{"packet_id": 6, "name": "CarTelemetry", "frame_id": 51, "lap_number": 13, "size_bytes": 1445, "m_speed": 333.47, "m_throttle": 0.544, "m_brake": 0.082, "m_gear": 8, "m_engineRPM": 10868, "m_drs": 0}
+{"packet_id": 2, "name": "LapData", "frame_id": 52, "lap_number": 14, "size_bytes": 1397, "m_lastLapTimeInMS": 78054, "m_sector1TimeInMS": 25324, "m_sector2TimeInMS": 25672, "m_speedTrapFastestSpeed": 340}
+{"packet_id": 6, "name": "CarTelemetry", "frame_id": 53, "lap_number": 14, "size_bytes": 1445, "m_speed": 329.77, "m_throttle": 0.26, "m_brake": 0.15, "m_gear": 8, "m_engineRPM": 9943, "m_drs": 0}
+{"packet_id": 6, "name": "CarTelemetry", "frame_id": 54, "lap_number": 14, "size_bytes": 1445, "m_speed": 333.49, "m_throttle": 0.412, "m_brake": 0.058, "m_gear": 8, "m_engineRPM": 10871, "m_drs": 0}
+{"packet_id": 6, "name": "CarTelemetry", "frame_id": 55, "lap_number": 14, "size_bytes": 1445, "m_speed": 335.54, "m_throttle": 0.371, "m_brake": 0.281, "m_gear": 8, "m_engineRPM": 11384, "m_drs": 0}
+{"packet_id": 2, "name": "LapData", "frame_id": 56, "lap_number": 15, "size_bytes": 1397, "m_lastLapTimeInMS": 77125, "m_sector1TimeInMS": 25875, "m_sector2TimeInMS": 25536, "m_speedTrapFastestSpeed": 340}
+{"packet_id": 6, "name": "CarTelemetry", "frame_id": 57, "lap_number": 15, "size_bytes": 1445, "m_speed": 337.45, "m_throttle": 0.341, "m_brake": 0.09, "m_gear": 8, "m_engineRPM": 11863, "m_drs": 0}
+{"packet_id": 6, "name": "CarTelemetry", "frame_id": 58, "lap_number": 15, "size_bytes": 1445, "m_speed": 337.95, "m_throttle": 0.321, "m_brake": 0.189, "m_gear": 8, "m_engineRPM": 11987, "m_drs": 0}
+{"packet_id": 6, "name": "CarTelemetry", "frame_id": 59, "lap_number": 15, "size_bytes": 1445, "m_speed": 329.57, "m_throttle": 0.207, "m_brake": 0.262, "m_gear": 8, "m_engineRPM": 9891, "m_drs": 0}
+{"packet_id": 2, "name": "LapData", "frame_id": 60, "lap_number": 16, "size_bytes": 1397, "m_lastLapTimeInMS": 76966, "m_sector1TimeInMS": 25675, "m_sector2TimeInMS": 25597, "m_speedTrapFastestSpeed": 340}
+{"packet_id": 6, "name": "CarTelemetry", "frame_id": 61, "lap_number": 16, "size_bytes": 1445, "m_speed": 333.54, "m_throttle": 0.342, "m_brake": 0.296, "m_gear": 8, "m_engineRPM": 10885, "m_drs": 0}
+{"packet_id": 6, "name": "CarTelemetry", "frame_id": 62, "lap_number": 16, "size_bytes": 1445, "m_speed": 333.03, "m_throttle": 0.464, "m_brake": 0.18, "m_gear": 8, "m_engineRPM": 10758, "m_drs": 0}
+{"packet_id": 6, "name": "CarTelemetry", "frame_id": 63, "lap_number": 16, "size_bytes": 1445, "m_speed": 332.46, "m_throttle": 0.298, "m_brake": 0.146, "m_gear": 8, "m_engineRPM": 10615, "m_drs": 0}
+{"packet_id": 5, "name": "CarSetups", "frame_id": 64, "size_bytes": 1229, "m_frontWing": 3, "m_rearWing": 2, "m_brakeBias": 59, "m_brakePressure": 84}
