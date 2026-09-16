@@ -19,7 +19,9 @@
 from __future__ import annotations
 
 import logging
+import queue
 import sys
+import threading
 from collections.abc import Callable
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -39,6 +41,7 @@ from setup_tuner.feedback.service import FeedbackService
 from setup_tuner.telemetry.lap_aggregator import LapAggregator
 from setup_tuner.telemetry.listener import TelemetryListener
 from setup_tuner.telemetry.stream import TelemetryStream
+from setup_tuner.telemetry.style_extractor import StyleExtractor
 
 logger = logging.getLogger(__name__)
 
@@ -92,6 +95,13 @@ def _init_app_services(app: FastAPI, config: Config) -> tuple[Store, TelemetryLi
     # ③ 遥测
     app.state.telemetry_stream = TelemetryStream()
     app.state.lap_aggregator = LapAggregator()
+    app.state.style_extractor = StyleExtractor()
+    app.state.lap_write_queue: queue.Queue[dict[str, Any]] = queue.Queue()
+    app.state.lap_writer = threading.Thread(
+        target=_lap_writer_loop, args=(app,), name="f1opt-lap-writer",
+        daemon=True,
+    )
+    app.state.lap_writer.start()
     listener = TelemetryListener(
         host=config.udp_host, port=config.udp_port,
     )
@@ -106,6 +116,65 @@ def _init_app_services(app: FastAPI, config: Config) -> tuple[Store, TelemetryLi
     app.state.current_track_id = None
     app.state.current_track_source = "manual"
     return store, listener
+
+
+def _lap_writer_loop(app: FastAPI) -> None:
+    """整圈落库线程：把队列里的整圈快照写入 lap_record + driver_style（EMA）。
+
+    质量门槛（不达标不入库）：样本帧数 ≥ 3000（≈50 秒）。
+    第 12 维（圈速一致性）由同车手同赛道的圈史计算后追加到向量。
+    EMA：新向量 = 0.8 × 旧向量 + 0.2 × 本圈向量（样本数 +1）。
+    """
+    MIN_FRAMES = 3000
+    EMA_ALPHA = 0.2
+    while True:
+        try:
+            job = app.state.lap_write_queue.get(timeout=1.0)
+        except Exception:
+            continue
+        try:
+            snapshot = job.get("snapshot") or {}
+            track_id = job.get("track_id")
+            if not track_id or snapshot.get("lap_frames", 0) < MIN_FRAMES:
+                continue
+            store = getattr(app.state, "store", None)
+            if store is None:
+                continue
+            driver_id = store.get_or_create_driver("默认车手")
+            lap_time_ms = snapshot.get("lap_time_ms")
+            records = store.get_lap_records(track_id, driver_id, limit=10)
+            times = [r["lap_time_ms"] for r in records
+                     if r.get("lap_time_ms")]
+            mean_t = sum(times) / len(times) if times else 0.0
+            var = (sum((t - mean_t) ** 2 for t in times) / len(times)
+                   if times else 0.0)
+            cv = (var ** 0.5) / mean_t if mean_t else 1.0
+            consistency = max(0.0, min(1.0, 1.0 - cv / 0.05))
+
+            old = store.get_driver_style(driver_id, track_id)
+            new_vec = list(job.get("style_vector") or [])
+            if len(new_vec) >= 11:
+                base = old["vector"] if old and len(old["vector"]) >= 11                     else new_vec[:11]
+                blended = [
+                    round((1 - EMA_ALPHA) * b + EMA_ALPHA * n, 4)
+                    for b, n in zip(base, new_vec[:11], strict=True)
+                ]
+                blended.append(round(consistency, 4))
+                sample_count = (old["sample_count"] + 1) if old else 1
+                store.save_driver_style(driver_id, track_id, blended, sample_count)
+
+            snapshot["lap_consistency"] = round(consistency, 4)
+            snapshot["driver_id"] = driver_id
+            store.save_lap_record(
+                driver_id, track_id, snapshot,
+                lap_number=snapshot.get("lap_number"),
+                lap_time_ms=lap_time_ms,
+                is_valid=True,
+                session_uid=None,
+                setup_id=None,
+            )
+        except Exception:
+            logger.exception("整圈落库失败，跳过该圈")
 
 
 def _make_packet_handler(app: FastAPI) -> Callable[[dict[str, Any]], None]:
@@ -126,8 +195,27 @@ def _make_packet_handler(app: FastAPI) -> Callable[[dict[str, Any]], None]:
             return
         if packet_id == 6:
             aggregator.on_telemetry(parsed)
+            extractor = getattr(app.state, "style_extractor", None)
+            if extractor is not None:
+                extractor.on_telemetry(parsed)
         elif packet_id == 2:
             aggregator.on_lap_data(parsed)
+            extractor = getattr(app.state, "style_extractor", None)
+            if extractor is not None:
+                extractor.on_lap_data(parsed)
+        # task-62 M1：一圈结束时把整圈快照与风格向量交给落库线程
+        completed = aggregator.take_completed_lap()
+        if completed is not None:
+            writer = getattr(app.state, "lap_write_queue", None)
+            if writer is not None:
+                writer.put({
+                    "snapshot": completed,
+                    "track_id": getattr(app.state, "current_track_id", None),
+                    "style_vector": (
+                        getattr(app.state, "style_extractor", None).
+                        take_completed()
+                    ),
+                })
     return _on_packet
 
 

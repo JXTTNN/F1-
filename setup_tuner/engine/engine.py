@@ -395,8 +395,9 @@ def _derive_telemetry_dx(telemetry: dict[str, Any] | None) -> dict[str, float]:
 def _compute_param_raw_delta(
     p: str, dx: dict[str, float], telemetry_gain: dict[str, float],
     track_gain: dict[str, float] | None = None,
+    style_gain: dict[str, float] | None = None,
 ) -> float:
-    """步骤 1-2：矩阵乘法 + 遥测/赛道校准，返回校准后 raw delta。"""
+    """步骤 1-2：矩阵乘法 + 遥测/赛道/风格校准，返回校准后 raw delta。"""
     raw = 0.0
     for cell in nonzero_cells_for_param_cached(p):
         dx_val = dx.get(cell.diag, 0.0)
@@ -406,6 +407,8 @@ def _compute_param_raw_delta(
     gain = telemetry_gain.get(p, 1.0)
     if track_gain:
         gain *= track_gain.get(p, 1.0)
+    if style_gain:
+        gain *= style_gain.get(p, 1.0)
     return raw * gain
 
 
@@ -427,6 +430,7 @@ def compute_setup_delta(
     current_setup: dict[str, float],
     telemetry_gain: dict[str, float] | None = None,
     track_gain: dict[str, float] | None = None,
+    style_gain: dict[str, float] | None = None,
 ) -> dict[str, float]:
     """执行完整的 6 步 SetupDelta 计算流水线。
 
@@ -439,7 +443,8 @@ def compute_setup_delta(
             None 时全部默认 1.0。
         track_gain: 每参数的**赛道敏感度增益** {param: gain}（见
             ``domain.track_coefficients``）；None 时全部默认 1.0。
-            与 telemetry_gain 相乘后作用于 raw delta，只改幅度不改方向。
+        style_gain: 每参数的**车手风格敏感度增益** {param: gain}（见
+            ``domain.style_coefficients``）；None 时全部默认 1.0。
 
     Returns:
         SetupDelta 字典 {param: delta_value}，覆盖全部 21 参数。
@@ -455,15 +460,26 @@ def compute_setup_delta(
         telemetry_gain = {f.name: 1.0 for f in ALL_SETUP_FIELDS}
     if track_gain is None:
         track_gain = {}
+    if style_gain is None:
+        style_gain = {}
 
     setup_delta: dict[str, float] = {}
     for spec in ALL_SETUP_FIELDS:
         p = spec.name
-        raw = _compute_param_raw_delta(p, dx, telemetry_gain, track_gain)
+        raw = _compute_param_raw_delta(p, dx, telemetry_gain, track_gain, style_gain)
         current = float(current_setup[p])
         setup_delta[p] = _align_param_delta(spec, raw, current)
     return setup_delta
 
+
+def _derive_style_gain(style_vector: list[float] | None) -> dict[str, float]:
+    """按车手风格向量推导参数敏感度增益（L1 风格调制）。
+
+    实现委托给 ``domain.style_coefficients``；向量缺失时返回全 1.0。
+    """
+    from setup_tuner.domain.style_coefficients import gain_for_style
+
+    return gain_for_style(style_vector)
 
 def _derive_track_gain(track_id: str) -> dict[str, float]:
     """按赛道标识推导参数敏感度增益（让建议因赛道而异）。
@@ -735,6 +751,7 @@ def generate_suggestion(
     track_id: str,
     telemetry: dict[str, Any] | None = None,
     model_type: str = "hybrid",
+    style_vector: list[float] | None = None,
 ) -> dict[str, Any]:
     """完整建议生成（Dx → SetupDelta → 报告组装）。详见模块级文档。"""
     feedback_dx = compute_dx(symptoms)
@@ -742,7 +759,10 @@ def generate_suggestion(
     dx = {dim: feedback_dx[dim] + telemetry_dx[dim] for dim in DIAG_DIMS}
     telemetry_gain = _derive_telemetry_gain(telemetry)
     track_gain = _derive_track_gain(track_id)
-    rule_delta = compute_setup_delta(dx, current_setup, telemetry_gain, track_gain)
+    style_gain = _derive_style_gain(style_vector)
+    rule_delta = compute_setup_delta(
+        dx, current_setup, telemetry_gain, track_gain, style_gain,
+    )
 
     nn_delta, nn_available = _compute_nn_delta(
         model_type, symptoms, dx, current_setup, track_id,

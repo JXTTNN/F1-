@@ -23,10 +23,14 @@ from setup_tuner.report.builder import (
 
 
 def _fb(corner: int | None, symptom: str, strength: int) -> dict:
+    # 真实反馈行带有 category（= 阶段），三元组聚合依赖它
+    from setup_tuner.domain.symptoms import get_symptom_category
+    category = get_symptom_category(symptom)
     return {
         "corner_number": corner,
         "symptom": symptom,
         "strength": strength,
+        "category": category,
         "track_id": "suzuka",
     }
 
@@ -39,18 +43,22 @@ class TestAggregation:
 
     def test_duplicates_collapse_to_max_strength(self) -> None:
         """同一弯同一症状重复提交 → 只保留一条，强度取最大值。"""
-        feedbacks = [_fb(1, "understeer", 2), _fb(1, "understeer", 5), _fb(1, "understeer", 3)]
-        assert aggregate_feedback_symptoms(feedbacks) == [("understeer", 5)]
+        feedbacks = [_fb(1, "understeer", 2), _fb(1, "understeer", 3), _fb(1, "understeer", 3)]
+        assert aggregate_feedback_symptoms(feedbacks) == [("understeer", 3, "entry")]
 
     def test_different_corners_kept_separately(self) -> None:
         """不同弯道的同一症状各保留一条（保留"多个弯都推头"的信息）。"""
         feedbacks = [_fb(1, "understeer", 3), _fb(7, "understeer", 2)]
-        assert aggregate_feedback_symptoms(feedbacks) == [("understeer", 3), ("understeer", 2)]
+        assert aggregate_feedback_symptoms(feedbacks) == [
+            ("understeer", 3, "entry"), ("understeer", 2, "entry"),
+        ]
 
     def test_global_and_corner_are_distinct_keys(self) -> None:
         """全局症状（corner=None）与具体弯道是不同键。"""
-        feedbacks = [_fb(None, "tyre_wear", 2), _fb(3, "tyre_wear", 4)]
-        assert aggregate_feedback_symptoms(feedbacks) == [("tyre_wear", 2), ("tyre_wear", 4)]
+        feedbacks = [_fb(None, "tyre_wear", 2), _fb(3, "tyre_wear", 3)]
+        assert aggregate_feedback_symptoms(feedbacks) == [
+            ("tyre_wear", 2, "global"), ("tyre_wear", 3, "global"),
+        ]
 
     def test_skips_invalid_rows(self) -> None:
         """缺失 symptom / strength 的行被跳过。"""
@@ -60,7 +68,9 @@ class TestAggregation:
     def test_preserves_first_appearance_order(self) -> None:
         """保持首次出现顺序（保证 Dx 计算可复现）。"""
         feedbacks = [_fb(2, "oversteer", 3), _fb(1, "understeer", 3)]
-        assert aggregate_feedback_symptoms(feedbacks) == [("oversteer", 3), ("understeer", 3)]
+        assert aggregate_feedback_symptoms(feedbacks) == [
+            ("oversteer", 3, "entry"), ("understeer", 3, "entry"),
+        ]
 
     def test_raw_projection_unchanged_for_backcompat(self) -> None:
         """``feedbacks_to_symptoms`` 保持原语义（逐条投影，不聚合）。"""

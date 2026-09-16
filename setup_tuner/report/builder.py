@@ -423,8 +423,8 @@ def feedbacks_to_symptoms(
 
 def aggregate_feedback_symptoms(
     feedbacks: list[dict[str, Any]],
-) -> list[tuple[str, int]]:
-    """把反馈按 ``(弯道, 症状)`` 聚合后再投影为症状列表。
+) -> list[tuple[str, int, str]]:
+    """把反馈按 ``(弯道, 症状)`` 聚合后投影为**三元组**（症状, 强度, 阶段）。
 
     为什么需要（2026-09 修正）：
         早期 ``/suggest`` 直接把每条反馈都作为一个症状丢给 ``compute_dx``。
@@ -437,24 +437,33 @@ def aggregate_feedback_symptoms(
         不同弯道的同一症状仍然各算一份（保留"多个弯都推头"的信息量，
         但不会因重复点击而虚假放大）。
 
+    task-62：输出升级为**三元组** ``(symptom, strength, stage)`` ——
+        ``compute_dx`` 原生支持阶段化映射（``SYMPTOM_STAGE_TO_DX``），此前管线
+        把阶段丢掉，等于放弃了引擎的阶段感知能力。stage 取反馈的
+        ``category``（entry/apex/exit/global，与"反馈阶段"同义）。
+
     Args:
         feedbacks: ``Store.get_feedbacks`` 返回的反馈记录列表。
 
     Returns:
-        聚合后的 ``[(symptom_key, strength), ...]``，按首次出现顺序。
+        聚合后的 ``[(symptom, strength, stage), ...]``，按首次出现顺序。
     """
-    best: dict[tuple[Any, str], int] = {}
+    best: dict[tuple[Any, str], tuple[int, str]] = {}
     order: list[tuple[Any, str]] = []
     for fb in feedbacks:
         symptom = fb.get("symptom")
         strength = fb.get("strength")
         if not symptom or strength is None:
             continue
+        stage = fb.get("category") or "global"
         key = (fb.get("corner_number"), symptom)
         value = int(strength)
         if key not in best:
-            best[key] = value
+            best[key] = (value, stage)
             order.append(key)
-        elif value > best[key]:
-            best[key] = value
-    return [(symptom, best[(corner, symptom)]) for corner, symptom in order]
+        elif value > best[key][0]:
+            best[key] = (value, stage)
+    return [
+        (symptom, best[(corner, symptom)][0], best[(corner, symptom)][1])
+        for corner, symptom in order
+    ]

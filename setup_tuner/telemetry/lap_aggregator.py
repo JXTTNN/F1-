@@ -182,6 +182,12 @@ class LapAggregator:
         with self._lock:
             return dict(self._last_completed) if self._last_completed else None
 
+    def take_completed_lap(self) -> dict[str, Any] | None:
+        """取出上一整圈快照（取出后清空；无则 None）。供落库线程消费。"""
+        with self._lock:
+            snapshot, self._last_completed = self._last_completed, None
+            return dict(snapshot) if snapshot else None
+
     def best_snapshot(self) -> dict[str, Any] | None:
         """优先返回上一整圈快照；没有则返回当前圈至今的快照（帧数 > 0 时）。"""
         completed = self.last_completed_lap()

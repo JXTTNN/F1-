@@ -68,3 +68,8 @@ __pycache__/
 htmlcov/
 coverage.xml
 
+
+# SQLite 临时文件与本地录制产物（task-62 清理）
+*.db-shm
+*.db-wal
+*.f1rec

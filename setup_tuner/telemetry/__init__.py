@@ -36,6 +36,7 @@ from .packets import (
 )
 from .simulator import TelemetrySimulator, generate_lap_snapshot
 from .stream import TelemetryStream
+from .style_extractor import STYLE_DIMS, StyleExtractor
 
 __all__ = [
     # packets
@@ -62,6 +63,9 @@ __all__ = [
     "TelemetryStream",
     # lap aggregator
     "LapAggregator",
+    # style extractor
+    "StyleExtractor",
+    "STYLE_DIMS",
     # simulator
     "TelemetrySimulator",
     "generate_lap_snapshot",

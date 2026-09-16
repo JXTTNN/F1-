@@ -122,9 +122,9 @@ class FeedbackService:
     # ------------------------------------------------------------------
     # 查询
     # ------------------------------------------------------------------
-    def get_feedbacks(self, track_id: str) -> list[dict[str, Any]]:
-        """查询某赛道的全部反馈列表（按 created_at 升序）。"""
-        return self._store.get_feedbacks(track_id)
+    def get_feedbacks(self, track_id: str, limit: int | None = None) -> list[dict[str, Any]]:
+        """查询某赛道的反馈列表（按 created_at 升序；limit=取最近 N 条）。"""
+        return self._store.get_feedbacks(track_id, limit=limit)
 
     def get_corner_feedbacks(
         self, track_id: str,

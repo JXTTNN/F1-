@@ -82,13 +82,13 @@ jobs:
           API_HOST=127.0.0.1 API_PORT=8000 UDP_PORT=20777 \
             nohup uvicorn setup_tuner.app:create_app --factory --host 127.0.0.1 --port 8000 > server.log 2>&1 &
           for i in $(seq 1 120); do
-            if curl -sf http://127.0.0.1:8000/api/health >/dev/null 2>&1; then
+            if curl -sf http://127.0.0.1:8000/api/v1/health >/dev/null 2>&1; then
               echo "server up after ${i}s"; break
             fi
             sleep 1
           done
-          echo '--- /api/health ---'
-          curl -s http://127.0.0.1:8000/api/health || echo 'HEALTH UNAVAILABLE'
+          echo '--- /api/v1/health ---'
+          curl -s http://127.0.0.1:8000/api/v1/health || echo 'HEALTH UNAVAILABLE'
 
       - name: Run UI click audit
         continue-on-error: true

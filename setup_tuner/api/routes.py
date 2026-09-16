@@ -119,7 +119,7 @@ class SelectTrackResponse(BaseModel):
 
 
 class SetupSnapshot(BaseModel):
-    """调教快照视图（20 参数 + 元数据）。"""
+    """调教快照视图（21 参数 + 元数据）。"""
 
     setup_id: int | None = None
     track_id: str
@@ -438,7 +438,7 @@ async def import_setup(request: Request) -> dict[str, Any]:
             http_status=409,
         )
 
-    # 提取 20 参数快照
+    # 提取 21 参数快照
     params = extract_setup_from_packet5(packet5)
 
     # 确定赛道：优先用当前选定赛道，其次用遥测 Session 包的 m_trackId
@@ -775,11 +775,13 @@ def _validate_feedback_available(feedback_service: Any, track_id: str) -> None:
 def _safe_generate_suggestion(
     symptoms: list, current_setup: dict[str, float],
     track_id: str, telemetry_summary: Any, model_type: str,
+    style_vector: list[float] | None = None,
 ) -> Any:
     """调用 generate_suggestion，失败转换为 fail 异常。"""
     try:
         return _invoke_generate_suggestion(
             symptoms, current_setup, track_id, telemetry_summary, model_type,
+            style_vector,
         )
     except Exception as e:
         logger.exception("generate_suggestion failed")
@@ -824,8 +826,9 @@ def _extract_telemetry_summary(stream: Any, aggregator: Any = None) -> dict[str,
 def _invoke_generate_suggestion(
     symptoms: list, current_setup: dict[str, float],
     track_id: str, telemetry_summary: Any, model_type: str,
+    style_vector: list[float] | None = None,
 ) -> Any:
-    """调用 generate_suggestion，兼容未支持 model_type 参数的旧版本。"""
+    """调用 generate_suggestion，兼容未支持新参数的旧版本。"""
     try:
         return generate_suggestion(
             symptoms=symptoms,
@@ -833,9 +836,10 @@ def _invoke_generate_suggestion(
             track_id=track_id,
             telemetry=telemetry_summary,
             model_type=model_type,
+            style_vector=style_vector,
         )
     except TypeError:
-        # generate_suggestion 尚未支持 model_type 参数（降级为纯规则引擎）
+        # generate_suggestion 尚未支持新参数（降级为纯规则引擎）
         return generate_suggestion(
             symptoms=symptoms,
             current_setup=current_setup,
@@ -891,15 +895,27 @@ async def suggest(
     _validate_suggest_request(body)
     _validate_feedback_available(feedback_service, body.track_id)
 
-    # 反馈按 (弯道, 症状) 聚合后再转症状：同一条反馈重复提交不再线性放大 Dx
-    symptoms = aggregate_feedback_symptoms(feedback_service.get_feedbacks(body.track_id))
+    # 反馈按 (弯道, 症状) 聚合后再转三元组：同一条反馈重复提交不再线性放大 Dx；
+    # 取最近 500 条，防止反馈无限增长拖慢查询（task-62）
+    symptoms = aggregate_feedback_symptoms(
+        feedback_service.get_feedbacks(body.track_id, limit=500),
+    )
     current_setup, setup_id = _resolve_current_setup(store, body.track_id)
     telemetry_summary = _extract_telemetry_summary(
         svc["telemetry_stream"], svc.get("lap_aggregator"),
     )
 
+    # task-62 M3：车手风格调制（样本 ≥3 圈才启用，否则退化为 L0）
+    style_entry = None
+    if store is not None:
+        style_entry = store.get_driver_style(1, body.track_id)
+    style_vector = (
+        style_entry["vector"]
+        if style_entry and style_entry.get("sample_count", 0) >= 3 else None
+    )
     suggestion_result = _safe_generate_suggestion(
-        symptoms, current_setup, body.track_id, telemetry_summary, body.model_type,
+        symptoms, current_setup, body.track_id, telemetry_summary,
+        body.model_type, style_vector,
     )
     report = build_report(
         suggestion_result=suggestion_result,
