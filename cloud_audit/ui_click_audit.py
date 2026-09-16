@@ -41,6 +41,7 @@ SHOTS.mkdir(parents=True, exist_ok=True)
 RESULTS: list[tuple[str, str, str]] = []
 CONSOLE_ERRORS: list[str] = []
 PAGE_ERRORS: list[str] = []
+BAD_RESPONSES: list[str] = []
 
 
 def item(tag: str, ok: bool, detail: str = "") -> None:
@@ -142,6 +143,7 @@ def run(page) -> None:
 
     # ── ⑦ 前端体检 ──
     item("⑦无 console error", not CONSOLE_ERRORS, "; ".join(CONSOLE_ERRORS[:3]))
+    item("⑦无 4xx 响应", not BAD_RESPONSES, "; ".join(BAD_RESPONSES[:5]))
     item("⑦无 page error", not PAGE_ERRORS, "; ".join(PAGE_ERRORS[:3]))
 
 
@@ -153,6 +155,8 @@ def main() -> int:
         page.on("console", lambda m: CONSOLE_ERRORS.append(m.text)
                 if m.type == "error" else None)
         page.on("pageerror", lambda e: PAGE_ERRORS.append(str(e)))
+        page.on("response", lambda r: BAD_RESPONSES.append(f"{r.status} {r.url}")
+                 if r.status >= 400 else None)
         try:
             run(page)
         except Exception as e:  # noqa: BLE001
