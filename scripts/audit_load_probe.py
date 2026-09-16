@@ -359,7 +359,7 @@ def l7_corner_map() -> None:
     _, t_min = bench(lambda: arc_map(1500.0, tr.length_m, "suzuka"), 30000)
     _, t_bis = bench(lambda: arc_map_bisect(1500.0, tr.length_m, "suzuka"), 30000)
 
-    # 正确率：24 赛道 × 200 采样点
+    # 正确率：24 赛道 × 200 采样点（含 track_id → 走弧长精确路径）
     wrong = tot_n = 0
     for t in get_all_tracks():
         if t.track_id not in table:
@@ -369,7 +369,7 @@ def l7_corner_map() -> None:
             d = t.length_m * i / 200
             truth = min(fr, key=lambda cf: min(abs(cf[1] - d / t.length_m),
                                                1 - abs(cf[1] - d / t.length_m)))[0]
-            got = _map_corner(d, t.length_m, t.corners)
+            got = _map_corner(d, t.length_m, t.corners, t.track_id)
             wrong += 0 if got == truth else 1
             tot_n += 1
     # 修正版（bisect）与真值一致性
@@ -382,12 +382,12 @@ def l7_corner_map() -> None:
             if arc_map_bisect(d, t.length_m, t.track_id) != arc_map(d, t.length_m, t.track_id):
                 wrong2 += 1
     cost_60hz8 = t_bis / 1e6 * 60 * 8 * 100
-    item("L7.当前弯判定：成本与正确率", "FAIL",
+    err_rate = wrong / tot_n * 100
+    item("L7.当前弯判定：成本与正确率", "PASS" if err_rate < 1.0 else "FAIL",
          f"弧长表构建 {build_ms:.0f} ms（24 赛道，启动/打包时算一次即可）｜单次查询："
-         f"现状 {t_old:.2f} µs、修正版(min) {t_min:.2f} µs、修正版(bisect) {t_bis:.2f} µs｜"
-         f"错误率 {wrong / tot_n * 100:.1f}%（{wrong}/{tot_n}）→ 0%（bisect 版与真值差 {wrong2} 个）｜"
-         f"bisect 版在 60Hz×8 连接下仅占单核 {cost_60hz8:.2f}%，"
-         "比现状慢几十微秒但完全可忽略 —— 正确性优先，不必为性能保留错误算法")
+         f"弧长+二分 {t_bis:.2f} µs（均匀近似 {t_old:.2f} µs，min 版 {t_min:.2f} µs）｜"
+         f"错误率 {err_rate:.1f}%（{wrong}/{tot_n}）｜"
+         f"二分版在 60Hz×8 连接下仅占单核 {cost_60hz8:.2f}%")
 
 
 def main() -> int:
