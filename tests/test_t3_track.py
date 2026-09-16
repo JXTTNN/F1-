@@ -225,11 +225,18 @@ class TestKnownTrackData:
         assert len(t.corners) == 14
 
     def test_suzuka_corners(self) -> None:
-        """Suzuka 18 弯，第 1 弯名 'First'。"""
+        """Suzuka 18 弯，第 1 弯名 'First Curve'（task-63 对齐 F1 26 弯号）。"""
         t = get_track_by_id("suzuka")
         assert t is not None
         assert len(t.corners) == 18
-        assert t.corners[0].name == "First"
+        assert t.corners[0].name == "First Curve"
+        # task-63：S-Curves=T3-T6、Dunlop=T7、Degner=T8/T9、Hairpin=T11、
+        # Spoon=T13/T14、130R=T15（与 F1 26 游内弯号一致）
+        names = {c.number: c.name for c in t.corners}
+        assert names[7] == "Dunlop"
+        assert names[8] == "Degner 1"
+        assert names[11] == "Hairpin"
+        assert names[15] == "130R"
         assert t.corners[0].number == 1
 
     def test_monaco_street_circuit(self) -> None:

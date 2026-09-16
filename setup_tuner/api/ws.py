@@ -29,6 +29,8 @@ from typing import Any
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
+from setup_tuner.domain._track_arcs import TRACK_CORNER_ARCS
+
 logger = logging.getLogger(__name__)
 
 # WebSocket 路由
@@ -233,6 +235,55 @@ def _sector_1based(raw: Any) -> int | None:
     return to_sector_1based(raw)
 
 
+_GROUPS_CACHE: dict[str, list[dict[str, Any]]] = {}
+
+
+def _get_groups(track_id: str) -> list[dict[str, Any]]:
+    """按赛道缓存弯道段（TRACK_CORNER_ARCS 静态，进程内缓存即可）。"""
+    if track_id not in _GROUPS_CACHE:
+        from setup_tuner.domain.corner_groups import build_corner_groups
+
+        _GROUPS_CACHE[track_id] = build_corner_groups(
+            TRACK_CORNER_ARCS.get(track_id, {}),
+        )
+    return _GROUPS_CACHE[track_id]
+
+
+def _map_corner_segment(
+    lap_distance: float, track_length: float, track_id: str,
+    corners: list[Any],
+) -> tuple[int | None, str | None, list[int] | None]:
+    """task-63：段化定位 —— 进度 → 段（区间归属）→ 段内最近成员。
+
+    连续弯（全赛道 39% 相邻弯对间距 < 4% 圈长）在单弯最近邻下会随微小
+    偏移高频跳变；段级映射把跳变收敛到段边界。无弧长表的赛道回退
+    :func:`_map_corner`。
+
+    Returns:
+        ``(corner_number, group_name, group_members)``；group 仅在
+        多弯段时非 None（单弯段无需段表达）。
+    """
+    arcs = TRACK_CORNER_ARCS.get(track_id)
+    if arcs is None:
+        from setup_tuner.domain._track_arcs import TRACK_CORNER_ARCS as _ARCS
+        arcs = _ARCS.get(track_id)
+    if not arcs or track_length <= 0:
+        return _map_corner(lap_distance, track_length, corners, track_id), None, None
+    from setup_tuner.domain.corner_groups import (
+        group_for_progress,
+        nearest_member,
+    )
+
+    progress = (lap_distance / track_length) % 1.0
+    group = group_for_progress(progress, _get_groups(track_id))
+    if group is None:
+        return _map_corner(lap_distance, track_length, corners, track_id), None, None
+    corner = nearest_member(progress, group, arcs)
+    if len(group["members"]) > 1:
+        return corner, group["name"], list(group["members"])
+    return corner, None, None
+
+
 async def _push_corner_highlight(
     ws_manager: Any, all_latest: dict[int, dict[str, Any]], app_state: Any,
     last_corner: int | None,
@@ -251,8 +302,8 @@ async def _push_corner_highlight(
     track = get_track_by_id(current_track_id)
     if track is None:
         return last_corner
-    corner_number = _map_corner(
-        float(lap_distance), track.length_m, track.corners, current_track_id,
+    corner_number, group_name, group_members = _map_corner_segment(
+        float(lap_distance), track.length_m, current_track_id, track.corners,
     )
     if corner_number is not None and corner_number != last_corner:
         if ws_manager is not None:
@@ -261,6 +312,8 @@ async def _push_corner_highlight(
                 payload={
                     "track_id": current_track_id,
                     "corner_number": corner_number,
+                    "corner_group": group_name,
+                    "corner_group_members": group_members,
                     "sector": sector,
                 },
             )

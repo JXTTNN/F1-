@@ -185,6 +185,8 @@
     feedbackCorners: new Set(),
     selectedCorner: null,
     feedbackMode: null, // "corner" | "track"
+    cornerGroups: [], // task-63：当前赛道的弯道段
+    selectedSegment: null, // task-63：反馈面板当前绑定的连续弯段
     currentCorner: null,
     ws: null,
     wsReconnectCount: 0,
@@ -408,6 +410,8 @@
       const track = data.track || data;
       const corners = data.corners || track.corners || [];
       state.corners = corners;
+      // task-63：弯道段（连续弯分组），热区点击与当前弯高亮都以段为单位
+      state.cornerGroups = data.segments || [];
       dom.trackMeta.textContent = `${track.circuit_name || ""} · ${track.country || ""} · ${(track.length_m / 1000).toFixed(3)} km · ${corners.length} 弯`;
       renderTrackMap(trackId, corners);
       loadExistingFeedback(trackId);
@@ -499,7 +503,7 @@
     hz.addEventListener("click", () => {
       hz.classList.add("pulse");
       setTimeout(() => hz.classList.remove("pulse"), PULSE_DURATION_MS);
-      openFeedbackPanel(num, c.name, "corner");
+      openFeedbackPanel(num, c.name, "corner", groupOfCorner(num));
     });
     layer.appendChild(hz);
   }
@@ -553,13 +557,20 @@
    *  @param {number|null} cornerNumber — 弯道编号，null 表示清除高亮
    *  @returns {void}
    */
-  function highlightCurrentCorner(cornerNumber) {
-    const prev = dom.mapWrap.querySelector(".hotzone.current-corner");
-    if (prev) prev.classList.remove("current-corner");
+  function highlightCurrentCorner(cornerNumber, groupMembers) {
+    dom.mapWrap.querySelectorAll(".hotzone.current-corner").forEach((el) => {
+      el.classList.remove("current-corner");
+    });
     state.currentCorner = cornerNumber;
     if (cornerNumber == null) return;
-    const hz = dom.mapWrap.querySelector(`.hotzone[data-corner="${cornerNumber}"]`);
-    if (hz) hz.classList.add("current-corner");
+    // task-63：连续弯段 → 段内全部成员一起高亮（消除单弯跳变观感）
+    const targets = Array.isArray(groupMembers) && groupMembers.length > 1
+      ? groupMembers
+      : [cornerNumber];
+    targets.forEach((n) => {
+      const hz = dom.mapWrap.querySelector(`.hotzone[data-corner="${n}"]`);
+      if (hz) hz.classList.add("current-corner");
+    });
   }
 
   /* ========================================================================
@@ -571,12 +582,24 @@
    *  @param {string|null} cornerName — 弯道名称
    *  @returns {void}
    */
-  function configureCornerMode(cornerNumber, cornerName) {
+  function configureCornerMode(cornerNumber, cornerName, segment) {
     state.selectedCorner = { number: cornerNumber, name: cornerName || "" };
-    dom.fbCornerNum.textContent = `T${cornerNumber}`;
+    // task-63：多弯段 → 反馈绑定整段（提交时展开为段内逐弯）
+    state.selectedSegment = segment && segment.members && segment.members.length > 1
+      ? segment : null;
+    const segName = state.selectedSegment ? state.selectedSegment.name : "";
+    dom.fbCornerNum.textContent = state.selectedSegment ? segName : `T${cornerNumber}`;
     dom.fbCornerName.textContent = cornerName || "";
-    if (dom.fbTitle) dom.fbTitle.textContent = "弯道反馈 · 多症状录入";
-    if (dom.fbTip) dom.fbTip.textContent = "可同时勾选多个症状（checkbox 多选）。入弯/弯中/出弯类症状绑定当前弯道。每个选中症状都有独立的强度档位（1-3）。";
+    if (dom.fbTitle) {
+      dom.fbTitle.textContent = state.selectedSegment
+        ? `连续弯段反馈 · ${segName}`
+        : "弯道反馈 · 多症状录入";
+    }
+    if (dom.fbTip) {
+      dom.fbTip.textContent = state.selectedSegment
+        ? `连续弯段（${segName}）：勾选的症状将作用于段内全部弯号（${state.selectedSegment.members.map((n) => "T" + n).join("、")}）。每个选中症状都有独立的强度档位（1-3）。`
+        : "可同时勾选多个症状（checkbox 多选）。入弯/弯中/出弯类症状绑定当前弯道。每个选中症状都有独立的强度档位（1-3）。";
+    }
     dom.fbOverlay.querySelectorAll('.sym-group').forEach((g) => {
       g.style.display = g.dataset.category === 'global' ? 'none' : '';
     });
@@ -587,6 +610,7 @@
    */
   function configureTrackMode() {
     state.selectedCorner = { number: null, name: "赛道级" };
+    state.selectedSegment = null;
     dom.fbCornerNum.textContent = "—";
     dom.fbCornerName.textContent = "赛道级";
     if (dom.fbTitle) dom.fbTitle.textContent = "赛道反馈 · 全局症状";
@@ -602,7 +626,14 @@
    *  @param {("corner"|"track")} mode — 反馈模式
    *  @returns {void}
    */
-  function openFeedbackPanel(cornerNumber, cornerName, mode) {
+  /** task-63：按弯号查所属弯道段（无段数据返回 null）。 */
+  function groupOfCorner(cornerNumber) {
+    return (state.cornerGroups || []).find(
+      (g) => Array.isArray(g.members) && g.members.includes(cornerNumber),
+    ) || null;
+  }
+
+  function openFeedbackPanel(cornerNumber, cornerName, mode, segment) {
     const fbMode = mode === "track" ? "track" : "corner";
     state.feedbackMode = fbMode;
 
@@ -610,7 +641,7 @@
     if (fbMode === "track") {
       configureTrackMode();
     } else {
-      configureCornerMode(cornerNumber, cornerName);
+      configureCornerMode(cornerNumber, cornerName, segment);
     }
 
     // 重置所有 checkbox
@@ -730,7 +761,16 @@
       return;
     }
     const corner = state.selectedCorner;
-    const feedbacks = collectFeedbacks();
+    let feedbacks = collectFeedbacks();
+    // task-63：连续弯段 → 展开为段内逐弯反馈（批量接口天然支持）
+    const seg = state.selectedSegment;
+    if (seg && Array.isArray(seg.members) && seg.members.length > 1) {
+      const expanded = [];
+      feedbacks.forEach((fb) => {
+        seg.members.forEach((m) => expanded.push({ ...fb, corner_number: m }));
+      });
+      feedbacks = expanded;
+    }
     const payload = { track_id: state.currentTrackId, feedbacks: feedbacks };
 
     dom.fbSubmit.disabled = true;
@@ -1054,7 +1094,7 @@
    */
   function onCornerEvent(c) {
     const num = c.corner_number;
-    highlightCurrentCorner(num);
+    highlightCurrentCorner(num, c.corner_group_members);
     updateTelValue(dom.telCorner, num != null ? `T${num}` : "—");
     if (c.sector != null) updateSectorDisplay(c.sector);
   }

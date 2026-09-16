@@ -128,14 +128,14 @@ class TestCornerEvent:
 
     def test_corner_event_uses_arc_mapping(self) -> None:
         manager = _FakeManager()
-        # suzuka 全长 5807m，26% ≈ 1510m → 应判为 T7
+        # suzuka 全长 5807m，26% ≈ 1510m → 应判为 T8（Degner 1，task-63 弯号）
         all_latest = {2: {"m_lapDistance": 1510.0, "m_sector": 0}}
         corner = asyncio.run(
             _push_corner_highlight(manager, all_latest, _FakeState(), None),
         )
-        assert corner == 7
+        assert corner == 8
         assert manager.events and manager.events[0][0] == "corner"
         payload = manager.events[0][1]
-        assert payload["corner_number"] == 7
+        assert payload["corner_number"] == 8
         assert payload["sector"] == 1  # UDP 0 → 1 基 1
         assert payload["track_id"] == "suzuka"

@@ -68,7 +68,9 @@ class TestArcTableConsistency:
         """抽查若干已知弯位（同时锁定"路径起点不在 T1 前"这一已知特性）。"""
         suzuka = TRACK_CORNER_ARCS["suzuka"]
         assert suzuka[1] == pytest.approx(0.0, abs=0.02)
-        assert suzuka[7] == pytest.approx(0.26, abs=0.03)
+        # task-63：F1 26 弯号 —— Dunlop=T7、Degner 1=T8
+        assert suzuka[7] == pytest.approx(0.193, abs=0.03)
+        assert suzuka[8] == pytest.approx(0.265, abs=0.03)
         melbourne = TRACK_CORNER_ARCS["melbourne"]
         assert melbourne[1] == pytest.approx(0.0, abs=0.02)
         # mexico_city / monza / spielberg 的 SVG 路径起点落在 T1 附近 → T1 ≈ 1.0
@@ -120,10 +122,10 @@ class TestCornerMapping:
         """Suzuka 具体点校验（旧均匀近似在这里会给出错误的弯号）。"""
         track = get_track_by_id("suzuka")
         assert track is not None
-        # 26% 处应为 T7（均匀近似会算成 T5）
-        assert _map_corner(0.26 * track.length_m, track.length_m, track.corners, "suzuka") == 7
-        # 76% 处应落在 T13/T14 一带（Spoon 之后）
-        assert _map_corner(0.76 * track.length_m, track.length_m, track.corners, "suzuka") in {13, 14}
+        # task-63：26% 处应为 T8（Degner 1，F1 26 弯号；均匀近似会算错）
+        assert _map_corner(0.26 * track.length_m, track.length_m, track.corners, "suzuka") == 8
+        # 76% 处应为 T15（130R，F1 26 弯号）
+        assert _map_corner(0.76 * track.length_m, track.length_m, track.corners, "suzuka") == 15
 
     def test_wraparound_path_origin(self) -> None:
         """monza 的路径起点在 T1 附近：lap_distance≈0 仍应判为 T1。"""

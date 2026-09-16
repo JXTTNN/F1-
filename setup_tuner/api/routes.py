@@ -99,10 +99,14 @@ class CornerView(BaseModel):
 
 
 class TrackDetail(BaseModel):
-    """赛道详情视图（含弯道锚点列表）。"""
+    """赛道详情视图（含弯道锚点列表与弯道段）。"""
 
     track: TrackRef
     corners: list[CornerView]
+    segments: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="弯道段（连续弯分组，task-63）：name/members/arc_start/arc_end",
+    )
 
 
 class SelectTrackRequest(BaseModel):
@@ -371,9 +375,13 @@ async def get_track(track_id: str) -> dict[str, Any]:
             code=4040,
             http_status=404,
         )
+    from setup_tuner.domain._track_arcs import TRACK_CORNER_ARCS
+    from setup_tuner.domain.corner_groups import build_corner_groups
+
     data = TrackDetail(
         track=_track_to_ref(track),
         corners=[_corner_to_view(c) for c in track.corners],
+        segments=build_corner_groups(TRACK_CORNER_ARCS.get(track_id, {})),
     )
     return ok(data=data.model_dump())
 

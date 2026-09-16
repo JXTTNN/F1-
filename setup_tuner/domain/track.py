@@ -290,26 +290,31 @@ def _melbourne_corners() -> list[Corner]:
 
 
 def _suzuka_corners() -> list[Corner]:
-    """Suzuka International Racing Course (5.807 km, 18 弯, mixed)。"""
+    """Suzuka International Racing Course (5.807 km, 18 弯, mixed)。
+
+    task-63：按 F1 26 游内弯号重排（S-Curves=T3-T6、Dunlop=T7、
+    Degner=T8/T9、Bridge Right=T10、Hairpin=T11、Spoon=T13/T14、
+    130R=T15、Casio=T16-T18）。锚点取自 _track_anchors（真实 SVG 投影）。
+    """
     return _build_corners([
-        (1, "First", "fast", 230),
-        (2, "S-Curves entry", "medium", 150),
-        (3, "S-Curves", "medium", 170),
-        (4, "S-Curves", "medium", 175),
-        (5, "S-Curves exit", "medium", 180),
-        (6, "Dunlop", "medium", 160),
-        (7, "Degner 1", "slow", 95),
-        (8, "Degner 2", "slow", 85),
-        (9, "Hairpin", "slow", 70),
-        (10, "200R", "fast", 210),
-        (11, "Spoon", "medium", 140),
-        (12, "Spoon exit", "medium", 155),
-        (13, "130R", "fast", 295),
-        (14, "Casio Triangle entry", "slow", 80),
-        (15, "Casio Triangle", "slow", 75),
-        (16, "Casio Triangle exit", "slow", 85),
-        (17, "Final", "medium", 165),
-        (18, "Final chicane", "slow", 90),
+        (1, "First Curve", "fast", 230),
+        (2, "Second Curve", "medium", 150),
+        (3, "S-Curves 1", "medium", 165),
+        (4, "S-Curves 2", "medium", 175),
+        (5, "S-Curves 3", "medium", 180),
+        (6, "S-Curves 4", "medium", 170),
+        (7, "Dunlop", "fast", 240),
+        (8, "Degner 1", "medium", 115),
+        (9, "Degner 2", "slow", 85),
+        (10, "Bridge Right", "fast", 210),
+        (11, "Hairpin", "slow", 70),
+        (12, "Sweep Right", "fast", 250),
+        (13, "Spoon Curve", "medium", 140),
+        (14, "Spoon Exit", "medium", 155),
+        (15, "130R", "fast", 295),
+        (16, "Casio Chicane Right", "slow", 75),
+        (17, "Casio Chicane Left", "slow", 80),
+        (18, "Final Right", "medium", 140),
     ])
 
 
