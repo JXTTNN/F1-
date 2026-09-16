@@ -71,6 +71,23 @@ def packet_name(packet_id: int) -> str:
     return PACKET_NAMES.get(packet_id, f"Unknown({packet_id})")
 
 
+def to_sector_1based(raw: Any) -> int | None:
+    """把 UDP 的 0 基 ``m_sector`` 归一化为 1 基（0/1/2 → 1/2/3）。
+
+    规范中 ``m_sector`` 取值 0=S1、1=S2、2=S3；而本项目的前端（``S1/S2/S3`` 展示与
+    CSS 类名）与规则引擎（``engine._apply_corner_rules`` 判断 ``sector == 3``）
+    都按 1 基理解。此前两处各自直读原始值，导致：
+        - 前端显示 "S0/S1/S2"、``sector-0`` 样式类不存在；
+        - 规则 5 判断 ``sector == 3`` 永不成立（真实值域上限是 2）。
+    统一在此转换，避免每个消费方各自 +1 而再次错位。
+    """
+    if raw is None or isinstance(raw, bool):
+        return None
+    if isinstance(raw, (int, float)):
+        return max(1, min(3, int(raw) + 1))
+    return None
+
+
 # --------------------------------------------------------------------------- #
 # 异常
 # --------------------------------------------------------------------------- #
