@@ -210,51 +210,63 @@ def _build_corners(raw: list[_RawCorner]) -> list[Corner]:
 # --------------------------------------------------------------------------- #
 
 def _melbourne_corners() -> list[Corner]:
-    """Albert Park Grand Prix Circuit (5.278 km, 14 弯, medium)。"""
+    """Albert Park Grand Prix Circuit (5.278 km, 14 弯, medium)。
+
+    task-64：按 2022 年改建后布局 + FIA 官方弯号重排，并以正式弯名替换
+    原先的 "Turn N" 占位命名（占位名无法定位到具体弯型，也无法与
+    游内 HUD 文本对上）。T3/T4/T6/T11/T12 在官方资料中无专名，改用
+    可读的方向描述；T9/T10 与 T13/T14 为连续弯的两段。
+    """
     return _build_corners([
-        (1, "Turn 1", "slow", 95),
-        (2, "Turn 2", "medium", 130),
-        (3, "Turn 3", "fast", 230),
-        (4, "Turn 4", "slow", 85),
-        (5, "Turn 5", "medium", 160),
-        (6, "Turn 6", "fast", 210),
-        (7, "Turn 7", "slow", 80),
-        (8, "Turn 8", "medium", 150),
-        (9, "Turn 9", "fast", 220),
-        (10, "Turn 10", "slow", 90),
-        (11, "Turn 11", "fast", 240),
-        (12, "Turn 12", "medium", 155),
-        (13, "Turn 13", "slow", 85),
-        (14, "Turn 14", "medium", 140),
+        (1, "Jones", "slow", 95),
+        (2, "Brabham", "medium", 130),
+        (3, "Turn 3 Right", "slow", 85),
+        (4, "Turn 4 Left", "medium", 160),
+        (5, "Whiteford", "fast", 210),
+        (6, "Turn 6 Right", "medium", 175),
+        (7, "Marina", "fast", 230),
+        (8, "Lauda", "fast", 240),
+        (9, "Waite Right", "fast", 250),
+        (10, "Waite Left", "fast", 220),
+        (11, "Turn 11 Left", "slow", 90),
+        (12, "Turn 12 Right", "medium", 155),
+        (13, "Ascari", "slow", 85),
+        (14, "Stewart", "medium", 140),
     ])
 
 
 def _suzuka_corners() -> list[Corner]:
     """Suzuka International Racing Course (5.807 km, 18 弯, mixed)。
 
-    task-63：按 F1 26 游内弯号重排（S-Curves=T3-T6、Dunlop=T7、
-    Degner=T8/T9、Bridge Right=T10、Hairpin=T11、Spoon=T13/T14、
-    130R=T15、Casio=T16-T18）。锚点取自 _track_anchors（真实 SVG 投影）。
+    task-64：按 FIA 官方弯号重排 —— T1/T2 First/Second Curve、
+    **T3-T7 Esses（S-Curves，五连弯，T7 即 Dunlop）**、T8/T9 Degner、
+    T10 Curve 10（Degner 与 Hairpin 之间的右弯）、T11 Hairpin、
+    T12 200R、T13/T14 Spoon、T15 130R、T16/T17 Casio Triangle、
+    T18 Final Corner。
+
+    旧数据把 Esses 压缩成 T3-T6 四弯、Dunlop 独立成 T7，使 Degner 之后
+    全部弯号前移一位；并用 "Sweep Right"/"Casio Chicane Left" 等
+    不规范命名填充。锚点取自 _track_anchors（真实 SVG 投影）。
     """
     return _build_corners([
         (1, "First Curve", "fast", 230),
         (2, "Second Curve", "medium", 150),
-        (3, "S-Curves 1", "medium", 165),
-        (4, "S-Curves 2", "medium", 175),
-        (5, "S-Curves 3", "medium", 180),
-        (6, "S-Curves 4", "medium", 170),
-        (7, "Dunlop", "fast", 240),
+        (3, "Esses 1", "medium", 165),
+        (4, "Esses 2", "medium", 175),
+        (5, "Esses 3", "medium", 180),
+        (6, "Esses 4", "medium", 170),
+        (7, "Dunlop Curve", "fast", 240),
         (8, "Degner 1", "medium", 115),
         (9, "Degner 2", "slow", 85),
-        (10, "Bridge Right", "fast", 210),
+        (10, "Curve 10", "fast", 210),
         (11, "Hairpin", "slow", 70),
-        (12, "Sweep Right", "fast", 250),
+        (12, "200R", "fast", 250),
         (13, "Spoon Curve", "medium", 140),
         (14, "Spoon Exit", "medium", 155),
         (15, "130R", "fast", 295),
-        (16, "Casio Chicane Right", "slow", 75),
-        (17, "Casio Chicane Left", "slow", 80),
-        (18, "Final Right", "medium", 140),
+        (16, "Casio Triangle (Right)", "slow", 75),
+        (17, "Casio Triangle (Left)", "slow", 80),
+        (18, "Final Corner", "medium", 140),
     ])
 
 
@@ -284,74 +296,95 @@ def _monaco_corners() -> list[Corner]:
 
 
 def _silverstone_corners() -> list[Corner]:
-    """Silverstone Circuit (5.891 km, 18 弯, mixed)。"""
+    """Silverstone Circuit (5.891 km, 18 弯, mixed)。
+
+    task-64：按 FIA 官方弯号重排（18 弯，全部有专名）——
+    T1 Abbey、T2 Farm、T3 Village、T4 The Loop、T5 Aintree、
+    **T6 Brooklands**、T7 Luffield、T8 Woodcote、**T9 Copse**、
+    T10-T14 Maggotts/Becketts/Chapel（五连弯）、T15 Stowe、T16 Vale、
+    T17/T18 Club。
+
+    旧数据把 "Wellington Straight"（直道，**并非弯道**）当作 T6 占位，
+    使 Brooklands 之后全部弯号后移一位（Copse 被误排为 T10 而非 T9）。
+    """
     return _build_corners([
         (1, "Abbey", "fast", 240),
         (2, "Farm", "medium", 175),
         (3, "Village", "medium", 140),
         (4, "The Loop", "slow", 90),
         (5, "Aintree", "medium", 165),
-        (6, "Wellington Straight", "fast", 280),
-        (7, "Brooklands", "slow", 95),
-        (8, "Luffield", "medium", 130),
-        (9, "Woodcote", "fast", 230),
-        (10, "Copse", "fast", 245),
-        (11, "Maggotts 1", "fast", 220),
-        (12, "Maggotts 2", "fast", 210),
-        (13, "Becketts 1", "medium", 175),
-        (14, "Becketts 2", "medium", 160),
-        (15, "Chapel", "fast", 215),
-        (16, "Stowe", "medium", 165),
-        (17, "Vale", "slow", 90),
-        (18, "Club", "medium", 155),
+        (6, "Brooklands", "slow", 95),
+        (7, "Luffield", "medium", 130),
+        (8, "Woodcote", "fast", 230),
+        (9, "Copse", "fast", 245),
+        (10, "Maggotts 1", "fast", 220),
+        (11, "Maggotts 2", "fast", 210),
+        (12, "Becketts 1", "medium", 175),
+        (13, "Becketts 2", "medium", 170),
+        (14, "Chapel", "fast", 215),
+        (15, "Stowe", "medium", 165),
+        (16, "Vale", "slow", 90),
+        (17, "Club 1", "medium", 150),
+        (18, "Club 2", "medium", 155),
     ])
 
 
 def _monza_corners() -> list[Corner]:
     """Autodromo Nazionale Monza (5.793 km, 11 弯, high_speed_low_downforce)。
 
-    task-63：按 F1 26 游内弯号重排 —— T1 Variante del Rettifilo、T2 Curva
-    Grande、T3 Variante della Roggia、T4/T5 Lesmo、T6 Serraglio、
-    T7-T9 Variante Ascari、T10/T11 Parabolica（旧版把 Curva Grande 排在
-    T10 且缺 Lesmo，与游内弯号不符）。
+    task-64：按 FIA 官方弯号重排 —— T1/T2 Variante del Rettifilo（右-左）、
+    **T3 Curva Grande**、T4/T5 Variante della Roggia（左-右）、
+    T6/T7 Curve di Lesmo、T8/T9/T10 Variante Ascari（左-右-左）、
+    T11 Curva Alboreto（Parabolica）。
+
+    旧数据把 Curva Grande 误排为 T2、Lesmo 整体前移到 T4/T5，并用人造拆分
+    "Variante Ascari entry/exit"、"Parabolica entry" 补足 11 弯，导致
+    Ascari 与 Parabolica 的真实弯号整体偏移。
     """
     return _build_corners([
-        (1, "Variante del Rettifilo", "slow", 80),
-        (2, "Curva Grande", "fast", 250),
-        (3, "Variante della Roggia", "slow", 85),
-        (4, "Lesmo 1", "medium", 145),
-        (5, "Lesmo 2", "medium", 150),
-        (6, "Serraglio", "fast", 230),
-        (7, "Variante Ascari entry", "slow", 90),
-        (8, "Variante Ascari", "slow", 85),
-        (9, "Variante Ascari exit", "medium", 140),
-        (10, "Parabolica entry", "medium", 160),
-        (11, "Parabolica", "medium", 200),
+        (1, "Variante del Rettifilo (Right)", "slow", 80),
+        (2, "Variante del Rettifilo (Left)", "slow", 87),
+        (3, "Curva Grande", "fast", 250),
+        (4, "Variante della Roggia (Left)", "slow", 85),
+        (5, "Variante della Roggia (Right)", "slow", 80),
+        (6, "Lesmo 1", "medium", 140),
+        (7, "Lesmo 2", "medium", 145),
+        (8, "Variante Ascari (Left)", "slow", 115),
+        (9, "Variante Ascari (Right)", "medium", 110),
+        (10, "Variante Ascari (Exit)", "medium", 120),
+        (11, "Curva Alboreto (Parabolica)", "fast", 200),
     ])
 
 
 def _spa_corners() -> list[Corner]:
-    """Circuit de Spa-Francorchamps (7.004 km, 19 弯, mixed)。"""
+    """Circuit de Spa-Francorchamps (7.004 km, 19 弯, mixed)。
+
+    task-64：按 FIA 官方弯号重排（19 弯，10 左 9 右）。
+    Eau Rouge/Raidillon 计为 T2-T4（左-右-左），Kemmel 直道上的轻微折角
+    **不计**为弯道；旧数据误将 "Kemmel Straight" 当作 T4，并用
+    "La Source/Eau Rouge/Kemmel approach" 三个虚构弯位补足 19 弯，
+    导致真实弯号整体前移（Bus Stop 被压到 T14-T16）并破坏回绕。
+    """
     return _build_corners([
         (1, "La Source", "slow", 85),
         (2, "Eau Rouge", "fast", 260),
-        (3, "Raidillon", "fast", 270),
-        (4, "Kemmel Straight", "fast", 280),
-        (5, "Les Combes", "slow", 95),
-        (6, "Malmedy", "medium", 145),
-        (7, "Rivage", "slow", 90),
-        (8, "Pouhon", "fast", 225),
-        (9, "Fagnes", "medium", 155),
-        (10, "Campus", "slow", 88),
-        (11, "Stavelot", "fast", 235),
-        (12, "Blanchimont 1", "fast", 275),
-        (13, "Blanchimont 2", "fast", 280),
-        (14, "Bus Stop entry", "slow", 82),
-        (15, "Bus Stop", "slow", 78),
-        (16, "Bus Stop exit", "slow", 85),
-        (17, "La Source approach", "medium", 160),
-        (18, "Eau Rouge approach", "fast", 255),
-        (19, "Kemmel approach", "fast", 265),
+        (3, "Raidillon Right", "fast", 270),
+        (4, "Raidillon Left", "fast", 280),
+        (5, "Les Combes Right", "slow", 95),
+        (6, "Les Combes Left", "medium", 145),
+        (7, "Malmedy", "fast", 240),
+        (8, "Bruxelles (Rivage)", "slow", 90),
+        (9, "Speakers Corner", "fast", 225),
+        (10, "Pouhon 1", "fast", 270),
+        (11, "Pouhon 2", "fast", 280),
+        (12, "Fagnes Right", "medium", 155),
+        (13, "Fagnes Left", "medium", 160),
+        (14, "Stavelot (Campus)", "fast", 235),
+        (15, "Curve Paul Frere", "fast", 275),
+        (16, "Blanchimont 1", "fast", 305),
+        (17, "Blanchimont 2", "fast", 310),
+        (18, "Bus Stop Right", "slow", 78),
+        (19, "Bus Stop Left", "slow", 75),
     ])
 
 

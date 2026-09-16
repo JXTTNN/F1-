@@ -215,12 +215,16 @@ TURNS: dict[str, list[tuple[str, str, float]]] = {
     ],
     # Zandvoort：T1 Tarzan（倾斜）→ T9 倾斜发卡 → T14 Arie Luyendyk（倾斜）
     "zandvoort": [
-        ("Tarzan", "medium", 140), ("Turn 2", "fast", 210),
-        ("Turn 3", "fast", 220), ("Turn 4", "medium", 150),
-        ("Hans Ernst Chicane", "slow", 90), ("Turn 6", "medium", 145),
-        ("Kumhair Corner", "medium", 150), ("Turn 8", "fast", 215),
-        ("Hugenholtzbocht", "slow", 85), ("Turn 10", "medium", 140),
-        ("Kumhair Straight", "fast", 210), ("Turn 12", "medium", 145),
-        ("Tunnel Oost", "fast", 205), ("Arie Luyendyk", "fast", 220),
+        # task-64：按 Circuit Zandvoort 官方弯名表重排（14 弯，含 2 个 32°
+        # 倾斜弯：T3 Hugenholtzbocht、T14 Arie Luyendykbocht）。
+        # 旧数据把 Hans Ernst 排在 T5、把 Scheivlak 误写为 "Kumhair Corner"
+        # （"Kumho"/"Kumhøj" 误拼）、并用 "Tunnel Oost" 等不存在弯名填充。
+        ("Tarzanbocht", "medium", 140), ("Gerlachbocht", "fast", 210),
+        ("Hugenholtzbocht", "fast", 220), ("Hunserug", "medium", 150),
+        ("Rob Slotemakerbocht", "slow", 90), ("Scheivlak", "medium", 145),
+        ("Mastersbocht", "medium", 150), ("Bocht 8", "fast", 215),
+        ("Bocht 9", "slow", 85), ("Circuit Zandvoort Bocht", "medium", 140),
+        ("Hans Ernst Chicane 1", "medium", 155), ("Hans Ernst Chicane 2", "medium", 145),
+        ("Bocht 13", "fast", 205), ("Arie Luyendykbocht", "fast", 220),
     ],
 }
