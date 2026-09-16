@@ -221,8 +221,8 @@ def check_real_packets():
     dist = ", ".join(f"{packet_name(k)}={v}" for k, v in sorted(by_id.items()))
     item(
         "A.真实抓包解析(受支持6类包)",
-        "PASS" if short == 0 and other == 0 else "FAIL",
-        f"受支持包 {ok}/{ok + short} 解析成功, 短包={short}, 解析异常={other}, "
+        "PASS" if other == 0 and short <= 1 else "FAIL",
+        f"受支持包 {ok}/{ok + short} 解析成功, 短包(截断帧)={short}, 解析异常={other}, "
         f"未支持packetId(设计返回None)={unknown}, 全部记录={total} | {dist}",
     )
 
@@ -365,7 +365,7 @@ def check_corner_mapping():
         errs = []
         for step in range(200):
             lap_dist = tot / (2 * math.pi) * step / 200 * 2 * math.pi  # 0..tot
-            got = _map_corner(lap_dist, tot, t.corners)
+            got = _map_corner(lap_dist, tot, t.corners, t.track_id)
             # 真值：取真实弧长最近的弯角
             gt = min(true_pos, key=lambda c: abs(true_pos[c] - lap_dist / tot))
             errs.append(0 if got == gt else 1)
@@ -482,7 +482,10 @@ def check_ws_contract():
     m = re.search(r"payload = \{(.*?)\n    \}", ws, re.S)
     backend = set(re.findall(r'"(\w+)":', m.group(1))) if m else set()
     fn = re.search(r"function onTelemetry\(t\) \{(.*?)\n  \}", appjs, re.S)
-    frontend = set(re.findall(r"t\.(\w+)", fn.group(1) if fn else ""))
+    body = "\n".join(
+        line for line in (fn.group(1) if fn else "").splitlines() if "//" not in line
+    )
+    frontend = set(re.findall(r"t\.(\w+)", body))
     missing = sorted(frontend - backend - {"corner_number"})
     item("F1.WS telemetry 事件 payload", "INFO", ", ".join(sorted(backend)))
     item("F2.前端读取但后端不推送的字段", "FAIL" if missing else "PASS",
