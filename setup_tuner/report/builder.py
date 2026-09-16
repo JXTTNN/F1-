@@ -19,13 +19,14 @@ from datetime import UTC, datetime
 from typing import Any
 
 from setup_tuner.domain.setup import ALL_SETUP_FIELDS
+from setup_tuner.telemetry.packets import to_sector_1based
 
 # 浮点比较 epsilon（用于 delta 零值判定）
 DELTA_ZERO_EPSILON = 1e-12
 
 # ---------------------------------------------------------------------------
 # Packet 5 字段映射（UDP 字段名 → domain.setup 参数名）
-# 对照 design 1.2.1 Packet 5 与 domain/setup.py 20 参数定义
+# 对照 design 1.2.1 Packet 5 与 domain/setup.py 21 参数定义
 # ---------------------------------------------------------------------------
 _PACKET5_FIELD_MAP: dict[str, str] = {
     "m_frontWing": "front_wing",
@@ -52,41 +53,30 @@ _PACKET5_FIELD_MAP: dict[str, str] = {
 }
 
 # ---------------------------------------------------------------------------
-# UDP 值域转换映射（UDP原始值 → 游戏内参数范围）
-# 对照 D 盘真实遥测数据反推与 domain/setup.py min_val/max_val 定义
-# uint8 字段：wing/suspension 类 UDP 0-250，diff/brake 类 UDP 0-200
-# float32 字段（camber/toe/tyre_pressure）：恒等映射
-# 格式：{param_name: (udp_min, udp_max, game_min, game_max)}
+# UDP 值域换算策略（2026-09 修正 —— 原实现会静默算错基线调教）
 # ---------------------------------------------------------------------------
-_UDP_VALUE_RANGE_MAP: dict[str, tuple[float, float, float, float]] = {
-    # --- 空气动力学 Aerodynamics (uint8, UDP 0-250) ---
-    "front_wing": (0, 250, 0, 50),
-    "rear_wing": (0, 250, 0, 50),
-    # --- 变速箱 Transmission (uint8, UDP 0-200) ---
-    "on_throttle_diff": (0, 200, 10, 100),
-    "off_throttle_diff": (0, 200, 10, 100),
-    # --- 悬挂几何 Suspension Geometry (float32, 恒等映射) ---
-    "front_camber": (-3.5, -2.5, -3.5, -2.5),
-    "rear_camber": (-2.0, -1.0, -2.0, -1.0),
-    "front_toe": (0.0, 0.2, 0.0, 0.2),
-    "rear_toe": (0.1, 0.35, 0.1, 0.35),
-    # --- 悬挂 Suspension (uint8, UDP 0-250) ---
-    "front_suspension": (0, 250, 1, 41),
-    "rear_suspension": (0, 250, 1, 41),
-    "front_anti_roll_bar": (0, 250, 1, 21),
-    "rear_anti_roll_bar": (0, 250, 1, 21),
-    "front_ride_height": (0, 250, 15, 35),
-    "rear_ride_height": (0, 250, 40, 60),
-    # --- 刹车 Brakes (uint8, UDP 0-200) ---
-    "brake_pressure": (0, 200, 80, 100),
-    "brake_bias": (0, 200, 50, 70),
-    "engine_braking": (0, 200, 0, 100),
-    # --- 轮胎 Tyres (float32, 恒等映射) ---
-    "front_left_tyre_pressure": (22.5, 29.5, 22.5, 29.5),
-    "front_right_tyre_pressure": (22.5, 29.5, 22.5, 29.5),
-    "rear_left_tyre_pressure": (20.5, 26.5, 20.5, 26.5),
-    "rear_right_tyre_pressure": (20.5, 26.5, 20.5, 26.5),
-}
+# 这里曾有一张 ``_UDP_VALUE_RANGE_MAP``，假设 EA 的 uint8 字段是 0–250 的编码值，
+# 再线性压缩到车库值域（例如 ``m_frontWing=34`` → 34/250*50 = **6.8**）。
+#
+# 该假设是错的。用仓库内 403 帧真实 F1 2026 抓包（``packetFormat=2026``）核对后：
+# EA 下发的 ``m_frontWing`` / ``m_frontSuspension`` / ``m_brakePressure`` /
+# ``m_engineBraking`` / ``m_frontToe`` … **已经是车库内显示的值** ——
+# 21/21 个映射字段的原始值全部落在 ``domain.setup`` 定义的合法区间内，例如：
+#
+#     m_frontWing=34            ∈ [0, 50]
+#     m_frontSuspension=37      ∈ [1, 41]
+#     m_frontAntiRollBar=15     ∈ [1, 21]
+#     m_brakePressure=97        ∈ [80, 100]
+#     m_brakeBias=57            ∈ [50, 70]
+#     m_engineBraking=50        ∈ [0, 100]
+#     m_frontToe=0.04           ∈ [0, 0.2]
+#
+# 错误换算不会报错（结果仍落在合法区间内，clamp 与全部测试都放行），
+# 因此属于"静默污染"：导入的当前调教基线全错 → 之后的每一个 setup_delta 都基于错基线。
+#
+# 现在改为**恒等映射**，只保留 clamp 到合法区间（防御越界值）。
+# 若将来确认某个字段 EA 确实做了编码，请**单独**为该字段加映射并附实测依据。
+
 
 
 # ---------------------------------------------------------------------------
@@ -252,34 +242,23 @@ def _assemble_report_dict(
 
 
 # ---------------------------------------------------------------------------
-# UDP 值域转换：将 Packet 5 原始值映射为游戏 Garage 参数值
+# UDP 值域换算：Packet 5 原始值 → 游戏车库值
 # ---------------------------------------------------------------------------
 def convert_udp_to_game_value(param_name: str, udp_value: float) -> float:
-    """将UDP原始值转换为游戏内参数值（线性映射）。
+    """把 Packet 5 原始值转换为游戏内车库值。
 
-    根据 _UDP_VALUE_RANGE_MAP 中定义的映射关系，将 UDP Packet 5
-    中的原始编码值线性映射为游戏内参数值。对于不在映射表中的参数，
-    直接返回原始值（恒等映射）。
-
-    转换公式：game = (udp - udp_min) / (udp_max - udp_min)
-                       * (game_max - game_min) + game_min
+    2026-09 修正：真实抓包证明 EA 下发的就是车库值，因此本函数为**恒等映射**
+    （详见本模块 ``UDP 值域换算策略`` 注释）。保留函数是为了不动调用方接口，
+    并作为"是否需要按字段换算"的唯一收敛点。
 
     Args:
-        param_name: 参数标识符（与 domain.setup 中的 name 一致）。
+        param_name: 参数标识（保留参数：将来若某字段确需换算，在此按名分派）。
         udp_value: UDP Packet 5 中的原始值。
 
     Returns:
-        游戏内参数值。
+        游戏内车库值（当前等于 ``udp_value``）。
     """
-    mapping = _UDP_VALUE_RANGE_MAP.get(param_name)
-    if mapping is None:
-        return udp_value
-    udp_min, udp_max, game_min, game_max = mapping
-    udp_span = udp_max - udp_min
-    if udp_span == 0:
-        return game_min
-    game_span = game_max - game_min
-    return (udp_value - udp_min) / udp_span * game_span + game_min
+    return udp_value
 
 
 # ---------------------------------------------------------------------------
@@ -289,8 +268,8 @@ def extract_setup_from_packet5(packet5: dict[str, Any]) -> dict[str, float]:
     """从遥测 CarSetups 包（packet_id=5）提取 21 项调教参数快照。
 
     对齐 design 1.2.1 Packet 5 字段映射与 domain.setup 21 参数全集。
-    缺失字段取 SetupField.default。
-    uint8 字段经值域转换（UDP原始值 → 游戏内参数范围），float32 字段恒等映射。
+    缺失字段取 SetupField.default；值经 :func:`convert_udp_to_game_value`
+    （当前为恒等映射）后 clamp 到合法区间。
 
     Args:
         packet5: ``parse_car_setups`` 返回的字典（含 m_frontWing 等字段）。
@@ -315,7 +294,7 @@ def extract_setup_from_packet5(packet5: dict[str, Any]) -> dict[str, float]:
 
 
 def _clamp_setup_to_bounds(result: dict[str, float]) -> None:
-    """将 20 参数值 clamp 到各自合法区间（原地修改）。"""
+    """将 21 参数值 clamp 到各自合法区间（原地修改）。"""
     for spec in ALL_SETUP_FIELDS:
         val = result[spec.name]
         if val < spec.min_val:
@@ -329,15 +308,21 @@ def _clamp_setup_to_bounds(result: dict[str, float]) -> None:
 # ---------------------------------------------------------------------------
 def extract_telemetry_summary(
     all_latest: dict[int, dict[str, Any]],
+    lap_stats: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """从 TelemetryStream.get_all_latest() 输出提取用于建议生成的遥测摘要。
+    """从遥测帧缓存 + 整圈统计提取用于建议生成的遥测摘要。
 
     提取 weather / track_temp / air_temp / speed / tyre_compound 等关键字段，
-    供 engine._derive_telemetry_gain 与 confidence.assess_confidence 使用。
+    供 engine._derive_telemetry_gain / _derive_telemetry_dx / confidence 使用。
 
     Args:
         all_latest: ``TelemetryStream.get_all_latest()`` 返回的
             ``{packet_id: parsed_dict}`` 字典。
+        lap_stats: 可选，``LapAggregator.snapshot()`` 产出的整圈统计。
+            提供后会合并进摘要，并用整圈均值覆盖 ``m_throttle`` / ``m_brake``
+            （引擎明确按"均值"语义使用这两个键）。
+            这是让遥测规则 6/7/10/15 生效的关键：单帧路径永远拿不到
+            ``max_speed`` / ``avg_steer`` / ``max_steer`` / ``on_straight``。
 
     Returns:
         遥测摘要字典。
@@ -347,6 +332,12 @@ def extract_telemetry_summary(
     _merge_telemetry_summary(summary, all_latest.get(6))
     _merge_status_summary(summary, all_latest.get(7))
     _merge_lap_summary(summary, all_latest.get(2))
+    if lap_stats:
+        summary.update(lap_stats)
+        if lap_stats.get("avg_throttle") is not None:
+            summary["m_throttle"] = lap_stats["avg_throttle"]
+        if lap_stats.get("avg_brake") is not None:
+            summary["m_brake"] = lap_stats["avg_brake"]
     return summary
 
 
@@ -395,22 +386,27 @@ def _merge_status_summary(
 def _merge_lap_summary(
     summary: dict[str, Any], lap: dict[str, Any] | None,
 ) -> None:
-    """从 Packet 2 LapData 提取圈速/扇区/圈距离。"""
+    """从 Packet 2 LapData 提取圈速/扇区/圈距离。
+
+    ``sector`` 统一转为 **1 基**（0/1/2 → 1/2/3）：前端按 ``S1/S2/S3`` 展示，
+    规则 5 判断 ``sector == 3``。早期直传 0 基原始值导致前端显示 S0/S1/S2、
+    且规则 5 永不触发。
+    """
     if not lap:
         return
     summary["lap_distance"] = lap.get("m_lapDistance")
-    summary["sector"] = lap.get("m_sector")
+    summary["sector"] = to_sector_1based(lap.get("m_sector"))
     summary["current_lap_num"] = lap.get("m_currentLapNum")
     summary["last_lap_time_ms"] = lap.get("m_lastLapTimeInMS")
 
 
 # ---------------------------------------------------------------------------
-# 辅助：从反馈记录列表提取症状列表（供 engine.generate_suggestion 使用）
+# 辅助：反馈列表 → 症状列表（含聚合，用于 /suggest）
 # ---------------------------------------------------------------------------
 def feedbacks_to_symptoms(
     feedbacks: list[dict[str, Any]],
 ) -> list[tuple[str, int]]:
-    """将反馈记录列表转换为 engine.generate_suggestion 所需的 symptoms 列表。
+    """将反馈记录逐条投影为 ``(symptom, strength)``（不做聚合，保留原语义）。
 
     Args:
         feedbacks: ``Store.get_feedbacks`` 返回的反馈记录列表。
@@ -423,3 +419,42 @@ def feedbacks_to_symptoms(
         for fb in feedbacks
         if fb.get("symptom") and fb.get("strength") is not None
     ]
+
+
+def aggregate_feedback_symptoms(
+    feedbacks: list[dict[str, Any]],
+) -> list[tuple[str, int]]:
+    """把反馈按 ``(弯道, 症状)`` 聚合后再投影为症状列表。
+
+    为什么需要（2026-09 修正）：
+        早期 ``/suggest`` 直接把每条反馈都作为一个症状丢给 ``compute_dx``。
+        而 ``compute_dx`` 对同症状是**代数求和**，于是同一条反馈重复 N 次就会让
+        Dx 线性放大 —— 云端实测：同一条反馈 ×20 时 ``|Dx|max`` 从 2.4 涨到 48，
+        21 个参数里 16 个被 ``max_delta`` 顶满 → 建议不再随输入变化，
+        且反馈越多越极端。这既不是"更多信息"，也不是个性化。
+
+        聚合规则：同一 ``(corner_number, symptom)`` 只保留**最强强度**；
+        不同弯道的同一症状仍然各算一份（保留"多个弯都推头"的信息量，
+        但不会因重复点击而虚假放大）。
+
+    Args:
+        feedbacks: ``Store.get_feedbacks`` 返回的反馈记录列表。
+
+    Returns:
+        聚合后的 ``[(symptom_key, strength), ...]``，按首次出现顺序。
+    """
+    best: dict[tuple[Any, str], int] = {}
+    order: list[tuple[Any, str]] = []
+    for fb in feedbacks:
+        symptom = fb.get("symptom")
+        strength = fb.get("strength")
+        if not symptom or strength is None:
+            continue
+        key = (fb.get("corner_number"), symptom)
+        value = int(strength)
+        if key not in best:
+            best[key] = value
+            order.append(key)
+        elif value > best[key]:
+            best[key] = value
+    return [(symptom, best[(corner, symptom)]) for corner, symptom in order]
