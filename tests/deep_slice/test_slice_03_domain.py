@@ -141,7 +141,8 @@ class TestUnit:
 
     def test_unit_get_track_by_udp_id(self) -> None:
         """get_track_by_udp_id 应返回对应赛道。"""
-        t = get_track_by_udp_id(2)
+        # 官方 m_trackId：suzuka = 13（早期按赛历轮次分配为 2，会认错赛道）
+        t = get_track_by_udp_id(13)
         assert t is not None
         assert t.track_id == "suzuka"
 
