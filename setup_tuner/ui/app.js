@@ -996,6 +996,8 @@
 
   /** 遥测数据 → 更新显示（数值变化添加 flash 过渡 + 仪表盘进度条）。 */
   /** 更新扇区显示（数值 + 三色编码标签）。F1 扇区三色编码：S1=紫、S2=绿、S3=黄。
+   *  入参为 **1 基**扇区（1/2/3）—— 后端 `to_sector_1based` 已把 UDP 的 0/1/2 转换好，
+   *  早期前端直读 0 基值导致显示 "S0/S1/S2" 且 sector-0 样式类不存在。
    *  @param {number} sector — 扇区编号（1/2/3）
    */
   function updateSectorDisplay(sector) {
@@ -1011,6 +1013,8 @@
   }
 
   /** 遥测数据 → 更新显示（数值变化添加 flash 过渡 + 仪表盘进度条）。
+   *  字段契约与后端 `api/ws.py::_push_telemetry_frame` 一致：
+   *  speed / throttle / brake / steer / gear / engine_rpm / drs / lap_time_ms / sector(1 基)。
    *  @param {Object} t — 遥测数据对象
    *  @returns {void}
    */
@@ -1030,9 +1034,11 @@
       setGaugeBar(dom.telBrakeBar, pct, PERCENT_MAX);
     }
     if (t.gear != null) { updateTelValue(dom.telGear, t.gear < 0 ? "R" : String(t.gear)); }
-    if (t.rpm != null) { updateTelValue(dom.telRpm, String(Math.round(t.rpm))); }
+    // 后端字段名为 engine_rpm（原实现误读 t.rpm → 转速恒为 "—"）
+    if (t.engine_rpm != null) { updateTelValue(dom.telRpm, String(Math.round(t.engine_rpm))); }
     if (t.lap_time_ms != null) { updateTelValue(dom.telLaptime, fmtLapTime(t.lap_time_ms)); }
     else if (t.last_lap_time_ms != null) { updateTelValue(dom.telLaptime, fmtLapTime(t.last_lap_time_ms)); }
+    // sector 由后端统一转为 1 基（S1/S2/S3）
     if (t.sector != null) updateSectorDisplay(t.sector);
   }
 
