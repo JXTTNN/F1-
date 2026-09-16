@@ -1566,7 +1566,7 @@ class LapTelemetrySummaryView(BaseModel):
     avg_steer: float
     max_steer: float
 
-    # 四轮温度/胎压统计 [FL, FR, RL, RR]
+    # 四轮温度/胎压统计（官方车轮顺序 [RL, RR, FL, FR]）
     avg_tyre_surface_temp: list[float]
     avg_tyre_inner_temp: list[float]
     avg_brake_temp: list[float]

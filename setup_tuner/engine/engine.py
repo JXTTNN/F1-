@@ -184,8 +184,12 @@ def _apply_tyre_temperature_rules(
         return
     temps = tyre_temps[:4]
     avg_tyre_temp = sum(temps) / 4.0
-    front_avg = (temps[0] + temps[1]) / 2.0  # FL, FR
-    rear_avg = (temps[2] + temps[3]) / 2.0   # RL, RR
+    # 车轮顺序由官方规范固定为 RL, RR, FL, FR（**不是** FL, FR, RL, RR）：
+    # "All wheel arrays have the following order: RL, RR, FL, FR"
+    #   [0]=RL [1]=RR [2]=FL [3]=FR
+    # 早期实现把 [:2] 当前轮、[2:4] 当后轮，导致前后轮判断完全颠倒。
+    rear_avg = (temps[0] + temps[1]) / 2.0   # RL, RR
+    front_avg = (temps[2] + temps[3]) / 2.0  # FL, FR
 
     # 规则1：胎温过高
     if avg_tyre_temp > 100.0:
@@ -222,8 +226,9 @@ def _apply_tyre_pressure_rules(
     tyre_pressures = telemetry.get("m_tyresPressure")
     if not (isinstance(tyre_pressures, list) and len(tyre_pressures) >= 4):
         return
-    front_abnormal = any(p > 26.0 or p < 22.0 for p in tyre_pressures[:2])
-    rear_abnormal = any(p > 26.0 or p < 22.0 for p in tyre_pressures[2:4])
+    # 官方车轮顺序 RL, RR, FL, FR：前轮 = 索引 2,3；后轮 = 索引 0,1
+    front_abnormal = any(p > 26.0 or p < 22.0 for p in tyre_pressures[2:4])
+    rear_abnormal = any(p > 26.0 or p < 22.0 for p in tyre_pressures[0:2])
     if front_abnormal:
         dx["front_grip_req"] += 0.15
     if rear_abnormal:
