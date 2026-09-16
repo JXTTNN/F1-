@@ -3,7 +3,7 @@
 覆盖验收标准：
 1. ALL_TRACKS 长度 == 24
 2. 每赛道含弯道列表，anchor 在 0~1 区间
-3. udp_track_id 唯一
+3. udp_track_id 唯一且与 EA 官方 m_trackId 枚举一致
 4. get_track_by_id / get_track_by_udp_id 查找正确
 """
 
@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from setup_tuner.domain.track import (
     ALL_TRACKS,
+    UDP_TRACK_ID_UNVERIFIED,
     Corner,
     CornerAnchor,
     Track,
@@ -51,10 +52,37 @@ class TestTrackRoster:
         udp_ids = [t.udp_track_id for t in ALL_TRACKS]
         assert len(udp_ids) == len(set(udp_ids)), f"udp_track_id 重复: {udp_ids}"
 
-    def test_udp_track_id_range_0_to_23(self) -> None:
-        """udp_track_id 应覆盖 0~23（按赛历轮次顺序分配）。"""
-        udp_ids = sorted(t.udp_track_id for t in ALL_TRACKS)
-        assert udp_ids == list(range(24))
+    def test_udp_track_id_matches_official_enum(self) -> None:
+        """udp_track_id 必须与 EA UDP 规范的 m_trackId 官方枚举一致。
+
+        历史问题：早期按「赛历轮次 - 1」占位分配，24 条赛道里 20 条会认错赛道
+        （例如 suzuka 被赋 2，官方是 13；jeddah 被赋 4，官方是 29）。
+        """
+        official = {
+            "melbourne": 0, "shanghai": 2, "sakhir": 3, "barcelona": 4,
+            "monaco": 5, "montreal": 6, "silverstone": 7, "hungaroring": 9,
+            "spa": 10, "monza": 11, "singapore": 12, "suzuka": 13,
+            "yas_marina": 14, "austin": 15, "sao_paulo": 16, "spielberg": 17,
+            "mexico_city": 19, "baku": 20, "zandvoort": 26, "jeddah": 29,
+            "miami": 30, "las_vegas": 31, "lusail": 32,
+        }
+        for t in ALL_TRACKS:
+            if t.track_id in UDP_TRACK_ID_UNVERIFIED:
+                continue
+            assert t.track_id in official, f"{t.track_id} 缺少官方枚举"
+            assert t.udp_track_id == official[t.track_id], (
+                f"{t.track_id}: udp_track_id={t.udp_track_id}，官方={official[t.track_id]}"
+            )
+
+    def test_udp_track_id_unverified_is_explicit(self) -> None:
+        """未确认官方枚举的赛道必须有显式标记，不许"看起来已校准"。"""
+        flagged = {t.track_id for t in ALL_TRACKS} & set(UDP_TRACK_ID_UNVERIFIED)
+        assert flagged == set(UDP_TRACK_ID_UNVERIFIED)
+        for tid in UDP_TRACK_ID_UNVERIFIED:
+            track = get_track_by_id(tid)
+            assert track is not None and track.udp_track_id > 32, (
+                f"{tid} 的占位 id 应大于已知枚举上限 32"
+            )
 
     def test_track_type_valid(self) -> None:
         """每赛道 track_type 必须在合法枚举内。"""
@@ -152,7 +180,7 @@ class TestTrackLookup:
 
     def test_get_track_by_udp_id_known(self) -> None:
         """已知 udp_track_id 应返回对应赛道。"""
-        t = get_track_by_udp_id(2)  # suzuka
+        t = get_track_by_udp_id(13)  # suzuka（官方 m_trackId=13）
         assert t is not None
         assert t.track_id == "suzuka"
 
