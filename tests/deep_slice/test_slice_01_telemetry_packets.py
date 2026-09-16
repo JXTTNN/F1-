@@ -459,14 +459,17 @@ class TestSmoke:
         assert result["m_tyresAgeLaps"] == 10
         assert result["m_ersDeployMode"] == 2
 
-    def test_smoke_all_5_packet_types_in_sequence(self) -> None:
-        """冒烟：连续解析 5 类包，全部成功且 packet_id 正确。"""
+    def test_smoke_all_supported_packet_types_in_sequence(self) -> None:
+        """冒烟：连续解析全部支持包类型，全部成功且 packet_id 正确。"""
         packets = [
             (1, build_session_body()),
             (2, build_lap_per_car()),
             (5, build_setup_per_car()),
             (6, build_telem_per_car()),
             (7, build_status_per_car()),
+            # Packet 13 (MotionEx)：非按车分组，包体直接 244 字节
+            (13, struct.pack("<" + "4f" * 8 + "f" * 11 + "4f" + "f" * 6 + "4f" * 2,
+                             *([0.0] * 61))),
         ]
         for pid, body in packets:
             data = build_header(packet_id=pid) + body

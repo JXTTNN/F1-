@@ -102,7 +102,7 @@ class PacketTooShortError(ValueError):
 
 
 class UnknownPacketError(ValueError):
-    """包头 packetId 不在本版支持的 6 类包范围内时抛出。"""
+    """包头 packetId 不在本版支持的 7 类包范围内时抛出。"""
 
 
 # --------------------------------------------------------------------------- #
