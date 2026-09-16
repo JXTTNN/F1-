@@ -435,8 +435,15 @@ def _make_corners(track_id: str, track_type: str, n_corners: int) -> list[Corner
 # 24 条 F1 2026 赛历赛道（按赛历轮次顺序）
 # --------------------------------------------------------------------------- #
 # 元数据核对自 legacy/f1opt/data/tracks.py ALL_TRACKS。
-# udp_track_id 按赛历轮次顺序分配（round_number - 1），需对照 F1 25
-# 官方 UDP 规范 m_trackId 枚举校准。
+# udp_track_id 取自 EA F1 25 UDP 规范 Session 包 ``m_trackId`` 官方枚举
+# （Appendices → Track IDs），**不是**赛历轮次顺序——
+# 早期曾按 ``round_number - 1`` 分配，导致 24 条里 20 条认错赛道。
+# 官方枚举值：0 Melbourne / 2 Shanghai / 3 Sakhir / 4 Catalunya / 5 Monaco /
+# 6 Montreal / 7 Silverstone / 9 Hungaroring / 10 Spa / 11 Monza /
+# 12 Singapore / 13 Suzuka / 14 Abu Dhabi / 15 Texas / 16 Brazil /
+# 17 Austria / 19 Mexico / 20 Baku / 26 Zandvoort / 29 Jeddah / 30 Miami /
+# 31 Las Vegas / 32 Losail；33 为 F1 26 新增的马德里（Madring）。
+# 未收录：27 Imola（F1 25 有、F1 26 赛历无）、39/40/41 为反向赛道变体。
 # svg_path 相对 setup_tuner/ui/ 目录。
 
 ALL_TRACKS: list[Track] = [
