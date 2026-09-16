@@ -11,6 +11,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from setup_tuner.domain.setup import ALL_SETUP_FIELDS, CarSetup
 from setup_tuner.engine.diagnostic import compute_dx
 from setup_tuner.engine.engine import generate_suggestion
