@@ -134,10 +134,10 @@ class TestTelemetryToEngine:
 
         # 23 参数字典 → CarSetup 领域对象（不抛异常即合法）
         setup = CarSetup.from_dict(setup_params)
-        # uint8 字段经过值域转换：front_wing 7→0+7*50/250=1.4
-        assert setup.front_wing == pytest.approx(7 * 50 / 250)
-        assert setup.rear_wing == pytest.approx(3 * 50 / 250)
-        assert setup.brake_pressure == pytest.approx(80 + 85 * 20 / 200)
+        # 2026-09 修正：真实抓包证明 EA 下发即车库值 → 恒等映射（不再线性压缩）
+        assert setup.front_wing == pytest.approx(7)
+        assert setup.rear_wing == pytest.approx(3)
+        assert setup.brake_pressure == pytest.approx(85)
 
     def test_packet5_field_values_preserved_through_pipeline(self) -> None:
         """Packet 5 关键字段值经整条链路传递后不变形。
@@ -155,15 +155,15 @@ class TestTelemetryToEngine:
         setup_params = extract_setup_from_packet5(parsed)
         setup = CarSetup.from_dict(setup_params)
 
-        # uint8 字段经值域转换，float 字段直接透传
+        # 恒等映射（EA 下发即车库值）；float 字段同样直接透传
         assert parsed["m_frontWing"] == 9
-        assert setup.front_wing == pytest.approx(9 * 50 / 250)
+        assert setup.front_wing == pytest.approx(9)
         assert parsed["m_rearWing"] == 2
-        assert setup.rear_wing == pytest.approx(2 * 50 / 250)
+        assert setup.rear_wing == pytest.approx(2)
         assert parsed["m_brakePressure"] == 90
-        assert setup.brake_pressure == pytest.approx(80 + 90 * 20 / 200)
+        assert setup.brake_pressure == pytest.approx(90)
         assert parsed["m_brakeBias"] == 70
-        assert setup.brake_bias == pytest.approx(50 + 70 * 20 / 200)
+        assert setup.brake_bias == pytest.approx(70)
         # float 字段无需转换，直接透传
         assert setup.front_camber == pytest.approx(-3.0)
         assert setup.rear_camber == pytest.approx(-1.5)
