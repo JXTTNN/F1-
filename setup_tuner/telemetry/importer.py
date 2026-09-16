@@ -13,10 +13,13 @@
 from __future__ import annotations
 
 import json
+import logging
 import statistics
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 # --------------------------------------------------------------------------- #
@@ -299,7 +302,9 @@ def import_laps_from_directory(dirpath: str) -> list[LapTelemetrySummary]:
             summary = import_lap_json(str(jf))
             summaries.append(summary)
         except (json.JSONDecodeError, KeyError):
-            # 跳过损坏的 JSON 文件，不中断整体导入
+            # 跳过损坏的 JSON 文件，不中断整体导入；但必须留痕，
+            # 否则"圈史少了几圈"会被误判为数据本身缺失
+            logger.warning("跳过损坏的圈 JSON：%s", jf, exc_info=True)
             continue
     summaries.sort(key=lambda s: s.lap_number)
     return summaries

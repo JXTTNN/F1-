@@ -490,6 +490,11 @@ class Store:
         try:
             vector = json.loads(row["vector_json"])
         except (json.JSONDecodeError, TypeError):
+            # 库内向量损坏：按"无记录"处理触发重新累积，但留痕以便察觉
+            logger.warning(
+                "车手风格向量 JSON 损坏，按无记录处理：driver=%s track=%s",
+                driver_id, track_id, exc_info=True,
+            )
             return None
         return {
             "vector": vector,

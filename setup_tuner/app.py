@@ -133,7 +133,12 @@ def _lap_writer_loop(app: FastAPI) -> None:
     while True:
         try:
             job = app.state.lap_write_queue.get(timeout=1.0)
+        except queue.Empty:
+            # 正常的 1 秒轮询超时，继续等待
+            continue
         except Exception:
+            # 队列被替换/关闭等异常：记录后继续，避免本线程静默死循环
+            logger.warning("整圈落库队列读取异常", exc_info=True)
             continue
         try:
             snapshot = job.get("snapshot") or {}

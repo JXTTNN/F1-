@@ -68,6 +68,29 @@ class TestStorePersonalization:
         assert entry["sample_count"] == 4
         assert store.get_driver_style(1, "monza") is None
 
+    def test_corrupt_driver_style_json_is_logged(self, store: Store, caplog) -> None:
+        """库内风格向量 JSON 损坏时按"无记录"处理，但必须留痕。
+
+        否则个性化会静默退化为全局默认，且看不出是数据坏了还是样本不足。
+        """
+        store.save_driver_style(1, "suzuka", [0.5] * 12, sample_count=3)
+        # 直接把 vector_json 写坏
+        with store._lock:  # noqa: SLF001 — 测试需绕过正常写入路径
+            store._conn.execute(  # noqa: SLF001
+                "UPDATE driver_style SET vector_json = ? "
+                "WHERE driver_id = 1 AND track_id = 'suzuka'",
+                ("{not json",),
+            )
+            store._conn.commit()  # noqa: SLF001
+
+        with caplog.at_level("WARNING", logger="setup_tuner.db.store"):
+            entry = store.get_driver_style(1, "suzuka")
+
+        assert entry is None, "损坏数据应表现为无记录"
+        assert any(
+            "损坏" in r.getMessage() for r in caplog.records if r.levelno >= 30
+        ), "损坏向量被静默吞掉"
+
     def test_iteration_outcome_writeback(self, store: Store) -> None:
         """迭代记录可回写实际圈时（S4 闭环数据入口）。"""
         round_no = store.get_latest_round("suzuka") + 1
@@ -113,6 +136,31 @@ class TestStyleExtractor:
         # 每圈输出 11 维；第 12 维（圈速一致性）由 Store 层依据圈史追加
         assert vector is not None and len(vector) == len(STYLE_DIMS) - 1
         assert all(0.0 <= v <= 1.0 for v in vector)
+
+    def test_non_numeric_wheel_temps_are_skipped(self, caplog) -> None:
+        """非数值胎温/刹车温度不崩，跳过该帧信号并留 debug 痕迹。"""
+        agg = StyleExtractor()
+        agg.on_telemetry(self._frame())
+        bad = agg.on_telemetry({
+            "m_speed": 200.0, "m_throttle": 0.5, "m_brake": 0.0, "m_steer": 0.1,
+            "m_tyresSurfaceTemperature": ["x", None, {}, []],
+            "m_brakesTemperature": ["y", "z", "w", "v"],
+        })
+        # 不抛异常，向量仍可产出且仍在值域内
+        vector = agg.snapshot()
+        assert bad is None or isinstance(bad, list)
+        assert vector is not None
+        assert all(0.0 <= v <= 1.0 for v in vector)
+
+    def test_short_wheel_arrays_are_ignored(self) -> None:
+        """少于 4 个元素的车轮数组不参与统计（不做越界访问）。"""
+        agg = StyleExtractor()
+        agg.on_telemetry({
+            "m_speed": 200.0, "m_throttle": 0.5, "m_brake": 0.0, "m_steer": 0.1,
+            "m_tyresSurfaceTemperature": [90, 92],
+            "m_brakesTemperature": [420, 430],
+        })
+        assert agg.snapshot() is not None
 
     def test_extremes_distinguish_drivers(self) -> None:
         """两个极端开法 → 向量显著不同（这就是"风格"可分性的依据）。"""

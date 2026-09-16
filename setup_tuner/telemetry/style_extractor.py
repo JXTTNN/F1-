@@ -11,8 +11,11 @@
 
 from __future__ import annotations
 
+import logging
 import threading
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 STYLE_DIMS: list[str] = [
     "steer_aggression",      # 1 攻弯强度（平均|转向|）
@@ -132,13 +135,15 @@ class StyleExtractor:
                     self._tyre_hi = max(self._tyre_hi, max(values))
                     self._tyre_lo = min(self._tyre_lo, min(values))
                 except (TypeError, ValueError):
-                    pass
+                    # 非数值胎温：本帧跳过该信号；记录一次避免风格向量静默失真
+                    logger.debug("轮胎温度非数值，本帧跳过：%r", temps)
             btemps = frame.get("m_brakesTemperature")
             if isinstance(btemps, list) and len(btemps) >= 4:
                 try:
                     self._brake_temp_sum += sum(float(v) for v in btemps[:4]) / 4.0
                 except (TypeError, ValueError):
-                    pass
+                    # 非数值刹车温度：本帧跳过该信号
+                    logger.debug("刹车温度非数值，本帧跳过：%r", btemps)
             self._prev_speed = speed
 
     # ------------------------------------------------------------------ #

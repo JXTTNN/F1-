@@ -461,6 +461,9 @@ class TelemetryRecorder:
             est_packets = max(0, (file_size - _FILE_HEADER_SIZE) // 200)
             return start_time, est_packets
         except Exception:
+            # 文件不可读/非普通文件：回落到空元数据，但必须留痕，
+            # 否则录制列表会出现"包数为 0、无起始时间"而无从追溯原因
+            logger.warning("读取 .f1rec 文件头失败：%s", f1rec_file, exc_info=True)
             return None, 0
 
     @staticmethod
@@ -477,7 +480,9 @@ class TelemetryRecorder:
             if row and row[0] > 0:
                 return row[0]
         except Exception:
-            pass
+            # 统计失败不致命：回落到估算值，但必须留痕，
+            # 否则 UI 长期显示估算值而无人察觉
+            logger.warning("读取录制包数失败，回落到估算值：%s", db_file, exc_info=True)
         return est_packets
 
     def list_recordings(self) -> list[dict[str, Any]]:
@@ -518,7 +523,8 @@ class TelemetryRecorder:
                         "utf-8", errors="replace",
                     )
         except Exception:
-            pass
+            # .f1rec 头部损坏：返回 None 触发调用方回落，但记录原因
+            logger.warning("读取 .f1rec 会话头部失败：%s", f1rec_file, exc_info=True)
         return None
 
     def _query_db_recording_stats(self, db_file: Path) -> tuple[int, float | None, list[dict[str, Any]]]:
@@ -549,7 +555,8 @@ class TelemetryRecorder:
                 for name, count in by_type_rows
             ]
         except Exception:
-            pass
+            # 统计查询失败：返回零值，但记录以便定位（表缺失/库损坏等）
+            logger.warning("查询录制统计失败：%s", db_file, exc_info=True)
         return packet_count, end_time, by_type
 
     def get_recording_detail(self, session_id: str) -> dict[str, Any] | None:

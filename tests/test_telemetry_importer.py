@@ -432,6 +432,27 @@ class TestImportLapsFromDirectory:
         assert result[0].lap_number == 1
         assert result[1].lap_number == 3
 
+    def test_corrupted_json_skip_is_logged(self, tmp_path: Path, caplog) -> None:
+        """跳过的损坏 JSON 必须留痕，否则"圈史少几圈"会被误判为数据缺失。"""
+        _write_json_file(tmp_path, "lap_1.json", _make_lap_json(lap_number=1))
+        (tmp_path / "lap_2.json").write_text("{invalid", encoding="utf-8")
+
+        with caplog.at_level("WARNING", logger="setup_tuner.telemetry.importer"):
+            import_laps_from_directory(str(tmp_path))
+
+        logged = [r for r in caplog.records if r.levelno >= 30]
+        assert logged, "损坏 JSON 被静默跳过"
+        assert any("lap_2.json" in r.getMessage() for r in logged)
+
+    def test_clean_directory_has_no_warnings(self, tmp_path: Path, caplog) -> None:
+        """全部文件正常时不应产生 warning 噪声。"""
+        _write_json_file(tmp_path, "lap_1.json", _make_lap_json(lap_number=1))
+
+        with caplog.at_level("WARNING", logger="setup_tuner.telemetry.importer"):
+            import_laps_from_directory(str(tmp_path))
+
+        assert not [r for r in caplog.records if r.levelno >= 30]
+
     def test_only_lap_prefix_files(self, tmp_path: Path) -> None:
         """只加载 lap_*.json 文件，忽略其他文件。"""
         _write_json_file(tmp_path, "lap_1.json", _make_lap_json(lap_number=1))
