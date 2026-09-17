@@ -1610,3 +1610,45 @@ h1, h2, h3 {
   padding: 1px 6px;
   letter-spacing: var(--ls-normal);
 }
+/* ── 整体分析区块（报告摘要内）：赛道画像 / 逐弯依据 / 跨类别冲突 / 收口取舍 ── */
+.holistic {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border, #3a3a44);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.holistic-line {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  flex-wrap: wrap;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.holistic-tag {
+  flex: 0 0 auto;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+  background: var(--accent-soft, rgba(120, 160, 255, .16));
+  color: var(--accent, #7aa2ff);
+}
+.holistic-group {
+  border-left: 3px solid var(--border, #3a3a44);
+  padding-left: 8px;
+}
+.holistic-group.holistic-conflict { border-left-color: #e0a33c; }
+.holistic-group.holistic-coherence { border-left-color: #5cb87a; }
+.holistic-title {
+  font-size: 12px;
+  font-weight: 600;
+  opacity: .85;
+  margin-bottom: 3px;
+}
+.holistic-item {
+  font-size: 12px;
+  line-height: 1.55;
+  opacity: .9;
+}

@@ -1476,9 +1476,36 @@
     }
   }
 
+  /** 渲染「整体分析」区块：赛道画像 / 逐弯加权依据 / 跨类别冲突 / 收口取舍。
+   *  这是"为什么这么调"的依据链 —— 让车手看到整体权衡，而不是只看到数字。
+   *  @param {Object} h — report.holistic
+   *  @returns {string} HTML 片段
+   */
+  function buildHolisticHtml(h) {
+    if (!h) return "";
+    const group = (title, items, cls) => {
+      if (!Array.isArray(items) || !items.length) return "";
+      return `<div class="holistic-group ${cls}">` +
+        `<div class="holistic-title">${esc(title)}（${items.length}）</div>` +
+        items.map((t) => `<div class="holistic-item">${esc(t)}</div>`).join("") +
+        `</div>`;
+    };
+    const demandLine = h.demand
+      ? `<div class="holistic-line"><span class="holistic-tag">赛道画像</span>${esc(h.demand)}</div>`
+      : "";
+    const body = [
+      group("逐弯加权依据", h.corner_notes, "holistic-corner"),
+      group("跨弯道类别冲突（已折中）", h.conflicts, "holistic-conflict"),
+      group("整体收口与取舍", h.coherence_notes, "holistic-coherence"),
+    ].join("");
+    if (!demandLine && !body) return "";
+    return `<div class="holistic">${demandLine}${body}</div>`;
+  }
+
   function renderReportSummary(report) {
     if (report.summary) {
       dom.reportSummary.innerHTML = `<div>${esc(report.summary)}</div>` +
+        buildHolisticHtml(report.holistic) +
         (report.generated_at ? `<div class="meta">生成时间：${esc(report.generated_at)}</div>` : "");
       dom.reportSummary.classList.add("visible");
     } else {

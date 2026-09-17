@@ -51,6 +51,7 @@ from .diagnostic import (
     compute_dx,
     is_zero_dx,
 )
+from .holistic import class_weighted_dx, holistic_coherence, track_demand
 
 
 # ---------------------------------------------------------------------------
@@ -835,9 +836,42 @@ def generate_suggestion(
     telemetry: dict[str, Any] | None = None,
     model_type: str = "hybrid",
     style_vector: list[float] | None = None,
+    feedbacks: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """完整建议生成（Dx → SetupDelta → 报告组装）。详见模块级文档。"""
-    feedback_dx = compute_dx(symptoms)
+    """完整建议生成（Dx → SetupDelta → 整体收口 → 报告组装）。详见模块级文档。
+
+    Args:
+        symptoms: ``[(symptom, strength[, stage]), ...]``。
+        current_setup: 当前调教（21 参数）。
+        track_id: 赛道标识。
+        telemetry: 遥测摘要。
+        model_type: 模型类型。
+        style_vector: 车手风格向量。
+        feedbacks: **逐弯原始反馈**（含 ``corner_number``）。提供时改走
+            :func:`holistic.class_weighted_dx` —— 用弯道号查到该弯的类别
+            （慢/中/快）后重加权 Dx，使"慢发夹推头"与"高速弯推头"得到
+            不同的调教动作。缺省时退化为原 ``compute_dx(symptoms)`` 路径。
+
+    Returns:
+        建议结果字典（在原有键之外新增 ``holistic``：赛道需求画像、
+        逐弯加权说明、跨类别冲突、整体收口说明）。
+    """
+    demand = track_demand(track_id)
+    holistic_block: dict[str, Any] = {
+        "demand": demand.describe(),
+        "corner_notes": [],
+        "conflicts": [],
+        "coherence_notes": [],
+    }
+
+    if feedbacks:
+        weighted = class_weighted_dx(feedbacks, track_id)
+        feedback_dx = weighted.dx
+        holistic_block["corner_notes"] = list(weighted.corner_notes)
+        holistic_block["conflicts"] = [c.describe() for c in weighted.conflicts]
+    else:
+        feedback_dx = compute_dx(symptoms)
+
     telemetry_dx = _derive_telemetry_dx(telemetry)
     dx = {dim: feedback_dx[dim] + telemetry_dx[dim] for dim in DIAG_DIMS}
     telemetry_gain = _derive_telemetry_gain(telemetry)
@@ -850,9 +884,14 @@ def generate_suggestion(
     nn_delta, nn_available = _compute_nn_delta(
         model_type, symptoms, dx, current_setup, track_id,
     )
-    final_delta, actual_model_type = _blend_delta(
+    blended_delta, actual_model_type = _blend_delta(
         rule_delta, nn_delta, model_type, nn_available,
     )
+
+    # 整体性收口：胎压左右对称 / 前后翼平衡窗口 / 改动预算 / 冲突与权衡说明
+    final_delta, coherence_notes = holistic_coherence(blended_delta, dx, demand)
+    holistic_block["coherence_notes"] = coherence_notes
+
     parameters = _build_param_details(final_delta, current_setup, dx)
     confidence = assess_confidence(symptoms, telemetry)
     summary = _build_suggestion_summary(final_delta, dx, parameters)
@@ -866,6 +905,7 @@ def generate_suggestion(
         "summary": summary,
         "model_type": actual_model_type,
         "nn_available": nn_available,
+        "holistic": holistic_block,
     }
 
 

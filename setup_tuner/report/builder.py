@@ -220,6 +220,11 @@ def build_report(
     # task-62：报告带实际生效的模型类型（nn/hybrid 未装 torch 时会降级为 rule，
     # 前端据此如实提示，不让用户误以为神经网络在跑）
     report["model_type"] = str(suggestion_result.get("model_type", "rule"))
+    # 整体思维层：赛道需求画像 / 逐弯加权说明 / 跨弯道类别冲突 / 收口说明。
+    # 这部分是"为什么这么调"的依据链，前端据此向车手解释取舍，而不是只给数字。
+    holistic = suggestion_result.get("holistic")
+    if holistic:
+        report["holistic"] = holistic
     return report
 
 

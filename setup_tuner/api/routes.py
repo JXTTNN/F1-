@@ -784,12 +784,17 @@ def _safe_generate_suggestion(
     symptoms: list, current_setup: dict[str, float],
     track_id: str, telemetry_summary: Any, model_type: str,
     style_vector: list[float] | None = None,
+    feedbacks: list[dict[str, Any]] | None = None,
 ) -> Any:
-    """调用 generate_suggestion，失败转换为 fail 异常。"""
+    """调用 generate_suggestion，失败转换为 fail 异常。
+
+    ``feedbacks`` 为逐弯原始反馈；传下去后引擎会按弯道类别重加权 Dx，
+    并做整体性收口（胎压对称 / 前后翼平衡窗口 / 改动预算）。
+    """
     try:
         return _invoke_generate_suggestion(
             symptoms, current_setup, track_id, telemetry_summary, model_type,
-            style_vector,
+            style_vector, feedbacks,
         )
     except Exception as e:
         logger.exception("generate_suggestion failed")
@@ -835,6 +840,7 @@ def _invoke_generate_suggestion(
     symptoms: list, current_setup: dict[str, float],
     track_id: str, telemetry_summary: Any, model_type: str,
     style_vector: list[float] | None = None,
+    feedbacks: list[dict[str, Any]] | None = None,
 ) -> Any:
     """调用 generate_suggestion，兼容未支持新参数的旧版本。"""
     try:
@@ -845,6 +851,7 @@ def _invoke_generate_suggestion(
             telemetry=telemetry_summary,
             model_type=model_type,
             style_vector=style_vector,
+            feedbacks=feedbacks,
         )
     except TypeError:
         # generate_suggestion 尚未支持新参数（降级为纯规则引擎）
@@ -905,9 +912,10 @@ async def suggest(
 
     # 反馈按 (弯道, 症状) 聚合后再转三元组：同一条反馈重复提交不再线性放大 Dx；
     # 取最近 500 条，防止反馈无限增长拖慢查询（task-62）
-    symptoms = aggregate_feedback_symptoms(
-        feedback_service.get_feedbacks(body.track_id, limit=500),
-    )
+    # 同时保留**原始逐弯反馈**透传给引擎：弯道号是"结合弯道特性"的前提，
+    # 聚合后的三元组已丢失它（慢发夹与高速弯的同类症状会退化为等价）。
+    raw_feedbacks = feedback_service.get_feedbacks(body.track_id, limit=500)
+    symptoms = aggregate_feedback_symptoms(raw_feedbacks)
     current_setup, setup_id = _resolve_current_setup(store, body.track_id)
     telemetry_summary = _extract_telemetry_summary(
         svc["telemetry_stream"], svc.get("lap_aggregator"),
@@ -923,7 +931,7 @@ async def suggest(
     )
     suggestion_result = _safe_generate_suggestion(
         symptoms, current_setup, body.track_id, telemetry_summary,
-        body.model_type, style_vector,
+        body.model_type, style_vector, raw_feedbacks,
     )
     report = build_report(
         suggestion_result=suggestion_result,
