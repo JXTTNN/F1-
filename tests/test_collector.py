@@ -295,6 +295,9 @@ class TestStatus:
             assert key in st, f"status 缺少 {key}"
         assert st["listening"] is False
         assert st["recording"] is False
+        # 回归防线：桌面接收器必须绑所有网卡——F1 游戏开「UDP 广播模式」时包
+        # 发往 255.255.255.255，只绑 127.0.0.1 会 0 包（真实踩坑）。
+        assert st["host"] == "0.0.0.0"
 
     def test_shutdown_idempotent(self, tmp_path: Path) -> None:
         app = CollectorApp(str(tmp_path / "recordings"))

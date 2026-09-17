@@ -20,7 +20,6 @@ from pathlib import Path
 from typing import Any
 
 from setup_tuner.telemetry.listener import (
-    DEFAULT_HOST,
     DEFAULT_PORT,
     TelemetryListener,
 )
@@ -28,6 +27,14 @@ from setup_tuner.telemetry.packets import packet_name, parse_header
 from setup_tuner.telemetry.recorder import TelemetryRecorder
 
 logger = logging.getLogger(__name__)
+
+#: 桌面接收器绑定所有网卡（而非只绑 127.0.0.1）。
+#: F1 游戏的「UDP 广播模式」开启时，包会被发到 255.255.255.255（广播）而非
+#: 设置里填的 IP；只绑 127.0.0.1 会**一个包都收不到**（0 包的经典成因）。
+#: 绑 0.0.0.0 可同时接收：单播到回环/局域网 IP + 广播。
+#: 注意：``TelemetryListener`` 自身的 ``DEFAULT_HOST`` 仍是 127.0.0.1
+#: （被 deep-slice 测试锁定），这里只改桌面接收器的绑定。
+_BIND_ALL = "0.0.0.0"
 
 
 class CollectorApp:
@@ -43,7 +50,7 @@ class CollectorApp:
         self,
         data_dir: str = "data/recordings",
         *,
-        host: str = DEFAULT_HOST,
+        host: str = _BIND_ALL,
         port: int = DEFAULT_PORT,
     ) -> None:
         self._data_dir = Path(data_dir)

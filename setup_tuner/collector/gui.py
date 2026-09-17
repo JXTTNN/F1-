@@ -164,8 +164,12 @@ class CollectorWindow:
                 f"总包数 {st['packets_total']}"
             ),
         )
+        host_disp = (
+            f"{st['host']}:{st['port']}（所有网卡）"
+            if st["host"] == "0.0.0.0" else f"{st['host']}:{st['port']}"
+        )
         self._lbl_target.config(
-            text=f"UDP {st['host']}:{st['port']}   数据目录 {st['data_dir']}",
+            text=f"UDP 监听 {host_disp}   数据目录 {st['data_dir']}",
         )
         self._btn_listen.config(
             text="停止监听" if st["listening"] else "启动监听",
