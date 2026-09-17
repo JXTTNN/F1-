@@ -128,15 +128,16 @@ class TestCornerEvent:
 
     def test_corner_event_uses_arc_mapping(self) -> None:
         manager = _FakeManager()
-        # suzuka 全长 5807m，26% ≈ 1510m → 处于 S 弯段，应判为 T6。
-        # （旧断言 T8 是错的：Degner 1 物理上在 ≈2900m ≈ 50%，旧弧长表整体错位）
+        # suzuka 全长 5807m，26% ≈ 1510m：真实 GPS 几何下 T7 弯心在 ≈1500m
+        # （S 弯群后段），该点恰在 T7 弯心旁，应判为 T7。
+        # （2026-09-17 真实几何重标；更早的 T8 断言系示意表整体错位）
         all_latest = {2: {"m_lapDistance": 1510.0, "m_sector": 0}}
         corner = asyncio.run(
             _push_corner_highlight(manager, all_latest, _FakeState(), None),
         )
-        assert corner == 6
+        assert corner == 7
         assert manager.events and manager.events[0][0] == "corner"
         payload = manager.events[0][1]
-        assert payload["corner_number"] == 6
+        assert payload["corner_number"] == 7
         assert payload["sector"] == 1  # UDP 0 → 1 基 1
         assert payload["track_id"] == "suzuka"

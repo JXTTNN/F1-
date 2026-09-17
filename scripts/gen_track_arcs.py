@@ -1,35 +1,51 @@
-"""生成 ``setup_tuner/domain/_track_arcs.py`` —— 各弯道锚点在赛道 SVG 路径上的弧长占比。
+"""弧长表复算与 SVG 交叉校验 —— 真实几何口径（task-80 重写）。
 
-为什么需要：
-    ``api/ws.py::_map_corner`` 早期用「弯角沿赛道均匀分布」的近似判定「当前弯」，
-    但弯道在真实赛道上并不等距（例如 Suzuka：T1 在 0%、T7 在 26%、T14-15 在 76-79%）。
-    云端实测该近似的判定错误率高达 69%（24 赛道 × 200 采样点 = 3313/4800）。
-    本脚本把「锚点 → 路径弧长占比」一次性算好落成数据文件，运行时二分查找即可，
-    单次查询约 0.2–0.3 µs（与错误近似同量级），零运行时 SVG 解析开销。
+2026-09-17 起 ``setup_tuner/domain/_track_arcs.py`` 由
+``scripts/gen_real_tracks.py`` 用真实 GPS 几何（``scripts/real_circuits/*.geojson``，
+起点 = 发车线、方向 = 官方行驶方向）同源生成：
 
-用法：
-    python scripts/gen_track_arcs.py
+- 锚点 = 官方弯数 N 个实测转弯特征点（``scripts/real_geometry.py::select_anchors``，
+  每点 ±40m 累计转角 >= 12°、官方每个 >= 60° 弯段必有锚点）；
+- 弧长占比 = 锚点真实圈内距离 / 真实圈长，与遥测 ``lap_distance`` 同一口径。
 
-产物：
-    ``setup_tuner/domain/_track_arcs.py``：``TRACK_CORNER_ARCS[track_id][corner] = fraction``
-    数值含义：弯道锚点最近点在该赛道 SVG 路径累计弧长上的占比 ∈ [0, 1)。
+本脚本保留两项职责：
 
-正确性保障：
-    ``tests/test_track_arcs.py`` 在 CI 中调用本模块的 :func:`compute_arcs` 重新计算，
-    与已提交的数据文件逐条比对（容差 1e-3），确保数据与 ``ui/tracks/*.svg`` 不脱节。
+1. ``compute_arcs()`` —— 用与生成器**完全相同**的算法复算全部占比，供
+   ``tests/test_track_arcs.py`` 在 CI 中与已提交数据逐条比对（容差 1e-3），
+   防止数据文件与生成逻辑脱节；
+2. ``verify_svg_consistency()`` —— 读取 ``ui/tracks/*.svg`` 的**实际路径**，
+   把 ``_track_anchors`` 的像素坐标投影回 SVG 路径反算占比，与真实几何
+   口径交叉验证。SVG 是真实几何的等比投影，两条独立计算路径应当给出
+   一致占比 —— 这是「SVG 可见层 / 锚点层 / 弧长层」三层同源的独立证据。
+
+已废弃（2026-09-17 删除）：旧「SVG 曲率峰值法」（在示意 SVG 上找转角局部
+极大、凑官方弯数）。示意 SVG 采样噪声大、需按赛道调参凑峰数，街道赛
+缓弯经常漏检，``_KNOWN_WEAK_ANCHORS`` 17 项人工豁免即其产物；真实几何
+口径下豁免整体不再需要。
+
+用法::
+
+    python scripts/gen_track_arcs.py      # 复算 + 交叉验证（只读校验器）
+    python scripts/gen_real_tracks.py     # 重建 SVG/锚点/弧长三件套（唯一写入者）
 """
 
 from __future__ import annotations
 
-import importlib.util
 import math
 import re
+import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SVG_DIR = REPO_ROOT / "setup_tuner" / "ui" / "tracks"
-ANCHORS_PATH = REPO_ROOT / "setup_tuner" / "domain" / "_track_anchors.py"
-OUT_PATH = REPO_ROOT / "setup_tuner" / "domain" / "_track_arcs.py"
+
+# real_geometry 与本文件同目录；tests 用 importlib 从路径加载本模块，
+# scripts/ 不在 pytest 的 sys.path 上
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+#: SVG 反算占比与数据表的最大允许偏差（SVG 为真实几何等比投影，
+#: 偏差仅来自路径抽稀与像素取整）
+SVG_CONSISTENCY_TOL = 0.01
 
 _TOK = re.compile(r"([MmLlHhVvCcSsQqTtAaZz])|(-?\d*\.?\d+(?:[eE][-+]?\d+)?)")
 _CUBIC_SAMPLES = 10
@@ -37,23 +53,14 @@ _QUAD_SAMPLES = 8
 _ARC_SAMPLES = 10
 
 # 闭合回路起跑线归一化容差（见 :func:`nearest_arc_fraction`）：
-#   CLOSURE_ANCHOR_TOL —— 锚点与回路闭合点的像素距离上限（锚点坐标保留 1 位小数）
+#   CLOSURE_ANCHOR_TOL —— 锚点与回路闭合点的像素距离上限（锚点坐标保留 2 位小数）
 #   CLOSURE_ARC_TOL    —— 最近点弧长与回路总长的相对偏差上限
 CLOSURE_ANCHOR_TOL = 0.5
 CLOSURE_ARC_TOL = 5e-4
 
 
-def load_anchors() -> dict[str, dict[int, tuple[float, float]]]:
-    """加载 ``_track_anchors.TRACK_ANCHORS``（按文件路径导入，不触发包导入副作用）。"""
-    spec = importlib.util.spec_from_file_location("_gen_anchors", ANCHORS_PATH)
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module.TRACK_ANCHORS
-
-
 # --------------------------------------------------------------------------- #
-# 曲线采样
+# path → 折线（供测试从 SVG 反算闭合点/累计转角；新 SVG 为 M/L/Z 折线）
 # --------------------------------------------------------------------------- #
 def _cubic_points(
     p0: tuple[float, float], p1: tuple[float, float],
@@ -65,7 +72,7 @@ def _cubic_points(
         mt = 1 - t
         out.append((
             mt ** 3 * p0[0] + 3 * mt * mt * t * p1[0] + 3 * mt * t * t * p2[0] + t ** 3 * p3[0],
-            mt ** 3 * p0[1] + 3 * mt * mt * t * p1[1] + 3 * mt * t * t * p2[1] + t ** 3 * p3[1],
+            mt ** 3 * p0[1] + 3 * mt * t * t * p2[1] + t ** 3 * p3[1],
         ))
     return out
 
@@ -138,13 +145,10 @@ def _arc_points(
     return out
 
 
-# --------------------------------------------------------------------------- #
-# path → 折线
-# --------------------------------------------------------------------------- #
 def parse_path(d: str) -> list[tuple[float, float]]:
     """把 SVG path 的 ``d`` 展平为折线点集。
 
-    支持 M/m L/l H/h V/v C/c S/s Q/q T/t A/a Z/z（本项目 24 条赛道资产实际用到的全集）。
+    支持 M/m L/l H/h V/v C/c S/s Q/q T/t A/a Z/z（SVG 全集）。
     """
     toks = [(m.group(1), m.group(2)) for m in _TOK.finditer(d)]
     pts: list[tuple[float, float]] = []
@@ -313,11 +317,6 @@ def nearest_arc_fraction(
 
     # 闭合回路归一化：锚点落在起跑线（回路闭合点）时，最近点在数值上
     # 会命中最后一段末端，返回 ≈1.0。此时应视其弧长为 0（起跑线）。
-    #
-    # 判据：
-    #   - 折线首尾重合（闭合回路）
-    #   - 投影点距离闭合点足够近（像素级容差，锚点本身有小数截断）
-    #   - 弧长落在回路末端附近（而非起点附近的普通弯）
     is_closed = math.hypot(poly[0][0] - poly[-1][0], poly[0][1] - poly[-1][1]) < 1e-6
     if is_closed:
         d_start = math.hypot(px - poly[0][0], py - poly[0][1])
@@ -328,86 +327,6 @@ def nearest_arc_fraction(
         if near_closure and d_start <= CLOSURE_ANCHOR_TOL:
             return 0.0
     return best_s / total
-
-
-def compute_arcs() -> dict[str, dict[int, float]]:
-    """重新计算全部赛道的弯道弧长占比（生成与 CI 校验共用同一实现）。
-
-    2026-09-17 起**改用曲率峰值法**：弯心 = 转角局部极大点，由赛道 SVG 几何
-    自动定位，并以官方弯数作硬校验（见 :func:`detect_apex_fractions`）。
-
-    为什么不再用人工锚点投影（用户实测指出蒙扎）：锚点摆错则全表皆错 ——
-    蒙扎 T1（第一减速弯，主直道末端 ≈1100 m）的锚点被摆在起跑线上，弧长
-    占比 0.0000，整条赛道弯号**整体前移 ≈19%**，所有"归因到某弯"的遥测实际
-    都属于前一个弯。几何法不依赖人工摆放，且峰数必须等于官方弯数。
-    """
-    from setup_tuner.domain.track import get_all_tracks
-
-    counts = {t.track_id: len(t.corners) for t in get_all_tracks()}
-    result, failed = compute_arcs_curvature(counts)
-    if failed:
-        raise RuntimeError(
-            "以下赛道无法用曲率峰值定位出恰好 N 个弯心，"
-            "需检查其 SVG 路径几何：" + ", ".join(sorted(failed))
-        )
-    return result
-
-
-def render_module(arcs: dict[str, dict[int, float]]) -> str:
-    """渲染 ``_track_arcs.py`` 内容。"""
-    lines = [
-        '"""各赛道弯道锚点在 SVG 路径上的累计弧长占比（自动生成，请勿手工编辑）。',
-        "",
-        "由 ``scripts/gen_track_arcs.py`` 生成；``tests/test_track_arcs.py`` 会在 CI 中用同一",
-        "算法重新计算并逐条比对，保证本文件与 ``ui/tracks/*.svg`` 不脱节。",
-        "",
-        "用途：``api/ws.py::_map_corner`` 依据圈内距离 (m) → 占比，取弧长最近的弯道，",
-        "取代早期「弯道均匀分布」的近似（云端实测错误率 69%）。",
-        '"""',
-        "",
-        "from __future__ import annotations",
-        "",
-        "# {track_id: {corner_number: arc_fraction}}，arc_fraction ∈ [0, 1)",
-        "TRACK_CORNER_ARCS: dict[str, dict[int, float]] = {",
-    ]
-    for track_id, corners in arcs.items():
-        lines.append(f'    "{track_id}": {{')
-        lines.extend(f"        {number}: {fraction}," for number, fraction in corners.items())
-        lines.append("    },")
-    lines.append("}")
-    lines.append("")
-    return "\n".join(lines)
-
-
-def main() -> int:
-    arcs = compute_arcs()
-    # newline 固定为 LF，避免 Windows 文本模式写出 CRLF 导致整文件 diff
-    OUT_PATH.write_text(render_module(arcs), encoding="utf-8", newline="\n")
-    total = sum(len(v) for v in arcs.values())
-    print(f"wrote {OUT_PATH} ({len(arcs)} tracks, {total} corners)")
-    return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
-
-
-# --------------------------------------------------------------------------- #
-# 曲率峰值法：由几何自动定位弯心（2026-09-17 起，替代人工锚点投影）
-# --------------------------------------------------------------------------- #
-# 为什么改（用户实测指出）：
-#   人工锚点会放错 —— 蒙扎 T1（第一减速弯，主直道末端 ≈1100 m）的锚点被摆在
-#   起跑线上，弧长占比 0.0000，导致整条赛道弯号**整体前移 ≈19%**；凡"遥测归因
-#   到某弯"的数据实际都属于前一个弯。受同样影响的还有 melbourne / mexico_city /
-#   spielberg（T1 锚点压在起跑线）。
-#   改为**曲率峰值自动定位**：弯心 = 转角局部极大点，纯几何决定，不依赖人工摆放；
-#   并以**官方弯数**作硬校验（峰数必须等于官方弯数，对不上就报错，不许编造）。
-
-# 累计转角窗口（圈长占比）：窗口越大越抗噪、越能识别"整段弯"而非单点锯齿。
-# 单点转角是错的度量 —— SVG 采样把每个 90° 弯拆成十几个 9° 小段，
-# 单点转角趋近 0，蒙扎 T1 因此被误判在直道上（实测 0.5°）。
-_APEX_WINDOWS = (0.08, 0.06, 0.05, 0.04, 0.03, 0.025, 0.02)
-_APEX_MIN_SEPS = (0.030, 0.022, 0.015, 0.010, 0.007)
 
 
 def _dense_path(track_id: str) -> tuple[list[tuple[float, float]], list[float], float]:
@@ -455,99 +374,84 @@ def _cumulative_turn(
     return out
 
 
-def _smooth_by_arc(
-    values: list[float], cum: list[float], total: float, window: float,
-) -> list[float]:
-    """按弧长窗口做滑动平均（抑制 SVG 采样噪声造成的锯齿峰）。"""
-    import bisect
-    half = window * total / 2.0
-    out: list[float] = []
-    for x in cum:
-        lo = bisect.bisect_left(cum, x - half)
-        hi = bisect.bisect_right(cum, x + half)
-        seg = values[lo:hi]
-        out.append(sum(seg) / len(seg) if seg else 0.0)
-    return out
+# --------------------------------------------------------------------------- #
+# 真实几何复算（与 scripts/gen_real_tracks.py 完全同一算法）
+# --------------------------------------------------------------------------- #
+def compute_arcs() -> dict[str, dict[int, float]]:
+    """复算全部赛道的弯道弧长占比（与生成器共用 ``real_geometry`` 实现）。
 
-
-def _cyclic_dist(a: float, b: float, total: float) -> float:
-    """占比环回距离（赛道是闭合回路，首尾相邻）。"""
-    d = abs(a - b) % total
-    return min(d, total - d)
-
-
-def _peaks_by_arc(
-    values: list[float], cum: list[float], total: float,
-    min_sep: float, threshold: float, n_want: int,
-) -> list[float] | None:
-    """取**恰好 ``n_want`` 个**最强且相互间隔 ≥ ``min_sep`` 的局部极大。
-
-    关键（早期版本的错误）：不是"调参让候选峰数恰好等于 n"——那样任何一组
-    参数都很难命中；而是**按强度从大到小贪心选取，凑满 n 个即停**。
-    蒙zilla 实测：转角聚集在 0.10–0.20（=物理上的 T1/T2 第一减速弯）、
-    0.35–0.45（T3 Curva Grande）、0.55–0.65（Lesmo）、0.80–0.90（Ascari）、
-    0.95–1.00（Parabolica），与真实赛历剖面吻合 —— 几何里本来就有正确答案，
-    是选峰方式不对。
-
-    候选不足 ``n_want`` 个时返回 ``None``（调用方须回退，不得编造）。
+    CI 中 ``tests/test_track_arcs.py`` 用本函数重算并与已提交的
+    ``_track_arcs.py`` 逐条比对（容差 1e-3），保证数据与生成逻辑不脱节。
+    选不满官方弯数时 ``select_anchors`` 抛 ``RuntimeError`` —— 宁可失败
+    不可编造。
     """
-    n = len(values)
-    idxs = [
-        i for i in range(1, n - 1)
-        if values[i] >= threshold
-        and values[i] >= values[i - 1] and values[i] >= values[i + 1]
-    ]
-    idxs.sort(key=lambda i: (-values[i], cum[i]))
-    chosen: list[int] = []
-    for i in idxs:
-        x = cum[i]
-        if all(_cyclic_dist(x, cum[j], total) >= min_sep for j in chosen):
-            chosen.append(i)
-            if len(chosen) == n_want:
-                return sorted(round(cum[k] / total, 6) for k in chosen)
-    return None
+    import real_geometry as rg
+
+    from setup_tuner.domain._track_official import OFFICIAL_TURN_COUNTS
+
+    result: dict[str, dict[int, float]] = {}
+    for tid in sorted(rg.TRACK_GEOJSON):
+        n_off = OFFICIAL_TURN_COUNTS[tid][0]
+        rt = rg.RealTrack(tid)
+        idxs = rg.select_anchors(rt, n_off)
+        result[tid] = {
+            pos + 1: round(rt.cum[idx] / rt.total_m, 6)
+            for pos, idx in enumerate(idxs)
+        }
+    return result
 
 
-def detect_apex_fractions(track_id: str, n_expected: int) -> list[float] | None:
-    """在赛道几何上定位 ``n_expected`` 个弯心，返回升序弧长占比。
-
-    度量：**累计转角窗口**（见 :func:`_cumulative_turn`）——弯 = 一段弧上
-    转角之和的局部极大，而非单点转角。确定性标定：按「最小间距由大到小 →
-    窗口由大到小」的固定顺序搜索，取第一个能凑满恰好 ``n_expected`` 个峰的
-    组合。找不到返回 ``None``（调用方须回退，不得编造）。
-    """
-    poly, cum, total = _dense_path(track_id)
-    if total <= 0 or n_expected <= 0:
-        return None
-    raw = _turning_series(poly)
-    for min_sep_frac in _APEX_MIN_SEPS:
-        for window in _APEX_WINDOWS:
-            signal = _cumulative_turn(raw, cum, total, window)
-            floor = max(signal) * 0.25 if max(signal) > 0 else 0.0
-            fr = _peaks_by_arc(
-                signal, cum, total, min_sep_frac * total, floor, n_expected,
-            )
-            if fr is not None:
-                return fr
-    return None
-
-
-def compute_arcs_curvature(
-    corner_counts: dict[str, int],
-) -> tuple[dict[str, dict[int, float]], list[str]]:
-    """对全部赛道做曲率峰值定位。
+# --------------------------------------------------------------------------- #
+# 三层同源交叉验证：SVG 实际路径反算 vs 数据表
+# --------------------------------------------------------------------------- #
+def verify_svg_consistency() -> tuple[float, list[str]]:
+    """把 ``_track_anchors`` 像素坐标投影回 ``ui/tracks/*.svg`` 实际路径，
+    反算占比并与 ``_track_arcs`` 数据表比对。
 
     Returns:
-        ``(arcs, failed)``：``arcs[track_id][corner] = fraction``；
-        ``failed`` 为未能用几何定位出恰好 N 个弯心的赛道 —— 调用方
-        **必须**对这些赛道保留人工锚点结果并明确报告，不得编造。
+        ``(worst_diff, issues)``：最大偏差与超差清单（空 = 三层一致）。
     """
-    result: dict[str, dict[int, float]] = {}
-    failed: list[str] = []
-    for track_id, n in sorted(corner_counts.items()):
-        fr = detect_apex_fractions(track_id, n)
-        if fr is None:
-            failed.append(track_id)
-            continue
-        result[track_id] = {i + 1: f for i, f in enumerate(fr)}
-    return result, failed
+    from setup_tuner.domain._track_anchors import TRACK_ANCHORS
+    from setup_tuner.domain._track_arcs import TRACK_CORNER_ARCS
+
+    issues: list[str] = []
+    worst = 0.0
+    for tid, anchors in sorted(TRACK_ANCHORS.items()):
+        poly, cum, total = _dense_path(tid)
+        for number, (x, y) in anchors.items():
+            frac = nearest_arc_fraction((x, y), poly, cum, total)
+            committed = TRACK_CORNER_ARCS[tid][number]
+            diff = abs(frac - committed)
+            worst = max(worst, diff)
+            if diff > SVG_CONSISTENCY_TOL:
+                issues.append(
+                    f"{tid} T{number}: SVG 反算 {frac:.4f} vs 数据 {committed:.4f}"
+                )
+    return worst, issues
+
+
+def main() -> int:
+    """只读校验：复算一致 + SVG 交叉一致（写盘职责归 gen_real_tracks.py）。"""
+    from setup_tuner.domain._track_arcs import TRACK_CORNER_ARCS
+
+    arcs = compute_arcs()
+    drift = [
+        f"{tid} T{num}: 提交 {TRACK_CORNER_ARCS[tid][num]:.4f} vs 复算 {frac:.4f}"
+        for tid, corners in arcs.items() for num, frac in corners.items()
+        if abs(TRACK_CORNER_ARCS[tid][num] - frac) > 1e-3
+    ]
+    worst, issues = verify_svg_consistency()
+    if drift or issues:
+        print("数据脱节：")
+        for line in drift + issues:
+            print(" ", line)
+        return 1
+    print(
+        f"OK: {len(arcs)} 条赛道 / {sum(len(v) for v in arcs.values())} 个锚点，"
+        f"复算与提交数据一致；SVG 实际路径反算最大偏差 {worst:.4f}"
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

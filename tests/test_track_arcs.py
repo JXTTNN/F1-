@@ -65,23 +65,26 @@ class TestArcTableConsistency:
                 )
 
     def test_known_corner_positions(self) -> None:
-        """抽查若干已知弯位（按真实赛道里程/圈长换算，2026-09-17 曲率法重标）。
+        """抽查若干已知弯位（2026-09-17 真实 GPS 几何重标，与官方赛道图对照）。
 
-        物理参照（距起点里程 ÷ 圈长）：
-        - Suzuka（5.807 km）：Dunlop(T7) ≈ 2600 m ≈ 0.45、Degner 1(T8) ≈ 0.50、
-          Hairpin(T11) ≈ 0.69、130R(T15) ≈ 0.87 —— 旧表把 Dunlop 放在 0.193
-          （≈1100 m），物理上就是错的。
-        - Monza（5.793 km）：主直道 1.1 km，T1（第一减速弯）在直道**末端**
-          ≈ 0.19；旧表 T1 = 0.0 是把锚点摆在了直道上（用户实测指出）。
+        口径：占比 = 锚点真实圈内距离 / 真实圈长（起点 = 发车线、方向 =
+        官方行驶方向），与遥测 lap_distance 同源。参照值即官方赛道布局：
+        - Suzuka（5.807 km）：T1 First Curve ≈ 590 m ≈ 0.102、Dunlop(T8)
+          ≈ 2045 m ≈ 0.352、Hairpin(T11) ≈ 2656 m ≈ 0.457、130R(T16)
+          ≈ 4728 m ≈ 0.814、Casio chicane(T18) ≈ 5226 m ≈ 0.900。
+        - Monza（5.793 km）：发车线在主直道中段，T1（第一减速弯）弯心
+          ≈ 637 m ≈ 0.110 —— 旧示意表的 0.0/0.19 系示意 SVG 不按比例所致。
+        - Melbourne（5.278 km）：T1 弯心 ≈ 330 m ≈ 0.062。
         """
         suzuka = TRACK_CORNER_ARCS["suzuka"]
-        assert suzuka[1] == pytest.approx(0.0680, abs=0.03)
-        assert suzuka[7] == pytest.approx(0.4808, abs=0.03)     # Dunlop
-        assert suzuka[8] == pytest.approx(0.5095, abs=0.03)     # Degner 1
-        assert suzuka[15] == pytest.approx(0.8798, abs=0.03)    # 130R
+        assert suzuka[1] == pytest.approx(0.1018, abs=0.03)     # First Curve
+        assert suzuka[8] == pytest.approx(0.3523, abs=0.03)     # Dunlop
+        assert suzuka[11] == pytest.approx(0.4573, abs=0.03)    # Hairpin
+        assert suzuka[16] == pytest.approx(0.8142, abs=0.03)    # 130R
+        assert suzuka[18] == pytest.approx(0.8999, abs=0.03)    # Casio chicane
         melbourne = TRACK_CORNER_ARCS["melbourne"]
-        assert melbourne[1] == pytest.approx(0.1535, abs=0.03)
-        # 这 4 条赛道的 T1 必须偏离起跑线（旧表压在 0.0）
+        assert melbourne[1] == pytest.approx(0.0625, abs=0.03)
+        # 这 3 条赛道的 T1 必须偏离起跑线（长主直道，弯心在直道末端）
         for track_id in ("monza", "mexico_city", "spielberg"):
             assert TRACK_CORNER_ARCS[track_id][1] > 0.01
 
@@ -127,36 +130,39 @@ class TestCornerMapping:
         assert wrong == 0, f"判定错误 {wrong}/{total}"
 
     def test_suzuka_landmark_positions(self) -> None:
-        """Suzuka 具体点校验（旧均匀近似在这里会给出错误的弯号）。"""
+        """Suzuka 具体点校验（2026-09-17 真实几何口径）。
+
+        真实 GPS 几何下 Dunlop=T8 ≈ 0.352、Hairpin=T11 ≈ 0.457、
+        130R=T16 ≈ 0.814，与官方布局一致；旧断言「Dunlop(T7) ≈ 48%」
+        系示意 SVG 时代的弯号错位。
+        """
         track = get_track_by_id("suzuka")
         assert track is not None
-        # 物理里程：Dunlop(T7)≈48%、Degner 1(T8)≈51%、130R(T15)≈88%
-        # （距起点里程 ÷ 5.807 km；发夹/勺区因示意 SVG 弯被合并，不逐弯断言）
-        assert _map_corner(0.48 * track.length_m, track.length_m, track.corners, "suzuka") == 7
-        assert _map_corner(0.51 * track.length_m, track.length_m, track.corners, "suzuka") == 8
-        assert _map_corner(0.88 * track.length_m, track.length_m, track.corners, "suzuka") == 15
+        arcs = TRACK_CORNER_ARCS["suzuka"]
+        # Dunlop(T8)：S 弯群后；Hairpin(T11)：Degner 后的发夹；130R(T16)：Spoon 后
+        assert _map_corner(arcs[8] * track.length_m, track.length_m, track.corners, "suzuka") == 8
+        assert _map_corner(arcs[11] * track.length_m, track.length_m, track.corners, "suzuka") == 11
+        assert _map_corner(arcs[16] * track.length_m, track.length_m, track.corners, "suzuka") == 16
 
     def test_wraparound_path_origin(self) -> None:
-        """monza 路径起点=起跑线：圈初判为**刚出末弯**（T11），而非 T1。
+        """monza 闭环回绕（真实 GPS 口径，2026-09-17 重标）。
 
-        旧断言"圈初= T1"建立在 T1 锚点被压到起跑线的错误之上 —— 蒙扎主直道
-        1.1 km，圈初位置是刚离开 Parabolica(T11)，T1 在直道末端才出现。
-
-        注意：赛道 SVG 是**示意图、不按比例**，主直道画得比真实的 19% 短，
-        因此"图上 4.2% 处"对应真实里程约 19% 的 T1。弧长表的本职是把标记
-        落在**图上画的弯**上（这正是本次修正的目标），不是复刻真实里程。
+        真实主直道恢复后：发车线离 T1（第一减速弯）弯心 ≈ 637 m、离
+        Parabolica(T11) 弯心 ≈ 965 m —— 圈初最近邻判 **T1**（正冲向第一
+        减速弯）。圈首(0.0) 与圈尾(1.0) 是闭环上同一点，映射必须一致。
         """
         track = get_track_by_id("monza")
         assert track is not None
         arcs = TRACK_CORNER_ARCS["monza"]
-        # 圈初 = 刚出末弯（闭环回绕），不是 T1
-        assert _map_corner(0.0, track.length_m, track.corners, "monza") == 11
-        assert _map_corner(0.10 * track.length_m, track.corners and track.length_m,
-                           track.corners, "monza") != 1
-        # T1 的弯心位置必须能被定位到（标记不再压在直道上）
-        t1_arc = arcs[1]
-        assert _map_corner(t1_arc * track.length_m, track.length_m,
-                           track.corners, "monza") == 1
+        # 闭环一致性：圈首与圈尾同点
+        assert _map_corner(0.0, track.length_m, track.corners, "monza") == (
+            _map_corner(track.length_m, track.length_m, track.corners, "monza")
+        )
+        # 主直道上（圈初 5%）判 T1（不在 T11 出口侧）
+        assert _map_corner(0.05 * track.length_m, track.length_m, track.corners, "monza") == 1
+        # T1 / T11 弯心处必须能定位到本弯
+        assert _map_corner(arcs[1] * track.length_m, track.length_m, track.corners, "monza") == 1
+        assert _map_corner(arcs[11] * track.length_m, track.length_m, track.corners, "monza") == 11
 
     def test_fallback_without_track_id(self) -> None:
         """未提供 track_id 时回退到均匀近似，仍返回合法弯号。"""
@@ -232,18 +238,17 @@ class TestClosedLoopNormalization:
         "track_id", ["monza", "mexico_city", "spielberg", "melbourne", "suzuka", "spa"]
     )
     def test_start_of_lap_maps_to_turn_1(self, track_id: str) -> None:
-        """圈首与圈尾是闭环上同一个点，必须映射到同一个弯。
+        """圈首(0.0)与圈尾(1.0)是闭环上同一个点，必须映射到同一个弯。
 
-        旧断言"圈初必为 T1"只在 T1 紧贴起跑线的赛道成立；对主直道较长的赛道
-        （蒙扎主直道 1.1 km ≈ 19% 圈长），圈初位置其实是**刚出末弯**，判为末弯
-        才对。闭环一致性才是与弯位布局无关的真不变量。
+        2026-09-17 真实几何口径下不再用 0.001/0.999 采样 —— 两点相距
+        0.2% 圈长，可能横跨相邻弯的最近邻边界（如 Suzuka 发车线恰在
+        Casio(T18) 与 First Curve(T1) 弯心近乎等距处），判不同弯是正确
+        行为。真正的闭环不变量是 0.0 与 1.0（严格同一点）映射一致。
         """
         track = get_track_by_id(track_id)
         assert track is not None
-        near_start = 0.001 * track.length_m
-        near_end = 0.999 * track.length_m
-        assert _map_corner(near_start, track.length_m, track.corners, track_id) == (
-            _map_corner(near_end, track.length_m, track.corners, track_id)
+        assert _map_corner(0.0, track.length_m, track.corners, track_id) == (
+            _map_corner(track.length_m, track.length_m, track.corners, track_id)
         )
 
     def test_full_lap_sweep_hits_every_turn(self) -> None:
@@ -263,26 +268,13 @@ class TestClosedLoopNormalization:
 
 
 # ===========================================================================
-# 锚点必须落在"弯"上，不得落在直道（2026-09-17 用户实测指出蒙扎 T1 在直道上）
+# 锚点必须落在"弯"上，不得落在直道（2026-09-17 真实 GPS 几何口径，task-80）
 # ===========================================================================
-#: 已知的弱弯豁免：街道赛 SVG 画得不够弯、官方弯数多于图上可辨弯，
-#: 累计转角(5%窗口)低于 25°。这些是示意 SVG 的固有局限，已逐一登记，
-#: 不得新增到其它赛道。
-_KNOWN_WEAK_ANCHORS = {
-    ("melbourne", 6), ("melbourne", 10),
-    ("suzuka", 7),
-    ("spielberg", 9),
-    ("silverstone", 17),
-    ("spa", 2), ("spa", 19),
-    ("hungaroring", 7),
-    ("zandvoort", 7),
-    ("singapore", 3), ("singapore", 5), ("singapore", 14),
-    ("las_vegas", 13),
-    ("lusail", 6), ("lusail", 14), ("lusail", 16),
-    ("yas_marina", 16),
-}
 #: 累计转角下限（度）：低于此即视为"落在直道上"。
-_MIN_TURN_DEG = 25.0
+#: 真实几何口径下锚点由 ``real_geometry.select_anchors`` 选出（硬门：
+#: ±40m 真实转角 >= 12°），官方缓弯（如 Spa Eau Rouge）允许 12–25°；
+#: 旧的 17 项示意 SVG 弱弯豁免随真实几何重建整体删除，不再需要。
+_MIN_TURN_DEG = 12.0
 
 
 class TestAnchorsSitOnCorners:
@@ -329,13 +321,16 @@ class TestAnchorsSitOnCorners:
 
     @pytest.mark.parametrize("track_id", sorted(TRACK_CORNER_ARCS))
     def test_anchors_not_on_straights(self, track_id: str) -> None:
-        """锚点累计转角必须 ≥ 25°（弱弯豁免除外）。"""
+        """锚点在 SVG 实际路径上的累计转角（5% 窗口）必须 ≥ 下限。
+
+        真实几何口径下无任何豁免：锚点全部由 ``select_anchors`` 硬门
+        （±40m 真实转角 ≥ 12°）选出，SVG 是等比投影，此处兜底校验
+        「可见层标记确实画在弯上」。
+        """
         from setup_tuner.domain._track_anchors import TRACK_ANCHORS
 
         for number, (x, y) in TRACK_ANCHORS[track_id].items():
             deg = self._cumulative_turn_at(track_id, x, y)
-            if (track_id, number) in _KNOWN_WEAK_ANCHORS:
-                continue
             assert deg >= _MIN_TURN_DEG, (
                 f"{track_id} T{number} 累计转角 {deg:.0f}° < {_MIN_TURN_DEG:.0f}°，"
                 f"锚点疑似落在直道上"
