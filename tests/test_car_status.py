@@ -13,17 +13,29 @@
 from __future__ import annotations
 
 import struct
+import time
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
 from setup_tuner.app import create_app
+from setup_tuner.config import Config
 from setup_tuner.engine.engine import _derive_telemetry_dx, generate_suggestion
 from setup_tuner.telemetry.lap_aggregator import (
     LapAggregator,
     _compound_label,
 )
 from setup_tuner.telemetry.packets import HEADER_FORMAT, parse_packet
+
+
+def _isolated_app(tmp_path: Path):
+    """构建使用隔离数据目录的 app。
+
+    测试**不得**读写仓库的 ``./data``：那会让断言依赖本机残留数据
+    （本地绿 / CI 红），并反过来污染用户真实数据库。
+    """
+    return create_app(Config(data_dir=str(tmp_path / "data")))
 
 
 # ===========================================================================
@@ -274,8 +286,8 @@ class TestParsePacketDispatch:
 class TestAppDispatch:
     """_on_packet 把 Packet 7 交给聚合器。"""
 
-    def test_car_status_reaches_aggregator(self) -> None:
-        app = create_app()
+    def test_car_status_reaches_aggregator(self, tmp_path: Path) -> None:
+        app = _isolated_app(tmp_path)
         with TestClient(app) as c:  # 进入 lifespan 才会初始化 state
             handler = app.state.packet_handler
             agg = app.state.lap_aggregator
@@ -286,9 +298,9 @@ class TestAppDispatch:
             assert after["tyre_compound"] == 18
             del c
 
-    def test_unknown_packet_id_is_ignored(self) -> None:
+    def test_unknown_packet_id_is_ignored(self, tmp_path: Path) -> None:
         """不支持的 packet_id（如 99）不得抛异常。"""
-        app = create_app()
+        app = _isolated_app(tmp_path)
         with TestClient(app):
             app.state.packet_handler({"packet_id": 99, "name": "Nope"})
 
@@ -299,15 +311,18 @@ class TestAppDispatch:
 class TestSimulatorCoverage:
     """模拟器必须产出 Packet 7，否则无真实游戏时该链路永不激活。"""
 
-    def test_simulator_emits_car_status(self) -> None:
-        app = create_app()
+    def test_simulator_emits_car_status(self, tmp_path: Path) -> None:
+        app = _isolated_app(tmp_path)
         with TestClient(app) as c:
             r = c.post("/api/v1/telemetry/simulate",
                        json={"action": "start", "track_id": "suzuka"})
             assert r.status_code == 200
-            import time
-            time.sleep(1.5)
-            snap = app.state.lap_aggregator.snapshot()
+            snap: dict = {}
+            for _ in range(100):
+                snap = app.state.lap_aggregator.snapshot()
+                if snap.get("car_status_frames", 0) > 0:
+                    break
+                time.sleep(0.1)
             c.post("/api/v1/telemetry/simulate",
                    json={"action": "stop", "track_id": "suzuka"})
         assert snap.get("car_status_frames", 0) > 0, "模拟器未产出 Packet 7"
@@ -417,14 +432,25 @@ class TestEngineBrakeRules:
 class TestEndToEnd:
     """模拟遥测驱动的完整建议链路。"""
 
-    def test_simulated_lap_reaches_suggestion(self) -> None:
-        app = create_app()
+    def test_simulated_lap_reaches_suggestion(self, tmp_path: Path) -> None:
+        """模拟一圈后 /suggest 应能生成完整报告。
+
+        必须使用隔离的数据目录：``/suggest`` 的入口校验要求"该赛道已有反馈"，
+        若沿用默认 ``./data``，本测试会因本地累积的反馈而**假绿**，
+        在 CI 的空数据库上必然 400 —— 这正是 PR #79 上 CI 红、本地绿的原因。
+        反馈由本测试经 API 显式录入，不再依赖任何环境残留。
+        """
+        app = _isolated_app(tmp_path)
         with TestClient(app) as c:
             c.post("/api/v1/telemetry/simulate",
                    json={"action": "start", "track_id": "suzuka"})
-            import time
-            time.sleep(2.0)
-            snap = app.state.lap_aggregator.snapshot()
+            # 轮询等待首帧，避免固定 sleep 在慢速 CI 上不稳定
+            snap: dict = {}
+            for _ in range(100):
+                snap = app.state.lap_aggregator.snapshot()
+                if snap.get("car_status_frames", 0) > 0:
+                    break
+                time.sleep(0.1)
             c.post("/api/v1/telemetry/simulate",
                    json={"action": "stop", "track_id": "suzuka"})
 
@@ -432,10 +458,18 @@ class TestEndToEnd:
             assert snap.get("car_status_frames", 0) > 0
             assert "front_brake_bias" in snap
 
-            # 建议可正常生成（不因新增规则报错）
-            r = c.post("/api/v1/suggest", json={
-                "symptoms": ["midcorner_understeer"], "track_id": "suzuka",
+            # 先录入反馈（/suggest 的前置条件），再生成建议
+            fb = c.post("/api/v1/feedback", json={
+                "track_id": "suzuka",
+                "feedbacks": [{
+                    "corner_number": 1,
+                    "symptom": "midcorner_understeer",
+                    "strength": 3,
+                }],
             })
+            assert fb.status_code == 200, fb.text
+
+            r = c.post("/api/v1/suggest", json={"track_id": "suzuka"})
             assert r.status_code == 200, r.text
             assert r.json()["code"] == 0
 

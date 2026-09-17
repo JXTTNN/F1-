@@ -271,6 +271,13 @@ def _normalize(path: str) -> str:
     return path.rstrip("/") or "/"
 
 
+def _isolated_app(tmp_path: Path):
+    """使用隔离数据目录构建 app（测试不得读写仓库 ./data）。"""
+    from setup_tuner.config import Config
+
+    return create_app(Config(data_dir=str(tmp_path / "data")))
+
+
 # --------------------------------------------------------------------------- #
 # 1) 前端 → 后端：路径与参数
 # --------------------------------------------------------------------------- #
@@ -439,13 +446,19 @@ class TestUnwiredEndpointsAreReachable:
         assert r.status_code == 200
         assert r.json()["code"] == 0
 
-    def test_recordings_list_empty_ok(self) -> None:
-        app = create_app()
+    def test_recordings_list_empty_ok(self, tmp_path: Path) -> None:
+        """空数据目录下录制列表返回空数组。
+
+        必须隔离数据目录：默认 ``./data`` 会被本机录制内容填充，
+        断言"空"在这里就会变成依赖环境的状态（本地绿 / CI 红）。
+        """
+        app = _isolated_app(tmp_path)
         with TestClient(app) as c:
             r = c.get("/api/v1/telemetry/recordings")
         assert r.status_code == 200
         assert r.json()["code"] == 0
         assert isinstance(r.json()["data"], list)
+        assert r.json()["data"] == []
 
     def test_replay_status_ok(self) -> None:
         app = create_app()
