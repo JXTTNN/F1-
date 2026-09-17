@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 520" width="720" height="520">
+<rect width="720" height="520" fill="#111318"/>
+<path d="M 250.3 353.2 L 274.4 445.9 L 277.0 455.7 L 279.5 461.3 L 285.3 469.8 L 288.3 472.2 L 292.5 474.0 L 296.8 474.0 L 301.4 473.0 L 303.8 471.8 L 311.4 464.9 L 318.7 456.8 L 321.6 454.7 L 325.4 453.3 L 329.2 453.1 L 334.7 454.9 L 346.4 462.0 L 355.7 465.8 L 362.6 467.6 L 368.9 468.4 L 374.7 468.7 L 383.2 467.7 L 389.7 466.3 L 397.7 463.5 L 405.2 459.2 L 412.6 453.4 L 418.6 447.1 L 423.3 440.4 L 426.8 434.2 L 429.8 427.1 L 441.2 389.5 L 446.1 370.6 L 454.4 338.6 L 464.5 297.6 L 482.3 230.5 L 488.7 206.3 L 493.3 189.3 L 495.3 181.4 L 496.1 176.4 L 495.6 171.7 L 494.5 168.6 L 491.9 164.8 L 487.3 161.6 L 481.9 159.4 L 474.2 157.8 L 451.0 153.2 L 442.0 152.3 L 436.4 152.7 L 429.5 153.6 L 423.0 155.5 L 417.3 158.9 L 411.9 162.1 L 406.4 166.5 L 401.2 172.3 L 394.0 181.3 L 370.5 212.9 L 356.7 232.3 L 344.9 248.9 L 332.0 265.7 L 325.2 275.1 L 320.0 282.1 L 316.4 286.1 L 312.3 288.6 L 306.5 290.6 L 300.1 291.5 L 290.6 291.2 L 284.2 290.2 L 279.2 288.6 L 274.6 286.6 L 266.9 282.4 L 263.1 279.0 L 260.5 275.6 L 258.0 270.8 L 256.1 264.2 L 253.8 254.5 L 251.9 245.6 L 249.3 229.2 L 248.8 222.4 L 248.9 215.6 L 250.5 210.4 L 253.2 207.7 L 255.0 206.8 L 257.3 206.0 L 260.5 205.6 L 263.8 206.5 L 267.2 207.8 L 276.6 214.9 L 280.4 217.1 L 283.3 218.4 L 286.5 219.0 L 289.3 219.2 L 292.5 218.8 L 296.9 217.2 L 302.0 213.0 L 304.9 208.7 L 306.5 204.1 L 306.7 200.1 L 306.1 195.4 L 304.3 191.8 L 300.3 185.9 L 296.7 182.3 L 283.8 169.8 L 277.2 162.3 L 272.6 155.6 L 269.3 146.6 L 266.8 135.4 L 265.6 128.6 L 265.0 122.6 L 265.4 117.6 L 267.4 114.2 L 269.0 112.1 L 271.6 111.2 L 273.8 110.7 L 276.6 111.2 L 279.9 112.5 L 295.6 130.2 L 309.1 145.1 L 311.5 147.0 L 316.6 150.5 L 321.2 152.6 L 325.1 153.7 L 329.8 154.5 L 334.2 155.0 L 339.3 155.0 L 347.2 153.9 L 353.3 151.9 L 359.7 148.3 L 366.3 143.0 L 369.9 138.2 L 373.8 132.9 L 384.2 116.6 L 395.7 97.4 L 408.8 76.5 L 409.6 74.0 L 409.8 71.1 L 409.0 68.2 L 407.5 65.2 L 404.6 62.5 L 397.8 58.9 L 387.9 55.4 L 367.7 47.8 L 363.8 46.8 L 358.8 46.0 L 348.6 47.1 L 339.8 48.6 L 320.3 52.7 L 313.9 54.9 L 301.1 60.2 L 294.7 63.0 L 279.7 71.1 L 273.7 75.1 L 268.6 79.6 L 263.4 84.4 L 259.2 89.4 L 255.4 95.2 L 252.0 102.6 L 249.2 110.5 L 244.8 126.6 L 240.1 146.9 L 237.0 166.0 L 231.6 186.4 L 228.1 201.7 L 225.1 212.4 L 224.1 220.1 L 223.9 230.6 L 224.4 243.0 L 225.8 252.3 L 228.2 263.2 L 232.2 278.8 L 244.1 328.3 L 250.3 353.2 L 250.3 353.2 Z" fill="none" stroke="#8a93a6" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="244.3" y="347.2" width="12" height="12" fill="#FF1801" stroke="#fff" stroke-width="1"/>
+<g transform="translate(252.3,361.1) rotate(75)"><path d="M 10 0 L -4 -6 L -4 6 Z" fill="#FFD21E"/></g>
+<circle cx="351.1" cy="463.9" r="7" fill="none" stroke="#3B9EFF" stroke-width="2"/>
+<text x="351.1" y="452.9" text-anchor="middle" fill="#e8ecf4" font-size="12" font-family="monospace" font-weight="bold">1</text>
+<text x="351.1" y="485.9" text-anchor="middle" fill="#9aa3b5" font-size="9" font-family="monospace">296°</text>
+<circle cx="494.5" cy="168.6" r="7" fill="none" stroke="#3B9EFF" stroke-width="2"/>
+<text x="494.5" y="157.6" text-anchor="middle" fill="#e8ecf4" font-size="12" font-family="monospace" font-weight="bold">2</text>
+<text x="494.5" y="190.6" text-anchor="middle" fill="#9aa3b5" font-size="9" font-family="monospace">93°</text>
+<circle cx="423.8" cy="155.3" r="7" fill="none" stroke="#3B9EFF" stroke-width="2"/>
+<text x="423.8" y="144.3" text-anchor="middle" fill="#e8ecf4" font-size="12" font-family="monospace" font-weight="bold">3</text>
+<text x="423.8" y="177.3" text-anchor="middle" fill="#9aa3b5" font-size="9" font-family="monospace">54°</text>
+<circle cx="289.8" cy="291.1" r="7" fill="none" stroke="#3B9EFF" stroke-width="2"/>
+<text x="289.8" y="280.1" text-anchor="middle" fill="#e8ecf4" font-size="12" font-family="monospace" font-weight="bold">4</text>
+<text x="289.8" y="313.1" text-anchor="middle" fill="#9aa3b5" font-size="9" font-family="monospace">127°</text>
+<circle cx="281.1" cy="217.4" r="7" fill="none" stroke="#3B9EFF" stroke-width="2"/>
+<text x="281.1" y="206.4" text-anchor="middle" fill="#e8ecf4" font-size="12" font-family="monospace" font-weight="bold">5</text>
+<text x="281.1" y="239.4" text-anchor="middle" fill="#9aa3b5" font-size="9" font-family="monospace">303°</text>
+<circle cx="274.5" cy="158.3" r="7" fill="none" stroke="#3B9EFF" stroke-width="2"/>
+<text x="274.5" y="147.3" text-anchor="middle" fill="#e8ecf4" font-size="12" font-family="monospace" font-weight="bold">6</text>
+<text x="274.5" y="180.3" text-anchor="middle" fill="#9aa3b5" font-size="9" font-family="monospace">28°</text>
+<circle cx="267.0" cy="114.8" r="7" fill="none" stroke="#3B9EFF" stroke-width="2"/>
+<text x="267.0" y="103.8" text-anchor="middle" fill="#e8ecf4" font-size="12" font-family="monospace" font-weight="bold">7</text>
+<text x="267.0" y="136.8" text-anchor="middle" fill="#9aa3b5" font-size="9" font-family="monospace">144°</text>
+<circle cx="335.0" cy="155.0" r="7" fill="none" stroke="#3B9EFF" stroke-width="2"/>
+<text x="335.0" y="144.0" text-anchor="middle" fill="#e8ecf4" font-size="12" font-family="monospace" font-weight="bold">8</text>
+<text x="335.0" y="177.0" text-anchor="middle" fill="#9aa3b5" font-size="9" font-family="monospace">100°</text>
+<circle cx="409.0" cy="68.2" r="7" fill="none" stroke="#3B9EFF" stroke-width="2"/>
+<text x="409.0" y="57.2" text-anchor="middle" fill="#e8ecf4" font-size="12" font-family="monospace" font-weight="bold">9</text>
+<text x="409.0" y="90.2" text-anchor="middle" fill="#9aa3b5" font-size="9" font-family="monospace">102°</text>
+<circle cx="366.2" cy="47.4" r="7" fill="none" stroke="#3B9EFF" stroke-width="2"/>
+<text x="366.2" y="36.4" text-anchor="middle" fill="#e8ecf4" font-size="12" font-family="monospace" font-weight="bold">10</text>
+<text x="366.2" y="69.4" text-anchor="middle" fill="#9aa3b5" font-size="9" font-family="monospace">27°</text>
+<circle cx="265.1" cy="82.8" r="7" fill="none" stroke="#3B9EFF" stroke-width="2"/>
+<text x="265.1" y="71.8" text-anchor="middle" fill="#e8ecf4" font-size="12" font-family="monospace" font-weight="bold">11</text>
+<text x="265.1" y="104.8" text-anchor="middle" fill="#9aa3b5" font-size="9" font-family="monospace">43°</text>
+<text x="12" y="20" fill="#e8ecf4" font-size="14" font-family="monospace">sao_paulo · 官方11簇 / 4284m · ■=frac0(geojson起点) ▶=行驶向</text>
+</svg>

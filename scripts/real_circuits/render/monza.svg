@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 520" width="720" height="520">
+<rect width="720" height="520" fill="#111318"/>
+<path d="M 243.3 317.8 L 250.5 233.2 L 253.8 197.7 L 254.2 196.3 L 255.2 195.4 L 256.5 195.2 L 258.0 195.4 L 259.5 195.6 L 260.8 195.4 L 261.8 194.7 L 262.5 193.7 L 262.7 192.8 L 262.7 191.7 L 257.5 172.4 L 256.8 167.1 L 256.5 162.4 L 256.9 157.2 L 258.8 131.9 L 259.6 127.8 L 260.5 124.0 L 261.9 119.9 L 263.7 115.4 L 265.8 111.1 L 268.9 106.2 L 272.1 102.2 L 276.4 97.6 L 281.1 93.6 L 286.3 89.9 L 291.9 86.7 L 298.2 83.5 L 304.5 81.4 L 311.4 79.4 L 319.3 78.1 L 327.4 77.3 L 358.7 74.7 L 397.1 72.4 L 399.4 72.2 L 400.6 71.5 L 401.6 70.5 L 402.9 66.1 L 403.4 64.8 L 404.4 64.0 L 405.9 63.5 L 411.1 62.5 L 416.8 61.3 L 424.9 58.7 L 460.8 46.7 L 463.9 46.0 L 466.8 46.0 L 469.7 46.5 L 471.7 47.3 L 473.6 48.5 L 475.4 49.7 L 477.7 52.2 L 479.0 54.2 L 479.9 56.6 L 480.4 59.2 L 481.9 76.2 L 484.9 105.2 L 484.8 107.7 L 484.3 109.4 L 483.6 110.9 L 482.4 111.9 L 480.2 113.3 L 456.7 126.0 L 437.6 136.6 L 425.7 143.1 L 419.9 146.4 L 413.4 151.0 L 408.7 154.5 L 404.7 158.0 L 383.9 175.8 L 369.1 189.1 L 337.8 216.4 L 318.9 232.9 L 316.4 235.5 L 315.4 237.1 L 315.2 238.8 L 315.2 240.8 L 315.8 245.1 L 316.0 247.5 L 316.0 250.9 L 315.7 252.8 L 315.0 255.1 L 313.9 257.9 L 312.1 260.7 L 309.6 263.6 L 306.8 266.0 L 304.5 267.7 L 303.3 269.1 L 302.4 270.9 L 301.5 274.4 L 299.6 290.0 L 297.6 306.6 L 282.1 456.0 L 281.4 461.4 L 280.8 463.9 L 279.5 466.4 L 277.8 468.5 L 275.8 470.4 L 272.9 472.2 L 269.8 473.4 L 266.2 474.0 L 263.2 473.8 L 260.4 473.2 L 257.1 471.9 L 253.9 470.5 L 251.5 468.8 L 248.7 466.6 L 245.5 463.2 L 243.3 460.1 L 241.4 456.8 L 239.7 452.9 L 238.2 448.5 L 237.0 444.1 L 236.4 440.3 L 235.8 434.5 L 235.7 428.7 L 235.6 423.2 L 235.3 412.3 L 235.1 402.8 L 235.3 392.5 L 236.5 378.9 L 241.0 336.1 L 243.3 317.8 L 243.3 317.8 Z" fill="none" stroke="#8a93a6" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="237.3" y="311.8" width="12" height="12" fill="#FF1801" stroke="#fff" stroke-width="1"/>
+<g transform="translate(243.7,312.3) rotate(-85)"><path d="M 10 0 L -4 -6 L -4 6 Z" fill="#FFD21E"/></g>
+<circle cx="258.0" cy="195.4" r="7" fill="none" stroke="#3B9EFF" stroke-width="2"/>
+<text x="258.0" y="184.4" text-anchor="middle" fill="#e8ecf4" font-size="12" font-family="monospace" font-weight="bold">1</text>
+<text x="258.0" y="217.4" text-anchor="middle" fill="#9aa3b5" font-size="9" font-family="monospace">204°</text>
+<circle cx="402.3" cy="68.3" r="7" fill="none" stroke="#3B9EFF" stroke-width="2"/>
+<text x="402.3" y="57.3" text-anchor="middle" fill="#e8ecf4" font-size="12" font-family="monospace" font-weight="bold">2</text>
+<text x="402.3" y="90.3" text-anchor="middle" fill="#9aa3b5" font-size="9" font-family="monospace">133°</text>
+<circle cx="473.0" cy="48.1" r="7" fill="none" stroke="#3B9EFF" stroke-width="2"/>
+<text x="473.0" y="37.1" text-anchor="middle" fill="#e8ecf4" font-size="12" font-family="monospace" font-weight="bold">3</text>
+<text x="473.0" y="70.1" text-anchor="middle" fill="#9aa3b5" font-size="9" font-family="monospace">99°</text>
+<circle cx="483.8" cy="110.5" r="7" fill="none" stroke="#3B9EFF" stroke-width="2"/>
+<text x="483.8" y="99.5" text-anchor="middle" fill="#e8ecf4" font-size="12" font-family="monospace" font-weight="bold">4</text>
+<text x="483.8" y="132.5" text-anchor="middle" fill="#9aa3b5" font-size="9" font-family="monospace">68°</text>
+<circle cx="314.3" cy="256.9" r="7" fill="none" stroke="#3B9EFF" stroke-width="2"/>
+<text x="314.3" y="245.9" text-anchor="middle" fill="#e8ecf4" font-size="12" font-family="monospace" font-weight="bold">5</text>
+<text x="314.3" y="278.9" text-anchor="middle" fill="#9aa3b5" font-size="9" font-family="monospace">155°</text>
+<circle cx="260.8" cy="473.3" r="7" fill="none" stroke="#3B9EFF" stroke-width="2"/>
+<text x="260.8" y="462.3" text-anchor="middle" fill="#e8ecf4" font-size="12" font-family="monospace" font-weight="bold">6</text>
+<text x="260.8" y="495.3" text-anchor="middle" fill="#9aa3b5" font-size="9" font-family="monospace">150°</text>
+<text x="12" y="20" fill="#e8ecf4" font-size="14" font-family="monospace">monza · 官方6簇 / 5766m · ■=frac0(geojson起点) ▶=行驶向</text>
+</svg>

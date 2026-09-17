@@ -1659,3 +1659,37 @@ h1, h2, h3 {
   font-size: 11px;
   opacity: .75;
 }
+
+/* ---------- 遥测采集状态条（系统内一站式采集，无需额外工具） ---------- */
+.collect-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 0 0 10px;
+  padding: 7px 10px;
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+  background: var(--bg-inset);
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: var(--ls-normal);
+}
+.collect-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-ghost);
+  flex: 0 0 auto;
+  transition: var(--transition-fast);
+}
+/* 监听中：数据青；录制中：F1 红（与「涨红」无关，此处为采集中标识） */
+.collect-bar.on .collect-dot { background: var(--data); box-shadow: 0 0 6px var(--data); }
+.collect-bar.rec .collect-dot { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+.collect-state { color: var(--text-body); font-weight: 500; }
+.collect-bar.rec .collect-state { color: var(--accent); }
+.collect-addr { color: var(--data); }
+.collect-tip { color: var(--text-faint); margin-left: auto; }
+@media (max-width: 720px) {
+  .collect-tip { margin-left: 0; }
+}

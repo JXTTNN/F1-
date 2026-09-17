@@ -175,6 +175,11 @@
     // 遥测录制
     btnRecord: $("btn-record-toggle"),
     btnListenerToggle: $("btn-listener-toggle"),
+    btnExportTraining: $("btn-export-training"),
+    // 遥测采集状态条
+    collectBar: document.querySelector(".collect-bar"),
+    collectState: $("collect-state"),
+    collectAddr: $("collect-addr"),
     // 录制库（列表 + 回放）
     btnRecordings: $("btn-recordings"),
     recOverlay: $("rec-overlay"), recClose: $("rec-close"),
@@ -910,6 +915,7 @@
       // 后端返回 {recording: bool, session_id: str?}
       state.isRecording = data && data.recording === true;
       updateRecordingUI();
+      refreshCollectBar();
       if (state.isRecording) {
         showToast("遥测录制已开始", "success");
       } else {
@@ -1240,6 +1246,7 @@
       });
       state.isListening = data && data.listening === true;
       updateListenerUI();
+      refreshCollectBar();
       if (state.isListening) {
         showToast("遥测收集已开启", "success");
       } else {
@@ -1260,6 +1267,69 @@
     dom.btnListenerToggle.classList.toggle("listening", state.isListening);
     const label = dom.btnListenerToggle.querySelector(".listener-label");
     if (label) label.textContent = state.isListening ? "收集" : "关闭";
+  }
+
+  /** 刷新「遥测采集」状态条：监听地址 / 监听状态 / 录制状态。
+   *  系统内一站式采集——打开系统即监听，点「录制」即自动落盘。
+   *  健康检查失败不打断界面（沿用本地状态）。
+   *  @returns {Promise<void>}
+   */
+  async function refreshCollectBar() {
+    if (!dom.collectBar) return;
+    let connected = state.isListening;
+    let addr = "";
+    try {
+      const h = await fetchJSON("/health");
+      connected = !!h.telemetry_connected;
+      addr = `UDP ${h.udp_host}:${h.udp_port}`;
+    } catch (_) {
+      /* 健康检查失败：保留本地状态，不弹错 */
+    }
+    state.isListening = connected;
+    updateListenerUI();
+    dom.collectBar.classList.toggle("on", connected && !state.isRecording);
+    dom.collectBar.classList.toggle("rec", !!state.isRecording);
+    if (dom.collectAddr && addr) dom.collectAddr.textContent = addr;
+    if (dom.collectState) {
+      if (!connected) {
+        dom.collectState.textContent = "遥测采集 · 已停止（点「收集」开启）";
+      } else if (state.isRecording) {
+        dom.collectState.textContent = "遥测采集 · 录制中（数据自动保存）";
+      } else {
+        dom.collectState.textContent = "遥测采集 · 监听中（点「录制」开始保存）";
+      }
+    }
+  }
+
+  /** 主页「导出训练」：把最近一次录制导出为逐圈训练样本。
+   *  @param {HTMLButtonElement} btn
+   *  @returns {Promise<void>}
+   */
+  async function exportLatestTraining(btn) {
+    const oldText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = "导出中…";
+    try {
+      const list = await fetchJSON("/telemetry/recordings");
+      if (!Array.isArray(list) || !list.length) {
+        showToast("暂无录制：先点「录制」跑几圈再导出", "error");
+        return;
+      }
+      const latest = list[0].session_id;  // 后端按时间倒序，[0] 为最近
+      const d = await fetchJSON(
+        `/telemetry/recordings/${encodeURIComponent(latest)}/export`,
+        { method: "POST" },
+      );
+      showToast(
+        `已导出 ${d.laps || 0} 圈训练样本（跳过坏包 ${d.parse_errors || 0}）：${d.out_path || ""}`,
+        "success",
+      );
+    } catch (e) {
+      showToast("导出训练样本失败：" + e.message, "error");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = oldText;
+    }
   }
 
   /* ========================================================================
@@ -2115,6 +2185,12 @@
     if (dom.btnRecord) dom.btnRecord.addEventListener("click", toggleRecording);
     // 录制库（列表 + 回放）
     if (dom.btnRecordings) dom.btnRecordings.addEventListener("click", openRecordings);
+    // 主页一键导出最近一次录制的训练样本
+    if (dom.btnExportTraining) {
+      dom.btnExportTraining.addEventListener(
+        "click", () => exportLatestTraining(dom.btnExportTraining),
+      );
+    }
     if (dom.recClose) dom.recClose.addEventListener("click", closeRecordings);
     if (dom.recRefresh) dom.recRefresh.addEventListener("click", refreshRecordings);
     if (dom.recReplayStop) dom.recReplayStop.addEventListener("click", stopReplay);
@@ -2196,6 +2272,7 @@
     loadSetupFields();
     connectWebSocket();
     updateListenerUI();
+    refreshCollectBar();
   }
 
   if (document.readyState === "loading") {

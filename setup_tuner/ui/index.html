@@ -67,7 +67,15 @@
               <span class="record-label">录制</span>
             </button>
             <button id="btn-recordings" class="btn btn-ghost btn-sm" type="button" aria-label="打开录制库">录制库</button>
+            <button id="btn-export-training" class="btn btn-ghost btn-sm" type="button" aria-label="导出最近一次录制的逐圈训练样本">导出训练</button>
           </div>
+        </div>
+        <!-- 遥测采集状态条：打开系统即收，点「录制」即自动落盘（无需额外工具） -->
+        <div class="collect-bar" role="note">
+          <span id="collect-dot" class="collect-dot" aria-hidden="true"></span>
+          <span id="collect-state" class="collect-state" aria-live="polite">遥测采集 · 检查中…</span>
+          <span id="collect-addr" class="collect-addr">UDP —</span>
+          <span class="collect-tip">游戏内：设置 → 遥测设置 → UDP 遥测开启、端口 20777（IP 填本机地址；开「广播模式」亦可）</span>
         </div>
         <div class="telemetry-grid" role="region" aria-label="实时遥测数据">
           <div class="tel-item tel-gauge" data-kind="speed">

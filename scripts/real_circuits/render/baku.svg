@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 520" width="720" height="520">
+<rect width="720" height="520" fill="#111318"/>
+<path d="M 607.7 155.6 L 650.9 137.2 L 653.1 135.4 L 654.6 132.8 L 654.9 130.2 L 654.2 126.5 L 645.4 103.9 L 630.6 75.4 L 618.3 47.8 L 616.3 46.4 L 613.7 46.0 L 572.4 62.4 L 521.9 81.8 L 453.0 112.6 L 393.6 139.6 L 389.7 143.7 L 389.7 149.2 L 409.1 199.2 L 409.3 203.1 L 406.3 206.5 L 372.4 222.4 L 353.3 232.8 L 327.5 249.2 L 326.0 251.3 L 326.6 254.3 L 330.9 263.7 L 330.7 266.4 L 328.5 268.5 L 318.8 277.0 L 260.1 322.1 L 250.1 331.1 L 246.0 333.9 L 241.8 333.8 L 238.3 330.0 L 222.8 284.6 L 220.9 282.7 L 218.1 282.1 L 214.3 282.1 L 208.7 278.7 L 205.2 277.8 L 201.7 277.9 L 198.2 278.2 L 194.5 276.7 L 192.6 273.9 L 189.3 263.2 L 187.7 261.2 L 185.4 259.7 L 181.9 259.5 L 157.2 268.1 L 117.8 287.2 L 91.7 302.7 L 86.5 306.9 L 82.5 312.3 L 78.8 319.9 L 66.0 363.0 L 65.1 368.9 L 69.3 428.5 L 70.6 432.2 L 73.7 435.9 L 127.1 463.7 L 142.1 470.3 L 150.3 473.3 L 154.9 474.0 L 160.2 473.1 L 163.9 470.6 L 166.4 467.9 L 182.5 438.3 L 186.3 431.5 L 190.6 425.9 L 236.5 384.4 L 240.2 379.2 L 242.1 374.1 L 246.1 346.8 L 247.8 341.4 L 251.3 336.3 L 255.3 332.7 L 321.4 281.8 L 330.3 276.0 L 340.4 270.6 L 349.7 266.1 L 379.5 253.7 L 406.0 241.5 L 470.6 214.0 L 496.8 202.2 L 563.8 173.8 L 607.7 155.6 L 607.7 155.6 Z" fill="none" stroke="#8a93a6" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="601.7" y="149.6" width="12" height="12" fill="#FF1801" stroke="#fff" stroke-width="1"/>
+<g transform="translate(615.1,152.5) rotate(-23)"><path d="M 10 0 L -4 -6 L -4 6 Z" fill="#FFD21E"/></g>
+<circle cx="654.6" cy="132.8" r="7" fill="none" stroke="#3B9EFF" stroke-width="2"/>
+<text x="654.6" y="121.8" text-anchor="middle" fill="#e8ecf4" font-size="12" font-family="monospace" font-weight="bold">1</text>
+<text x="654.6" y="154.8" text-anchor="middle" fill="#9aa3b5" font-size="9" font-family="monospace">88°</text>
+<circle cx="616.8" cy="46.8" r="7" fill="none" stroke="#3B9EFF" stroke-width="2"/>
+<text x="616.8" y="35.8" text-anchor="middle" fill="#e8ecf4" font-size="12" font-family="monospace" font-weight="bold">2</text>
+<text x="616.8" y="68.8" text-anchor="middle" fill="#9aa3b5" font-size="9" font-family="monospace">88°</text>
+<circle cx="390.9" cy="142.5" r="7" fill="none" stroke="#3B9EFF" stroke-width="2"/>
+<text x="390.9" y="131.5" text-anchor="middle" fill="#e8ecf4" font-size="12" font-family="monospace" font-weight="bold">3</text>
+<text x="390.9" y="164.5" text-anchor="middle" fill="#9aa3b5" font-size="9" font-family="monospace">87°</text>
+<circle cx="409.2" cy="201.4" r="7" fill="none" stroke="#3B9EFF" stroke-width="2"/>
+<text x="409.2" y="190.4" text-anchor="middle" fill="#e8ecf4" font-size="12" font-family="monospace" font-weight="bold">4</text>
+<text x="409.2" y="223.4" text-anchor="middle" fill="#9aa3b5" font-size="9" font-family="monospace">86°</text>
+<circle cx="327.5" cy="256.4" r="7" fill="none" stroke="#3B9EFF" stroke-width="2"/>
+<text x="327.5" y="245.4" text-anchor="middle" fill="#e8ecf4" font-size="12" font-family="monospace" font-weight="bold">5</text>
+<text x="327.5" y="278.4" text-anchor="middle" fill="#9aa3b5" font-size="9" font-family="monospace">153°</text>
+<circle cx="245.4" cy="333.9" r="7" fill="none" stroke="#3B9EFF" stroke-width="2"/>
+<text x="245.4" y="322.9" text-anchor="middle" fill="#e8ecf4" font-size="12" font-family="monospace" font-weight="bold">6</text>
+<text x="245.4" y="355.9" text-anchor="middle" fill="#9aa3b5" font-size="9" font-family="monospace">113°</text>
+<circle cx="209.7" cy="279.3" r="7" fill="none" stroke="#3B9EFF" stroke-width="2"/>
+<text x="209.7" y="268.3" text-anchor="middle" fill="#e8ecf4" font-size="12" font-family="monospace" font-weight="bold">7</text>
+<text x="209.7" y="301.3" text-anchor="middle" fill="#9aa3b5" font-size="9" font-family="monospace">187°</text>
+<circle cx="187.2" cy="260.9" r="7" fill="none" stroke="#3B9EFF" stroke-width="2"/>
+<text x="187.2" y="249.9" text-anchor="middle" fill="#e8ecf4" font-size="12" font-family="monospace" font-weight="bold">8</text>
+<text x="187.2" y="282.9" text-anchor="middle" fill="#9aa3b5" font-size="9" font-family="monospace">92°</text>
+<circle cx="85.2" cy="308.7" r="7" fill="none" stroke="#3B9EFF" stroke-width="2"/>
+<text x="85.2" y="297.7" text-anchor="middle" fill="#e8ecf4" font-size="12" font-family="monospace" font-weight="bold">9</text>
+<text x="85.2" y="330.7" text-anchor="middle" fill="#9aa3b5" font-size="9" font-family="monospace">43°</text>
+<circle cx="70.0" cy="430.6" r="7" fill="none" stroke="#3B9EFF" stroke-width="2"/>
+<text x="70.0" y="419.6" text-anchor="middle" fill="#e8ecf4" font-size="12" font-family="monospace" font-weight="bold">10</text>
+<text x="70.0" y="452.6" text-anchor="middle" fill="#9aa3b5" font-size="9" font-family="monospace">58°</text>
+<circle cx="157.8" cy="473.5" r="7" fill="none" stroke="#3B9EFF" stroke-width="2"/>
+<text x="157.8" y="462.5" text-anchor="middle" fill="#e8ecf4" font-size="12" font-family="monospace" font-weight="bold">11</text>
+<text x="157.8" y="495.5" text-anchor="middle" fill="#9aa3b5" font-size="9" font-family="monospace">81°</text>
+<circle cx="238.8" cy="381.1" r="7" fill="none" stroke="#3B9EFF" stroke-width="2"/>
+<text x="238.8" y="370.1" text-anchor="middle" fill="#e8ecf4" font-size="12" font-family="monospace" font-weight="bold">12</text>
+<text x="238.8" y="403.1" text-anchor="middle" fill="#9aa3b5" font-size="9" font-family="monospace">39°</text>
+<circle cx="247.5" cy="342.5" r="7" fill="none" stroke="#3B9EFF" stroke-width="2"/>
+<text x="247.5" y="331.5" text-anchor="middle" fill="#e8ecf4" font-size="12" font-family="monospace" font-weight="bold">13</text>
+<text x="247.5" y="364.5" text-anchor="middle" fill="#9aa3b5" font-size="9" font-family="monospace">40°</text>
+<text x="12" y="20" fill="#e8ecf4" font-size="14" font-family="monospace">baku · 官方13簇 / 5932m · ■=frac0(geojson起点) ▶=行驶向</text>
+</svg>

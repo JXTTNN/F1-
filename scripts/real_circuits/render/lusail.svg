@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 520" width="720" height="520">
+<rect width="720" height="520" fill="#111318"/>
+<path d="M 241.5 305.1 L 196.3 222.9 L 178.6 191.1 L 177.5 185.1 L 178.2 178.9 L 180.5 174.1 L 184.0 170.6 L 189.5 167.4 L 195.7 166.4 L 201.6 167.5 L 246.7 194.7 L 251.0 195.9 L 256.7 196.1 L 263.2 194.2 L 268.5 189.3 L 271.5 183.9 L 272.2 178.5 L 271.2 139.5 L 271.8 134.1 L 273.5 129.6 L 275.6 125.2 L 278.7 121.6 L 343.0 50.8 L 346.6 47.9 L 352.1 46.4 L 357.3 46.0 L 362.7 47.4 L 366.9 49.8 L 386.0 67.9 L 388.1 71.8 L 389.1 77.0 L 388.9 81.6 L 387.6 86.1 L 384.8 90.1 L 343.0 135.7 L 341.2 139.0 L 341.1 142.6 L 342.1 145.8 L 344.1 148.2 L 347.1 150.1 L 351.3 150.6 L 354.2 149.8 L 358.0 148.1 L 431.0 119.1 L 435.7 118.5 L 441.6 119.4 L 446.6 121.6 L 450.4 125.5 L 452.8 130.4 L 453.7 135.2 L 453.7 139.5 L 452.3 143.5 L 449.3 148.2 L 446.8 150.6 L 441.1 155.2 L 434.8 162.4 L 429.5 169.6 L 425.1 177.4 L 421.6 186.4 L 419.5 192.6 L 417.4 203.5 L 415.5 208.1 L 412.4 212.0 L 409.1 214.5 L 404.6 216.5 L 363.1 226.5 L 359.5 228.7 L 356.7 231.1 L 355.1 235.2 L 354.5 239.1 L 355.2 245.0 L 359.7 250.9 L 367.4 258.7 L 379.4 267.7 L 391.8 274.7 L 404.5 279.2 L 417.1 281.9 L 429.5 282.9 L 443.0 281.7 L 505.0 274.8 L 510.7 276.0 L 517.2 279.1 L 522.3 282.9 L 527.0 289.3 L 541.4 315.9 L 542.5 320.5 L 542.5 324.6 L 541.9 329.0 L 538.9 334.5 L 516.6 370.3 L 513.8 373.0 L 509.6 374.9 L 505.3 376.2 L 499.5 375.9 L 428.2 361.6 L 423.2 361.6 L 418.1 363.1 L 413.8 366.0 L 410.8 369.7 L 361.2 465.6 L 357.2 470.2 L 352.7 472.9 L 346.2 474.0 L 341.2 473.5 L 336.4 471.4 L 331.5 467.2 L 241.5 305.1 L 241.5 305.1 Z" fill="none" stroke="#8a93a6" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="235.5" y="299.1" width="12" height="12" fill="#FF1801" stroke="#fff" stroke-width="1"/>
+<g transform="translate(237.9,298.4) rotate(-119)"><path d="M 10 0 L -4 -6 L -4 6 Z" fill="#FFD21E"/></g>
+<circle cx="181.7" cy="172.9" r="7" fill="none" stroke="#3B9EFF" stroke-width="2"/>
+<text x="181.7" y="161.9" text-anchor="middle" fill="#e8ecf4" font-size="12" font-family="monospace" font-weight="bold">1</text>
+<text x="181.7" y="194.9" text-anchor="middle" fill="#9aa3b5" font-size="9" font-family="monospace">150°</text>
+<circle cx="261.6" cy="194.6" r="7" fill="none" stroke="#3B9EFF" stroke-width="2"/>
+<text x="261.6" y="183.6" text-anchor="middle" fill="#e8ecf4" font-size="12" font-family="monospace" font-weight="bold">2</text>
+<text x="261.6" y="216.6" text-anchor="middle" fill="#9aa3b5" font-size="9" font-family="monospace">123°</text>
+<circle cx="272.0" cy="133.6" r="7" fill="none" stroke="#3B9EFF" stroke-width="2"/>
+<text x="272.0" y="122.6" text-anchor="middle" fill="#e8ecf4" font-size="12" font-family="monospace" font-weight="bold">3</text>
+<text x="272.0" y="155.6" text-anchor="middle" fill="#9aa3b5" font-size="9" font-family="monospace">42°</text>
+<circle cx="352.6" cy="46.4" r="7" fill="none" stroke="#3B9EFF" stroke-width="2"/>
+<text x="352.6" y="35.4" text-anchor="middle" fill="#e8ecf4" font-size="12" font-family="monospace" font-weight="bold">4</text>
+<text x="352.6" y="68.4" text-anchor="middle" fill="#9aa3b5" font-size="9" font-family="monospace">91°</text>
+<circle cx="389.1" cy="77.6" r="7" fill="none" stroke="#3B9EFF" stroke-width="2"/>
+<text x="389.1" y="66.6" text-anchor="middle" fill="#e8ecf4" font-size="12" font-family="monospace" font-weight="bold">5</text>
+<text x="389.1" y="99.6" text-anchor="middle" fill="#9aa3b5" font-size="9" font-family="monospace">89°</text>
+<circle cx="342.5" cy="146.3" r="7" fill="none" stroke="#3B9EFF" stroke-width="2"/>
+<text x="342.5" y="135.3" text-anchor="middle" fill="#e8ecf4" font-size="12" font-family="monospace" font-weight="bold">6</text>
+<text x="342.5" y="168.3" text-anchor="middle" fill="#9aa3b5" font-size="9" font-family="monospace">157°</text>
+<circle cx="450.8" cy="145.9" r="7" fill="none" stroke="#3B9EFF" stroke-width="2"/>
+<text x="450.8" y="134.9" text-anchor="middle" fill="#e8ecf4" font-size="12" font-family="monospace" font-weight="bold">7</text>
+<text x="450.8" y="167.9" text-anchor="middle" fill="#9aa3b5" font-size="9" font-family="monospace">184°</text>
+<circle cx="416.0" cy="207.1" r="7" fill="none" stroke="#3B9EFF" stroke-width="2"/>
+<text x="416.0" y="196.1" text-anchor="middle" fill="#e8ecf4" font-size="12" font-family="monospace" font-weight="bold">8</text>
+<text x="416.0" y="229.1" text-anchor="middle" fill="#9aa3b5" font-size="9" font-family="monospace">58°</text>
+<circle cx="355.2" cy="245.0" r="7" fill="none" stroke="#3B9EFF" stroke-width="2"/>
+<text x="355.2" y="234.0" text-anchor="middle" fill="#e8ecf4" font-size="12" font-family="monospace" font-weight="bold">9</text>
+<text x="355.2" y="267.0" text-anchor="middle" fill="#9aa3b5" font-size="9" font-family="monospace">129°</text>
+<circle cx="518.6" cy="280.2" r="7" fill="none" stroke="#3B9EFF" stroke-width="2"/>
+<text x="518.6" y="269.2" text-anchor="middle" fill="#e8ecf4" font-size="12" font-family="monospace" font-weight="bold">10</text>
+<text x="518.6" y="302.2" text-anchor="middle" fill="#9aa3b5" font-size="9" font-family="monospace">68°</text>
+<circle cx="542.5" cy="322.8" r="7" fill="none" stroke="#3B9EFF" stroke-width="2"/>
+<text x="542.5" y="311.8" text-anchor="middle" fill="#e8ecf4" font-size="12" font-family="monospace" font-weight="bold">11</text>
+<text x="542.5" y="344.8" text-anchor="middle" fill="#9aa3b5" font-size="9" font-family="monospace">57°</text>
+<circle cx="508.5" cy="375.2" r="7" fill="none" stroke="#3B9EFF" stroke-width="2"/>
+<text x="508.5" y="364.2" text-anchor="middle" fill="#e8ecf4" font-size="12" font-family="monospace" font-weight="bold">12</text>
+<text x="508.5" y="397.2" text-anchor="middle" fill="#9aa3b5" font-size="9" font-family="monospace">69°</text>
+<circle cx="419.2" cy="362.8" r="7" fill="none" stroke="#3B9EFF" stroke-width="2"/>
+<text x="419.2" y="351.8" text-anchor="middle" fill="#e8ecf4" font-size="12" font-family="monospace" font-weight="bold">13</text>
+<text x="419.2" y="384.8" text-anchor="middle" fill="#9aa3b5" font-size="9" font-family="monospace">74°</text>
+<circle cx="346.8" cy="473.9" r="7" fill="none" stroke="#3B9EFF" stroke-width="2"/>
+<text x="346.8" y="462.9" text-anchor="middle" fill="#e8ecf4" font-size="12" font-family="monospace" font-weight="bold">14</text>
+<text x="346.8" y="495.9" text-anchor="middle" fill="#9aa3b5" font-size="9" font-family="monospace">124°</text>
+<text x="12" y="20" fill="#e8ecf4" font-size="14" font-family="monospace">lusail · 官方14簇 / 5407m · ■=frac0(geojson起点) ▶=行驶向</text>
+</svg>
