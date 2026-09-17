@@ -20,7 +20,6 @@
 from __future__ import annotations
 
 import asyncio
-import bisect
 import contextlib
 import json
 import logging
@@ -35,6 +34,7 @@ from setup_tuner.domain.corner_groups import (
     group_for_progress,
     nearest_member,
 )
+from setup_tuner.domain.corner_locator import locate_corner
 from setup_tuner.telemetry.packets import to_sector_1based
 
 logger = logging.getLogger(__name__)
@@ -112,80 +112,20 @@ class WSManager:
 # =========================================================================== #
 # 弯道落点映射
 # =========================================================================== #
-# 弧长占比表：{track_id: ([排序后的占比], [对应弯道号])}，进程内构建一次
-_ARC_TABLES: dict[str, tuple[list[float], list[int]]] | None = None
-
-
-def _arc_tables() -> dict[str, tuple[list[float], list[int]]]:
-    """构建「弯道弧长占比」二分查找表（进程内缓存，仅首次调用有开销）。"""
-    global _ARC_TABLES
-    if _ARC_TABLES is None:
-        tables: dict[str, tuple[list[float], list[int]]] = {}
-        for track_id, corners in TRACK_CORNER_ARCS.items():
-            ordered = sorted(corners.items(), key=lambda kv: kv[1])
-            tables[track_id] = (
-                [fraction for _, fraction in ordered],
-                [number for number, _ in ordered],
-            )
-        _ARC_TABLES = tables
-    return _ARC_TABLES
-
-
 def _map_corner(
     lap_distance: float,
     track_length: float,
     corners: list[Any],
     track_id: str | None = None,
 ) -> int | None:
-    """根据圈内距离映射当前弯道编号。
+    """根据圈内距离映射当前弯道编号（委托 domain 层唯一实现）。
 
-    实现（2026-09 修正）：
-        使用 ``domain/_track_arcs.TRACK_CORNER_ARCS`` —— 由
-        ``scripts/gen_track_arcs.py`` 依据 ``ui/tracks/*.svg`` 的真实路径算出
-        每个弯道锚点的累计弧长占比。把 ``lap_distance`` 归一化为圈内进度后，
-        在该占比序列上做**循环最近邻**二分查找。
-
-        早期实现按「弯道沿赛道均匀分布」（``idx = int(progress * total)``）近似，
-        但弯道在真实赛道上并不等距：云端实测 24 赛道 × 200 采样点中判定错误
-        3313/4800 = **69%**。修正后错误率 0%，单次查询约 0.2–0.3 µs。
-
-        闭合回路归一化（2026-09 二次修正）：赛道 SVG 是闭合回路（折线首尾重合），
-        当锚点恰好落在起跑线时，最近点在数值上会命中回路末端而返回 ≈1.0，
-        使 T1 被误判为全圈最后一个弯，导致整条赛道弯号错位。
-        ``gen_track_arcs.nearest_arc_fraction`` 现对「投影落在回路闭合点」做归一化，
-        统一返回 0.0（起跑线）；受影响的 melbourne / mexico_city / monza / spielberg
-        已修正，24 条赛道弧长表全部单调且 T1 ≈ 0。
-
-    Args:
-        lap_distance: 当前圈距离（米）。
-        track_length: 赛道长度（米）。
-        corners: 弯道列表（domain.Corner），仅回退路径使用。
-        track_id: 赛道标识；提供且有弧长表时走精确路径。
-
-    Returns:
-        当前弯道编号（1-based）；无法映射时返回 None。
+    本函数只做转调：算法与弧长表缓存统一在
+    :func:`domain.corner_locator.locate_corner`（遥测层按弯累积数据时也要用它，
+    两处各写一份必然漂移）。行为与历史实现逐位一致，``tests/test_track_arcs.py``
+    继续锁定。
     """
-    if track_length <= 0 or not corners:
-        return None
-    progress = (lap_distance % track_length) / track_length
-
-    table = _arc_tables().get(track_id) if track_id else None
-    if table is not None:
-        fractions, numbers = table
-        i = bisect.bisect_left(fractions, progress)
-        prev_fraction = fractions[i - 1] if i > 0 else fractions[-1] - 1.0
-        next_fraction = fractions[i] if i < len(fractions) else fractions[0] + 1.0
-        # 循环比较（路径闭合，末段与首段相邻）
-        if (progress - prev_fraction) <= (next_fraction - progress):
-            return numbers[i - 1]
-        return numbers[i % len(numbers)]
-
-    # 回退：无弧长表的赛道仍用均匀分布近似（兼容未知赛道）
-    total = len(corners)
-    idx = int(progress * total)
-    if idx >= total:
-        idx = total - 1
-    return corners[idx].number
+    return locate_corner(lap_distance, track_length, corners, track_id)
 
 
 # =========================================================================== #

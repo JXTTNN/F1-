@@ -331,18 +331,25 @@ def nearest_arc_fraction(
 
 
 def compute_arcs() -> dict[str, dict[int, float]]:
-    """重新计算全部赛道的弯道弧长占比（生成与 CI 校验共用同一实现）。"""
-    anchors = load_anchors()
-    result: dict[str, dict[int, float]] = {}
-    for track_id, corners in sorted(anchors.items()):
-        svg = (SVG_DIR / f"{track_id}.svg").read_text(encoding="utf-8")
-        paths = re.findall(r'<path[^>]*\sd="([^"]+)"', svg)
-        poly = parse_path(max(paths, key=len))
-        cum, total = _cumulative(poly)
-        result[track_id] = {
-            number: round(nearest_arc_fraction(point, poly, cum, total), 6)
-            for number, point in sorted(corners.items())
-        }
+    """重新计算全部赛道的弯道弧长占比（生成与 CI 校验共用同一实现）。
+
+    2026-09-17 起**改用曲率峰值法**：弯心 = 转角局部极大点，由赛道 SVG 几何
+    自动定位，并以官方弯数作硬校验（见 :func:`detect_apex_fractions`）。
+
+    为什么不再用人工锚点投影（用户实测指出蒙扎）：锚点摆错则全表皆错 ——
+    蒙扎 T1（第一减速弯，主直道末端 ≈1100 m）的锚点被摆在起跑线上，弧长
+    占比 0.0000，整条赛道弯号**整体前移 ≈19%**，所有"归因到某弯"的遥测实际
+    都属于前一个弯。几何法不依赖人工摆放，且峰数必须等于官方弯数。
+    """
+    from setup_tuner.domain.track import get_all_tracks
+
+    counts = {t.track_id: len(t.corners) for t in get_all_tracks()}
+    result, failed = compute_arcs_curvature(counts)
+    if failed:
+        raise RuntimeError(
+            "以下赛道无法用曲率峰值定位出恰好 N 个弯心，"
+            "需检查其 SVG 路径几何：" + ", ".join(sorted(failed))
+        )
     return result
 
 
@@ -383,3 +390,146 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+
+# --------------------------------------------------------------------------- #
+# 曲率峰值法：由几何自动定位弯心（2026-09-17 起，替代人工锚点投影）
+# --------------------------------------------------------------------------- #
+# 为什么改（用户实测指出）：
+#   人工锚点会放错 —— 蒙扎 T1（第一减速弯，主直道末端 ≈1100 m）的锚点被摆在
+#   起跑线上，弧长占比 0.0000，导致整条赛道弯号**整体前移 ≈19%**；凡"遥测归因
+#   到某弯"的数据实际都属于前一个弯。受同样影响的还有 melbourne / mexico_city /
+#   spielberg（T1 锚点压在起跑线）。
+#   改为**曲率峰值自动定位**：弯心 = 转角局部极大点，纯几何决定，不依赖人工摆放；
+#   并以**官方弯数**作硬校验（峰数必须等于官方弯数，对不上就报错，不许编造）。
+
+_APEX_WINDOWS = (0.010, 0.015, 0.020, 0.030, 0.045, 0.060, 0.080, 0.110)
+_APEX_MIN_SEPS = (0.030, 0.022, 0.015, 0.010, 0.007)
+_APEX_THRESH_FRACS = (0.50, 0.42, 0.35, 0.30, 0.25, 0.20, 0.16, 0.12)
+
+
+def _dense_path(track_id: str) -> tuple[list[tuple[float, float]], list[float], float]:
+    """读取赛道主 path 并采样为折线 + 累计弧长。"""
+    svg = (SVG_DIR / f"{track_id}.svg").read_text(encoding="utf-8")
+    paths = re.findall(r'<path[^>]*\sd="([^"]+)"', svg)
+    poly = parse_path(max(paths, key=len))
+    cum, total = _cumulative(poly)
+    return poly, cum, total
+
+
+def _turning_series(
+    poly: list[tuple[float, float]],
+) -> list[float]:
+    """逐点转角幅值（0..π）：相邻两段方向的夹角，越大越接近弯心。"""
+    n = len(poly)
+    out = [0.0] * n
+    for i in range(1, n - 1):
+        ax = poly[i][0] - poly[i - 1][0]
+        ay = poly[i][1] - poly[i - 1][1]
+        bx = poly[i + 1][0] - poly[i][0]
+        by = poly[i + 1][1] - poly[i][1]
+        na = math.hypot(ax, ay) or 1.0
+        nb = math.hypot(bx, by) or 1.0
+        cosang = (ax * bx + ay * by) / (na * nb)
+        out[i] = math.acos(max(-1.0, min(1.0, cosang)))
+    out[0] = out[-1] = 0.0
+    return out
+
+
+def _smooth_by_arc(
+    values: list[float], cum: list[float], total: float, window: float,
+) -> list[float]:
+    """按弧长窗口做滑动平均（抑制 SVG 采样噪声造成的锯齿峰）。"""
+    import bisect
+    half = window * total / 2.0
+    out: list[float] = []
+    for x in cum:
+        lo = bisect.bisect_left(cum, x - half)
+        hi = bisect.bisect_right(cum, x + half)
+        seg = values[lo:hi]
+        out.append(sum(seg) / len(seg) if seg else 0.0)
+    return out
+
+
+def _cyclic_dist(a: float, b: float, total: float) -> float:
+    """占比环回距离（赛道是闭合回路，首尾相邻）。"""
+    d = abs(a - b) % total
+    return min(d, total - d)
+
+
+def _peaks_by_arc(
+    values: list[float], cum: list[float], total: float,
+    min_sep: float, threshold: float, n_want: int,
+) -> list[float] | None:
+    """取**恰好 ``n_want`` 个**最强且相互间隔 ≥ ``min_sep`` 的局部极大。
+
+    关键（早期版本的错误）：不是"调参让候选峰数恰好等于 n"——那样任何一组
+    参数都很难命中；而是**按强度从大到小贪心选取，凑满 n 个即停**。
+    蒙zilla 实测：转角聚集在 0.10–0.20（=物理上的 T1/T2 第一减速弯）、
+    0.35–0.45（T3 Curva Grande）、0.55–0.65（Lesmo）、0.80–0.90（Ascari）、
+    0.95–1.00（Parabolica），与真实赛历剖面吻合 —— 几何里本来就有正确答案，
+    是选峰方式不对。
+
+    候选不足 ``n_want`` 个时返回 ``None``（调用方须回退，不得编造）。
+    """
+    n = len(values)
+    idxs = [
+        i for i in range(1, n - 1)
+        if values[i] >= threshold
+        and values[i] >= values[i - 1] and values[i] >= values[i + 1]
+    ]
+    idxs.sort(key=lambda i: (-values[i], cum[i]))
+    chosen: list[int] = []
+    for i in idxs:
+        x = cum[i]
+        if all(_cyclic_dist(x, cum[j], total) >= min_sep for j in chosen):
+            chosen.append(i)
+            if len(chosen) == n_want:
+                return sorted(round(cum[k] / total, 6) for k in chosen)
+    return None
+
+
+def detect_apex_fractions(track_id: str, n_expected: int) -> list[float] | None:
+    """在赛道几何上定位 ``n_expected`` 个弯心，返回升序弧长占比。
+
+    确定性标定：按「窗口由大到小（越平滑越可信）→ 最小间距由大到小 →
+    阈值由高到低」的固定顺序搜索，取**第一个**能产出恰好 ``n_expected``
+    个峰的组合。找不到返回 ``None`` —— 调用方**必须**回退，不得编造。
+    """
+    poly, cum, total = _dense_path(track_id)
+    if total <= 0 or n_expected <= 0:
+        return None
+    raw = _turning_series(poly)
+    for min_sep_frac in _APEX_MIN_SEPS:
+        for window in _APEX_WINDOWS:
+            smoothed = _smooth_by_arc(raw, cum, total, window)
+            peak_max = max(smoothed) or 1.0
+            for thr_frac in _APEX_THRESH_FRACS:
+                fr = _peaks_by_arc(
+                    smoothed, cum, total, min_sep_frac * total,
+                    thr_frac * peak_max, n_expected,
+                )
+                if fr is not None:
+                    return fr
+    return None
+
+
+def compute_arcs_curvature(
+    corner_counts: dict[str, int],
+) -> tuple[dict[str, dict[int, float]], list[str]]:
+    """对全部赛道做曲率峰值定位。
+
+    Returns:
+        ``(arcs, failed)``：``arcs[track_id][corner] = fraction``；
+        ``failed`` 为未能用几何定位出恰好 N 个弯心的赛道 —— 调用方
+        **必须**对这些赛道保留人工锚点结果并明确报告，不得编造。
+    """
+    result: dict[str, dict[int, float]] = {}
+    failed: list[str] = []
+    for track_id, n in sorted(corner_counts.items()):
+        fr = detect_apex_fractions(track_id, n)
+        if fr is None:
+            failed.append(track_id)
+            continue
+        result[track_id] = {i + 1: f for i, f in enumerate(fr)}
+    return result, failed

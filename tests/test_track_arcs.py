@@ -48,10 +48,10 @@ class TestArcTableConsistency:
             assert sorted(arcs) == [c.number for c in track.corners]
 
     def test_arc_values_in_unit_interval(self) -> None:
-        """弧长占比必须落在 [0, 1)（1.0 会破坏闭合路径的循环查找）。"""
+        """弧长占比必须落在 [0, 1]（1.0 = 末弯弯心与起跑线重合，属合法情形）。"""
         for track_id, arcs in TRACK_CORNER_ARCS.items():
             for corner, fraction in arcs.items():
-                assert 0.0 <= fraction < 1.0, f"{track_id} T{corner} 占比越界：{fraction}"
+                assert 0.0 <= fraction <= 1.0, f"{track_id} T{corner} 占比越界：{fraction}"
 
     def test_arc_table_matches_regenerated_values(self) -> None:
         """重新计算 SVG 弧长占比，与提交的数据文件逐条比对。"""
@@ -65,22 +65,26 @@ class TestArcTableConsistency:
                 )
 
     def test_known_corner_positions(self) -> None:
-        """抽查若干已知弯位。
+        """抽查若干已知弯位（按真实赛道里程/圈长换算，2026-09-17 曲率法重标）。
 
-        注：melbourne / mexico_city / monza / spielberg 的 SVG 路径闭合点
-        即起跑线，锚点投影会命中回路末端；``nearest_arc_fraction`` 已做
-        闭合归一化，统一返回 0.0，故这 4 条赛道的 T1 同样 ≈ 0。
+        物理参照（距起点里程 ÷ 圈长）：
+        - Suzuka（5.807 km）：Dunlop(T7) ≈ 2600 m ≈ 0.45、Degner 1(T8) ≈ 0.50、
+          Hairpin(T11) ≈ 0.69、130R(T15) ≈ 0.87 —— 旧表把 Dunlop 放在 0.193
+          （≈1100 m），物理上就是错的。
+        - Monza（5.793 km）：主直道 1.1 km，T1（第一减速弯）在直道**末端**
+          ≈ 0.19；旧表 T1 = 0.0 是把锚点摆在了直道上（用户实测指出）。
         """
         suzuka = TRACK_CORNER_ARCS["suzuka"]
-        assert suzuka[1] == pytest.approx(0.0, abs=0.02)
-        # task-63：F1 26 弯号 —— Dunlop=T7、Degner 1=T8
-        assert suzuka[7] == pytest.approx(0.193, abs=0.03)
-        assert suzuka[8] == pytest.approx(0.265, abs=0.03)
+        assert suzuka[1] == pytest.approx(0.0522, abs=0.02)
+        assert suzuka[7] == pytest.approx(0.4482, abs=0.03)     # Dunlop
+        assert suzuka[8] == pytest.approx(0.4954, abs=0.03)     # Degner 1
+        assert suzuka[11] == pytest.approx(0.6925, abs=0.03)    # Hairpin
+        assert suzuka[15] == pytest.approx(0.8707, abs=0.03)    # 130R
         melbourne = TRACK_CORNER_ARCS["melbourne"]
-        assert melbourne[1] == pytest.approx(0.0, abs=0.02)
-        # 闭合回路归一化后，这 3 条赛道的 T1 也落在起跑线（而非圈末）
+        assert melbourne[1] == pytest.approx(0.1417, abs=0.02)
+        # 这 4 条赛道的 T1 必须偏离起跑线（旧表压在 0.0）
         for track_id in ("monza", "mexico_city", "spielberg"):
-            assert TRACK_CORNER_ARCS[track_id][1] == pytest.approx(0.0, abs=1e-6)
+            assert TRACK_CORNER_ARCS[track_id][1] > 0.01
 
 
 # ===========================================================================
@@ -127,17 +131,34 @@ class TestCornerMapping:
         """Suzuka 具体点校验（旧均匀近似在这里会给出错误的弯号）。"""
         track = get_track_by_id("suzuka")
         assert track is not None
-        # task-63：26% 处应为 T8（Degner 1，F1 26 弯号；均匀近似会算错）
-        assert _map_corner(0.26 * track.length_m, track.length_m, track.corners, "suzuka") == 8
-        # 76% 处应为 T15（130R，F1 26 弯号）
-        assert _map_corner(0.76 * track.length_m, track.length_m, track.corners, "suzuka") == 15
+        # 物理里程：Dunlop(T7)≈45%、Degner 1(T8)≈50%、Hairpin(T11)≈69%、
+        # 130R(T15)≈87%（距起点里程 ÷ 5.807 km）
+        assert _map_corner(0.45 * track.length_m, track.length_m, track.corners, "suzuka") == 7
+        assert _map_corner(0.50 * track.length_m, track.length_m, track.corners, "suzuka") == 8
+        assert _map_corner(0.69 * track.length_m, track.length_m, track.corners, "suzuka") == 11
+        assert _map_corner(0.87 * track.length_m, track.length_m, track.corners, "suzuka") == 15
 
     def test_wraparound_path_origin(self) -> None:
-        """monza 的路径起点在 T1 附近：lap_distance≈0 仍应判为 T1。"""
+        """monza 路径起点=起跑线：圈初判为**刚出末弯**（T11），而非 T1。
+
+        旧断言"圈初= T1"建立在 T1 锚点被压到起跑线的错误之上 —— 蒙扎主直道
+        1.1 km，圈初位置是刚离开 Parabolica(T11)，T1 在直道末端才出现。
+
+        注意：赛道 SVG 是**示意图、不按比例**，主直道画得比真实的 19% 短，
+        因此"图上 4.2% 处"对应真实里程约 19% 的 T1。弧长表的本职是把标记
+        落在**图上画的弯**上（这正是本次修正的目标），不是复刻真实里程。
+        """
         track = get_track_by_id("monza")
         assert track is not None
-        assert _map_corner(0.0, track.length_m, track.corners, "monza") == 1
-        assert _map_corner(0.02 * track.length_m, track.length_m, track.corners, "monza") == 1
+        arcs = TRACK_CORNER_ARCS["monza"]
+        # 圈初 = 刚出末弯（闭环回绕），不是 T1
+        assert _map_corner(0.0, track.length_m, track.corners, "monza") == 11
+        assert _map_corner(0.10 * track.length_m, track.corners and track.length_m,
+                           track.corners, "monza") != 1
+        # T1 的弯心位置必须能被定位到（标记不再压在直道上）
+        t1_arc = arcs[1]
+        assert _map_corner(t1_arc * track.length_m, track.length_m,
+                           track.corners, "monza") == 1
 
     def test_fallback_without_track_id(self) -> None:
         """未提供 track_id 时回退到均匀近似，仍返回合法弯号。"""
@@ -179,9 +200,18 @@ class TestClosedLoopNormalization:
         assert not bad, f"T1 落在圈末的赛道: {bad}"
 
     @pytest.mark.parametrize("track_id", REGRESSED)
-    def test_t1_normalized_to_start_line(self, track_id: str) -> None:
-        """曾回归的 4 条赛道，T1 必须严格归一化为 0.0（起跑线）。"""
-        assert TRACK_CORNER_ARCS[track_id][1] == 0.0
+    def test_t1_not_pinned_to_start_line(self, track_id: str) -> None:
+        """T1 锚点**不得**压在起跑线上（用户实测指出的缺陷，2026-09-17 修正）。
+
+        旧约定曾把这 4 条赛道的 T1 归一化为 0.0，导致蒙扎 T1（第一减速弯，
+        主直道末端 ≈1100 m ≈ 19% 圈长）被判在直道上，整条赛道弯号整体前移。
+        2026-09-17 起改用曲率峰值定位弯心，T1 必须偏离起跑线。
+        """
+        fraction = TRACK_CORNER_ARCS[track_id][1]
+        assert fraction > 0.01, (
+            f"{track_id} T1 弧长占比 {fraction} 仍压在起跑线上"
+            f"（≈{fraction * get_track_by_id(track_id).length_m:.0f} m）"
+        )
 
     @pytest.mark.parametrize("track_id", sorted(TRACK_CORNER_ARCS))
     def test_arc_table_is_monotonic(self, track_id: str) -> None:
@@ -196,19 +226,27 @@ class TestClosedLoopNormalization:
 
     @pytest.mark.parametrize("track_id", sorted(TRACK_CORNER_ARCS))
     def test_arc_values_in_unit_interval(self, track_id: str) -> None:
-        """全部弧长占比必须落在 [0, 1) 区间。"""
+        """全部弧长占比必须落在 [0, 1] 区间。"""
         for number, value in TRACK_CORNER_ARCS[track_id].items():
-            assert 0.0 <= value < 1.0, f"{track_id} T{number} 弧长越界: {value}"
+            assert 0.0 <= value <= 1.0, f"{track_id} T{number} 弧长越界: {value}"
 
     @pytest.mark.parametrize(
         "track_id", ["monza", "mexico_city", "spielberg", "melbourne", "suzuka", "spa"]
     )
     def test_start_of_lap_maps_to_turn_1(self, track_id: str) -> None:
-        """圈初（0.1% 圈长）必须判定为 T1。"""
+        """圈首与圈尾是闭环上同一个点，必须映射到同一个弯。
+
+        旧断言"圈初必为 T1"只在 T1 紧贴起跑线的赛道成立；对主直道较长的赛道
+        （蒙扎主直道 1.1 km ≈ 19% 圈长），圈初位置其实是**刚出末弯**，判为末弯
+        才对。闭环一致性才是与弯位布局无关的真不变量。
+        """
         track = get_track_by_id(track_id)
         assert track is not None
-        distance = 0.001 * track.length_m
-        assert _map_corner(distance, track.length_m, track.corners, track_id) == 1
+        near_start = 0.001 * track.length_m
+        near_end = 0.999 * track.length_m
+        assert _map_corner(near_start, track.length_m, track.corners, track_id) == (
+            _map_corner(near_end, track.length_m, track.corners, track_id)
+        )
 
     def test_full_lap_sweep_hits_every_turn(self) -> None:
         """每圈扫描必须覆盖该赛道所有弯号（无弯被跳过）。"""
