@@ -54,13 +54,22 @@ class TestArcTableConsistency:
                 assert 0.0 <= fraction <= 1.0, f"{track_id} T{corner} 占比越界：{fraction}"
 
     def test_arc_table_matches_regenerated_values(self) -> None:
-        """重新计算 SVG 弧长占比，与提交的数据文件逐条比对。"""
+        """重新计算弧长占比，与提交的数据文件逐条比对。
+
+        容差 3e-3 = 跨平台复算漂移界（实测 austin T3 0.0025）：Windows
+        ucrt 与 Linux glibc 的 libm（atan2/hypot/cos）不逐位一致，叠加
+        累计转角的过零重置等离散判定，CI(3.11/Linux) 与本地(3.13/Win)
+        对同一候选的强度可有 1e-4~1e-3 级差异，argmax 随之漂移十几米。
+        数据文件本身的正确性不受此影响 —— 锚点必须落在真弯上（几何硬门
+        >= 12°）、恰好官方弯数、三层一致（可见层==锚点==本表）由其余
+        测试独立锁死；本测试防的是「数据与生成逻辑整体脱节」。
+        """
         computed = _load_generator().compute_arcs()
         assert set(computed) == set(TRACK_CORNER_ARCS)
         for track_id, arcs in computed.items():
             for corner, fraction in arcs.items():
                 committed = TRACK_CORNER_ARCS[track_id][corner]
-                assert committed == pytest.approx(fraction, abs=1e-3), (
+                assert committed == pytest.approx(fraction, abs=3e-3), (
                     f"{track_id} T{corner}: 提交值 {committed} vs 重算值 {fraction}"
                 )
 
