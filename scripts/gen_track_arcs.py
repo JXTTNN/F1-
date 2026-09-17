@@ -403,9 +403,11 @@ if __name__ == "__main__":
 #   改为**曲率峰值自动定位**：弯心 = 转角局部极大点，纯几何决定，不依赖人工摆放；
 #   并以**官方弯数**作硬校验（峰数必须等于官方弯数，对不上就报错，不许编造）。
 
-_APEX_WINDOWS = (0.010, 0.015, 0.020, 0.030, 0.045, 0.060, 0.080, 0.110)
+# 累计转角窗口（圈长占比）：窗口越大越抗噪、越能识别"整段弯"而非单点锯齿。
+# 单点转角是错的度量 —— SVG 采样把每个 90° 弯拆成十几个 9° 小段，
+# 单点转角趋近 0，蒙扎 T1 因此被误判在直道上（实测 0.5°）。
+_APEX_WINDOWS = (0.08, 0.06, 0.05, 0.04, 0.03, 0.025, 0.02)
 _APEX_MIN_SEPS = (0.030, 0.022, 0.015, 0.010, 0.007)
-_APEX_THRESH_FRACS = (0.50, 0.42, 0.35, 0.30, 0.25, 0.20, 0.16, 0.12)
 
 
 def _dense_path(track_id: str) -> tuple[list[tuple[float, float]], list[float], float]:
@@ -433,6 +435,23 @@ def _turning_series(
         cosang = (ax * bx + ay * by) / (na * nb)
         out[i] = math.acos(max(-1.0, min(1.0, cosang)))
     out[0] = out[-1] = 0.0
+    return out
+
+
+def _cumulative_turn(
+    raw: list[float], cum: list[float], total: float, window: float,
+) -> list[float]:
+    """每个顶点处、弧长窗口内的**累计转角**（弧度，可取 >2π）。
+
+    弯的正确度量：一段弧上所有单点转角之和。直道≈0，发夹≈π 以上。
+    """
+    import bisect
+    half = window * total / 2.0
+    out: list[float] = []
+    for x in cum:
+        lo = bisect.bisect_left(cum, x - half)
+        hi = bisect.bisect_right(cum, x + half)
+        out.append(sum(raw[lo:hi]))
     return out
 
 
@@ -492,9 +511,10 @@ def _peaks_by_arc(
 def detect_apex_fractions(track_id: str, n_expected: int) -> list[float] | None:
     """在赛道几何上定位 ``n_expected`` 个弯心，返回升序弧长占比。
 
-    确定性标定：按「窗口由大到小（越平滑越可信）→ 最小间距由大到小 →
-    阈值由高到低」的固定顺序搜索，取**第一个**能产出恰好 ``n_expected``
-    个峰的组合。找不到返回 ``None`` —— 调用方**必须**回退，不得编造。
+    度量：**累计转角窗口**（见 :func:`_cumulative_turn`）——弯 = 一段弧上
+    转角之和的局部极大，而非单点转角。确定性标定：按「最小间距由大到小 →
+    窗口由大到小」的固定顺序搜索，取第一个能凑满恰好 ``n_expected`` 个峰的
+    组合。找不到返回 ``None``（调用方须回退，不得编造）。
     """
     poly, cum, total = _dense_path(track_id)
     if total <= 0 or n_expected <= 0:
@@ -502,15 +522,13 @@ def detect_apex_fractions(track_id: str, n_expected: int) -> list[float] | None:
     raw = _turning_series(poly)
     for min_sep_frac in _APEX_MIN_SEPS:
         for window in _APEX_WINDOWS:
-            smoothed = _smooth_by_arc(raw, cum, total, window)
-            peak_max = max(smoothed) or 1.0
-            for thr_frac in _APEX_THRESH_FRACS:
-                fr = _peaks_by_arc(
-                    smoothed, cum, total, min_sep_frac * total,
-                    thr_frac * peak_max, n_expected,
-                )
-                if fr is not None:
-                    return fr
+            signal = _cumulative_turn(raw, cum, total, window)
+            floor = max(signal) * 0.25 if max(signal) > 0 else 0.0
+            fr = _peaks_by_arc(
+                signal, cum, total, min_sep_frac * total, floor, n_expected,
+            )
+            if fr is not None:
+                return fr
     return None
 
 

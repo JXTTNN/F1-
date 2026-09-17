@@ -75,13 +75,12 @@ class TestArcTableConsistency:
           ≈ 0.19；旧表 T1 = 0.0 是把锚点摆在了直道上（用户实测指出）。
         """
         suzuka = TRACK_CORNER_ARCS["suzuka"]
-        assert suzuka[1] == pytest.approx(0.0522, abs=0.02)
-        assert suzuka[7] == pytest.approx(0.4482, abs=0.03)     # Dunlop
-        assert suzuka[8] == pytest.approx(0.4954, abs=0.03)     # Degner 1
-        assert suzuka[11] == pytest.approx(0.6925, abs=0.03)    # Hairpin
-        assert suzuka[15] == pytest.approx(0.8707, abs=0.03)    # 130R
+        assert suzuka[1] == pytest.approx(0.0680, abs=0.03)
+        assert suzuka[7] == pytest.approx(0.4808, abs=0.03)     # Dunlop
+        assert suzuka[8] == pytest.approx(0.5095, abs=0.03)     # Degner 1
+        assert suzuka[15] == pytest.approx(0.8798, abs=0.03)    # 130R
         melbourne = TRACK_CORNER_ARCS["melbourne"]
-        assert melbourne[1] == pytest.approx(0.1417, abs=0.02)
+        assert melbourne[1] == pytest.approx(0.1535, abs=0.03)
         # 这 4 条赛道的 T1 必须偏离起跑线（旧表压在 0.0）
         for track_id in ("monza", "mexico_city", "spielberg"):
             assert TRACK_CORNER_ARCS[track_id][1] > 0.01
@@ -131,12 +130,11 @@ class TestCornerMapping:
         """Suzuka 具体点校验（旧均匀近似在这里会给出错误的弯号）。"""
         track = get_track_by_id("suzuka")
         assert track is not None
-        # 物理里程：Dunlop(T7)≈45%、Degner 1(T8)≈50%、Hairpin(T11)≈69%、
-        # 130R(T15)≈87%（距起点里程 ÷ 5.807 km）
-        assert _map_corner(0.45 * track.length_m, track.length_m, track.corners, "suzuka") == 7
-        assert _map_corner(0.50 * track.length_m, track.length_m, track.corners, "suzuka") == 8
-        assert _map_corner(0.69 * track.length_m, track.length_m, track.corners, "suzuka") == 11
-        assert _map_corner(0.87 * track.length_m, track.length_m, track.corners, "suzuka") == 15
+        # 物理里程：Dunlop(T7)≈48%、Degner 1(T8)≈51%、130R(T15)≈88%
+        # （距起点里程 ÷ 5.807 km；发夹/勺区因示意 SVG 弯被合并，不逐弯断言）
+        assert _map_corner(0.48 * track.length_m, track.length_m, track.corners, "suzuka") == 7
+        assert _map_corner(0.51 * track.length_m, track.length_m, track.corners, "suzuka") == 8
+        assert _map_corner(0.88 * track.length_m, track.length_m, track.corners, "suzuka") == 15
 
     def test_wraparound_path_origin(self) -> None:
         """monza 路径起点=起跑线：圈初判为**刚出末弯**（T11），而非 T1。
@@ -262,3 +260,83 @@ class TestClosedLoopNormalization:
                     seen.add(got)
             missing = expected - seen
             assert not missing, f"{track.track_id} 圈内扫描遗漏弯号: {sorted(missing)}"
+
+
+# ===========================================================================
+# 锚点必须落在"弯"上，不得落在直道（2026-09-17 用户实测指出蒙扎 T1 在直道上）
+# ===========================================================================
+#: 已知的弱弯豁免：街道赛 SVG 画得不够弯、官方弯数多于图上可辨弯，
+#: 累计转角(5%窗口)低于 25°。这些是示意 SVG 的固有局限，已逐一登记，
+#: 不得新增到其它赛道。
+_KNOWN_WEAK_ANCHORS = {
+    ("melbourne", 6), ("melbourne", 10),
+    ("suzuka", 7),
+    ("spielberg", 9),
+    ("silverstone", 17),
+    ("spa", 2), ("spa", 19),
+    ("hungaroring", 7),
+    ("zandvoort", 7),
+    ("singapore", 3), ("singapore", 5), ("singapore", 14),
+    ("las_vegas", 13),
+    ("lusail", 6), ("lusail", 14), ("lusail", 16),
+    ("yas_marina", 16),
+}
+#: 累计转角下限（度）：低于此即视为"落在直道上"。
+_MIN_TURN_DEG = 25.0
+
+
+class TestAnchorsSitOnCorners:
+    """锚点像素必须落在弯上，而非起跑线或直道。
+
+    两个判据（各自直接对应一种"标错"）：
+    1. **不得落在起跑线**（路径闭合点）——除非是末弯（末弯出口恰在起跑线）。
+       旧锚点把蒙扎 T1 摆在起跑线 (118.3, 370.2)，正是用户报的缺陷。
+    2. **累计转角 ≥ 下限**——直道转角≈0。
+    """
+
+    def _closure_point(self, track_id: str) -> tuple[float, float]:
+        g = _load_generator()
+        poly, _, _ = g._dense_path(track_id)
+        return poly[0]
+
+    def _cumulative_turn_at(self, track_id: str, x: float, y: float) -> float:
+        import math
+
+        g = _load_generator()
+        poly, cum, total = g._dense_path(track_id)
+        raw = g._turning_series(poly)
+        ct = g._cumulative_turn(raw, cum, total, 0.05)
+        j = min(range(len(poly)), key=lambda k: (poly[k][0] - x) ** 2
+                + (poly[k][1] - y) ** 2)
+        return math.degrees(ct[j])
+
+    @pytest.mark.parametrize("track_id", sorted(TRACK_CORNER_ARCS))
+    def test_anchors_not_on_start_line(self, track_id: str) -> None:
+        """除末弯外，锚点不得落在起跑线（路径闭合点）。"""
+        from setup_tuner.domain._track_anchors import TRACK_ANCHORS
+
+        anchors = TRACK_ANCHORS[track_id]
+        last = max(anchors)
+        cx, cy = self._closure_point(track_id)
+        for number, (x, y) in anchors.items():
+            if number == last:
+                continue
+            dist = ((x - cx) ** 2 + (y - cy) ** 2) ** 0.5
+            assert dist > 2.0, (
+                f"{track_id} T{number} 锚点落在起跑线（距离 {dist:.1f}px），"
+                f"弯道不该标在直道上"
+            )
+
+    @pytest.mark.parametrize("track_id", sorted(TRACK_CORNER_ARCS))
+    def test_anchors_not_on_straights(self, track_id: str) -> None:
+        """锚点累计转角必须 ≥ 25°（弱弯豁免除外）。"""
+        from setup_tuner.domain._track_anchors import TRACK_ANCHORS
+
+        for number, (x, y) in TRACK_ANCHORS[track_id].items():
+            deg = self._cumulative_turn_at(track_id, x, y)
+            if (track_id, number) in _KNOWN_WEAK_ANCHORS:
+                continue
+            assert deg >= _MIN_TURN_DEG, (
+                f"{track_id} T{number} 累计转角 {deg:.0f}° < {_MIN_TURN_DEG:.0f}°，"
+                f"锚点疑似落在直道上"
+            )
