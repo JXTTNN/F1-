@@ -52,6 +52,7 @@ from .diagnostic import (
     is_zero_dx,
 )
 from .holistic import class_weighted_dx, holistic_coherence, track_demand
+from .optimizer import describe_tradeoff, optimize_setup
 
 
 # ---------------------------------------------------------------------------
@@ -86,8 +87,15 @@ def _align_to_step(value: float, step: float, lo: float) -> float:
 # ---------------------------------------------------------------------------
 # 遥测校准增益提取（design 2.7.5）
 # ---------------------------------------------------------------------------
-def _is_wet_weather(telemetry: dict[str, Any]) -> bool:
-    """判断遥测指示湿滑天气。"""
+def _is_wet_weather(telemetry: dict[str, Any] | None) -> bool:
+    """判断遥测指示湿滑天气。
+
+    接受 ``None``（"没有遥测"是合法输入）：早期直接 ``telemetry.get(...)``，
+    调用方一旦传 None 就 ``AttributeError``；引擎整体对缺失遥测是宽容的，
+    这里不得例外。
+    """
+    if not telemetry:
+        return False
     weather = telemetry.get("weather") or telemetry.get("m_weather")
     if isinstance(weather, str):
         return weather.lower() in {"wet", "rainy", "rain", "drizzle"}
@@ -864,6 +872,7 @@ def generate_suggestion(
         "coherence_notes": [],
     }
 
+    weighted = None
     if feedbacks:
         weighted = class_weighted_dx(feedbacks, track_id)
         feedback_dx = weighted.dx
@@ -888,8 +897,35 @@ def generate_suggestion(
         rule_delta, nn_delta, model_type, nn_available,
     )
 
-    # 整体性收口：胎压左右对称 / 前后翼平衡窗口 / 改动预算 / 冲突与权衡说明
-    final_delta, coherence_notes = holistic_coherence(blended_delta, dx, demand)
+    # 圈级整体优化：在"逐弯需求残差 + 显式代价（阻力/刮底/胎温/改动幅度）"
+    # 这个目标函数上做确定性搜索，把一次线性步换成整圈净收益最大的解。
+    # 关键：需求按弯道类别分列（来自 class_weighted_dx().by_class），
+    # 于是慢弯与快弯各自带着不同诉求，单一参数集不可能同时满足 ——
+    # 赛道弯型占比与车手反馈才真正决定取向，并产生可解释的取舍。
+    optimized = optimize_setup(
+        dx, current_setup, track_id,
+        telemetry=telemetry, feedbacks=feedbacks,
+        initial_delta=blended_delta,
+        needs_by_class=(weighted.by_class if weighted else None),
+        wet=_is_wet_weather(telemetry),
+    )
+    holistic_block["optimization"] = {
+        "objective_before": round(optimized.before.total, 6),
+        "objective_after": round(optimized.after.total, 6),
+        "improvement": round(optimized.improvement, 6),
+        "per_class_gain": optimized.per_class_gain,
+        "costs": {
+            "drag": round(optimized.after.drag_cost, 6),
+            "bottoming": round(optimized.after.bottoming_cost, 6),
+            "tyre_heat": round(optimized.after.tyre_heat_cost, 6),
+            "effort": round(optimized.after.effort_cost, 6),
+        },
+        "trace": list(optimized.trace),
+        "tradeoff": describe_tradeoff(optimized),
+    }
+
+    # 整体性收口：胎压左右对称 / 前后翼平衡窗口 / 改动预算（保证可用性）
+    final_delta, coherence_notes = holistic_coherence(optimized.delta, dx, demand)
     holistic_block["coherence_notes"] = coherence_notes
 
     parameters = _build_param_details(final_delta, current_setup, dx)

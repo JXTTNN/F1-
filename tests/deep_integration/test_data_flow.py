@@ -589,7 +589,20 @@ class TestTelemetrySummaryFlow:
             track_id="suzuka",
             telemetry=None,
         )
-        # 雨天应至少有一个参数的 |delta| 更小或相等
-        deltas_wet = [abs(v) for v in result["setup_delta"].values()]
-        deltas_dry = [abs(v) for v in result_no_telemetry["setup_delta"].values()]
-        assert all(w <= d + 1e-9 for w, d in zip(deltas_wet, deltas_dry, strict=True))
+        # 雨天应整体更保守：总调整幅度 Σ|Δ| 不大于干地。
+        #
+        # 注意（2026-09-17 修订）：不再逐元素断言 |wet| <= |dry|。
+        # 新架构下 setup_delta 由**圈级优化器**产出，天气以"需求倾斜"
+        # （湿地抬高高稳定/出弯牵引需求、降低空力抓地收益）进入目标函数。
+        # 于是湿地可能把某个参数调得更大（如为稳定性增加后翼），同时在其他
+        # 参数上更保守 —— 逐元素单调性不再是湿地意图的正确表达。
+        # 真正要守住的意图有两条：①总幅度不增加；②湿地结果必须与干地不同。
+        # 第 ② 条正是能抓住"天气被优化器抹平"那类回归的断言。
+        sum_wet = sum(abs(v) for v in result["setup_delta"].values())
+        sum_dry = sum(abs(v) for v in result_no_telemetry["setup_delta"].values())
+        assert sum_wet <= sum_dry + 1e-9, (
+            f"雨天总调整幅度 {sum_wet:.2f} 不应大于干地 {sum_dry:.2f}"
+        )
+        assert result["setup_delta"] != result_no_telemetry["setup_delta"], (
+            "湿地与干地输出相同 —— 天气没有被模型消费（回归）"
+        )

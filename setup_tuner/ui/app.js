@@ -1476,7 +1476,7 @@
     }
   }
 
-  /** 渲染「整体分析」区块：赛道画像 / 逐弯加权依据 / 跨类别冲突 / 收口取舍。
+  /** 渲染「整体分析」区块：赛道画像 / 逐弯依据 / 跨类别冲突 / 圈级优化 / 收口。
    *  这是"为什么这么调"的依据链 —— 让车手看到整体权衡，而不是只看到数字。
    *  @param {Object} h — report.holistic
    *  @returns {string} HTML 片段
@@ -1493,13 +1493,31 @@
     const demandLine = h.demand
       ? `<div class="holistic-line"><span class="holistic-tag">赛道画像</span>${esc(h.demand)}</div>`
       : "";
+
+    // 圈级优化：目标是"圈级需求缺口 + 代价（阻力/刮底/胎温/改动幅度）"的总和，越小越好
+    let optLine = "";
+    const o = h.optimization;
+    if (o) {
+      const gain = (o.per_class_gain) || {};
+      const cls = [["slow", "慢弯"], ["medium", "中速弯"], ["fast", "快弯"]]
+        .filter(([k]) => Math.abs(gain[k] || 0) > 1e-4)
+        .map(([k, label]) => `${label}${(gain[k] || 0) > 0 ? "↓" : "↑"}${Math.abs(gain[k]).toFixed(4)}`)
+        .join("　");
+      optLine = `<div class="holistic-line"><span class="holistic-tag">圈级优化</span>` +
+        `目标 ${(o.objective_before ?? 0).toFixed(4)} → ${(o.objective_after ?? 0).toFixed(4)}` +
+        `（改善 ${(o.improvement ?? 0).toFixed(4)}）${cls ? "　残差：" + cls : ""}</div>`;
+    }
+
     const body = [
       group("逐弯加权依据", h.corner_notes, "holistic-corner"),
       group("跨弯道类别冲突（已折中）", h.conflicts, "holistic-conflict"),
+      group("整体取舍说明", o && o.tradeoff, "holistic-tradeoff"),
+      group("改动轨迹（逐步接受的最优改动）", (o && o.trace || []).slice(0, 10),
+            "holistic-trace"),
       group("整体收口与取舍", h.coherence_notes, "holistic-coherence"),
     ].join("");
-    if (!demandLine && !body) return "";
-    return `<div class="holistic">${demandLine}${body}</div>`;
+    if (!demandLine && !optLine && !body) return "";
+    return `<div class="holistic">${demandLine}${optLine}${body}</div>`;
   }
 
   function renderReportSummary(report) {

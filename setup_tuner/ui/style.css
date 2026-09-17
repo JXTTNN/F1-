@@ -1652,3 +1652,10 @@ h1, h2, h3 {
   line-height: 1.55;
   opacity: .9;
 }
+.holistic-group.holistic-tradeoff { border-left-color: #7aa2ff; }
+.holistic-group.holistic-trace { border-left-color: #8d8d99; }
+.holistic-group.holistic-trace .holistic-item {
+  font-family: var(--mono);
+  font-size: 11px;
+  opacity: .75;
+}
