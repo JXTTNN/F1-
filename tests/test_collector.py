@@ -308,3 +308,48 @@ class TestStatus:
         st = app.status()
         assert st["listening"] is False
         assert st["recording"] is False
+
+
+# ===========================================================================
+# 5. 开箱即用：点「开始收集」必定在收包并自动落盘（GUI 依赖的兜底）
+# ===========================================================================
+class TestAutoListen:
+    """GUI 开窗自动监听 + 点收集兜底监听 —— 「自动保存遥测」的底座。"""
+
+    def test_start_collect_auto_listens(self, tmp_path: Path) -> None:
+        port = _free_udp_port()
+        app = CollectorApp(str(tmp_path / "recordings"), port=port)
+        assert app.status()["listening"] is False
+
+        app.start_collect(auto_listen=True)
+
+        assert app.status()["listening"] is True
+        assert app.status()["recording"] is True
+        app.shutdown()
+
+    def test_auto_listen_actually_captures(self, tmp_path: Path) -> None:
+        """端到端：auto_listen 开的收集真的能收到包并落盘。"""
+        port = _free_udp_port()
+        app = CollectorApp(str(tmp_path / "recordings"), port=port)
+        app.start_collect(auto_listen=True)
+
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        for _ in range(4):
+            sock.sendto(_session_packet(track_id=3), ("127.0.0.1", port))
+        assert _wait_until(
+            lambda: app.status()["counts"].get("Session", 0) >= 4,
+        ), "auto_listen 后未收到包"
+        summary = app.stop_collect()
+        assert summary["packet_count"] == 4
+        assert Path(summary["f1rec_path"]).exists()
+
+        app.shutdown()
+        sock.close()
+
+    def test_start_collect_default_stays_pure(self, tmp_path: Path) -> None:
+        """负向：不带 auto_listen 时**不得**隐式绑定端口（库层语义纯粹）。"""
+        app = CollectorApp(str(tmp_path / "recordings"))
+        app.start_collect()
+        assert app.status()["listening"] is False
+        assert app.status()["recording"] is True
+        app.shutdown()

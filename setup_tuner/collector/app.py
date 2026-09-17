@@ -82,8 +82,16 @@ class CollectorApp:
         """停止 UDP 监听（幂等）。"""
         self._listener.stop()
 
-    def start_collect(self) -> dict[str, Any]:
-        """开始收集（落盘录制），返回录制会话信息。"""
+    def start_collect(self, *, auto_listen: bool = False) -> dict[str, Any]:
+        """开始收集（落盘录制），返回录制会话信息。
+
+        Args:
+            auto_listen: 为 True 时，若监听未启动则**先自动启动监听**再开录
+                （GUI 用）——保证用户「点开始收集」就一定在收包并自动落盘。
+                默认 False 保持库层语义纯粹：测试不会隐式占用默认端口。
+        """
+        if auto_listen and not self._listener.is_running:
+            self.listen()
         return self._recorder.start()
 
     def stop_collect(self) -> dict[str, Any]:

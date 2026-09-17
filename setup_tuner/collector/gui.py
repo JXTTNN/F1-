@@ -39,6 +39,7 @@ class CollectorWindow:
         self._root.title("F1OPT 桌面遥测接收器")
         self._root.geometry("680x560")
         self._build_widgets()
+        self._auto_listen()
         self._refresh()
 
     # ------------------------------------------------------------------ #
@@ -52,6 +53,11 @@ class CollectorWindow:
         self._lbl_state.pack(anchor="w")
         self._lbl_target = ttk.Label(top, text="")
         self._lbl_target.pack(anchor="w")
+        ttk.Label(
+            top,
+            text="用法：游戏内开 UDP 遥测（可开广播模式）→ 点「开始收集」，"
+                 "数据即自动保存到 data\\recordings",
+        ).pack(anchor="w")
 
         btns = ttk.Frame(root, padding=(8, 0))
         btns.pack(fill="x")
@@ -91,6 +97,23 @@ class CollectorWindow:
     # ------------------------------------------------------------------ #
     # 动作
     # ------------------------------------------------------------------ #
+    def _auto_listen(self) -> None:
+        """开窗即自动启动监听（开箱即用）。
+
+        用户只需点一次「开始收集」就能自动落盘；监听失败（如端口被另一个
+        接收器实例占用）只弹提示、不崩溃。
+        """
+        try:
+            self._app.listen()
+        except OSError as exc:
+            messagebox.showerror(
+                "自动监听失败",
+                f"无法监听 UDP 端口：{exc}\n\n"
+                "常见原因：已经开着另一个「遥测接收器」实例。\n"
+                "请关掉多余实例后点「启动监听」重试。",
+                parent=self._root,
+            )
+
     def _toggle_listen(self) -> None:
         try:
             if self._app.status()["listening"]:
@@ -107,7 +130,9 @@ class CollectorWindow:
                 summary = self._app.stop_collect()
                 logger.info("collect stopped: %s", summary)
             else:
-                self._app.start_collect()
+                # auto_listen=True：万一监听被停掉，点「开始收集」也会自动补上，
+                # 保证「一点就开始收包并自动落盘」这条链路永不断。
+                self._app.start_collect(auto_listen=True)
         except Exception as exc:  # noqa: BLE001 —— GUI 层兜底，弹窗不崩溃
             messagebox.showerror("收集失败", str(exc), parent=self._root)
         self._refresh()
