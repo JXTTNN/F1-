@@ -185,6 +185,45 @@ def _lap_writer_loop(app: FastAPI) -> None:
             logger.exception("整圈落库失败，跳过该圈")
 
 
+def _wire_track_context(app: FastAPI, aggregator: Any, session: dict[str, Any]) -> None:
+    """把 Session 包转成「圈内距离 → 弯号」定位回调并注入聚合器。
+
+    路肩（kerb）检测需要知道每一帧落在哪个弯：MotionEx 不带圈内距离，
+    只能靠 Session 包的 ``m_trackLength`` + 弧长表反查。
+
+    幂等：同一 ``m_trackId`` 只构造一次（Session 包每圈都会重发）。
+    """
+    udp_id = session.get("m_trackId")
+    if not isinstance(udp_id, int) or isinstance(udp_id, bool):
+        return
+    if getattr(app.state, "_kerb_track_udp_id", None) == udp_id:
+        return
+
+    length = session.get("m_trackLength")
+    if not isinstance(length, (int, float)) or isinstance(length, bool):
+        return
+
+    from setup_tuner.domain.corner_locator import locate_corner
+    from setup_tuner.domain.track import get_track_by_udp_id
+
+    track = get_track_by_udp_id(udp_id)
+    if track is None:
+        # 未知赛道：路肩按弯归因不可用，但绝不因此打断主流程
+        logger.info("未知 m_trackId=%s，路肩按弯归因降级为不可用", udp_id)
+        app.state._kerb_track_udp_id = udp_id
+        return
+
+    def _locate(dist: float) -> int | None:
+        return locate_corner(dist, track.length_m, track.corners, track.track_id)
+
+    aggregator.set_track_context(float(length), _locate)
+    app.state._kerb_track_udp_id = udp_id
+    logger.info(
+        "路肩检测已启用：%s（%d 弯，赛道长 %s m）",
+        track.track_id, len(track.corners), length,
+    )
+
+
 def _make_packet_handler(app: FastAPI) -> Callable[[dict[str, Any]], None]:
     """构造 UDP 包处理函数：写入 TelemetryStream，并喂给整圈聚合器。
 
@@ -220,6 +259,11 @@ def _make_packet_handler(app: FastAPI) -> Callable[[dict[str, Any]], None]:
             # parse_car_status 早已实现但此前从未分发，导致这些状态量
             # 解析出来即丢弃（配方相关的阈值区分、刹车平衡核对全部失效）。
             aggregator.on_car_status(parsed)
+        elif packet_id == 1:
+            # Packet 1 (Session)：注入赛道上下文 —— 路肩检测必须知道
+            # 赛道长度 + 弧长表才能把「圈内距离」归因到具体弯道
+            # （MotionEx 本身不带距离，这是唯一的定位来源）。
+            _wire_track_context(app, aggregator, parsed)
         # task-62 M1：一圈结束时把整圈快照与风格向量交给落库线程
         completed = aggregator.take_completed_lap()
         if completed is not None:

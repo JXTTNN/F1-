@@ -106,6 +106,10 @@ SYMPTOM_STAGE_TO_DX: dict[str, dict[str, dict[str, float]]] = {
     "lockup": {
         "entry": {"brake_stab_req": 0.70, "brake_power_req": -0.30, "front_grip_req": 0.10},
     },
+    "brake_instability": {
+        # task-82：重刹下车尾摆动/车身不稳 —— 制动稳定性优先，兼顾后轴抓地
+        "entry": {"brake_stab_req": 0.80, "rear_grip_req": 0.30},
+    },
     # 弯中 apex
     "midcorner_understeer": {
         "apex": {"front_grip_req": 0.60, "hi_speed_stab_req": 0.30, "turnin_req": 0.10},
@@ -155,6 +159,21 @@ SYMPTOM_STAGE_TO_DX: dict[str, dict[str, dict[str, float]]] = {
     "high_speed_instability": {
         "global": {"hi_speed_stab_req": 0.80, "front_grip_req": 0.10, "rear_grip_req": 0.10},
     },
+    "kerb_instability": {
+        # task-82：压路肩弹跳失控 —— 提高离地/悬挂行程余量为主，
+        # 兼顾高速稳定（路肩冲击后车身姿态需要更早稳定）。
+        # 对应遥测：按弯路肩检测（kerb_corners）——路肩不得不压，调教迁就路肩。
+        "global": {"ride_height_req": 0.90, "hi_speed_stab_req": 0.20},
+    },
+    "tyre_graining": {
+        # task-82：轮胎粒化（表面滑动过热起粒）—— 减少滑动 + 保胎，
+        # 两侧抓地同降（粒化不分前后轴，取决于车手滑移习惯与风格）。
+        "global": {"tyre_life_req": 0.80, "front_grip_req": 0.30, "rear_grip_req": 0.30},
+    },
+    "brake_fade": {
+        # task-82：刹车过热衰减 —— 制动力恢复 + 制动稳定性（踏板软后更难稳住车头）
+        "global": {"brake_power_req": 0.70, "brake_stab_req": 0.30},
+    },
 }
 
 
@@ -178,6 +197,10 @@ SYMPTOM_DEFAULT_STAGE: dict[str, str] = {
     "straight_slow": "global",
     "lap_slow": "global",
     "high_speed_instability": "global",
+    "kerb_instability": "global",
+    "brake_instability": "entry",
+    "tyre_graining": "global",
+    "brake_fade": "global",
 }
 
 
