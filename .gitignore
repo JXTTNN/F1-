@@ -85,3 +85,7 @@ api_test_result*.json
 
 # 赛道渲染产物（由 scripts/render_real_tracks.py 生成，可随时重建）
 scripts/real_circuits/render/
+
+# 车手真实遥测与训练数据（个人数据，绝不入库）
+data/recordings/
+data/training/

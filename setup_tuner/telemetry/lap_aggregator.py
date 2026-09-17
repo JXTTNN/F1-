@@ -26,10 +26,13 @@
 
 from __future__ import annotations
 
+import logging
 import threading
 from typing import Any
 
 from .packets import to_sector_1based
+
+logger = logging.getLogger(__name__)
 
 # 判定「当前处于直道」的阈值（转向接近回正 + 大油门）
 _STRAIGHT_STEER_MAX = 0.05
@@ -45,6 +48,18 @@ _PLANK_BOTTOMING_MIN_M = 0.002
 _PLANK_BOTTOMING_MAX_M = 0.012
 # 悬挂行程（m_suspensionPosition）被压到接近下限时同样视为触底迹象
 _SUSPENSION_BOTTOMING_MAX_M = 0.005
+
+# ── 路肩（kerb）检测 ────────────────────────────────────────────────────
+# 信号：MotionEx ``m_suspensionAcceleration``（四轮悬挂加速度）。
+# 实测（data/recordings 真实圈，87k 帧）该信号绝对量纲噪声极大
+# （p50≈175、p90≈1230、p99≈10978、max≈178799），**绝对阈值法不可用**
+# ——74% 的帧都会越过 500。故改用**相对法**：
+#   逐帧取四轮 |加速度| 最大值作为「路面粗糙度」，
+#   按弯聚合后与全圈各弯中位数比较，显著偏高的弯即压路肩弯。
+# 实测验证（Monza 11 弯）：检出 T5(Roggia 减速弯) 2.9x / T10(Ascari 减速弯)
+# 2.9x / T7(Lesmo2) 2.8x / T2(Rettifilo 减速弯) 2.0x —— 与赛历吻合。
+_KERB_ROUGHNESS_RATIO = 1.6   # 相对全圈中位数的倍数阈值
+_KERB_MIN_FRAMES = 15         # 单弯最少帧数，避免样本过少误报
 
 # ── Packet 7 (CarStatus) 轮胎配方枚举 ───────────────────────────────────
 # Source: EA F1 25 UDP Telemetry Specification — m_actualTyreCompound
@@ -100,6 +115,9 @@ class LapAggregator:
 
     def __init__(self) -> None:
         self._lock = threading.Lock()
+        # 赛道上下文：跨圈保持（_reset_acc 不重置它），由 set_track_context 注入
+        self._track_length: float | None = None
+        self._corner_locator: Any = None
         self._reset_acc()
         self._lap_time_ms: int | None = None
         self._lap_number: int | None = None
@@ -136,6 +154,14 @@ class LapAggregator:
         self._rear_height_sum = 0.0
         self._plank_bottoming_frames = 0
         self._suspension_height_min: float | None = None
+        # 路肩检测：按弯粗糙度累积（逐圈重置）。
+        # 注意：赛道上下文（_track_length / _corner_locator）**不在此重置**——
+        # 它由 set_track_context() 注入后必须跨圈保持，否则每圈都被清空。
+        self._lap_distance: float | None = None
+        self._corner_rough_sum: dict[int, float] = {}
+        self._corner_rough_n: dict[int, int] = {}
+        self._corner_rough_left: dict[int, float] = {}
+        self._corner_rough_right: dict[int, float] = {}
         # Packet 7 累积量：轮胎配方/胎龄/燃油/ERS/刹车平衡
         # 这些是"整圈不变或单调变化"的状态量，取最后一次有效值即可。
         self._status_frames = 0
@@ -158,6 +184,42 @@ class LapAggregator:
         if isinstance(value, bool) or not isinstance(value, (int, float)):
             return None
         return float(value)
+
+    def _kerb_corners_locked(self) -> list[dict[str, Any]]:
+        """挑出「压路肩」的弯（调用方须持锁）。
+
+        相对法：逐弯路面粗糙度均值 vs 全圈各弯中位数。绝对值噪声大，
+        但「相对偏粗糙」稳定——路肩把车轮顶起，悬挂加速度显著高于正常路面。
+
+        Returns:
+            按 ratio 降序的列表，每项 ``{corner, ratio, frames, side}``；
+            弯数不足 3 个或基线为 0 时返回空（中位数无意义）。
+        """
+        means = {
+            c: self._corner_rough_sum[c] / n
+            for c, n in self._corner_rough_n.items()
+            if n >= _KERB_MIN_FRAMES
+        }
+        if len(means) < 3:
+            return []
+        ordered = sorted(means.values())
+        base = ordered[len(ordered) // 2]
+        if base <= 0:
+            return []
+        out: list[dict[str, Any]] = []
+        for corner, mean in means.items():
+            ratio = mean / base
+            if ratio >= _KERB_ROUGHNESS_RATIO:
+                left = self._corner_rough_left.get(corner, 0.0)
+                right = self._corner_rough_right.get(corner, 0.0)
+                out.append({
+                    "corner": corner,
+                    "ratio": round(ratio, 2),
+                    "frames": self._corner_rough_n[corner],
+                    "side": "left" if left >= right else "right",
+                })
+        out.sort(key=lambda d: (-d["ratio"], d["corner"]))
+        return out
 
     def _accumulate_wheels(self, frame: dict[str, Any]) -> None:
         for key, target in self._wheel_sum.items():
@@ -204,6 +266,10 @@ class LapAggregator:
                 snapshot["suspension_height_min"] = round(
                     self._suspension_height_min, 5,
                 )
+            # 路肩：按弯粗糙度相对全圈中位数，挑出压路肩弯（有些路肩不得不压）
+            kerb = self._kerb_corners_locked()
+            if kerb:
+                snapshot["kerb_corners"] = kerb
         # Packet 7：车辆状态（轮胎配方/胎龄/燃油/ERS/刹车平衡）
         if self._status_frames:
             snapshot["car_status_frames"] = self._status_frames
@@ -240,6 +306,25 @@ class LapAggregator:
                 snapshot["drs_allowed"] = self._drs_allowed
         return snapshot
 
+    def set_track_context(
+        self, track_length: float | None, corner_locator: Any = None,
+    ) -> None:
+        """注入赛道上下文，用于把帧归因到弯道（路肩检测）。
+
+        Args:
+            track_length: 赛道长度（米，来自 Session 包 ``m_trackLength``）。
+            corner_locator: 可调用对象 ``f(lap_distance_m) -> corner_number|None``。
+                由调用方（app / exporter）用 :func:`domain.corner_locator.locate_corner`
+                构造——**telemetry 层不反向依赖 domain 层**，故用回调解耦。
+                为 None 时不做按弯归因（路肩统计自动缺省为空）。
+
+        注入后 ``on_motion_ex`` 会把每帧路面粗糙度按弯累积，圈末在快照里
+        输出 ``kerb_corners``（显著偏粗糙的弯 = 压路肩弯）。
+        """
+        with self._lock:
+            self._track_length = track_length
+            self._corner_locator = corner_locator
+
     # ------------------------------------------------------------------ #
     # 输入
     # ------------------------------------------------------------------ #
@@ -252,6 +337,10 @@ class LapAggregator:
         lap_no = int(lap_no) if isinstance(lap_no, (int, float)) else None
 
         with self._lock:
+            # 圈内距离：路肩检测按弯归因的唯一位置来源（MotionEx 不带距离）
+            dist = lap.get("m_lapDistance")
+            if isinstance(dist, (int, float)) and not isinstance(dist, bool):
+                self._lap_distance = float(dist)
             if sector is not None:
                 self._sector = sector
             # 记录最近一次"上圈完成圈时"（m_lastLapTimeInMS），圈号变化时归入上一圈
@@ -326,8 +415,23 @@ class LapAggregator:
             if candidates:
                 suspension_min = min(candidates)
 
-        # 两个信号都没有 → 该帧无有效内容，不计入也不改变状态
-        if front is None and rear is None and suspension_min is None:
+        # 路肩信号：四轮悬挂加速度，分左右侧取最大（判定压哪一侧的路肩）。
+        # 车轮序（官方规范）：0=RL 1=RR 2=FL 3=FR → 左=RL/FL，右=RR/FR。
+        rough_left: float | None = None
+        rough_right: float | None = None
+        accel = frame.get("m_suspensionAcceleration")
+        if isinstance(accel, list) and len(accel) == 4:
+            vals: list[float] = []
+            for v in accel:
+                if isinstance(v, (int, float)) and not isinstance(v, bool):
+                    vals.append(abs(float(v)))
+            if len(vals) == 4:
+                rough_left = max(vals[0], vals[2])
+                rough_right = max(vals[1], vals[3])
+
+        # 所有信号都没有 → 该帧无有效内容，不计入也不改变状态
+        if (front is None and rear is None and suspension_min is None
+                and rough_left is None):
             return
 
         with self._lock:
@@ -359,6 +463,35 @@ class LapAggregator:
                     and suspension_min <= _SUSPENSION_BOTTOMING_MAX_M):
                 # 本帧无底板离地高度，但悬挂行程已压到接近下限 —— 视为触底迹象。
                 self._plank_bottoming_frames += 1
+
+            # ── 路肩归因：把本帧路面粗糙度记到所属弯 ──
+            if (rough_left is not None and rough_right is not None
+                    and self._corner_locator is not None
+                    and self._track_length
+                    and self._lap_distance is not None):
+                try:
+                    corner = self._corner_locator(self._lap_distance)
+                except Exception:
+                    # 定位失败不致命（该帧不参与路肩统计），但必须留痕
+                    logger.warning("路肩归因定位失败", exc_info=True)
+                    corner = None
+                if corner is not None:
+                    rough = max(rough_left, rough_right)
+                    self._corner_rough_sum[corner] = (
+                        self._corner_rough_sum.get(corner, 0.0) + rough
+                    )
+                    self._corner_rough_n[corner] = (
+                        self._corner_rough_n.get(corner, 0) + 1
+                    )
+                    # 记录两侧各自累积，用于判定该弯主要压哪一侧
+                    if rough_left >= rough_right:
+                        self._corner_rough_left[corner] = (
+                            self._corner_rough_left.get(corner, 0.0) + rough_left
+                        )
+                    else:
+                        self._corner_rough_right[corner] = (
+                            self._corner_rough_right.get(corner, 0.0) + rough_right
+                        )
 
     def on_car_status(self, frame: dict[str, Any]) -> None:
         """接收 Packet 7 (CarStatus)：累积轮胎配方 / 胎龄 / 燃油 / ERS / 刹车平衡。
