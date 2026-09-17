@@ -13,45 +13,45 @@
   <path class="track-line" d="M 749.92 138.29 c -0.77 -6.62 -7.46 -11.65 -14.08 -10.33 c -176.75 34.91 -300.94 34.21 -421.05 33.51 l -2.12 -0.01 a 11.27 11.27 30.00 0 0 -9.63 5.27 a 11.37 11.37 30.00 0 0 -0.67 11.05 c 6.71 14.03 12.40 24.77 16.97 33.40 c 6.69 12.62 10.91 20.58 12.31 27.55 l -16.94 -1.73 c -1.87 -0.19 -3.38 -0.62 -4.50 -1.27 c -1.37 -0.79 -3.00 -2.33 -3.42 -7.22 l -0.87 -10.18 a 16.80 16.80 30.00 0 0 -3.18 -8.47 l -9.72 -13.32 a 16.76 16.76 30.00 0 0 -10.14 -6.54 l -15.05 -3.12 c -4.10 -0.85 -8.21 0.53 -10.99 3.68 a 11.69 11.69 30.00 0 0 -2.32 11.45 c 3.72 11.03 8.64 21.09 13.41 30.83 c 5.31 10.85 10.33 21.10 12.45 30.55 c -0.03 2.60 -0.60 15.60 -9.47 28.58 a 12.38 12.38 30.00 0 1 -5.78 4.54 c -6.49 2.46 -18.69 6.81 -27.50 8.13 a 11.67 11.67 30.00 0 1 -4.96 -0.32 c -3.47 -0.99 -10.44 -3.29 -18.01 -7.67 a 74.36 74.36 30.00 0 1 -9.65 -6.63 c -1.00 -0.82 -1.90 -1.92 -2.64 -3.28 l -34.33 -61.99 c -4.08 -7.35 -13.37 -11.08 -21.40 -8.59 l -86.90 26.90 a 13.71 13.71 30.00 0 0 -9.27 9.72 c -1.22 4.67 0.05 9.51 3.38 12.97 l 195.82 203.06 c 0.74 0.77 1.58 1.42 2.49 1.95 l 0.00 0.00 c 3.55 2.05 7.96 1.96 11.51 -0.24 c 3.55 -2.21 5.51 -6.03 5.27 -10.21 c -0.65 -11.32 -2.42 -28.95 -7.04 -48.63 c -6.71 -28.60 -0.71 -44.13 20.72 -53.60 c 17.24 -7.63 41.80 -17.86 54.90 -23.28 a 24.82 24.82 30.00 0 0 11.69 -9.95 l 10.22 -16.51 a 25.10 25.10 30.00 0 1 16.27 -11.36 l 1.19 -0.24 c 12.37 -2.53 22.27 -11.63 25.83 -23.77 l 5.17 -17.60 c 0.73 -2.47 2.38 -4.56 4.65 -5.88 c 5.85 -3.40 17.33 -9.37 28.67 -11.13 c 2.55 -0.40 5.35 0.19 7.88 1.65 l 28.94 18.62 l 1.05 0.64 c 9.19 5.31 20.83 4.23 28.96 -2.65 l 24.19 -20.51 c 4.60 -3.90 11.18 -4.50 16.38 -1.50 c 2.15 1.24 3.88 2.99 5.15 5.17 l 5.69 9.81 c 2.36 4.06 7.06 6.50 11.73 6.09 l 62.67 -5.51 a 18.00 18.00 30.00 0 0 10.78 -4.88 L 746.26 148.29 c 2.76 -2.63 4.09 -6.28 3.67 -10.00 z"/>
   <path class="track-line-accent" d="M 749.92 138.29 c -0.77 -6.62 -7.46 -11.65 -14.08 -10.33 c -176.75 34.91 -300.94 34.21 -421.05 33.51 l -2.12 -0.01 a 11.27 11.27 30.00 0 0 -9.63 5.27 a 11.37 11.37 30.00 0 0 -0.67 11.05 c 6.71 14.03 12.40 24.77 16.97 33.40 c 6.69 12.62 10.91 20.58 12.31 27.55 l -16.94 -1.73 c -1.87 -0.19 -3.38 -0.62 -4.50 -1.27 c -1.37 -0.79 -3.00 -2.33 -3.42 -7.22 l -0.87 -10.18 a 16.80 16.80 30.00 0 0 -3.18 -8.47 l -9.72 -13.32 a 16.76 16.76 30.00 0 0 -10.14 -6.54 l -15.05 -3.12 c -4.10 -0.85 -8.21 0.53 -10.99 3.68 a 11.69 11.69 30.00 0 0 -2.32 11.45 c 3.72 11.03 8.64 21.09 13.41 30.83 c 5.31 10.85 10.33 21.10 12.45 30.55 c -0.03 2.60 -0.60 15.60 -9.47 28.58 a 12.38 12.38 30.00 0 1 -5.78 4.54 c -6.49 2.46 -18.69 6.81 -27.50 8.13 a 11.67 11.67 30.00 0 1 -4.96 -0.32 c -3.47 -0.99 -10.44 -3.29 -18.01 -7.67 a 74.36 74.36 30.00 0 1 -9.65 -6.63 c -1.00 -0.82 -1.90 -1.92 -2.64 -3.28 l -34.33 -61.99 c -4.08 -7.35 -13.37 -11.08 -21.40 -8.59 l -86.90 26.90 a 13.71 13.71 30.00 0 0 -9.27 9.72 c -1.22 4.67 0.05 9.51 3.38 12.97 l 195.82 203.06 c 0.74 0.77 1.58 1.42 2.49 1.95 l 0.00 0.00 c 3.55 2.05 7.96 1.96 11.51 -0.24 c 3.55 -2.21 5.51 -6.03 5.27 -10.21 c -0.65 -11.32 -2.42 -28.95 -7.04 -48.63 c -6.71 -28.60 -0.71 -44.13 20.72 -53.60 c 17.24 -7.63 41.80 -17.86 54.90 -23.28 a 24.82 24.82 30.00 0 0 11.69 -9.95 l 10.22 -16.51 a 25.10 25.10 30.00 0 1 16.27 -11.36 l 1.19 -0.24 c 12.37 -2.53 22.27 -11.63 25.83 -23.77 l 5.17 -17.60 c 0.73 -2.47 2.38 -4.56 4.65 -5.88 c 5.85 -3.40 17.33 -9.37 28.67 -11.13 c 2.55 -0.40 5.35 0.19 7.88 1.65 l 28.94 18.62 l 1.05 0.64 c 9.19 5.31 20.83 4.23 28.96 -2.65 l 24.19 -20.51 c 4.60 -3.90 11.18 -4.50 16.38 -1.50 c 2.15 1.24 3.88 2.99 5.15 5.17 l 5.69 9.81 c 2.36 4.06 7.06 6.50 11.73 6.09 l 62.67 -5.51 a 18.00 18.00 30.00 0 0 10.78 -4.88 L 746.26 148.29 c 2.76 -2.63 4.09 -6.28 3.67 -10.00 z"/>
   <rect x="744.9" y="133.3" width="10" height="10" fill="#FF1801" rx="1"/>
-  <circle cx="741.7" cy="128.4" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
-  <text x="741.7" y="119.4" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">1</text>
-  <circle cx="567.5" cy="153.0" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
-  <text x="567.5" y="144.0" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">2</text>
-  <circle cx="301.8" cy="169.3" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
-  <text x="301.8" y="160.3" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">3</text>
-  <circle cx="329.7" cy="232.1" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
-  <text x="329.7" y="223.1" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">4</text>
-  <circle cx="291.0" cy="194.2" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
-  <text x="291.0" y="185.2" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">5</text>
-  <circle cx="256.8" cy="190.6" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
-  <text x="256.8" y="181.6" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">6</text>
-  <circle cx="268.4" cy="294.7" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
-  <text x="268.4" y="285.7" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">7</text>
-  <circle cx="235.1" cy="304.8" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
-  <text x="235.1" y="295.8" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">8</text>
-  <circle cx="204.6" cy="289.7" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
-  <text x="204.6" y="280.7" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">9</text>
-  <circle cx="154.0" cy="215.6" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
-  <text x="154.0" y="206.6" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">10</text>
-  <circle cx="50.2" cy="254.2" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
-  <text x="50.2" y="245.2" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">11</text>
-  <circle cx="268.6" cy="464.0" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
-  <text x="268.6" y="455.0" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">12</text>
-  <circle cx="264.1" cy="372.8" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
-  <text x="264.1" y="363.8" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">13</text>
-  <circle cx="337.5" cy="334.8" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
-  <text x="337.5" y="325.8" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">14</text>
-  <circle cx="371.8" cy="298.1" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
-  <text x="371.8" y="289.1" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">15</text>
-  <circle cx="397.9" cy="283.0" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
-  <text x="397.9" y="274.0" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">16</text>
-  <circle cx="408.8" cy="253.3" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
-  <text x="408.8" y="244.3" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">17</text>
-  <circle cx="499.9" cy="261.2" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
-  <text x="499.9" y="252.2" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">18</text>
-  <circle cx="536.8" cy="233.5" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
-  <text x="536.8" y="224.5" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">19</text>
-  <circle cx="570.5" cy="255.7" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
-  <text x="570.5" y="246.7" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">20</text>
+  <circle cx="304.40" cy="164.90" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
+  <text x="304.40" y="155.90" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">1</text>
+  <circle cx="309.90" cy="193.10" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
+  <text x="309.90" y="184.10" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">2</text>
+  <circle cx="328.60" cy="229.70" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
+  <text x="328.60" y="220.70" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">3</text>
+  <circle cx="308.10" cy="233.70" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
+  <text x="308.10" y="224.70" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">4</text>
+  <circle cx="293.00" cy="196.50" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
+  <text x="293.00" y="187.50" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">5</text>
+  <circle cx="261.80" cy="187.20" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
+  <text x="261.80" y="178.20" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">6</text>
+  <circle cx="265.10" cy="227.00" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
+  <text x="265.10" y="218.00" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">7</text>
+  <circle cx="273.30" cy="288.10" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
+  <text x="273.30" y="279.10" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">8</text>
+  <circle cx="237.60" cy="304.60" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
+  <text x="237.60" y="295.60" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">9</text>
+  <circle cx="251.90" cy="470.60" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
+  <text x="251.90" y="461.60" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">10</text>
+  <circle cx="268.40" cy="452.80" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
+  <text x="268.40" y="443.80" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">11</text>
+  <circle cx="263.20" cy="417.50" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
+  <text x="263.20" y="408.50" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">12</text>
+  <circle cx="344.20" cy="330.80" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
+  <text x="344.20" y="321.80" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">13</text>
+  <circle cx="366.40" cy="301.00" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
+  <text x="366.40" y="292.00" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">14</text>
+  <circle cx="395.70" cy="285.90" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
+  <text x="395.70" y="276.90" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">15</text>
+  <circle cx="431.10" cy="240.90" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
+  <text x="431.10" y="231.90" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">16</text>
+  <circle cx="479.10" cy="259.30" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
+  <text x="479.10" y="250.30" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">17</text>
+  <circle cx="508.00" cy="256.60" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
+  <text x="508.00" y="247.60" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">18</text>
+  <circle cx="533.70" cy="235.00" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
+  <text x="533.70" y="226.00" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">19</text>
+  <circle cx="562.10" cy="252.80" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
+  <text x="562.10" y="243.80" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">20</text>
   <text x="400" y="588" text-anchor="middle" fill="#5c5c70" font-size="11" font-family="monospace" letter-spacing="2">AUSTIN</text>
 </svg>

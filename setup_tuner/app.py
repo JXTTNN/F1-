@@ -372,6 +372,17 @@ def _mount_static_assets(app: FastAPI) -> None:
         name="static-ui",
     )
 
+    # 静态资源协商缓存：文件一变，浏览器下次加载立即拿到新版；
+    # 未变化走 304，本地服务几乎零成本。
+    # 背景（task-79）：无此头时浏览器按 Last-Modified 启发式缓存旧
+    # SVG/app.js，出现「代码改了、地图还是旧圆点」的假象。
+    @app.middleware("http")
+    async def _static_revalidate(request: Request, call_next: Any) -> Any:
+        response = await call_next(request)
+        if request.url.path.startswith("/static/"):
+            response.headers["Cache-Control"] = "no-cache"
+        return response
+
 
 def _register_exception_handlers(app: FastAPI) -> None:
     """注册全局异常处理器（统一 {code, message, data} 信封）。"""
