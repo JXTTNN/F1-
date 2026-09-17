@@ -900,10 +900,12 @@
     if (!dom.btnRecord) return;
     dom.btnRecord.disabled = true;
     try {
+      // 后端 RecordToggleRequest 要求 action 必填（start | stop），
+      // 早期前端传 {} 会直接 422 —— 录制按钮点了没反应。
       const data = await fetchJSON("/telemetry/record/toggle", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ action: state.isRecording ? "stop" : "start" }),
       });
       // 后端返回 {recording: bool, session_id: str?}
       state.isRecording = data && data.recording === true;

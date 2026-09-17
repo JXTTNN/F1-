@@ -1694,6 +1694,11 @@ class TelemetryExperimentRequest(BaseModel):
     """调教实验对比请求。
 
     提供两份调教参数和遥测数据，分别生成建议并对比差异。
+
+    遥测可共享也可分侧：两侧都未单独提供时使用 ``telemetry``；
+    真实 A/B 实验（同一弯道分别用方案 A / B 各跑一趟）应提供
+    ``telemetry_a`` / ``telemetry_b``，否则两次诊断输入完全相同，
+    ``dx_diff`` 恒为空 —— 该字段就无法反映方案差异。
     """
 
     track_id: str = Field(..., description="赛道标识")
@@ -1701,7 +1706,15 @@ class TelemetryExperimentRequest(BaseModel):
     setup_b: dict[str, float] = Field(..., description="调教方案 B 的参数字典")
     telemetry: dict[str, Any] = Field(
         default_factory=dict,
-        description="遥测数据字典（avg_speed/max_speed/avg_throttle 等）",
+        description="共享遥测数据字典（两侧均未单独提供时使用）",
+    )
+    telemetry_a: dict[str, Any] | None = Field(
+        default=None,
+        description="方案 A 专属遥测；为空时回退到 telemetry",
+    )
+    telemetry_b: dict[str, Any] | None = Field(
+        default=None,
+        description="方案 B 专属遥测；为空时回退到 telemetry",
     )
 
 
@@ -1784,13 +1797,18 @@ def _describe_confidence_diff(conf_a: str, conf_b: str) -> str:
     return f"方案 B 置信度更高（{conf_b} > {conf_a})"
 
 
-@router.post("/telemetry/experiment")
 def _generate_experiment_suggestion(
     setup: dict[str, float],
     track_id: str,
     telemetry: dict[str, Any] | None,
 ) -> dict[str, Any]:
     """为实验对比生成单份调教建议（无车手反馈，仅遥测驱动）。
+
+    内部辅助函数，**不是**端点：由 ``telemetry_experiment`` 各调用一次。
+    历史上这里曾误挂 ``@router.post`` 装饰器，导致 FastAPI 把本函数注册成
+    ``/telemetry/experiment`` 的处理函数（把 ``setup``/``telemetry`` 当作 body、
+    ``track_id`` 当作 query），真正的端点反倒成了死代码 —— 按文档契约调用
+    必然 422。勿再为本函数添加路由装饰器。
 
     Args:
         setup: 调教参数字典。
@@ -1843,6 +1861,7 @@ def _build_experiment_comparison(
     )
 
 
+@router.post("/telemetry/experiment")
 async def telemetry_experiment(
     body: TelemetryExperimentRequest,
 ) -> dict[str, Any]:
@@ -1851,6 +1870,10 @@ async def telemetry_experiment(
     分别用 setup_a 和 setup_b 作为当前调教，结合遥测数据调用
     ``engine.generate_suggestion`` 生成建议，对比两份方案的
     Dx 向量 / SetupDelta / 置信度差异。
+
+    遥测取值优先级：``telemetry_a``/``telemetry_b`` 优先，缺省回退到
+    共享的 ``telemetry``。两侧输入相同则 Dx 必然相同（``dx_diff`` 全零），
+    这是正确结果 —— 想看到 Dx 差异就必须提供分侧遥测。
 
     请求体示例：
         ``{"track_id": "abu_dhabi", "setup_a": {...}, "setup_b": {...}, "telemetry": {...}}``
@@ -1866,12 +1889,17 @@ async def telemetry_experiment(
     # 校验两份调教参数
     _validate_experiment_setups(body.setup_a, body.setup_b)
 
-    # 遥测数据（空字典时传 None 给 engine）
-    telemetry = body.telemetry if body.telemetry else None
+    # 遥测数据（分侧优先，缺省回退共享；空字典时传 None 给 engine）
+    telem_a = body.telemetry_a if body.telemetry_a else body.telemetry
+    telem_b = body.telemetry_b if body.telemetry_b else body.telemetry
 
     # 分别生成建议（无车手反馈，仅遥测驱动）
-    suggestion_a = _generate_experiment_suggestion(body.setup_a, body.track_id, telemetry)
-    suggestion_b = _generate_experiment_suggestion(body.setup_b, body.track_id, telemetry)
+    suggestion_a = _generate_experiment_suggestion(
+        body.setup_a, body.track_id, telem_a if telem_a else None,
+    )
+    suggestion_b = _generate_experiment_suggestion(
+        body.setup_b, body.track_id, telem_b if telem_b else None,
+    )
 
     # 构建对比结果
     data = _build_experiment_comparison(body, suggestion_a, suggestion_b)
