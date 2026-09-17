@@ -4,22 +4,27 @@
 2. 弯道位置：弯道在赛道线上的位置 vs 真实弯道位置（距离比例）
 3. 视觉效果：高分辨率渲染检查
 """
-import re
 import math
+import re
 import sys
-import json
 from pathlib import Path
 
+# 仓库根目录（本脚本位于 <root>/scripts/），避免硬编码绝对路径
+ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-sys.path.insert(0, "D:/F1OPT-Test")
+sys.path.insert(0, str(ROOT))
 from convert_track_svgs import (
-    path_to_points, scale_points, extract_path_d,
-    compute_bbox, CANVAS_W, CANVAS_H, MARGIN,
-    TRACK_LAYOUT_MAP, TRACK_CORNERS_COUNT,
+    CANVAS_H,
+    CANVAS_W,
+    MARGIN,
+    TRACK_LAYOUT_MAP,
+    extract_path_d,
+    path_to_points,
+    scale_points,
 )
 
-TRACK_DIR = Path("D:/F1OPT-Test/setup_tuner/ui/tracks")
-RAW_DIR = Path("D:/F1OPT-Test/scripts/raw_svgs")
+TRACK_DIR = ROOT / "setup_tuner" / "ui" / "tracks"
+RAW_DIR = ROOT / "scripts" / "raw_svgs"
 
 
 def hausdorff_distance(pts1, pts2):

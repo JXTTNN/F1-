@@ -48,6 +48,10 @@ exclude = ["tests*", "legacy*", "data_store*"]
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+# legacy/ 是重构前的旧实现存档（见 legacy/README.md）：只读参考区，
+# 不属于 setup_tuner 运行时，也不应参与 lint —— 否则 `ruff check .`
+# 会被 270+ 条历史噪音淹没，真正的回归反而看不见。
+exclude = ["legacy"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]

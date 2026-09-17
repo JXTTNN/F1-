@@ -1,15 +1,19 @@
 #!/usr/bin/env python3
 """端到端API验证：直接用uvicorn启动app，验证赛道图API。"""
 import subprocess
-import time
-import urllib.request
 import sys
 
 # 写一个临时启动脚本
 import tempfile
+import time
+import urllib.request
+from pathlib import Path
+
+# 仓库根目录（本脚本位于 <root>/scripts/），避免硬编码绝对路径
+ROOT = Path(__file__).resolve().parents[1]
 startup_script = """
 import sys
-sys.path.insert(0, "D:/F1OPT-Test")
+sys.path.insert(0, str(ROOT))
 from setup_tuner.app import create_app
 import uvicorn
 uvicorn.run(create_app(), host="127.0.0.1", port=8000, log_level="error")
@@ -21,7 +25,7 @@ tmp.close()
 
 proc = subprocess.Popen(
     [sys.executable, tmp.name],
-    cwd="D:/F1OPT-Test",
+    cwd=str(ROOT),
     stdout=subprocess.PIPE,
     stderr=subprocess.PIPE,
 )
@@ -66,4 +70,5 @@ finally:
     print("进程已关闭")
 
 import os
+
 os.unlink(tmp.name)

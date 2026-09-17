@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """F1OPT 性能 & 个性化能力探针（只读，云端运行）。
 
 量化：
@@ -10,7 +9,6 @@ from __future__ import annotations
 import json
 import math
 import re
-import statistics
 import sys
 import tempfile
 import time
@@ -139,8 +137,12 @@ def p3_store():
         if one_tx:
             c.commit()
         c.close()
-    t1 = time.perf_counter(); raw(False); per_row = time.perf_counter() - t1
-    t2 = time.perf_counter(); raw(True); one = time.perf_counter() - t2
+    t1 = time.perf_counter()
+    raw(False)
+    per_row = time.perf_counter() - t1
+    t2 = time.perf_counter()
+    raw(True)
+    one = time.perf_counter() - t2
     item("P3b.单事务 vs 逐行 commit（同量数据）", "INFO",
          f"逐行 commit {per_row * 1000:.0f} ms → 单事务 {one * 1000:.0f} ms，"
          f"提速 {per_row / max(one, 1e-9):.1f}×")
@@ -200,7 +202,8 @@ def p5_corner_cost():
 
     spec = _ilu.spec_from_file_location(
         "anch", ROOT / "setup_tuner" / "domain" / "_track_anchors.py")
-    anch = _ilu.module_from_spec(spec); spec.loader.exec_module(anch)
+    anch = _ilu.module_from_spec(spec)
+    spec.loader.exec_module(anch)
     from setup_tuner.api.ws import _map_corner
     from setup_tuner.domain.track import get_track_by_id
 
@@ -220,8 +223,10 @@ def p5_corner_cost():
             px, py = corners[cn]
             best = (1e18, 0.0)
             for k in range(len(poly) - 1):
-                ax, ay = poly[k]; bx, by = poly[k + 1]
-                dx, dy = bx - ax, by - ay; L2 = dx * dx + dy * dy
+                ax, ay = poly[k]
+                bx, by = poly[k + 1]
+                dx, dy = bx - ax, by - ay
+                L2 = dx * dx + dy * dy
                 tt = 0.0 if L2 == 0 else max(0.0, min(1.0,
                      ((px - ax) * dx + (py - ay) * dy) / L2))
                 dd = math.hypot(px - (ax + tt * dx), py - (ay + tt * dy))
@@ -272,8 +277,8 @@ def p6_stream_alias():
 # P7 录制热路径成本
 # =========================================================================== #
 def p7_recorder():
-    from setup_tuner.telemetry.recorder import TelemetryRecorder
     from setup_tuner.telemetry.packets import parse_packet
+    from setup_tuner.telemetry.recorder import TelemetryRecorder
 
     frames = real_frames()
     frames = [f for f in frames if len(f) > 900][:60]
@@ -283,7 +288,7 @@ def p7_recorder():
         parsed = [parse_packet(f) for f in frames]
 
         def run():
-            for f, p in zip(frames, parsed):
+            for f, p in zip(frames, parsed, strict=True):
                 rec.on_raw_packet(f, p)
         dt, per = bench(run, 20)
         summary = rec.stop()
@@ -476,7 +481,9 @@ def p2c_detail_old_vs_new():
     from setup_tuner.domain.setup import ALL_SETUP_FIELDS, CarSetup
     from setup_tuner.engine.coupling import nonzero_cells_for_param_cached
     from setup_tuner.engine.diagnostic import (
-        DIAG_DIMS_POSITIVE_SEMANTICS, DIAG_DIMS_ZH, compute_dx,
+        DIAG_DIMS_POSITIVE_SEMANTICS,
+        DIAG_DIMS_ZH,
+        compute_dx,
     )
     from setup_tuner.engine.engine import _active_cells
 
@@ -535,7 +542,7 @@ def p7c_recorder_old_vs_new():
     frames = real_frames()
     frames = [f for f in frames if len(f) > 900][:60]
     parsed = [parse_packet(f) for f in frames]
-    pool = list(zip(frames, parsed))
+    pool = list(zip(frames, parsed, strict=True))
 
     # 新路径：接收线程只入队
     with tempfile.TemporaryDirectory() as td_new:

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Suzuka 弯道数据按 F1 26 游内弯号全面重做（task-63 连续弯整改模板）。
 
 依据（F1 26 官方弯号，来源 simracingsetup/planetf1 赛道指南）：
@@ -13,7 +12,6 @@
 """
 from __future__ import annotations
 
-import importlib.util
 import math
 import re
 import sys
@@ -110,8 +108,8 @@ def main() -> int:
         'def _suzuka_corners() -> list[Corner]:\n'
         '    """Suzuka International Racing Course (5.807 km, 18 弯, mixed)。\n\n'
         '    task-63：按 F1 26 游内弯号重排（S-Curves=T3-T6、Dunlop=T7、\n'
-    	'    Degner=T8/T9、Bridge Right=T10、Hairpin=T11、Spoon=T13/T14、\n'
-    	'    130R=T15、Casio=T16-T18）。锚点取自 _track_anchors（真实 SVG 投影）。\n'
+        '    Degner=T8/T9、Bridge Right=T10、Hairpin=T11、Spoon=T13/T14、\n'
+        '    130R=T15、Casio=T16-T18）。锚点取自 _track_anchors（真实 SVG 投影）。\n'
      '    """\n'
         f'    return _build_corners([\n{rows},\n    ])'
     )

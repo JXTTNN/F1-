@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """F1OPT 负载驱动性能探测（结合仓库已有遥测数据，云端只读运行）。
 
 思路：用 legacy/tests/data/real_f1_26_sample.jsonl 里 403 帧真实 F1 2026 抓包
@@ -13,7 +12,6 @@ import re
 import sys
 import tempfile
 import time
-from collections import defaultdict
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -36,7 +34,7 @@ def bench(fn, n: int) -> tuple[float, float]:
 
 def load_samples() -> list[dict]:
     fp = ROOT / "legacy" / "tests" / "data" / "real_f1_26_sample.jsonl"
-    return [json.loads(l) for l in fp.read_text("utf-8").splitlines() if l.strip()]
+    return [json.loads(line) for line in fp.read_text("utf-8").splitlines() if line.strip()]
 
 
 # =========================================================================== #
@@ -82,7 +80,7 @@ def l1_load_model(samples: list[dict]) -> dict:
 # L2 解析链路在真实负载下的 CPU 占用
 # =========================================================================== #
 def l2_parse_under_load(model: dict, samples: list[dict]) -> None:
-    from setup_tuner.telemetry.packets import PacketTooShortError, packet_name, parse_packet
+    from setup_tuner.telemetry.packets import parse_packet
 
     pool: list[bytes] = []
     for r in samples:
@@ -215,8 +213,8 @@ def l4_ws_fanout(samples: list[dict]) -> None:
     print(f"     {'连接数':>6}{'旧:每tick发送':>14}{'旧:每tick':>12}{'旧:单核@60Hz':>14}"
           f"{'新:每tick发送':>14}{'新:每tick':>12}{'新:单核@60Hz':>14}", flush=True)
     for n in (1, 2, 4, 8, 16):
-        _, t_old = bench(lambda: old_tick(n), 200)
-        _, t_new = bench(lambda: new_tick(n), 200)
+        _, t_old = bench(lambda n=n: old_tick(n), 200)
+        _, t_new = bench(lambda n=n: new_tick(n), 200)
         print(f"     {n:>6}{n * n:>14}{t_old:>10.0f}µs{t_old / 1e6 * 60 * 100:>13.2f}%"
               f"{n:>14}{t_new:>10.0f}µs{t_new / 1e6 * 60 * 100:>13.2f}%", flush=True)
 

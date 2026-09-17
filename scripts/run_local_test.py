@@ -13,7 +13,8 @@ from concurrent.futures import ThreadPoolExecutor
 
 import httpx
 
-
+# 仓库根目录（本脚本位于 <root>/scripts/），避免硬编码绝对路径
+ROOT = pathlib.Path(__file__).resolve().parents[1]
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--host", default="127.0.0.1")
@@ -265,7 +266,7 @@ def main() -> int:
             h_ok = False
             break
     check("F9 连续50次health无错误", h_ok)
-    db = pathlib.Path("D:/F1OPT-Test/data/f1opt.db")
+    db = pathlib.ROOT / "data" / "f1opt.db"
     if db.exists():
         db_mb = db.stat().st_size / (1024 * 1024)
         check("F10 数据库<10MB", db_mb < 10, f"{db_mb:.2f}MB")

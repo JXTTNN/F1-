@@ -3,15 +3,17 @@
 关键：verify_corners_on_track.py检查的是原始SVG的path经scale_points后的结果，
 但F1OPT SVG中的赛道线path可能与之不同。本脚本直接检查F1OPT SVG自身的path。
 """
-import re
 import math
+import re
 import sys
 from pathlib import Path
 
+# 仓库根目录（本脚本位于 <root>/scripts/），避免硬编码绝对路径
+ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from convert_track_svgs import path_to_points
 
-TRACK_DIR = Path("D:/F1OPT-Test/setup_tuner/ui/tracks")
+TRACK_DIR = ROOT / "setup_tuner" / "ui" / "tracks"
 
 
 def extract_f1opt_track_points(svg_path):

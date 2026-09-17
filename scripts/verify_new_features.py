@@ -2,9 +2,12 @@
 import subprocess
 import sys
 import time
+from pathlib import Path
 
 import requests
 
+# 仓库根目录（本脚本位于 <root>/scripts/），避免硬编码绝对路径
+ROOT = Path(__file__).resolve().parents[1]
 HOST = "127.0.0.1"
 PORT = 8000
 BASE = f"http://{HOST}:{PORT}"
@@ -23,7 +26,7 @@ def main() -> int:
     proc = subprocess.Popen(
         [sys.executable, "-m", "uvicorn", "setup_tuner.app:create_app",
          "--factory", "--host", HOST, "--port", str(PORT)],
-        cwd="D:/F1OPT-Test",
+        cwd=str(ROOT),
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )

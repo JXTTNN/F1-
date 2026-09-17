@@ -9,7 +9,6 @@
 """
 
 import sys
-import traceback
 
 sys.path.insert(0, ".")
 

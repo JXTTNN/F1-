@@ -72,38 +72,52 @@ def parse_path(d: str):
         if c in "Mm":
             x, y = num(), num()
             if c == "m" and cur:
-                x += cur[0]; y += cur[1]
-            cur = (x, y); start = cur; pts.append(cur)
+                x += cur[0]
+                y += cur[1]
+            cur = (x, y)
+            start = cur
+            pts.append(cur)
             cmd = "l" if c == "m" else "L"
         elif c in "Ll":
             while more():
                 x, y = num(), num()
                 if c == "l":
-                    x += cur[0]; y += cur[1]
-                cur = (x, y); pts.append(cur)
+                    x += cur[0]
+                    y += cur[1]
+                cur = (x, y)
+                pts.append(cur)
         elif c in "Hh":
             while more():
                 x = num()
                 if c == "h":
                     x += cur[0]
-                cur = (x, cur[1]); pts.append(cur)
+                cur = (x, cur[1])
+                pts.append(cur)
         elif c in "Vv":
             while more():
                 y = num()
                 if c == "v":
                     y += cur[1]
-                cur = (cur[0], y); pts.append(cur)
+                cur = (cur[0], y)
+                pts.append(cur)
         elif c in "CcSs":
             while more():
                 if c in "Cc":
                     x1, y1, x2, y2, x, y = (num(), num(), num(), num(), num(), num())
                     if c == "c":
-                        x1 += cur[0]; y1 += cur[1]; x2 += cur[0]; y2 += cur[1]
-                        x += cur[0]; y += cur[1]
+                        x1 += cur[0]
+                        y1 += cur[1]
+                        x2 += cur[0]
+                        y2 += cur[1]
+                        x += cur[0]
+                        y += cur[1]
                 else:
                     x2, y2, x, y = num(), num(), num(), num()
                     if c == "s":
-                        x2 += cur[0]; y2 += cur[1]; x += cur[0]; y += cur[1]
+                        x2 += cur[0]
+                        y2 += cur[1]
+                        x += cur[0]
+                        y += cur[1]
                     if prev_ctrl:
                         x1, y1 = 2 * cur[0] - prev_ctrl[0], 2 * cur[1] - prev_ctrl[1]
                     else:
@@ -114,17 +128,22 @@ def parse_path(d: str):
                         mt ** 3 * cur[0] + 3 * mt * mt * t * x1 + 3 * mt * t * t * x2 + t ** 3 * x,
                         mt ** 3 * cur[1] + 3 * mt * mt * t * y1 + 3 * mt * t * t * y2 + t ** 3 * y,
                     ))
-                prev_ctrl = (x2, y2); cur = (x, y)
+                prev_ctrl = (x2, y2)
+                cur = (x, y)
         elif c in "QqTt":
             while more():
                 if c in "Qq":
                     x1, y1, x, y = num(), num(), num(), num()
                     if c == "q":
-                        x1 += cur[0]; y1 += cur[1]; x += cur[0]; y += cur[1]
+                        x1 += cur[0]
+                        y1 += cur[1]
+                        x += cur[0]
+                        y += cur[1]
                 else:
                     x, y = num(), num()
                     if c == "t":
-                        x += cur[0]; y += cur[1]
+                        x += cur[0]
+                        y += cur[1]
                     if prev_ctrl:
                         x1, y1 = 2 * cur[0] - prev_ctrl[0], 2 * cur[1] - prev_ctrl[1]
                     else:
@@ -135,24 +154,30 @@ def parse_path(d: str):
                         mt * mt * cur[0] + 2 * mt * t * x1 + t * t * x,
                         mt * mt * cur[1] + 2 * mt * t * y1 + t * t * y,
                     ))
-                prev_ctrl = (x1, y1); cur = (x, y)
+                prev_ctrl = (x1, y1)
+                cur = (x, y)
         elif c in "Aa":
             while more():
-                num(); num(); num(); num(); num()
+                num(), num(), num(), num(), num()
                 x, y = num(), num()
                 if c == "a":
-                    x += cur[0]; y += cur[1]
-                pts.append((x, y)); cur = (x, y)
+                    x += cur[0]
+                    y += cur[1]
+                pts.append((x, y))
+                cur = (x, y)
         elif c in "Zz":
             if start:
-                pts.append(start); cur = start
+                pts.append(start)
+                cur = start
         else:
             i += 1
     return pts
 
 
 def seg_dist(p, a, b):
-    ax, ay = a; bx, by = b; px, py = p
+    ax, ay = a
+    bx, by = b
+    px, py = p
     dx, dy = bx - ax, by - ay
     if dx == 0 and dy == 0:
         return math.hypot(px - ax, py - ay)
@@ -169,7 +194,8 @@ def polyline(track_id):
 def arc_lookup(pt, poly, cum):
     best = (1e18, 0.0)
     for i in range(len(poly) - 1):
-        ax, ay = poly[i]; bx, by = poly[i + 1]
+        ax, ay = poly[i]
+        bx, by = poly[i + 1]
         dx, dy = bx - ax, by - ay
         L2 = dx * dx + dy * dy
         t = 0.0 if L2 == 0 else max(0.0, min(1.0, ((pt[0] - ax) * dx + (pt[1] - ay) * dy) / L2))
@@ -188,7 +214,9 @@ def check_real_packets():
         item("A.真实抓包解析", "SKIP", f"样本不存在: {fp}")
         return
     from setup_tuner.telemetry.packets import (
-        PacketTooShortError, parse_packet, packet_name,
+        PacketTooShortError,
+        packet_name,
+        parse_packet,
     )
     total = ok = short = unknown = other = 0
     by_id: dict[int, int] = {}
@@ -234,7 +262,7 @@ def check_real_packets():
         item("A2.真实Session字段", "INFO",
              f"m_trackId={tids} m_trackLength={lens} m_weather={wcode} "
              f"样例 trackTemperature={sessions[0].get('m_trackTemperature')}")
-        from setup_tuner.domain.track import get_track_by_udp_id, get_all_tracks
+        from setup_tuner.domain.track import get_all_tracks, get_track_by_udp_id
         for tid in tids:
             t = get_track_by_udp_id(int(tid))
             real_len = lens[0] if lens else None
@@ -250,8 +278,8 @@ def check_real_packets():
 
     # A5: 真实 CarSetups 包 → 21 参数提取
     if setups:
-        from setup_tuner.report.builder import extract_setup_from_packet5
         from setup_tuner.domain.setup import ALL_SETUP_FIELDS
+        from setup_tuner.report.builder import extract_setup_from_packet5
         s0 = setups[0]
         raw_fields = {k: v for k, v in s0.items()
                       if k.startswith("m_") and k in {
@@ -652,8 +680,11 @@ def check_stride():
         if pid in want and pid not in blob:
             blob[pid] = bytes.fromhex(rec["hex"])
     from setup_tuner.telemetry.packets import (
-        NUM_CARS, _LAP_PER_STRUCT, _SETUP_PER_STRUCT, _STATUS_PER_STRUCT,
+        _LAP_PER_STRUCT,
+        _SETUP_PER_STRUCT,
+        _STATUS_PER_STRUCT,
         _TELEM_PER_STRUCT,
+        NUM_CARS,
     )
     expect = {2: _LAP_PER_STRUCT.size, 5: _SETUP_PER_STRUCT.size,
               6: _TELEM_PER_STRUCT.size, 7: _STATUS_PER_STRUCT.size}
@@ -709,7 +740,8 @@ def check_udp_remap():
     fp = ROOT / "legacy" / "tests" / "data" / "real_f1_26_sample.jsonl"
     from setup_tuner.domain.setup import ALL_SETUP_FIELDS
     from setup_tuner.report.builder import (
-        _PACKET5_FIELD_MAP, convert_udp_to_game_value,
+        _PACKET5_FIELD_MAP,
+        convert_udp_to_game_value,
     )
     from setup_tuner.telemetry.packets import parse_car_setups, parse_header
     if not fp.exists():

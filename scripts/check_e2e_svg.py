@@ -36,7 +36,7 @@ ns = {'svg': 'http://www.w3.org/2000/svg'}
 circles = root.findall('.//svg:circle', ns)
 texts = root.findall('.//svg:text', ns)
 below = []
-for i, (c, t) in enumerate(zip(circles, texts), 1):
+for i, (c, t) in enumerate(zip(circles, texts, strict=False), 1):
     cy = float(c.get('cy'))
     ty = float(t.get('y'))
     if ty > cy:

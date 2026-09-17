@@ -14,10 +14,13 @@ import os
 import sys
 import threading
 import time
-import urllib.request
 import urllib.error
+import urllib.request
+from pathlib import Path
 
-sys.path.insert(0, "D:/F1OPT-Test")
+# 仓库根目录（本脚本位于 <root>/scripts/），避免硬编码绝对路径
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
 
 HOST = "127.0.0.1"
 PORT = 8000
@@ -61,9 +64,10 @@ def main():
     # 第 1 步：启动服务（等价于点击一键启动.bat）
     # ============================================================ #
     print("\n[步骤1] 启动服务（等价双击一键启动.bat）...")
+    import uvicorn
+
     from setup_tuner.app import create_app
     from setup_tuner.config import load_config
-    import uvicorn
 
     config = load_config()
     app = create_app(config)
@@ -195,18 +199,18 @@ def main():
     print(f"    m_brake={tdict.get('m_brake'):.3f}  weather={tdict.get('weather')}")
     print(f"    m_tyresSurfaceTemperature={[round(t,1) for t in tdict.get('m_tyresSurfaceTemperature',[])]}")
     print(f"    m_tyresPressure={[round(p,2) for p in tdict.get('m_tyresPressure',[])]}")
-    print(f"  ✅ 遥测字典转换正确，可喂给 engine._derive_telemetry_dx/gain")
+    print("  ✅ 遥测字典转换正确，可喂给 engine._derive_telemetry_dx/gain")
 
     # ============================================================ #
     # 收尾
     # ============================================================ #
     print("\n" + "=" * 72)
     print("全流程测试完成")
-    print(f"  ✅ 服务启动 → 健康检查 → 24 赛道列表")
+    print("  ✅ 服务启动 → 健康检查 → 24 赛道列表")
     print(f"  ✅ 导入 {len(laps)} 圈真实遥测（阿布扎比 yas_marina）")
-    print(f"  ✅ 遥测解析：调教参数/速度/胎温/胎压/圈速统计正确")
-    print(f"  ✅ 选赛道 → 反馈 → 建议 → 报告")
-    print(f"  ✅ importer → to_telemetry_dict → engine 诊断链路通")
+    print("  ✅ 遥测解析：调教参数/速度/胎温/胎压/圈速统计正确")
+    print("  ✅ 选赛道 → 反馈 → 建议 → 报告")
+    print("  ✅ importer → to_telemetry_dict → engine 诊断链路通")
     print("=" * 72)
 
     server.should_exit = True

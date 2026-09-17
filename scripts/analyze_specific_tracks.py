@@ -1,13 +1,15 @@
 """检查特定赛道的弯道圆圈与赛道线path的精确关系。"""
-import re
 import math
+import re
 import sys
 from pathlib import Path
 
+# 仓库根目录（本脚本位于 <root>/scripts/），避免硬编码绝对路径
+ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from convert_track_svgs import path_to_points
 
-TRACK_DIR = Path("D:/F1OPT-Test/setup_tuner/ui/tracks")
+TRACK_DIR = ROOT / "setup_tuner" / "ui" / "tracks"
 
 
 def analyze_track(track_id):

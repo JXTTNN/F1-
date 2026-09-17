@@ -6,7 +6,7 @@ from statistics import mean, stdev
 DATA_DIR = r"D:\F1TelemetryCollector\dist\data"
 
 def load_lap(filepath):
-    with open(filepath, "r", encoding="utf-8") as f:
+    with open(filepath, encoding="utf-8") as f:
         return json.load(f)
 
 def analyze_lap(lap_data, lap_num):
@@ -26,7 +26,7 @@ def analyze_lap(lap_data, lap_num):
     print(f"采样点数={sample_count} | 赛道={lap_data.get('track_name','?')}")
 
     # 调教参数
-    print(f"\n--- 调教参数 ---")
+    print("\n--- 调教参数 ---")
     for k, v in setup.items():
         if isinstance(v, float) and (abs(v) < 1e-10 or abs(v) > 1e10):
             print(f"  {k}: {v:.6e} (异常值!)")
@@ -72,7 +72,7 @@ def analyze_lap(lap_data, lap_num):
     surface_types = [s.get("surface_type", [0,0,0,0]) for s in samples]
 
     # 全圈统计
-    print(f"\n--- 全圈统计 ---")
+    print("\n--- 全圈统计 ---")
     print(f"  速度: 均值={mean(speeds):.1f} 峰值={max(speeds):.1f} 最低={min(speeds):.1f}")
     print(f"  油门: 均值={mean(throttles):.3f} >0.5占比={sum(1 for t in throttles if t>0.5)/len(throttles)*100:.1f}%")
     print(f"  刹车: 均值={mean(brakes):.3f} >0.3占比={sum(1 for b in brakes if b>0.3)/len(brakes)*100:.1f}%")
@@ -84,7 +84,7 @@ def analyze_lap(lap_data, lap_num):
     print(f"  垂直G力: 均值={mean(vert_gs):.2f} 峰值={max(abs(g) for g in vert_gs):.2f}")
 
     # 胎温统计
-    print(f"\n--- 胎温统计 (表面) ---")
+    print("\n--- 胎温统计 (表面) ---")
     print(f"  FL: 均值={mean(fl_surface_temps):.1f} 峰值={max(fl_surface_temps):.1f}")
     print(f"  FR: 均值={mean(fr_surface_temps):.1f} 峰值={max(fr_surface_temps):.1f}")
     print(f"  RL: 均值={mean(rl_surface_temps):.1f} 峰值={max(rl_surface_temps):.1f}")
@@ -92,14 +92,14 @@ def analyze_lap(lap_data, lap_num):
     avg_temps = [mean(fl_surface_temps), mean(fr_surface_temps), mean(rl_surface_temps), mean(rr_surface_temps)]
     print(f"  四轮均值偏差: max-min={max(avg_temps)-min(avg_temps):.1f}°C")
 
-    print(f"\n--- 胎温统计 (内部) ---")
+    print("\n--- 胎温统计 (内部) ---")
     print(f"  FL: 均值={mean(fl_inner_temps):.1f} 峰值={max(fl_inner_temps):.1f}")
     print(f"  FR: 均值={mean(fr_inner_temps):.1f} 峰值={max(fr_inner_temps):.1f}")
     print(f"  RL: 均值={mean(rl_inner_temps):.1f} 峰值={max(rl_inner_temps):.1f}")
     print(f"  RR: 均值={mean(rr_inner_temps):.1f} 峰值={max(rr_inner_temps):.1f}")
 
     # 胎压统计
-    print(f"\n--- 胎压统计 ---")
+    print("\n--- 胎压统计 ---")
     # 过滤异常值（科学记数法）
     def safe_stats(vals, name):
         clean = [v for v in vals if 15 < v < 35]
@@ -114,14 +114,14 @@ def analyze_lap(lap_data, lap_num):
     safe_stats(rr_pressures, "RR")
 
     # 刹车温度统计
-    print(f"\n--- 刹车温度统计 ---")
+    print("\n--- 刹车温度统计 ---")
     print(f"  FL: 均值={mean(fl_brake_temps):.0f} 峰值={max(fl_brake_temps):.0f}")
     print(f"  FR: 均值={mean(fr_brake_temps):.0f} 峰值={max(fr_brake_temps):.0f}")
     print(f"  RL: 均值={mean(rl_brake_temps):.0f} 峰值={max(rl_brake_temps):.0f}")
     print(f"  RR: 均值={mean(rr_brake_temps):.0f} 峰值={max(rr_brake_temps):.0f}")
 
     # 分段分析：用lap_distance识别直道和弯道
-    print(f"\n--- 分段分析 (按lap_distance) ---")
+    print("\n--- 分段分析 (按lap_distance) ---")
     if lap_dists:
         total_dist = max(lap_dists)
         print(f"  总距离: {total_dist:.1f}m")
@@ -176,7 +176,7 @@ def analyze_lap(lap_data, lap_num):
                 print(f"    距离={ep['dist']:.0f}m 速度={ep['speed']:.0f}km/h 油门={ep['throttle']:.2f} 横G={ep['lat_g']:.2f}")
 
     # 路面类型分析
-    print(f"\n--- 路面类型 ---")
+    print("\n--- 路面类型 ---")
     all_surface_types = set()
     for st in surface_types:
         for v in st:
@@ -186,12 +186,12 @@ def analyze_lap(lap_data, lap_num):
     # DRS使用
     drs_values = [s.get("drs", 0) for s in samples]
     drs_active = sum(1 for d in drs_values if d > 0)
-    print(f"\n--- DRS ---")
+    print("\n--- DRS ---")
     print(f"  DRS激活采样点: {drs_active}/{sample_count} ({drs_active/sample_count*100:.1f}%)")
 
     # 驾驶风格指标
     driver_style = lap_data.get("driver_style", {})
-    print(f"\n--- 驾驶风格 ---")
+    print("\n--- 驾驶风格 ---")
     for k, v in driver_style.items():
         print(f"  {k}: {v}")
 

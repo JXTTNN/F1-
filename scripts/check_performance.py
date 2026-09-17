@@ -17,7 +17,9 @@ import urllib.request
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-sys.path.insert(0, "D:/F1OPT-Test")
+# 仓库根目录（本脚本位于 <root>/scripts/），避免硬编码绝对路径
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
 
 HOST = "127.0.0.1"
 PORT = 8000
@@ -45,7 +47,7 @@ def timed_get(path, timeout=5):
         r = urllib.request.urlopen(BASE + path, timeout=timeout)
         data = r.read()
         return time.time() - start, r.status, len(data)
-    except Exception as e:
+    except Exception:
         return time.time() - start, None, 0
 
 
@@ -64,6 +66,7 @@ def measure():
     app = create_app(config)
 
     import threading
+
     import uvicorn
 
     server = uvicorn.Server(uvicorn.Config(app, host=HOST, port=PORT, log_level="error"))
@@ -148,7 +151,10 @@ def measure():
         ns = {"svg": "http://www.w3.org/2000/svg"}
         circles = root.findall(".//svg:circle", ns)
         texts = root.findall(".//svg:text", ns)
-        below = sum(1 for c, t in zip(circles, texts) if float(t.get("y")) > float(c.get("cy")))
+        below = sum(
+            1 for c, t in zip(circles, texts, strict=False)
+            if float(t.get("y")) > float(c.get("cy"))
+        )
         return len(circles), len(texts), below
 
     for tid in ["baku", "jeddah", "singapore"]:

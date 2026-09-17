@@ -8,6 +8,7 @@ import sys
 sys.path.insert(0, ".")
 
 from fastapi.testclient import TestClient
+
 from setup_tuner.app import create_app
 from setup_tuner.domain.setup import ALL_SETUP_FIELDS
 
@@ -78,7 +79,7 @@ with TestClient(app) as client:
         assert body["code"] == 0, f"code: {body['code']}"
         assert body["data"]["track_id"] == TRACK_ID
         assert len(body["data"]["params"]) == 21
-        print(f"  ✅ setup/manual 接受21项参数成功")
+        print("  ✅ setup/manual 接受21项参数成功")
         passed += 1
     except Exception as e:
         print(f"  ❌ setup/manual 失败: {e}")
@@ -119,7 +120,7 @@ with TestClient(app) as client:
         assert resp.status_code == 200, f"单条状态码: {resp.status_code}, body: {resp.text}"
         body = resp.json()
         assert body["code"] == 0
-        print(f"  ✅ feedback 单条格式提交成功")
+        print("  ✅ feedback 单条格式提交成功")
         passed += 1
     except Exception as e:
         print(f"  ❌ feedback 单条格式失败: {e}")
@@ -137,8 +138,8 @@ with TestClient(app) as client:
         assert resp.status_code == 200, f"状态码: {resp.status_code}, body: {resp.text}"
         body = resp.json()
         assert body["code"] == 0
-        assert body["data"]["simulating"] == True
-        print(f"  ✅ telemetry/simulate start 成功")
+        assert body["data"]["simulating"] is True
+        print("  ✅ telemetry/simulate start 成功")
         passed += 1
     except Exception as e:
         print(f"  ❌ telemetry/simulate start 失败: {e}")
@@ -152,8 +153,8 @@ with TestClient(app) as client:
         assert resp.status_code == 200, f"状态码: {resp.status_code}, body: {resp.text}"
         body = resp.json()
         assert body["code"] == 0
-        assert body["data"]["simulating"] == False
-        print(f"  ✅ telemetry/simulate stop 成功")
+        assert body["data"]["simulating"] is False
+        print("  ✅ telemetry/simulate stop 成功")
         passed += 1
     except Exception as e:
         print(f"  ❌ telemetry/simulate stop 失败: {e}")
@@ -169,7 +170,7 @@ with TestClient(app) as client:
         assert resp.status_code == 200, f"状态码: {resp.status_code}, body: {resp.text}"
         body = resp.json()
         assert body["code"] == 0
-        assert body["data"]["recording"] == True
+        assert body["data"]["recording"] is True
         session_id = body["data"]["session_id"]
         print(f"  ✅ telemetry/record/toggle start 成功 (session={session_id})")
         passed += 1
@@ -183,8 +184,8 @@ with TestClient(app) as client:
         assert resp.status_code == 200, f"状态码: {resp.status_code}, body: {resp.text}"
         body = resp.json()
         assert body["code"] == 0
-        assert body["data"]["recording"] == False
-        print(f"  ✅ telemetry/record/toggle stop 成功")
+        assert body["data"]["recording"] is False
+        print("  ✅ telemetry/record/toggle stop 成功")
         passed += 1
     except Exception as e:
         print(f"  ❌ telemetry/record/toggle stop 失败: {e}")
@@ -240,7 +241,7 @@ with TestClient(app) as client:
         assert body["code"] == 0
         tracks = body["data"]
         assert len(tracks) == 24, f"赛道数={len(tracks)}, 应为24"
-        print(f"  ✅ GET /tracks 返回24条赛道")
+        print("  ✅ GET /tracks 返回24条赛道")
         passed += 1
     except Exception as e:
         print(f"  ❌ GET /tracks 失败: {e}")
@@ -268,7 +269,7 @@ with TestClient(app) as client:
         body = resp.json()
         assert body["code"] == 0
         assert body["data"]["current_track_id"] == TRACK_ID
-        print(f"  ✅ POST /tracks/current 成功")
+        print("  ✅ POST /tracks/current 成功")
         passed += 1
     except Exception as e:
         print(f"  ❌ POST /tracks/current 失败: {e}")
@@ -282,7 +283,7 @@ with TestClient(app) as client:
         body = resp.json()
         assert body["code"] == 0
         assert len(body["data"]["params"]) == 21
-        print(f"  ✅ GET /setup/current 成功")
+        print("  ✅ GET /setup/current 成功")
         passed += 1
     except Exception as e:
         print(f"  ❌ GET /setup/current 失败: {e}")
@@ -308,7 +309,7 @@ with TestClient(app) as client:
         assert resp.status_code == 200
         body = resp.json()
         assert body["code"] == 0
-        print(f"  ✅ GET /suggest/latest 成功")
+        print("  ✅ GET /suggest/latest 成功")
         passed += 1
     except Exception as e:
         print(f"  ❌ GET /suggest/latest 失败: {e}")
@@ -321,7 +322,7 @@ with TestClient(app) as client:
         assert resp.status_code == 200
         body = resp.json()
         assert body["code"] == 0
-        print(f"  ✅ GET /iteration/history 成功")
+        print("  ✅ GET /iteration/history 成功")
         passed += 1
     except Exception as e:
         print(f"  ❌ GET /iteration/history 失败: {e}")
@@ -345,7 +346,7 @@ with TestClient(app) as client:
         assert resp.status_code == 200
         body = resp.json()
         assert body["code"] == 0
-        print(f"  ✅ GET /telemetry/replay/status 成功")
+        print("  ✅ GET /telemetry/replay/status 成功")
         passed += 1
     except Exception as e:
         print(f"  ❌ GET /telemetry/replay/status 失败: {e}")
@@ -358,7 +359,7 @@ with TestClient(app) as client:
         assert resp.status_code == 200
         body = resp.json()
         assert body["code"] == 0
-        print(f"  ✅ POST /telemetry/replay/stop 成功")
+        print("  ✅ POST /telemetry/replay/stop 成功")
         passed += 1
     except Exception as e:
         print(f"  ❌ POST /telemetry/replay/stop 失败: {e}")

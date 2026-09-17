@@ -1,16 +1,25 @@
 #!/usr/bin/env python3
 """验证距离比例映射方案：用弯道distance_start在SVG path采样点上定位弯道。"""
-import sys
 import math
+import sys
 from pathlib import Path
 
+# 仓库根目录（本脚本位于 <root>/scripts/），避免硬编码绝对路径
+ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-sys.path.insert(0, "D:/F1OPT-Test/legacy")
+sys.path.insert(0, str(ROOT / "legacy"))
 from convert_track_svgs import (
-    path_to_points, scale_points, compute_bbox, download_svg, extract_path_d,
-    CANVAS_W, CANVAS_H, MARGIN, TRACK_LAYOUT_MAP,
+    CANVAS_H,
+    CANVAS_W,
+    MARGIN,
+    TRACK_LAYOUT_MAP,
+    download_svg,
+    extract_path_d,
+    path_to_points,
+    scale_points,
 )
 from f1opt.data.track_maps import TRACK_MAPS
+
 
 def compute_arc_lengths(points):
     """计算采样点的累积弧长。"""
@@ -74,7 +83,7 @@ print(f"legacy track length: {legacy_total_m}m")
 
 # 6. 用距离比例定位弯道
 corners = sorted(tm.corners, key=lambda c: c.corner_id)
-print(f"\n=== 弯道映射结果 ===")
+print("\n=== 弯道映射结果 ===")
 for c in corners[:5]:
     # 用弯道中点的距离比例
     corner_mid_dist = (c.distance_start + c.distance_end) / 2
@@ -87,7 +96,7 @@ for c in corners[:5]:
 print(f"\n  ... (showing first 5 of {len(corners)} corners)")
 
 # 7. 对比：所有弯道的映射坐标 vs legacy坐标
-print(f"\n=== 全部弯道对比 ===")
+print("\n=== 全部弯道对比 ===")
 for c in corners:
     corner_mid_dist = (c.distance_start + c.distance_end) / 2
     ratio = corner_mid_dist / legacy_total_m
