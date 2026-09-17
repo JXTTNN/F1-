@@ -410,9 +410,9 @@ class TestUnitsToDelta:
         delta = units_to_delta({"front_wing": 1.0}, _SETUP)
         assert delta["front_wing"] <= _SPECS["front_wing"].max_delta
 
-    def test_returns_all_21_fields(self) -> None:
+    def test_returns_all_20_fields(self) -> None:
         """必须返回全部 21 项（下游 _build_param_details 按 21 项取值）。"""
-        assert len(units_to_delta({"front_wing": 0.1}, _SETUP)) == 21
+        assert len(units_to_delta({"front_wing": 0.1}, _SETUP)) == 20
 
     def test_respects_upper_bound(self) -> None:
         setup = dict(_SETUP)

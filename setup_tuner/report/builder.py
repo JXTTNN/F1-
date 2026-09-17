@@ -45,7 +45,6 @@ _PACKET5_FIELD_MAP: dict[str, str] = {
     "m_rearSuspensionHeight": "rear_ride_height",
     "m_brakePressure": "brake_pressure",
     "m_brakeBias": "brake_bias",
-    "m_engineBraking": "engine_braking",
     "m_rearLeftTyrePressure": "rear_left_tyre_pressure",
     "m_rearRightTyrePressure": "rear_right_tyre_pressure",
     "m_frontLeftTyrePressure": "front_left_tyre_pressure",

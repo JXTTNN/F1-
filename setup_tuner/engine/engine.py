@@ -654,10 +654,6 @@ _TRADEOFF_NOTES: dict[str, dict[str, str]] = {
         "increase": "可能增加前轮锁死倾向",
         "decrease": "可能增加后轮锁死倾向",
     },
-    "engine_braking": {
-        "increase": "可能增加弯中后轴扰动但助减速",
-        "decrease": "可能减少弯中后轴扰动但降减速辅助",
-    },
     "front_left_tyre_pressure": {
         "increase": "可能减小轮胎接触面积但增响应",
         "decrease": "可能增大轮胎接触面积但降响应",

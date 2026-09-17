@@ -9,7 +9,7 @@ C[d][p] = 诊断维度 d 每 +1 单位 → 参数 p 的调整量（带符号档�
     - 出处（source）：每个非零元素附带出处键。
 
 参数对齐 EA F1 游戏（F1 25，UDP format=2026）CarSetups 包真实字段：
-前翼/后翼/差速器×2/倾角×2/束角×2/悬挂×2/防倾杆×2/行驶高度×2/刹车压力/刹车偏置/引擎制动/胎压×4。
+前翼/后翼/差速器×2/倾角×2/束角×2/悬挂×2/防倾杆×2/行驶高度×2/刹车压力/刹车偏置/胎压×4。
 
 **工程硬约束（构建期校验，``validate_matrix``）**：
     1. 每个参数（列）至少含 1 个非零元素；
@@ -88,7 +88,6 @@ _RAW_MATRIX: dict[str, dict[str, _Cell]] = {
         "brake_bias":           (+1, 0.2, G),  # 略前移刹车配比
         "front_left_tyre_pressure":  (+1, 0.3, P),  # 增前左胎压增弯中响应
         "front_right_tyre_pressure": (+1, 0.3, P),  # 增前右胎压增弯中响应
-        "engine_braking":       (-1, 0.1, G),  # 降引擎制动减弯中后轴扰动
     },
 
     # 2. rear_grip_req（后轴抓地不足）
@@ -105,7 +104,6 @@ _RAW_MATRIX: dict[str, dict[str, _Cell]] = {
         "brake_bias":           (-1, 0.2, G),  # 略后移刹车配比
         "rear_left_tyre_pressure":  (+1, 0.3, P),
         "rear_right_tyre_pressure": (+1, 0.3, P),
-        "engine_braking":       (-1, 0.2, G),  # 降引擎制动减出弯后轴不稳定
     },
 
     # 3. turnin_req（入弯响应不足）
@@ -142,7 +140,6 @@ _RAW_MATRIX: dict[str, dict[str, _Cell]] = {
         "front_right_tyre_pressure": (+1, 0.2, P),
         "rear_left_tyre_pressure":   (+1, 0.2, P),
         "rear_right_tyre_pressure":  (+1, 0.2, P),
-        "engine_braking":       (-1, 0.2, G),  # 降引擎制动稳弯中
     },
 
     # 5. brake_stab_req（制动不稳定/易锁死）
@@ -161,7 +158,6 @@ _RAW_MATRIX: dict[str, dict[str, _Cell]] = {
         "front_right_tyre_pressure": (+1, 0.2, P),
         "rear_left_tyre_pressure":   (+1, 0.2, P),  # 后胎压也影响制动稳定性
         "rear_right_tyre_pressure":  (+1, 0.2, P),
-        "engine_braking":       (+1, 0.1, G),  # 增引擎制动辅助减速稳制动
     },
 
     # 6. brake_power_req（制动力不足）
@@ -174,7 +170,6 @@ _RAW_MATRIX: dict[str, dict[str, _Cell]] = {
         "front_right_tyre_pressure": (+1, 0.3, P),
         "rear_left_tyre_pressure":   (+1, 0.2, P),  # 后胎压也影响制动力
         "rear_right_tyre_pressure":  (+1, 0.2, P),
-        "engine_braking":       (+1, 0.3, G),  # 增引擎制动辅助减速增制动力
     },
 
     # 7. exit_traction_req（出弯牵引不足）
@@ -190,7 +185,6 @@ _RAW_MATRIX: dict[str, dict[str, _Cell]] = {
         "rear_ride_height":     (-1, 0.1, G),
         "rear_left_tyre_pressure":  (-1, 0.2, P),  # 降后胎压增出弯接触面积
         "rear_right_tyre_pressure": (-1, 0.2, P),
-        "engine_braking":       (-1, 0.1, G),  # 降引擎制动减出弯过度
     },
 
     # 8. tyre_life_req（胎耗过高）

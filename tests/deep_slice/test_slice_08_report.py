@@ -124,10 +124,10 @@ class TestUnit:
                 assert field in p, f"参数项缺字段: {field}"
 
     # ---------- extract_setup_from_packet5 ----------
-    def test_extract_setup_returns_23_fields(self, sample_packet5: dict) -> None:
+    def test_extract_setup_returns_20_fields(self, sample_packet5: dict) -> None:
         """extract_setup_from_packet5 返回 23 项参数。"""
         result = extract_setup_from_packet5(sample_packet5)
-        assert len(result) == 21
+        assert len(result) == 20
         # 字段名与 ALL_SETUP_FIELDS 一致
         assert set(result.keys()) == {f.name for f in ALL_SETUP_FIELDS}
 
@@ -331,7 +331,7 @@ class TestProperty:
             track_id="suzuka",
         )
         report = build_report(suggestion, track_id="suzuka")
-        assert len(report["parameters"]) == 21
+        assert len(report["parameters"]) == 20
 
     def test_build_report_setup_delta_keys_match_params(
         self, sample_params: dict,
@@ -504,7 +504,7 @@ class TestSmoke:
             track_id="suzuka",
         )
         report = build_report(suggestion, track_id="suzuka")
-        assert len(report["parameters"]) == 21
+        assert len(report["parameters"]) == 20
 
     def test_telemetry_aware_report(
         self, sample_params: dict, sample_packet5: dict,

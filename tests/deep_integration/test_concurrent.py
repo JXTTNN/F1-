@@ -147,7 +147,7 @@ class TestConcurrentStoreWrite:
                     if latest is not None:
                         # 校验返回的 params 是完整 dict（非脏读）
                         assert isinstance(latest["params"], dict)
-                        assert len(latest["params"]) == 21
+                        assert len(latest["params"]) == 20
             except Exception as e:
                 errors.append(f"reader {idx} exception: {e}")
 
@@ -176,7 +176,7 @@ class TestConcurrentStoreWrite:
             # （通过不断 get_latest_setup 间接验证，直接计数需新方法）
             latest = store.get_latest_setup(track_id)
             assert latest is not None
-            assert len(latest["params"]) == 21
+            assert len(latest["params"]) == 20
         finally:
             store.close()
 
@@ -406,7 +406,7 @@ class TestConcurrentApiRequests:
                         )
                         return False
                     report = resp.json()["data"]["report"]
-                    return len(report["parameters"]) == 21
+                    return len(report["parameters"]) == 20
                 except Exception as e:
                     errors.append(f"thread {idx} exception: {e}")
                     return False
@@ -592,7 +592,7 @@ class TestConcurrentDataIntegrity:
             )
             # 10 条 understeer 反馈 → Dx front_grip_req 应显著为正
             assert suggestion["dx"]["front_grip_req"] > 0.0
-            assert len(suggestion["setup_delta"]) == 21
+            assert len(suggestion["setup_delta"]) == 20
         finally:
             store.close()
 

@@ -474,7 +474,7 @@ class TestEndToEnd:
             assert r.json()["code"] == 0
 
             report = r.json()["data"]["report"]
-            assert len(report["parameters"]) == 21
+            assert len(report["parameters"]) == 20
 
     def test_suggestion_deterministic_with_new_rule(self) -> None:
         """新增规则不得破坏确定性。"""

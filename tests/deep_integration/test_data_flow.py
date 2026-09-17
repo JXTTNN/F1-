@@ -115,7 +115,7 @@ class TestTelemetryToEngine:
     协作模块：telemetry.packets ↔ report.builder ↔ engine.engine
     """
 
-    def test_packet5_to_setup_dict_covers_23_params(self) -> None:
+    def test_packet5_to_setup_dict_covers_20_params(self) -> None:
         """Packet 5 解析后经 extract_setup_from_packet5 应覆盖全部 21 参数。
 
         链路：parse_packet → extract_setup_from_packet5 → CarSetup.from_dict
@@ -130,7 +130,7 @@ class TestTelemetryToEngine:
         # 解析结果 → 21 参数字典
         setup_params = extract_setup_from_packet5(parsed)
         assert set(setup_params.keys()) == {f.name for f in ALL_SETUP_FIELDS}
-        assert len(setup_params) == 21
+        assert len(setup_params) == 20
 
         # 23 参数字典 → CarSetup 领域对象（不抛异常即合法）
         setup = CarSetup.from_dict(setup_params)
@@ -186,8 +186,8 @@ class TestTelemetryToEngine:
             telemetry=None,
         )
         assert "setup_delta" in result
-        assert len(result["setup_delta"]) == 21
-        assert len(result["parameters"]) == 21
+        assert len(result["setup_delta"]) == 20
+        assert len(result["parameters"]) == 20
 
 
 # ===========================================================================
@@ -220,7 +220,7 @@ class TestDxToSetupDelta:
         # brake_long 应贡献 brake_power_req
         assert dx["brake_power_req"] > 0.0
 
-    def test_dx_to_setup_delta_covers_23_params(self) -> None:
+    def test_dx_to_setup_delta_covers_20_params(self) -> None:
         """Dx 向量经 compute_setup_delta 后应覆盖全部 23 参数。
 
         链路：compute_dx → compute_setup_delta → {param: delta}
@@ -232,7 +232,7 @@ class TestDxToSetupDelta:
 
         # SetupDelta 必须覆盖全部 23 参数
         assert set(setup_delta.keys()) == {f.name for f in ALL_SETUP_FIELDS}
-        assert len(setup_delta) == 21
+        assert len(setup_delta) == 20
 
     def test_dx_to_setup_delta_respects_bounds(self) -> None:
         """SetupDelta 每参数必须满足 |delta| <= max_delta 且 next ∈ [min, max]。
@@ -403,8 +403,8 @@ class TestFeedbackToReport:
             telemetry=None,
         )
         assert suggestion["track_id"] == track_id
-        assert len(suggestion["setup_delta"]) == 21
-        assert len(suggestion["parameters"]) == 21
+        assert len(suggestion["setup_delta"]) == 20
+        assert len(suggestion["parameters"]) == 20
         # 多症状非零 Dx → 应有非零调整
         assert not is_zero_dx(suggestion["dx"])
 
@@ -416,7 +416,7 @@ class TestFeedbackToReport:
         )
         assert report["track_id"] == track_id
         assert "generated_at" in report
-        assert len(report["parameters"]) == 21
+        assert len(report["parameters"]) == 20
         assert report["confidence"] in {"high", "medium", "low"}
         # 报告 setup_delta 与引擎 setup_delta 一致（不变形）
         assert report["setup_delta"] == suggestion["setup_delta"]
@@ -456,7 +456,7 @@ class TestFeedbackToReport:
         retrieved_report = json.loads(retrieved["report_json"])
         assert retrieved_report["track_id"] == track_id
         assert retrieved_report["setup_delta"] == report["setup_delta"]
-        assert len(retrieved_report["parameters"]) == 21
+        assert len(retrieved_report["parameters"]) == 20
 
 
 # ===========================================================================
@@ -519,7 +519,7 @@ class TestTrackSetupConsistency:
                 track_id=track.track_id,
             )
             assert suggestion["track_id"] == track.track_id
-            assert len(suggestion["setup_delta"]) == 21
+            assert len(suggestion["setup_delta"]) == 20
 
     def test_track_lookup_by_id_consistent(self) -> None:
         """get_track_by_id 返回的赛道与 get_all_tracks 中的一致。"""
@@ -580,7 +580,7 @@ class TestTelemetrySummaryFlow:
             track_id="suzuka",
             telemetry=summary,
         )
-        assert len(result["setup_delta"]) == 21
+        assert len(result["setup_delta"]) == 20
 
         # 对比：无遥测 vs 有遥测，雨天增益应使调整幅度更保守
         result_no_telemetry = generate_suggestion(

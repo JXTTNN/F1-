@@ -18,7 +18,7 @@
     high_speed_low_downforce     低下压力赛道（Monza/Spielberg/Baku/Las Vegas/
     （5 条：jeddah/montreal/     Jeddah/Montreal）：翼片直接影响极速，故翼片增益↑；
     monza/baku/las_vegas）       离地间隙已压到极限、再压收益小而刮底风险高，故↓；
-                                 长直线依赖发动机制动与差速锁止，故这两项↑。
+                                 长直线依赖差速锁止，故该项↑。
     high_downforce               高下压力赛道（Hungaroring/Zandvoort）：弯中抓地与
     （2 条）                     轮胎几何（外倾/束角）主导，故翼片与几何增益↑；
                                  侧倾控制更关键，防倾杆↑。
@@ -46,7 +46,6 @@ PARAM_GROUPS: dict[str, tuple[str, ...]] = {
     "geometry": ("front_camber", "rear_camber", "front_toe", "rear_toe"),
     "brake": ("brake_pressure", "brake_bias"),
     "diff": ("on_throttle_diff", "off_throttle_diff"),
-    "engine_braking": ("engine_braking",),
     "tyre_pressure": (
         "front_left_tyre_pressure", "front_right_tyre_pressure",
         "rear_left_tyre_pressure", "rear_right_tyre_pressure",
@@ -59,7 +58,6 @@ TRACK_TYPE_MULTIPLIERS: dict[str, dict[str, float]] = {
         "aero": 1.25,
         "ride_height": 0.90,
         "diff": 1.10,
-        "engine_braking": 1.10,
         "arb": 0.95,
     },
     "high_downforce": {

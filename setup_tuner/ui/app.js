@@ -97,7 +97,6 @@
     front_anti_roll_bar: "前防倾杆", rear_anti_roll_bar: "后防倾杆",
     front_ride_height: "前行驶高度", rear_ride_height: "后行驶高度",
     brake_pressure: "刹车压力", brake_bias: "刹车偏置",
-    engine_braking: "引擎制动",
     front_left_tyre_pressure: "前左胎压", front_right_tyre_pressure: "前右胎压",
     rear_left_tyre_pressure: "后左胎压", rear_right_tyre_pressure: "后右胎压",
   };
@@ -109,7 +108,7 @@
     "Brakes": "刹车", "Tyres": "轮胎",
   };
 
-  // 21 参数前端 fallback 定义（与后端 setup.py ALL_SETUP_FIELDS 对齐；API 不可用时使用）
+  // 20 参数前端 fallback 定义（与后端 setup.py ALL_SETUP_FIELDS 对齐；API 不可用时使用）
   const FALLBACK_SETUP_FIELDS = [
     { name: "front_wing", group: "Aerodynamics", label: "前翼", min: 0, max: 50, step: 1, default: 25, unit: "级" },
     { name: "rear_wing", group: "Aerodynamics", label: "后翼", min: 0, max: 50, step: 1, default: 25, unit: "级" },
@@ -127,7 +126,6 @@
     { name: "rear_ride_height", group: "Suspension", label: "后行驶高度", min: 40, max: 60, step: 1, default: 50, unit: "级" },
     { name: "brake_pressure", group: "Brakes", label: "刹车压力", min: 80, max: 100, step: 1, default: 90, unit: "%" },
     { name: "brake_bias", group: "Brakes", label: "刹车偏置", min: 50, max: 70, step: 1, default: 58, unit: "%" },
-    { name: "engine_braking", group: "Brakes", label: "引擎制动", min: 0, max: 100, step: 1, default: 50, unit: "%" },
     { name: "front_left_tyre_pressure", group: "Tyres", label: "前左胎压", min: 22.5, max: 29.5, step: 0.1, default: 23.5, unit: "psi" },
     { name: "front_right_tyre_pressure", group: "Tyres", label: "前右胎压", min: 22.5, max: 29.5, step: 0.1, default: 23.5, unit: "psi" },
     { name: "rear_left_tyre_pressure", group: "Tyres", label: "后左胎压", min: 20.5, max: 26.5, step: 0.1, default: 22.0, unit: "psi" },

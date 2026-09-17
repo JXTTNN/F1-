@@ -140,7 +140,7 @@ class TestBuildReport:
         """参数列表 21 项。"""
         result = self._make_suggestion_result()
         report = build_report(result, track_id="suzuka")
-        assert len(report["parameters"]) == 21
+        assert len(report["parameters"]) == 20
 
     def test_report_param_entry_fields(self) -> None:
         """每参数项含必要字段。"""
@@ -192,7 +192,7 @@ class TestBuildReport:
 class TestExtractSetupFromPacket5:
     """从遥测 CarSetups 包提取 21 参数快照。"""
 
-    def test_extract_all_21_params(self) -> None:
+    def test_extract_all_20_params(self) -> None:
         """提取结果覆盖全部 21 参数（2026-09 修正：值域为恒等映射）。"""
         packet5 = {
             "m_frontWing": 7,
@@ -215,7 +215,7 @@ class TestExtractSetupFromPacket5:
             "m_ballast": 50,
         }
         params = extract_setup_from_packet5(packet5)
-        assert len(params) == 21
+        assert len(params) == 20
         # EA 下发即车库值 → 恒等映射（不再线性压缩）
         assert params["front_wing"] == pytest.approx(7.0)
         assert params["rear_wing"] == pytest.approx(6.0)

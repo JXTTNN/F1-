@@ -99,7 +99,7 @@ class TestUnit:
         """CarSetup.to_dict 应返回 21 字段扁平字典。"""
         s = CarSetup.default()
         d = s.to_dict()
-        assert len(d) == 21
+        assert len(d) == 20
         assert d["front_wing"] == 25.0
 
     def test_unit_car_setup_from_dict(self) -> None:
@@ -237,10 +237,10 @@ class TestProperty:
         restored = CarSetup.from_dict(d)
         assert restored.to_dict() == d
 
-    def test_property_default_to_dict_has_23_fields(self) -> None:
+    def test_property_default_to_dict_has_20_fields(self) -> None:
         """不变量：default().to_dict() 恰好含 21 个字段。"""
         d = CarSetup.default().to_dict()
-        assert len(d) == 21
+        assert len(d) == 20
 
     def test_property_default_is_idempotent(self) -> None:
         """幂等性：多次调用 default() 结果一致。"""
@@ -301,9 +301,9 @@ class TestProperty:
 class TestStatic:
     """静态分析：验证数量与值域约束。"""
 
-    def test_static_setup_field_count_is_21(self) -> None:
+    def test_static_setup_field_count_is_20(self) -> None:
         """数量约束：ALL_SETUP_FIELDS 恰好 21 项。"""
-        assert len(ALL_SETUP_FIELDS) == 21
+        assert len(ALL_SETUP_FIELDS) == 20
 
     def test_static_group_count_is_6(self) -> None:
         """数量约束：ALL_GROUPS 恰好 6 大类。"""

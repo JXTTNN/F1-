@@ -40,9 +40,9 @@ from setup_tuner.domain.symptoms import (
 class TestSetupSchema:
     """20 8调教参数 / 6 大类 schema 校验。"""
 
-    def test_field_count_is_21(self) -> None:
+    def test_field_count_is_20(self) -> None:
         """ALL_SETUP_FIELDS 必须恰好 21 项。"""
-        assert len(ALL_SETUP_FIELDS) == 21
+        assert len(ALL_SETUP_FIELDS) == 20
 
     def test_group_count_is_6(self) -> None:
         """ALL_GROUPS 必须恰好 6 大类。"""
@@ -103,13 +103,13 @@ class TestSetupSchema:
             assert f.source, f"参数 {f.name!r} source 为空"
 
     def test_group_field_counts(self) -> None:
-        """6 大类参数数量分布：2/2/4/6/3/4 = 21。"""
+        """6 大类参数数量分布：2/2/4/6/2/4 = 20。"""
         expected = {
             "Aerodynamics": 2,
             "Transmission": 2,
             "Suspension Geometry": 4,
             "Suspension": 6,
-            "Brakes": 3,
+            "Brakes": 2,
             "Tyres": 4,
         }
         for group, count in expected.items():
@@ -175,11 +175,11 @@ class TestValidateValue:
 class TestCarSetup:
     """CarSetup 数据类。"""
 
-    def test_default_has_21_fields(self) -> None:
+    def test_default_has_20_fields(self) -> None:
         """default() 产出 21 字段。"""
         cs = CarSetup.default()
         d = cs.to_dict()
-        assert len(d) == 21
+        assert len(d) == 20
 
     def test_default_values_match_spec(self) -> None:
         """default() 各字段值与 SetupField.default 一致。"""
@@ -198,10 +198,10 @@ class TestCarSetup:
         cs2 = CarSetup.from_dict(d)
         assert cs2.to_dict() == d
 
-    def test_field_names_count_21(self) -> None:
+    def test_field_names_count_20(self) -> None:
         """field_names() 返回 21 个字段名。"""
         cs = CarSetup.default()
-        assert len(cs.field_names()) == 21
+        assert len(cs.field_names()) == 20
 
     def test_diff_detects_changes(self) -> None:
         """diff 应检测出变更字段。"""

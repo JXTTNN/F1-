@@ -102,7 +102,7 @@ class TestTelemetryGain:
     def test_none_telemetry(self) -> None:
         """None 返回全 1.0 增益。"""
         gain = _derive_telemetry_gain(None)
-        assert len(gain) == 21
+        assert len(gain) == 20
         assert all(v == 1.0 for v in gain.values())
 
     def test_empty_telemetry(self) -> None:
@@ -142,7 +142,7 @@ class TestTelemetryGain:
         gain = _derive_telemetry_gain({"weather": None})
         assert all(v == 1.0 for v in gain.values())
 
-    def test_gain_covers_all_23_params(self) -> None:
+    def test_gain_covers_all_20_params(self) -> None:
         """增益覆盖全部 23 参数。"""
         gain = _derive_telemetry_gain({"weather": "wet"})
         assert set(gain.keys()) == set(PARAM_NAMES)
@@ -179,7 +179,7 @@ class TestComputeSetupDelta:
         d2 = compute_setup_delta(dx, default_setup)
         assert d1 == d2
 
-    def test_delta_keys_cover_23_params(self, default_setup) -> None:
+    def test_delta_keys_cover_20_params(self, default_setup) -> None:
         """delta 键覆盖全部 23 参数。"""
         dx = compute_dx([("understeer", 3)])
         delta = compute_setup_delta(dx, default_setup)
@@ -361,7 +361,7 @@ class TestCouplingMatrixEdgeCases:
     def test_get_row_unknown_diag(self) -> None:
         """get_row 未知维度 → 全 None。"""
         row = get_row("nonexistent_diag")
-        assert len(row) == 21
+        assert len(row) == 20
         assert all(v is None for v in row.values())
 
     def test_get_coupling_both_unknown(self) -> None:
