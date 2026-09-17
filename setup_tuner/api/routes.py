@@ -1272,11 +1272,14 @@ def _get_or_create_recorder(request: Request) -> Any:
     if recorder is not None:
         return recorder
     # 延迟初始化
+    # index_json=False：data_json 列只服务调试且体量巨大（实测一次 45 分钟
+    # 会话 .f1rec 281MB / .db 878MB，3.1 倍膨胀）。主数据源是 .f1rec 无损
+    # 原始字节，随时可用更新版解析器重放；SQLite 只保留索引/统计所需列。
     from setup_tuner.telemetry.recorder import TelemetryRecorder
     config = getattr(request.app.state, "config", None)
     data_dir = getattr(config, "data_dir", "data") if config else "data"
     recordings_dir = str(Path(data_dir) / "recordings")
-    recorder = TelemetryRecorder(data_dir=recordings_dir)
+    recorder = TelemetryRecorder(data_dir=recordings_dir, index_json=False)
     request.app.state.telemetry_recorder = recorder
     return recorder
 

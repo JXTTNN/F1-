@@ -58,6 +58,32 @@ _SETUP_KEYS: tuple[str, ...] = (
 )
 
 
+def _wire_kerb_track(agg: Any, session: dict[str, Any]) -> None:
+    """把 Session 包的赛道信息注入聚合器，使训练样本带上「按弯路肩」特征。
+
+    MotionEx 不带圈内距离，只能靠 Session 的 ``m_trackLength`` + 弧长表
+    把每一帧归因到弯道。未知赛道静默降级（路肩字段缺省），不影响导出。
+    """
+    udp_id = session.get("m_trackId")
+    length = session.get("m_trackLength")
+    if not isinstance(udp_id, int) or isinstance(udp_id, bool):
+        return
+    if not isinstance(length, (int, float)) or isinstance(length, bool):
+        return
+
+    from setup_tuner.domain.corner_locator import locate_corner
+    from setup_tuner.domain.track import get_track_by_udp_id
+
+    track = get_track_by_udp_id(udp_id)
+    if track is None:
+        return
+
+    def _locate(dist: float) -> int | None:
+        return locate_corner(dist, track.length_m, track.corners, track.track_id)
+
+    agg.set_track_context(float(length), _locate)
+
+
 class TrainingExporter:
     """把一份 .f1rec 录制导出为逐圈训练样本 JSONL。
 
@@ -87,6 +113,10 @@ class TrainingExporter:
         current_setup: dict[str, Any] = {}
         session_uid: str | None = None
         track_id: int | None = None
+        kerb_wired: int | None = None
+        session_weather: int | None = None
+        session_track_temp: float | None = None
+        session_air_temp: float | None = None
         # 近似有效性：最近一帧 LapData 的 m_currentLapInvalid（0=有效圈）
         last_seen_invalid: int | None = None
 
@@ -121,6 +151,20 @@ class TrainingExporter:
 
                     if pid == 1 and "m_trackId" in parsed:
                         track_id = parsed["m_trackId"]
+                        # 天气/温度：训练样本需要区分干/湿与温度工况（普世化特征）
+                        weather = parsed.get("m_weather")
+                        if weather is not None:
+                            session_weather = weather
+                        track_temp = parsed.get("m_trackTemperature")
+                        if track_temp is not None:
+                            session_track_temp = track_temp
+                        air_temp = parsed.get("m_airTemperature")
+                        if air_temp is not None:
+                            session_air_temp = air_temp
+                        # 首次见到该赛道时注入上下文，使样本带上按弯路肩特征
+                        if track_id != kerb_wired:
+                            _wire_kerb_track(lap_agg, parsed)
+                            kerb_wired = track_id
                     elif pid == 2:
                         if "m_currentLapInvalid" in parsed:
                             last_seen_invalid = parsed["m_currentLapInvalid"]
@@ -151,6 +195,10 @@ class TrainingExporter:
                         sample = {
                             "session_uid": session_uid,
                             "track_id": track_id,
+                            # 天气/温度工况（普世化特征：干/湿与温度影响调教取向）
+                            "weather": session_weather,
+                            "track_temp": session_track_temp,
+                            "air_temp": session_air_temp,
                             "lap_number": completed.get("lap_number"),
                             "lap_time_ms": completed.get("lap_time_ms"),
                             # 近似：取圈末最近一帧的当前圈无效标志

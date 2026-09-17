@@ -114,7 +114,7 @@ class TestUnit:
     def test_unit_get_symptoms_by_category(self) -> None:
         """get_symptoms_by_category 应返回该类别下全部症状。"""
         entry = get_symptoms_by_category(SymptomCategory.ENTRY)
-        assert len(entry) == 5
+        assert len(entry) == 6
         assert Symptom.UNDERSTEER in entry
 
     def test_unit_get_symptom_label(self) -> None:
@@ -313,9 +313,9 @@ class TestStatic:
             "Suspension", "Brakes", "Tyres",
         ]
 
-    def test_static_symptom_count_is_18(self) -> None:
-        """数量约束：Symptom 枚举恰好 18 项（task-61 扩展）。"""
-        assert len(list(Symptom)) == 18
+    def test_static_symptom_count_is_22(self) -> None:
+        """数量约束：Symptom 枚举恰好 22 项（task-82 扩展）。"""
+        assert len(list(Symptom)) == 22
 
     def test_static_track_count_is_24(self) -> None:
         """数量约束：ALL_TRACKS 恰好 24 条赛道。"""
@@ -415,12 +415,12 @@ class TestSmoke:
             assert fetched.track_id == track.track_id
             assert fetched.udp_track_id == track.udp_track_id
 
-    def test_smoke_all_18_symptoms_categorized(self) -> None:
-        """冒烟：全部 18 症状可按类别检索（task-61 扩展）。"""
+    def test_smoke_all_22_symptoms_categorized(self) -> None:
+        """冒烟：全部 22 症状可按类别检索（task-82 扩展）。"""
         all_categorized: list[Symptom] = []
         for cat in SymptomCategory:
             all_categorized.extend(get_symptoms_by_category(cat))
-        assert len(all_categorized) == 18
+        assert len(all_categorized) == 22
         assert set(all_categorized) == set(Symptom)
 
     def test_smoke_setup_roundtrip_with_modifications(self) -> None:

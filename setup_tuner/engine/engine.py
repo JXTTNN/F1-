@@ -415,13 +415,79 @@ def _apply_ride_height_rules(
         dx["ride_height_req"] += 0.4
 
 
+def _apply_kerb_rules(telemetry: dict[str, Any], dx: dict[str, float]) -> None:
+    """规则17：压路肩检测（按弯归因），针对性优化离地与悬挂余量。
+
+    信号源：LapAggregator 的按弯路肩统计 ``kerb_corners`` —— 相对法
+    （逐弯悬挂加速度 vs 全圈中位数），显著偏高的弯即压路肩弯。
+    实测验证（真实圈 87k 帧）：Monza 检出 T2/T5/T10（Rettifilo/Roggia/Ascari
+    三个减速弯）+ T7(Lesmo2)，与赛历吻合。
+
+    路肩常常**不得不压**（走线需要），所以目标是"让车能吃路肩"，
+    而不是提醒车手避开：
+    - 存在 ratio >= 2.0 的重度路肩弯：``ride_height_req += 0.30`` 且
+      ``hi_speed_stab_req += 0.10``（冲击后尽早稳定车身）；
+    - 只有 1.6~2.0 的轻度路肩弯：``ride_height_req += 0.15``。
+
+    无 ``kerb_corners``（未注入赛道上下文 / 无 MotionEx）时不触发。
+    """
+    kerb = telemetry.get("kerb_corners")
+    if not isinstance(kerb, list) or not kerb:
+        return
+    ratios = [
+        float(k["ratio"]) for k in kerb
+        if isinstance(k, dict)
+        and isinstance(k.get("ratio"), (int, float))
+        and not isinstance(k.get("ratio"), bool)
+        and float(k["ratio"]) > 0.0          # 脏数据（负/零）不参与判定
+    ]
+    if not ratios:
+        return
+    worst = max(ratios)
+    if worst >= 2.0:
+        dx["ride_height_req"] += 0.30
+        dx["hi_speed_stab_req"] += 0.10
+    else:
+        dx["ride_height_req"] += 0.15
+
+
+def _reclamp_delta(
+    delta: dict[str, float], current_setup: dict[str, float],
+) -> dict[str, float]:
+    """整体收口后的**边界兜底夹取**。
+
+    coherence 的配对等比收口（悬挂几何/防倾杆/rake/翼片）可能把参数推出
+    ``[min, max]``（实测：oversteer 强度 5 时 front_camber 越下限）。
+    本函数保证最终建议永远满足：
+        ``|delta| <= max_delta`` 且 ``current + delta ∈ [min, max]``。
+
+    Args:
+        delta: 收口后的调整量。
+        current_setup: 当前调教（决定绝对边界）。
+
+    Returns:
+        夹取后的调整量（键与入参一致）。
+    """
+    specs = {f.name: f for f in ALL_SETUP_FIELDS}
+    out: dict[str, float] = {}
+    for name, value in delta.items():
+        spec = specs.get(name)
+        if spec is None or not value:
+            out[name] = value
+            continue
+        raw = _clip(value, -spec.max_delta, spec.max_delta)
+        current = current_setup.get(name, spec.default)
+        out[name] = _clip(raw, spec.min_val - current, spec.max_val - current)
+    return out
+
+
 def _derive_telemetry_dx(telemetry: dict[str, Any] | None) -> dict[str, float]:
-    """从遥测性能数据提取诊断向量贡献（9维Dx，16条规则）。
+    """从遥测性能数据提取诊断向量贡献（9维Dx，17条规则）。
 
     与车手反馈Dx叠加后共同驱动调教优化模型。所有规则基于官方数据，
     覆盖全部9维Dx并引入方向修正因子（负值表示该能力过强需减弱）。
 
-    16条规则分组：
+    17条规则分组：
         - 胎温规则（1/2/12/13）：胎温过高/过低/不均/湿地严重不足
         - 胎压规则（3）：胎压异常
         - 刹车规则（4/4b/8/14）：刹车过热/前后轴失衡/制动力不足/持续过热+方向修正
@@ -429,6 +495,8 @@ def _derive_telemetry_dx(telemetry: dict[str, Any] | None) -> dict[str, float]:
         - 弯道规则（5/7/10/11）：出弯油门低/入弯响应差/弯中不稳定/出弯打滑
         - 速度规则（6/15）：直道速度低/直道极速低（均含方向修正因子）
         - 底盘规则（9）：刮底检测（底板离地高度，来自 Packet 13 MotionEx）
+        - 路肩规则（17，task-82）：按弯压路肩检测（kerb_corners 相对法），
+          路肩不得不压 → 抬离地/悬挂余量，针对性优化而非劝车手避让
 
     配方相关阈值：刹车温度告警阈值随 Packet 7 ``m_actualTyreCompound``
     换算的软/硬标记浮动（软胎更早告警、硬胎阈值上调）。
@@ -453,6 +521,7 @@ def _derive_telemetry_dx(telemetry: dict[str, Any] | None) -> dict[str, float]:
     _apply_corner_rules(telemetry, dx)
     _apply_speed_rules(telemetry, dx)
     _apply_ride_height_rules(telemetry, dx)
+    _apply_kerb_rules(telemetry, dx)
     return dx
 
 
@@ -922,6 +991,10 @@ def generate_suggestion(
 
     # 整体性收口：胎压左右对称 / 前后翼平衡窗口 / 改动预算（保证可用性）
     final_delta, coherence_notes = holistic_coherence(optimized.delta, dx, demand)
+    # 收口会做配对等比调整（悬挂几何/防倾杆/rake/翼片），可能把参数推出
+    # [min, max]（实测：oversteer 强度 5 时 front_camber 越下限）——
+    # 因此收口后必须**再次夹取**，作为最终边界兜底。
+    final_delta = _reclamp_delta(final_delta, current_setup)
     holistic_block["coherence_notes"] = coherence_notes
 
     parameters = _build_param_details(final_delta, current_setup, dx)

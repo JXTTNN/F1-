@@ -232,6 +232,60 @@ class TestHolisticCoherence:
         assert out["front_wing"] == 1.0
         assert not any("改动预算" in n for n in notes)
 
+    # ---- task-82：悬挂几何 / 防倾杆 / rake / 压路肩冲突 ----
+
+    def test_camber_pair_only_larger_side_shrinks(self) -> None:
+        """外倾配对：只回收变化更大的一侧，**不得在零变化侧凭空造值**。
+
+        对称等比收口曾把 rear_camber 从 0 变成非零（无出处）——已改为
+        「回收大侧」，保证出处可追溯。
+        """
+        delta = {"front_camber": -0.45, "rear_camber": 0.0}
+        out, notes = holistic_coherence(delta, {}, track_demand("suzuka"))
+        assert out["rear_camber"] == 0.0, "不应在零变化侧凭空造出反向变化"
+        assert abs(out["front_camber"] - out["rear_camber"]) <= 0.30
+        assert any("外倾" in n for n in notes)
+
+    def test_toe_pair_within_window_untouched(self) -> None:
+        """束角变化在窗口内 → 不收口。"""
+        delta = {"front_toe": 0.02, "rear_toe": 0.01}
+        out, notes = holistic_coherence(delta, {}, track_demand("suzuka"))
+        assert out["front_toe"] == 0.02
+        assert not any("束角" in n for n in notes)
+
+    def test_arb_pair_larger_side_shrinks(self) -> None:
+        """防倾杆前后差值超窗 → 回收大侧到窗口内。"""
+        delta = {"front_anti_roll_bar": 4.0, "rear_anti_roll_bar": -1.0}
+        out, notes = holistic_coherence(delta, {}, track_demand("suzuka"))
+        assert abs(out["front_anti_roll_bar"] - out["rear_anti_roll_bar"]) <= 2.0
+        assert any("防倾杆" in n for n in notes)
+
+    def test_rake_change_window(self) -> None:
+        """前后离地变化（rake）超窗 → 收口。"""
+        delta = {"front_ride_height": -3.0, "rear_ride_height": 3.0}
+        out, notes = holistic_coherence(delta, {}, track_demand("suzuka"))
+        assert abs(out["rear_ride_height"] - out["front_ride_height"]) <= 3.0
+        assert any("rake" in n for n in notes)
+
+    def test_kerb_blocks_ride_height_reduction(self) -> None:
+        """压路肩冲突收口：遥测检出需要更高离地 → 撤回降低离地的建议。
+
+        路肩不得不压——此时降低离地等于让车更吃不了路肩。
+        """
+        dx = {"ride_height_req": 0.30}  # 引擎规则17：重度路肩
+        delta = {"front_ride_height": -2.0, "rear_wing": 1.0}
+        out, notes = holistic_coherence(delta, dx, track_demand("suzuka"))
+        assert out["front_ride_height"] == 0.0, "降低离地的建议应被撤回"
+        assert out["rear_wing"] == 1.0, "其它建议不受影响"
+        assert any("路肩" in n for n in notes)
+
+    def test_no_ride_height_signal_keeps_reduction(self) -> None:
+        """无路肩/刮底信号时降低离地不受限（正常优化路径）。"""
+        delta = {"front_ride_height": -2.0}
+        out, notes = holistic_coherence(delta, {}, track_demand("suzuka"))
+        assert out["front_ride_height"] == -2.0
+        assert not any("路肩" in n for n in notes)
+
     def test_traction_track_notes(self) -> None:
         """慢弯占比高的赛道应给出牵引优先的说明。"""
         _, notes = holistic_coherence({}, {}, track_demand("monaco"))

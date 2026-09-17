@@ -34,6 +34,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from functools import cache
+from math import copysign
 from typing import Any
 
 from setup_tuner.domain._track_arcs import TRACK_CORNER_ARCS
@@ -436,6 +437,19 @@ _PRESSURE_PAIRS = (
     ("front_left_tyre_pressure", "front_right_tyre_pressure"),
     ("rear_left_tyre_pressure", "rear_right_tyre_pressure"),
 )
+#: 悬挂几何前后配对（外倾/束角）：前后轴特性**变化量**的差异窗口。
+#: 窗口取各参数 max_delta 的一半量级（外倾 0.5、束角 0.05）。
+_GEOMETRY_PAIRS: tuple[tuple[str, str, str, float], ...] = (
+    ("front_camber", "rear_camber", "外倾角", 0.30),
+    ("front_toe", "rear_toe", "束角", 0.03),
+)
+#: 前后防倾杆变化量差异窗口（横向刚度前后分配不宜悬殊；max_delta=2.0）。
+_ARB_BALANCE_WINDOW = 2.0
+#: 前后离地变化量（rake 变化）窗口（max_delta=2.0，允许 rake 微调）。
+_RAKE_CHANGE_WINDOW = 3.0
+#: 存在该量级以上的「抬高底盘」诉求时，禁止任何降低离地的建议
+#: （路肩不得不压 / 刮底——先保证车能吃路肩，再谈其它）。
+_RIDE_HEIGHT_GUARD_REQ = 0.15
 
 
 def holistic_coherence(
@@ -450,6 +464,11 @@ def holistic_coherence(
     3. **改动预算** —— 一次最多改 ``_CHANGE_BUDGET`` 个参数，超出则保留
        幅度最大的（整体思维：改动越少越可归因）；
     4. **整车抓地不足** —— 前后抓地需求同时很高时提示优先胎温/胎压而非极端翼片。
+    5. **悬挂几何前后配对** —— 外倾/束角的前后**变化量**保持一致（task-82）；
+    6. **前后防倾杆配对** —— 横向刚度前后分配不宜悬殊（task-82）；
+    7. **离地 rake 窗口** —— 前后离地变化保持一致（task-82）；
+    8. **压路肩/刮底冲突** —— 遥测检出需要更高离地时，撤回任何降低离地的
+       建议（路肩不得不压，调教迁就路肩；task-82）。
     """
     out = dict(delta)
     notes: list[str] = []
@@ -502,7 +521,74 @@ def holistic_coherence(
             "单纯加大翼片只在高速弯有效，且会拖慢直道"
         )
 
-    # 5. 赛道画像提示（让建议"看得出是为这条赛道做的"）
+    # 5. 悬挂几何前后配对（外倾/束角）—— 前后轴特性变化保持一致。
+    #    只回收变化更大的一侧：**不制造另一侧的反向新值**（否则出处不可追溯，
+    #    实测 understeer@3 时 rear_toe 被凭空造出非零变化）。
+    for front, rear, label, window in _GEOMETRY_PAIRS:
+        a, b = out.get(front, 0.0), out.get(rear, 0.0)
+        imbalance = a - b
+        if abs(imbalance) <= window:
+            continue
+        if abs(a) >= abs(b):
+            out[front] = round(b + copysign(window, imbalance), 4)
+        else:
+            out[rear] = round(a + copysign(window, -imbalance), 4)
+        notes.append(
+            f"{label}前后配对收口（Δ{front}−Δ{rear} {imbalance:+.2f} → "
+            f"{out[front] - out[rear]:+.2f}）：前后轴几何特性变化保持一致，"
+            f"只回收变化更大的一侧（不引入新改动，保持出处可追溯）"
+        )
+
+    # 6. 前后防倾杆：横向刚度前后分配不宜悬殊（同上，只回收大侧）
+    fa, ra = out.get("front_anti_roll_bar", 0.0), out.get("rear_anti_roll_bar", 0.0)
+    if abs(fa - ra) > _ARB_BALANCE_WINDOW:
+        if abs(fa) >= abs(ra):
+            out["front_anti_roll_bar"] = round(
+                ra + copysign(_ARB_BALANCE_WINDOW, fa - ra), 4,
+            )
+        else:
+            out["rear_anti_roll_bar"] = round(
+                fa + copysign(_ARB_BALANCE_WINDOW, ra - fa), 4,
+            )
+        notes.append(
+            f"防倾杆前后配对收口（Δ前−Δ后 {fa - ra:+.2f} → "
+            f"{out['front_anti_roll_bar'] - out['rear_anti_roll_bar']:+.2f}）："
+            f"横向刚度前后分配保持接近，避免整车平衡被单轴翻转"
+        )
+
+    # 7. 离地 rake 变化窗口：前后离地变化保持一致（rake 大改 = 姿态特性大改）
+    fr, rr = out.get("front_ride_height", 0.0), out.get("rear_ride_height", 0.0)
+    rake_change = rr - fr
+    if abs(rake_change) > _RAKE_CHANGE_WINDOW:
+        if abs(rr) >= abs(fr):
+            out["rear_ride_height"] = round(
+                fr + copysign(_RAKE_CHANGE_WINDOW, rake_change), 4,
+            )
+        else:
+            out["front_ride_height"] = round(
+                rr + copysign(_RAKE_CHANGE_WINDOW, -rake_change), 4,
+            )
+        notes.append(
+            f"离地 rake 收口（Δ后−Δ前 {rake_change:+.2f} → "
+            f"{out['rear_ride_height'] - out['front_ride_height']:+.2f}）："
+            f"前后离地变化保持一致，rake 大改等于改变整车姿态特性"
+        )
+
+    # 8. 压路肩/刮底冲突收口：遥测说「车需要更高离地」时，禁止任何降低离地的建议
+    #    （路肩不得不压——先保证车能吃路肩，再谈其它优化）
+    if dx.get("ride_height_req", 0.0) >= _RIDE_HEIGHT_GUARD_REQ:
+        lowered = [p for p in ("front_ride_height", "rear_ride_height")
+                   if out.get(p, 0.0) < 0]
+        if lowered:
+            for p in lowered:
+                out[p] = 0.0
+            notes.append(
+                "压路肩/刮底冲突收口：遥测检出存在需要更高离地的信号"
+                "（按弯路肩或触地），撤回降低离地的建议 "
+                f"（{'、'.join(lowered)} 归零）——路肩不得不压，调教迁就路肩"
+            )
+
+    # 9. 赛道画像提示（让建议"看得出是为这条赛道做的"）
     # 阈值为弯型占比的经验分界：慢弯占比 ≥40% 即机械抓地主导（Monaco 0.42、
     # Monza 0.45 属此类），快弯占比 ≥35% 即空气动力学主导（Jeddah 0.37）。
     if demand.traction_index >= 0.40:

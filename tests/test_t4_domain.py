@@ -44,6 +44,17 @@ class TestSetupSchema:
         """ALL_SETUP_FIELDS 必须恰好 21 项。"""
         assert len(ALL_SETUP_FIELDS) == 20
 
+    def test_no_engine_braking(self) -> None:
+        """F1 2026 车库调教界面**没有引擎制动**——参数全集不得出现。
+
+        engine_braking 在 Packet 5 字节布局中占位、CarStatus 里也有
+        ``m_engineBraking`` 遥测量，但游戏中不可调，故不建模。
+        防回潮：谁把它加回 ALL_SETUP_FIELDS，这条就红。
+        """
+        names = [f.name for f in ALL_SETUP_FIELDS]
+        assert "engine_braking" not in names
+        assert not any("engine" in n for n in names), names
+
     def test_group_count_is_6(self) -> None:
         """ALL_GROUPS 必须恰好 6 大类。"""
         assert len(ALL_GROUPS) == 6
@@ -221,9 +232,9 @@ class TestCarSetup:
 class TestSymptoms:
     """18 项症状 / 4 类枚举校验。"""
 
-    def test_symptom_count_is_18(self) -> None:
-        """Symptom 枚举必须恰好 18 项（task-61 扩展）。"""
-        assert len(list(Symptom)) == 18
+    def test_symptom_count_is_22(self) -> None:
+        """Symptom 枚举必须恰好 22 项（task-82 扩展：18 + 4）。"""
+        assert len(list(Symptom)) == 22
 
     def test_category_count_is_4(self) -> None:
         """SymptomCategory 必须恰好 4 类。"""
@@ -258,17 +269,17 @@ class TestSymptoms:
         assert get_symptom_category(Symptom.TYRE_WEAR) == "global"
 
     def test_get_symptoms_by_category_counts(self) -> None:
-        """4 类症状数量分布：entry=5, apex=3, exit=4, global=6（task-61 扩展）。"""
-        assert len(get_symptoms_by_category(SymptomCategory.ENTRY)) == 5
+        """4 类症状数量分布：entry=6, apex=3, exit=4, global=9（task-82 扩展）。"""
+        assert len(get_symptoms_by_category(SymptomCategory.ENTRY)) == 6
         assert len(get_symptoms_by_category(SymptomCategory.APEX)) == 3
         assert len(get_symptoms_by_category(SymptomCategory.EXIT)) == 4
-        assert len(get_symptoms_by_category(SymptomCategory.GLOBAL)) == 6
+        assert len(get_symptoms_by_category(SymptomCategory.GLOBAL)) == 9
 
     def test_get_symptoms_by_category_string_arg(self) -> None:
         """get_symptoms_by_category 接受字符串参数。"""
         entry = get_symptoms_by_category("entry")
         assert Symptom.UNDERSTEER in entry
-        assert len(entry) == 5
+        assert len(entry) == 6
 
     def test_intensity_constants(self) -> None:
         """强度范围 1-3，默认 2（task-61 三档制）。"""
