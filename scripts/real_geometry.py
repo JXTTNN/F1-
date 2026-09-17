@@ -114,6 +114,8 @@ class RealTrack:
         for i in range(n):
             self.cum[i + 1] = self.cum[i] + seg_len[i]
         # 逐点转向速率（°/m）+ 滑动平均去噪
+        # （rate 值含 libm atan2 的跨版本 ULP 差异；后续所有阈值比较
+        # 都留 1e-9 余量，避免恰在阈值上的点跨版本翻转归属）
         rate = [
             abs(_norm180(brg[(i + 1) % n] - brg[i])) / max(seg_len[i], 1e-6)
             for i in range(n)
@@ -128,7 +130,7 @@ class RealTrack:
     # ---- 转弯段 ----
     def _regions(self) -> list[dict]:
         n = self.n
-        in_c = [self.rate[i] >= RATE_FLOOR for i in range(n)]
+        in_c = [self.rate[i] >= RATE_FLOOR - 1e-9 for i in range(n)]
         segs: list[list[int]] = []
         i = 0
         while i < n:
@@ -179,13 +181,22 @@ class RealTrack:
         return total + abs(run)
 
     def turn_at(self, idx: int, half_window: float = WINDOW_M / 2.0) -> float:
-        """idx 处 ±half_window 弧长窗口内的累计转角（度）。"""
+        """idx 处 ±(half_window - 0.1m) 弧长窗口内的累计转角（度）。
+
+        窗口边界**内缩 0.1m**：恰在边界上的采样点是否计入，会因浮点
+        ULP 差异（cum 累加序不同）在 Python 3.11 / 3.13 间翻转 —— 每个
+        边界点可携带数度转角，足以让锚点选择漂移十几米（austin T3
+        跨版本差 0.0025 占比即此根源，1e-4° 量化无法吸收离散跳变）。
+        内缩后最近边界点距判定线 0.1m，ULP(≈1e-13m) 不可能翻转计入
+        与否 → 跨版本窗口点集完全一致。
+        """
+        eps = 0.1
         n = self.n
         lo = idx
-        while self.cum[idx] - self.cum[lo] < half_window and lo > 0:
+        while self.cum[idx] - self.cum[lo] < half_window - eps and lo > 0:
             lo -= 1
         hi = idx
-        while self.cum[hi] - self.cum[idx] < half_window and hi < n - 1:
+        while self.cum[hi] - self.cum[idx] < half_window - eps and hi < n - 1:
             hi += 1
         return self._turn_between(lo, hi)
 
@@ -223,7 +234,7 @@ def select_anchors(rt: RealTrack, n_expected: int) -> list[int]:
         if rt.rate[i] < 1e-6:
             continue
         win = int(3.0 / DENSIFY_STEP)
-        if all(rt.rate[i] >= rt.rate[(i + k) % n] for k in range(-win, win + 1)):
+        if all(rt.rate[i] >= rt.rate[(i + k) % n] - 1e-9 for k in range(-win, win + 1)):
             cands.append(i)
     # 去重相邻（环上取等值平台只留一个）
     cands.sort()
