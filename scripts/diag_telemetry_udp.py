@@ -21,7 +21,7 @@ import sys
 import time
 from collections import Counter
 
-# F1 UDP 包头（29 字节），与 udp_telemetry_collector.py 一致
+# F1 UDP 包头（29 字节）
 HEADER_FMT = "<HBBBBBQfIIBB"
 HEADER_SIZE = struct.calcsize(HEADER_FMT)
 
