@@ -212,24 +212,28 @@ def _build_corners(raw: list[_RawCorner]) -> list[Corner]:
 def _melbourne_corners() -> list[Corner]:
     """Albert Park Grand Prix Circuit (5.278 km, 14 弯, medium)。
 
-    task-64：按 2022 年改建后布局 + FIA 官方弯号重排，并以正式弯名替换
-    原先的 "Turn N" 占位命名（占位名无法定位到具体弯型，也无法与
-    游内 HUD 文本对上）。T3/T4/T6/T11/T12 在官方资料中无专名，改用
-    可读的方向描述；T9/T10 与 T13/T14 为连续弯的两段。
+    按 2022 年改建后布局的官方 14 弯（F1 官方 Circuit Guide 逐字：
+    "Number of turns: 14"，并注明已拆除 "the chicane that used to be
+    Turns 9 and 10"）。
+
+    命名口径：F1 官方文档**未**对 Albert Park 逐弯命名，因此没有官方专名的弯
+    一律写作 "Turn N"（这正是官方对无专名弯的写法）。此前用
+    "Turn 3 Right" / "Waite Right" 这类**自造的方向描述**填充是错的：
+    它们既非官方名，又让人误以为是真名。
     """
     return _build_corners([
         (1, "Jones", "slow", 95),
         (2, "Brabham", "medium", 130),
-        (3, "Turn 3 Right", "slow", 85),
-        (4, "Turn 4 Left", "medium", 160),
+        (3, "Turn 3", "slow", 85),
+        (4, "Turn 4", "medium", 160),
         (5, "Whiteford", "fast", 210),
-        (6, "Turn 6 Right", "medium", 175),
+        (6, "Turn 6", "medium", 175),
         (7, "Marina", "fast", 230),
         (8, "Lauda", "fast", 240),
-        (9, "Waite Right", "fast", 250),
-        (10, "Waite Left", "fast", 220),
-        (11, "Turn 11 Left", "slow", 90),
-        (12, "Turn 12 Right", "medium", 155),
+        (9, "Waite 1", "fast", 250),
+        (10, "Waite 2", "fast", 220),
+        (11, "Turn 11", "slow", 90),
+        (12, "Turn 12", "medium", 155),
         (13, "Ascari", "slow", 85),
         (14, "Stewart", "medium", 140),
     ])
@@ -258,7 +262,7 @@ def _suzuka_corners() -> list[Corner]:
         (7, "Dunlop Curve", "fast", 240),
         (8, "Degner 1", "medium", 115),
         (9, "Degner 2", "slow", 85),
-        (10, "Curve 10", "fast", 210),
+        (10, "Turn 10", "fast", 210),
         (11, "Hairpin", "slow", 70),
         (12, "200R", "fast", 250),
         (13, "Spoon Curve", "medium", 140),
@@ -354,16 +358,16 @@ def _monza_corners() -> list[Corner]:
     Ascari 与 Parabolica 的真实弯号整体偏移。
     """
     return _build_corners([
-        (1, "Variante del Rettifilo (Right)", "slow", 80),
-        (2, "Variante del Rettifilo (Left)", "slow", 87),
+        (1, "Variante del Rettifilo 1", "slow", 80),
+        (2, "Variante del Rettifilo 2", "slow", 87),
         (3, "Curva Grande", "fast", 250),
-        (4, "Variante della Roggia (Left)", "slow", 85),
-        (5, "Variante della Roggia (Right)", "slow", 80),
+        (4, "Variante della Roggia 1", "slow", 85),
+        (5, "Variante della Roggia 2", "slow", 80),
         (6, "Lesmo 1", "medium", 140),
         (7, "Lesmo 2", "medium", 145),
-        (8, "Variante Ascari (Left)", "slow", 115),
-        (9, "Variante Ascari (Right)", "medium", 110),
-        (10, "Variante Ascari (Left 2)", "medium", 120),
+        (8, "Variante Ascari 1", "slow", 115),
+        (9, "Variante Ascari 2", "medium", 110),
+        (10, "Variante Ascari 3", "medium", 120),
         (11, "Curva Alboreto (Parabolica)", "fast", 200),
     ])
 

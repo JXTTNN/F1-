@@ -1,12 +1,23 @@
-"""24 赛道弯道元数据 —— 每弯 (name, corner_type, speed_kmh)（task-63 收尾）。
+"""24 赛道弯道元数据 —— 每弯 (name, corner_type, speed_kmh)。
 
-之前的 18 条赛道由 ``_synthesize_corners`` 合成（"Corner N" 占位名 + 伪随机
-速度），连续弯区域标号/属性与真实赛道不符。本模块按 **F1 25/26 游内弯号**
-逐弯编写全部元数据（名称用游内通用的 "Turn N"，知名弯道用官方名），
-类型/速度为各弯真实特征的近似值（发卡 slow、全场速 fast）。
+**命名口径（以 F1 官方文档为准）**
+
+查证 F1 官方文档后的结论：官方只对部分赛道命名弯道（Monaco / Silverstone /
+Spa / Monza / Zandvoort / Albert Park / Red Bull Ring 等有官方点名的弯），
+其余赛道**在官方口径里就没有专名**，官方直接写 ``Turn N``。
+因此：
+
+- 官方有专名的弯 → 用官方名（出处见 :mod:`_track_official`，测试逐条锁定）；
+- 官方未命名的弯 → 写 ``Turn N``，这是**官方写法**，不是占位符；
+- **禁止**自造描述（``Bocht 8`` / ``Curve 10`` / ``Turn 3 Right``）与把
+  直道名、路段名（``Reta Oposta`` / ``Subida dos Boxes`` / ``Arquibancada``）
+  当作弯名 —— 这类"为了填满字段而编"的命名正是用户反馈「弯道号就是乱的」的根源。
+
+多 apex 复合弯用序号消歧（``Lesmo 1/2``、``Variante Ascari 1/2/3``），
+这是本项目的一致约定，不宣称是官方名。
 
 顺序即行驶顺序（与 ``_track_anchors`` 的真实像素坐标一一对应）；
-锚点坐标仍以 ``_track_anchors`` 为准，本表只承载元数据。
+锚点坐标以 ``_track_anchors`` 为准，本表只承载元数据。
 """
 
 from __future__ import annotations
@@ -153,13 +164,13 @@ TURNS: dict[str, list[tuple[str, str, float]]] = {
         # task-64：以官方弯名替换 "Descida do Lago exit"/"Subida dos Boxes
         # exit" 的人造拆分（该处为同一连续弯的第二段，非独立弯位）
         ("Senna S", "slow", 90), ("Curva do Sol", "medium", 140),
-        ("Reta Oposta", "fast", 210), ("Descida do Lago 1", "medium", 145),
+        ("Turn 3", "fast", 210), ("Descida do Lago 1", "medium", 145),
         ("Descida do Lago 2", "medium", 150), ("Ferradura", "medium", 155),
         ("Laranjinha", "medium", 145), ("Pinheirinho", "slow", 90),
         ("Bico de Pato", "slow", 85), ("Mergulho", "medium", 140),
-        ("Juncao", "medium", 150), ("Subida dos Boxes 1", "fast", 200),
-        ("Subida dos Boxes 2", "fast", 210), ("Arquibancada 1", "fast", 220),
-        ("Arquibancada 2", "fast", 230),
+        ("Juncao", "medium", 150), ("Turn 12", "fast", 200),
+        ("Turn 13", "fast", 210), ("Turn 14", "fast", 220),
+        ("Turn 15", "fast", 230),
     ],
     # Sakhir：T1 重刹 → 连续中速段 → 发卡
     "sakhir": [
@@ -202,7 +213,7 @@ TURNS: dict[str, list[tuple[str, str, float]]] = {
         ("Turn 3", "slow", 95), ("Turn 4", "fast", 220),
         ("Turn 5", "fast", 230), ("Turn 6", "medium", 150),
         ("Turn 7", "fast", 220), ("Turn 8", "medium", 150),
-        ("Turn 9", "fast", 230), ("Turn 10", "fast", 240),
+        ("Rindt", "fast", 230), ("Turn 10", "fast", 240),
     ],
     # Yas Marina：T1 重刹 → T5-6 弯道酒店 → T7 发卡 → 双左 → 终段
     "yas_marina": [
@@ -224,9 +235,9 @@ TURNS: dict[str, list[tuple[str, str, float]]] = {
         ("Tarzanbocht", "medium", 140), ("Gerlachbocht", "fast", 210),
         ("Hugenholtzbocht", "fast", 220), ("Hunserug", "medium", 150),
         ("Rob Slotemakerbocht", "slow", 90), ("Scheivlak", "medium", 145),
-        ("Mastersbocht", "medium", 150), ("Bocht 8", "fast", 215),
-        ("Bocht 9", "slow", 85), ("Circuit Zandvoort Bocht", "medium", 140),
+        ("Mastersbocht", "medium", 150), ("Turn 8", "fast", 215),
+        ("Turn 9", "slow", 85), ("Turn 10", "medium", 140),
         ("Hans Ernst Chicane 1", "medium", 155), ("Hans Ernst Chicane 2", "medium", 145),
-        ("Bocht 13", "fast", 205), ("Arie Luyendykbocht", "fast", 220),
+        ("Turn 13", "fast", 205), ("Arie Luyendykbocht", "fast", 220),
     ],
 }

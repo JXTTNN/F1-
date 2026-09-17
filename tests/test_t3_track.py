@@ -230,13 +230,14 @@ class TestKnownTrackData:
         assert t is not None
         assert len(t.corners) == 18
         assert t.corners[0].name == "First Curve"
-        # task-64：Esses=T3-T6、Dunlop=T7、Degner=T8/T9、Curve10=T10、
+        # 按 F1 官方口径校正：Esses=T3-T6、Dunlop=T7、Degner=T8/T9、
+        # T10 官方无专名（故写作 "Turn 10"，这是官方对无专名弯的写法）、
         # Hairpin=T11、200R=T12、Spoon=T13/T14、130R=T15、
-        # Casio=T16/T17、Final Corner=T18（与 FIA 官方弯号一致）
+        # Casio=T16/T17、Final Corner=T18
         names = {c.number: c.name for c in t.corners}
         assert names[7] == "Dunlop Curve"
         assert names[8] == "Degner 1"
-        assert names[10] == "Curve 10"
+        assert names[10] == "Turn 10"
         assert names[11] == "Hairpin"
         assert names[12] == "200R"
         assert names[15] == "130R"
