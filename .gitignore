@@ -82,3 +82,6 @@ reports/
 test_result.txt
 deep_check_*.txt
 api_test_result*.json
+
+# 赛道渲染产物（由 scripts/render_real_tracks.py 生成，可随时重建）
+scripts/real_circuits/render/
