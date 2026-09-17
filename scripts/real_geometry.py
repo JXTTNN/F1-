@@ -196,6 +196,21 @@ class RealTrack:
         return None
 
 
+def _turn_key(i: int, deg: float) -> tuple[float, int]:
+    """确定性排序键：强度量化到 1e-4°，并列取采样下标靠前者。
+
+    为什么量化：同一弯段内 ±40m 窗口完全重叠的多个采样点，累计转角
+    **逐位相同**（如 austin T3 区 4 个候选同为 121.9°），跨 Python 版本
+    的浮点噪声（< 1e-9°）会翻转 ``sorted``/``min``/``max`` 的并列顺序 →
+    CI（3.11）与本地（3.13）选出相差十几米的锚点，弧长表复算超差。
+    量化到 1e-4°：噪声被吸收成精确并列（tie-break 用下标，跨版本
+    确定）；而真实不同 apex 的强度差 >= 0.01°，不会被误判并列
+    （0.1° 宽量化曾把 Suzuka S 弯群相邻 apex 吞成并列，导致官方
+    弯号整体前移一个弯位 —— 已实测回退）。
+    """
+    return (-round(deg, 4), i)
+
+
 def select_anchors(rt: RealTrack, n_expected: int) -> list[int]:
     """在真实几何上选出恰好 n_expected 个官方弯锚点（采样点下标）。
 
@@ -222,7 +237,7 @@ def select_anchors(rt: RealTrack, n_expected: int) -> list[int]:
     cands = dedup
 
     def try_fill(sep: float) -> list[int]:
-        order = sorted(cands, key=lambda i: -rt.turn_at(i))
+        order = sorted(cands, key=lambda i: _turn_key(i, rt.turn_at(i)))
         picked: list[int] = []
         for i in order:
             if len(picked) >= n_expected:
@@ -246,7 +261,7 @@ def select_anchors(rt: RealTrack, n_expected: int) -> list[int]:
 
     def strongest_in(r: dict) -> int:
         members = [p for p in picked if r["a"] <= p <= r["b"]]
-        return max(members, key=lambda i: rt.turn_at(i))
+        return min(members, key=lambda i: _turn_key(i, rt.turn_at(i)))
 
     while len(picked) > n_expected:
         droppable = []
@@ -266,7 +281,8 @@ def select_anchors(rt: RealTrack, n_expected: int) -> list[int]:
             ]
         if not droppable:
             break
-        victim = min(droppable, key=lambda i: rt.turn_at(i))
+        # _turn_key 升序 = 强度降序，故取 max 才是「最弱」（并列时删下标靠后者）
+        victim = max(droppable, key=lambda i: _turn_key(i, rt.turn_at(i)))
         picked.remove(victim)
 
     # 覆盖门：>=60° 的段必须有锚点，没有就强制补段内 argmax
@@ -275,9 +291,13 @@ def select_anchors(rt: RealTrack, n_expected: int) -> list[int]:
             continue
         if not region_deg_covered(r):
             if len(picked) >= n_expected:
-                weak = min(picked, key=lambda i: rt.turn_at(i))
+                # 同理取 max 才是「最弱」（_turn_key 升序 = 强度降序）
+                weak = max(picked, key=lambda i: _turn_key(i, rt.turn_at(i)))
                 picked.remove(weak)
-            arg = max(range(r["a"], r["b"] + 1), key=lambda i: rt.rate[i])
+            arg = max(
+                range(r["a"], r["b"] + 1),
+                key=lambda i: (round(rt.rate[i], 5), -i),
+            )
             picked.append(arg)
 
     if len(picked) != n_expected:

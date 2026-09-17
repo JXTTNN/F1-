@@ -18,8 +18,8 @@
   <text x="738.22" y="165.21" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">2</text>
   <circle cx="760.00" cy="192.84" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
   <text x="760.00" y="183.84" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">3</text>
-  <circle cx="599.63" cy="494.14" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
-  <text x="599.63" y="485.14" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">4</text>
+  <circle cx="599.86" cy="491.05" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
+  <text x="599.86" y="482.05" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">4</text>
   <circle cx="626.13" cy="520.34" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
   <text x="626.13" y="511.34" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">5</text>
   <circle cx="571.29" cy="557.32" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
@@ -38,8 +38,8 @@
   <text x="421.70" y="289.26" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">12</text>
   <circle cx="409.39" cy="264.97" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
   <text x="409.39" y="255.97" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">13</text>
-  <circle cx="135.56" cy="183.42" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
-  <text x="135.56" y="174.42" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">14</text>
+  <circle cx="136.99" cy="186.17" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
+  <text x="136.99" y="177.17" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">14</text>
   <circle cx="119.57" cy="99.30" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
   <text x="119.57" y="90.30" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">15</text>
   <circle cx="100.94" cy="116.03" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>

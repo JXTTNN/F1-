@@ -24,8 +24,8 @@
   <text x="201.02" y="275.40" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">5</text>
   <circle cx="219.69" cy="297.55" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
   <text x="219.69" y="288.55" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">6</text>
-  <circle cx="618.95" cy="463.21" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
-  <text x="618.95" y="454.21" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">7</text>
+  <circle cx="626.53" cy="460.57" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
+  <text x="626.53" y="451.57" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">7</text>
   <circle cx="500.04" cy="416.95" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
   <text x="500.04" y="407.95" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">8</text>
   <circle cx="622.77" cy="349.13" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
@@ -34,11 +34,11 @@
   <text x="612.50" y="304.47" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">10</text>
   <circle cx="283.86" cy="368.94" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
   <text x="283.86" y="359.94" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">11</text>
-  <circle cx="257.10" cy="343.44" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
-  <text x="257.10" y="334.44" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">12</text>
+  <circle cx="261.36" cy="344.22" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
+  <text x="261.36" y="335.22" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">12</text>
   <circle cx="234.23" cy="354.19" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
   <text x="234.23" y="345.19" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">13</text>
-  <circle cx="114.24" cy="533.08" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
-  <text x="114.24" y="524.08" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">14</text>
+  <circle cx="119.63" cy="538.35" r="6" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>
+  <text x="119.63" y="529.35" text-anchor="middle" fill="#9494a8" font-size="9" font-family="monospace">14</text>
   <text x="400" y="588" text-anchor="middle" fill="#5c5c70" font-size="11" font-family="monospace" letter-spacing="2">ZANDVOORT</text>
 </svg>
