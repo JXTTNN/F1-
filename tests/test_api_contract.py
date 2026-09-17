@@ -694,3 +694,127 @@ class TestDomIdConsistency:
             "app.js 引用了 index.html 中不存在的元素 id（点击将无反应）："
             + ", ".join(missing)
         )
+
+
+# --------------------------------------------------------------------------- #
+# 录制训练样本导出（系统内导出，替代独立桌面接收器）
+# --------------------------------------------------------------------------- #
+def _hdr(pid: int) -> bytes:
+    import struct
+
+    from setup_tuner.telemetry.packets import HEADER_FORMAT
+
+    return struct.pack(
+        HEADER_FORMAT, 2026, 26, 1, 0, 1, pid,
+        0x1234_5678_9ABC_DEF0, 1.0, 1, 1, 0, 255,
+    )
+
+
+def _session_pkt(track_id: int = 3) -> bytes:
+    import struct
+
+    return (
+        _hdr(1)
+        + struct.pack(
+            "<BbbBHBbBHHBBBBBB",
+            0, 25, 22, 58, 5807, 0, track_id, 1, 1800, 3600, 60, 0, 0, 0, 0, 21,
+        )
+        + b"".join(struct.pack("<fb", 0.0, 0) for _ in range(21))
+        + struct.pack("<BBB", 0, 0, 0)
+    )
+
+
+def _lap_pkt(lap_num: int, last_ms: int = 0, invalid: int = 0) -> bytes:
+    import struct
+
+    from setup_tuner.telemetry.packets import _LAP_PER_STRUCT
+
+    body = bytearray(_LAP_PER_STRUCT.size)
+    struct.pack_into("<I", body, 0, last_ms)
+    body[33] = lap_num
+    body[37] = invalid
+    return _hdr(2) + bytes(body)
+
+
+def _setup_pkt(brake_bias: int = 55) -> bytes:
+    from setup_tuner.telemetry.packets import _SETUP_PER_STRUCT
+
+    body = bytearray(_SETUP_PER_STRUCT.size)
+    body[27] = brake_bias
+    return _hdr(5) + bytes(body)
+
+
+def _tele_pkt(speed: int = 180) -> bytes:
+    import struct
+
+    body = bytearray(59)
+    struct.pack_into("<H", body, 0, speed)
+    return _hdr(6) + bytes(body)
+
+
+def _make_recording(rec_dir: Path) -> str:
+    """在 rec_dir 下录一段两圈的合成遥测，返回 session_id。"""
+    from setup_tuner.telemetry.recorder import TelemetryRecorder
+
+    recorder = TelemetryRecorder(str(rec_dir))
+    recorder.start()
+    raws = [
+        _session_pkt(track_id=3),
+        _setup_pkt(brake_bias=55),
+        _lap_pkt(1),
+        _tele_pkt(180), _tele_pkt(250),
+        _lap_pkt(1),                     # 同圈：不固化
+        _lap_pkt(2, last_ms=91_234),     # 圈号变化 → 固化圈 1
+        _tele_pkt(200),
+        _lap_pkt(3, last_ms=88_500),     # 固化圈 2
+    ]
+    for raw in raws:
+        recorder.on_raw_packet(raw, None)
+    return recorder.stop()["session_id"]
+
+
+class TestRecordingTrainingExport:
+    """``POST /telemetry/recordings/{id}/export`` —— 系统内导出逐圈训练样本。"""
+
+    def test_export_produces_samples(self, tmp_path: Path) -> None:
+        import json
+
+        data_dir = tmp_path / "data"
+        session_id = _make_recording(data_dir / "recordings")
+
+        app = _isolated_app(tmp_path)  # 同一 data_dir 布局，且隔离环境
+        with TestClient(app) as c:
+            r = c.post(f"/api/v1/telemetry/recordings/{session_id}/export")
+
+        assert r.status_code == 200, r.text
+        d = r.json()["data"]
+        assert d["laps"] == 2, d
+        assert d["packets"] == 9
+        assert d["parse_errors"] == 0
+
+        out = Path(d["out_path"])
+        assert out.exists()
+        rows = [json.loads(line) for line in out.read_text("utf-8").splitlines()]
+        assert len(rows) == 2
+
+        lap1 = rows[0]
+        assert lap1["track_id"] == 3
+        assert lap1["lap_number"] == 1
+        assert lap1["lap_time_ms"] == 91_234
+        assert lap1["setup"]["m_brakeBias"] == 55
+        assert isinstance(lap1["style"], list) and lap1["style"]
+
+    def test_export_unknown_session_404(self, tmp_path: Path) -> None:
+        app = _isolated_app(tmp_path)
+        with TestClient(app) as c:
+            r = c.post("/api/v1/telemetry/recordings/__nope__/export")
+        assert r.status_code == 404
+        assert r.json()["code"] == 4044
+
+    def test_export_rejects_path_traversal(self, tmp_path: Path) -> None:
+        """负向：含 ``..`` 的会话 ID 必须 400，不能拼出目录外的路径。"""
+        app = _isolated_app(tmp_path)
+        with TestClient(app) as c:
+            r = c.post("/api/v1/telemetry/recordings/..foo/export")
+        assert r.status_code == 400
+        assert r.json()["code"] == 4004

@@ -1383,6 +1383,55 @@ async def get_recording_detail(
     return ok(data=data.model_dump())
 
 
+@router.post("/telemetry/recordings/{session_id}/export")
+def export_recording_training_samples(
+    session_id: str, request: Request,
+) -> dict[str, Any]:
+    """把某个录制会话导出为逐圈训练样本（JSONL）。
+
+    产物写在录制目录下 ``<session_id>_laps.jsonl``，每行一圈样本：
+    赛道 ID / 圈号 / 圈时 / 有效性 / 调教 22 项 / 驾驶风格 / 圈级聚合。
+
+    同步端点（``def``）——FastAPI 会自动放线程池执行，重放解析不阻塞事件循环。
+    """
+    # 路径穿越防护：会话 ID 只能是文件名，不得含分隔符或 ..
+    if not session_id or "/" in session_id or "\\" in session_id or ".." in session_id:
+        raise fail(message=f"非法的会话 ID：{session_id!r}", code=4004, http_status=400)
+
+    recorder = _get_or_create_recorder(request)
+    detail = recorder.get_recording_detail(session_id)
+    if detail is None or not detail.get("f1rec_path"):
+        raise fail(
+            message=f"录制会话 {session_id} 不存在",
+            code=4044,
+            http_status=404,
+        )
+
+    from setup_tuner.telemetry.training_export import TrainingExporter
+
+    f1rec = Path(str(detail["f1rec_path"]))
+    out_path = f1rec.with_name(f"{session_id}_laps.jsonl")
+    try:
+        stats = TrainingExporter().export(f1rec, out_path)
+    except Exception as exc:  # noqa: BLE001 —— 导出失败按 500 返回，附原因
+        raise fail(
+            message=f"导出训练样本失败：{exc}",
+            code=5002,
+            http_status=500,
+        ) from exc
+
+    return ok(
+        data={
+            "session_id": session_id,
+            "out_path": str(out_path),
+            "laps": stats["laps"],
+            "packets": stats["packets"],
+            "parse_errors": stats["parse_errors"],
+        },
+        message=f"已导出 {stats['laps']} 圈训练样本",
+    )
+
+
 # =========================================================================== #
 # 遥测回放端点
 # =========================================================================== #

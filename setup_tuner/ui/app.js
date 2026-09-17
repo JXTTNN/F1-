@@ -961,6 +961,37 @@
     if (dom.recError) dom.recError.textContent = msg || "";
   }
 
+  /** 把某个录制会话导出为逐圈训练样本。
+   *  产物为录制目录下的 `<session>_laps.jsonl`，每行一圈样本
+   *  （赛道 ID / 圈时 / 有效性 / 调教 22 项 / 驾驶风格 / 圈级聚合）。
+   *  @param {string} sessionId
+   *  @param {HTMLButtonElement} btn
+   *  @returns {Promise<void>}
+   */
+  async function exportTrainingSamples(sessionId, btn) {
+    if (!sessionId) return;
+    const oldText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = "导出中…";
+    setRecError("");
+    try {
+      const d = await fetchJSON(
+        `/telemetry/recordings/${encodeURIComponent(sessionId)}/export`,
+        { method: "POST" },
+      );
+      showToast(
+        `已导出 ${d.laps || 0} 圈训练样本（跳过坏包 ${d.parse_errors || 0}）：${d.out_path || ""}`,
+        "success",
+      );
+    } catch (e) {
+      setRecError("导出训练样本失败：" + e.message);
+      showToast("导出训练样本失败：" + e.message, "error");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = oldText;
+    }
+  }
+
   /** 加载并渲染录制会话列表。
    *  @returns {Promise<void>}
    */
@@ -1062,8 +1093,16 @@
       btnReplay.setAttribute("aria-label", `回放会话 ${it.session_id}`);
       btnReplay.addEventListener("click", () => startReplay(it.session_id, btnReplay));
 
+      const btnExport = document.createElement("button");
+      btnExport.className = "btn btn-ghost btn-sm";
+      btnExport.type = "button";
+      btnExport.textContent = "导出训练";
+      btnExport.setAttribute("aria-label", `把会话 ${it.session_id} 导出为逐圈训练样本`);
+      btnExport.addEventListener("click", () => exportTrainingSamples(it.session_id, btnExport));
+
       actions.appendChild(btnDetail);
       actions.appendChild(btnReplay);
+      actions.appendChild(btnExport);
       line.appendChild(meta);
       line.appendChild(actions);
       row.appendChild(line);

@@ -181,7 +181,8 @@ class TestUnit:
         """load_config 无 .env 文件返回全缺省值。"""
         # tmp_path 下无 .env
         config = load_config(env_path=tmp_path / "nonexistent.env")
-        assert config.udp_host == "127.0.0.1"
+        # 默认绑所有网卡以兼容 F1 游戏广播模式（2026-09-17）
+        assert config.udp_host == "0.0.0.0"
         assert config.udp_port == 20777
         assert config.api_host == "127.0.0.1"
         assert config.api_port == 8000

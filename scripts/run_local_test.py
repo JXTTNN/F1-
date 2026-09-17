@@ -50,7 +50,7 @@ def main() -> int:
         check("B2 health 200", r.status_code == 200)
         check("B3 status=ok", d.get("status") == "ok", f"status={d.get('status')}")
         check("B4 telemetry_connected字段", "telemetry_connected" in d)
-        check("B5 udp_host=127.0.0.1", d.get("udp_host") == "127.0.0.1")
+        check("B5 udp_host=0.0.0.0", d.get("udp_host") == "0.0.0.0")
         check("B6 udp_port=20777", d.get("udp_port") == 20777)
         check("B7 current_track_id=None", d.get("current_track_id") is None)
         check("B8 code=0", body.get("code") == 0)
