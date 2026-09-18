@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import statistics
 import sys
 from pathlib import Path
@@ -74,14 +75,19 @@ def _lap_meta(laptimes: dict[str, Any], driver: str, lap: int) -> dict[str, Any]
     """从 session_laptimes 列式结构取某车某圈的官方圈速/配方/天气元数据。"""
     drv, laps = laptimes.get("drv") or [], laptimes.get("lap") or []
     idx = next(
-        (i for i, (d, n) in enumerate(zip(drv, laps)) if d == driver and n == lap),
+        (i for i, (d, n) in enumerate(zip(drv, laps, strict=False))
+         if d == driver and n == lap),
         None,
     )
     if idx is None:
         return {}
     def col(name: str) -> Any:
         v = laptimes.get(name)
-        return v[idx] if isinstance(v, list) and idx < len(v) else None
+        raw = v[idx] if isinstance(v, list) and idx < len(v) else None
+        # 该数据源用字符串 'None' 表示缺失（未完成圈/无数据），统一转 None
+        if isinstance(raw, str):
+            return None if raw.strip().lower() in ("none", "") else raw
+        return raw
     return {
         "lap_time_s": col("time"),
         "compound": col("compound"),
@@ -151,6 +157,10 @@ def build_external_reference(
             continue
         tel = json.loads(path.read_text(encoding="utf-8"))
         feat = _tel_features(tel)
+        # 圈速必须是数值（字符串 'None'/异常值一律剔除，避免训练标签被污染）
+        if not isinstance(meta.get("lap_time_s"), (int, float)):
+            stats["skipped"].append(f"{race}/{session}/{driver}/{lap}: 圈速非数值")
+            continue
         row = {
             "race": race, "session": session, "driver": driver, "lap": lap,
             "source_year": 2026, **meta, **feat,
@@ -167,6 +177,32 @@ def build_external_reference(
             "median_lap_s": round(statistics.median(times), 3) if times else None,
         }
     return per_track, stats
+
+
+#: 外部 2026 专业基准特征列（并入训练特征向量；无外部数据时补 0）
+EXT_FEATURE_KEYS: tuple[str, ...] = (
+    "ext_best_lap_s", "ext_median_lap_s", "ext_n_laps_log",
+    "ext_median_speed_max", "ext_median_throttle_full_pct",
+    "ext_median_brake_pct", "ext_median_drs_open_pct",
+    "ext_median_max_lateral_g",
+)
+
+
+def _flatten_ext(prior: dict[str, Any] | None) -> dict[str, float]:
+    """外部基准画像 → 数值特征列（无外部数据时全 0，训练侧可据 has_external_ref 区分）。"""
+    if not prior:
+        return dict.fromkeys(EXT_FEATURE_KEYS, 0.0)
+    n = prior.get("n_laps") or 0
+    return {
+        "ext_best_lap_s": float(prior.get("best_lap_s") or 0.0),
+        "ext_median_lap_s": float(prior.get("median_lap_s") or 0.0),
+        "ext_n_laps_log": round(math.log1p(n), 4),
+        "ext_median_speed_max": float(prior.get("median_speed_max") or 0.0),
+        "ext_median_throttle_full_pct": float(prior.get("median_throttle_full_pct") or 0.0),
+        "ext_median_brake_pct": float(prior.get("median_brake_pct") or 0.0),
+        "ext_median_drs_open_pct": float(prior.get("median_drs_open_pct") or 0.0),
+        "ext_median_max_lateral_g": float(prior.get("median_max_lateral_g") or 0.0),
+    }
 
 
 def _track_prior(rows: list[dict[str, Any]]) -> dict[str, Any]:
@@ -214,6 +250,7 @@ def main(argv: list[str] | None = None) -> int:
     udp_to_short = {t.udp_track_id: t.track_id for t in ALL_TRACKS}
 
     merged: list[dict[str, Any]] = []
+    training_rows: list[dict[str, Any]] = []
     covered = 0
     for r in rows:
         meta = r.get("meta") or {}
@@ -232,6 +269,15 @@ def main(argv: list[str] | None = None) -> int:
             "ext_track_ref": prior,
             "features": r.get("features"),
             "target": r.get("target"),
+        })
+        # 训练用行：本地 29 维特征 + 外部 2026 专业基准特征（缺失补 0 并标记）
+        feats = dict(r.get("features") or {})
+        feats.update(_flatten_ext(prior))
+        training_rows.append({
+            "track_id": short,
+            "target": r.get("target"),
+            "has_external_ref": prior is not None,
+            "features": feats,
         })
 
     # 外部基准本身也作为独立行（赛道先验样本，供画像层使用）
@@ -258,6 +304,22 @@ def main(argv: list[str] | None = None) -> int:
         for row in merged:
             f.write(json.dumps(row, ensure_ascii=False) + "\n")
     print(f"写出: {out}（{len(merged)} 行，全部 2026）")
+
+    # 训练用矩阵：本地特征 + 外部 2026 基准特征（直接喂训练脚本）
+    base_keys = list((rows[0].get("features") or {}).keys()) if rows else []
+    ds_out = out.with_name("merged_dataset.json")
+    dataset = {
+        "schema": "f1opt-merged-training/1",
+        "feature_keys": base_keys + list(EXT_FEATURE_KEYS),
+        "ext_feature_keys": list(EXT_FEATURE_KEYS),
+        "external_source": "TracingInsights 2026 (only 2026, year-checked)",
+        "count": len(training_rows),
+        "rows": training_rows,
+    }
+    ds_out.write_text(json.dumps(dataset, ensure_ascii=False, indent=2),
+                      encoding="utf-8")
+    with_ext = sum(1 for r in training_rows if r["has_external_ref"])
+    print(f"写出: {ds_out}（{len(training_rows)} 行，其中 {with_ext} 行带外部 2026 基准）")
     return 0
 
 

@@ -21,7 +21,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import statistics
 import sys
 from collections import defaultdict
 from pathlib import Path
@@ -59,6 +58,27 @@ def _load_recording_samples() -> list[dict[str, Any]]:
 def _track_names() -> dict[int, str]:
     from setup_tuner.domain.track import ALL_TRACKS
     return {t.udp_track_id: t.track_id for t in ALL_TRACKS}
+
+
+def _external_coverage() -> dict[str, int]:
+    """外部 2026 专业遥测的每赛道逐圈文件数（.ref/tracing_2026）。"""
+    from setup_tuner.domain.track import ALL_TRACKS
+
+    race_to_track = {t.official_name: t.track_id for t in ALL_TRACKS}
+    cache = ROOT / ".ref" / "tracing_2026"
+    out: dict[str, int] = {}
+    if not cache.exists():
+        return out
+    for race_dir in cache.iterdir():
+        if not race_dir.is_dir():
+            continue
+        tid = race_to_track.get(race_dir.name)
+        if tid is None:
+            continue
+        n = sum(1 for _ in race_dir.glob("*/*/*_tel.json"))
+        if n:
+            out[tid] = n
+    return out
 
 
 def analyze() -> dict[str, Any]:
@@ -154,6 +174,7 @@ def analyze() -> dict[str, Any]:
             })
 
     tasks.sort(key=lambda t: (-t["need_laps"], -len(t["reasons"])))
+    external = _external_coverage()
     return {
         "summary": {
             "tracks_covered": len(by_track),
@@ -163,7 +184,10 @@ def analyze() -> dict[str, Any]:
             "wet_laps": wet_laps,
             "target_laps_t2": 8 * TARGET_LAPS_PER_TRACK,
             "external_2026_cache": str(ROOT / ".ref" / "tracing_2026"),
+            "external_tracks": len(external),
+            "external_laps": sum(external.values()),
         },
+        "external_by_track": external,
         "by_track": {
             names.get(tid, str(tid)): {
                 "laps": g["laps"],
@@ -189,17 +213,20 @@ def _render_markdown(rep: dict[str, Any]) -> str:
         f"- 有效圈：**{s['total_valid_laps']}**（T2 泛化目标 ≥ {s['target_laps_t2']} 圈）",
         f"- 不同 setup：**{s['unique_setups']}**（关键短板：模型靠它学「改动方向」）",
         f"- 湿地圈：**{s['wet_laps']}**",
+        f"- 外部 2026 专业基准：**{s.get('external_tracks', 0)}** 条赛道 / "
+        f"**{s.get('external_laps', 0)}** 圈（TracingInsights 2026，年检通过）",
         "",
         "## 各赛道明细",
         "",
-        "| 赛道 | 圈数 | setup 数 | 配方 | 天气 | 损伤样本 | 主动空力 | 超车模式 |",
-        "|---|---|---|---|---|---|---|---|",
+        "| 赛道 | 圈数 | setup 数 | 配方 | 天气 | 损伤样本 | 主动空力 | 超车模式 | 外部 2026 |",
+        "|---|---|---|---|---|---|---|---|---|",
     ]
+    ext = rep.get("external_by_track", {})
     for name, g in rep["by_track"].items():
         lines.append(
             f"| {name} | {g['laps']} | {g['setups']} | {','.join(g['compounds']) or '-'} "
             f"| {','.join(g['weather']) or '-'} | {g['damage_laps']} | {g['aero_laps']} "
-            f"| {g['overtake_laps']} |"
+            f"| {g['overtake_laps']} | {ext.get(name, 0)} |"
         )
     lines += ["", "## 下一步采集清单（按缺口优先级）", ""]
     for i, t in enumerate(rep["tasks"][:10], 1):
