@@ -93,6 +93,12 @@ def _is_wet_weather(telemetry: dict[str, Any] | None) -> bool:
     接受 ``None``（"没有遥测"是合法输入）：早期直接 ``telemetry.get(...)``，
     调用方一旦传 None 就 ``AttributeError``；引擎整体对缺失遥测是宽容的，
     这里不得例外。
+
+    **m_weather 阈值修正（task-82）**：官方规范为 6 档
+    ``0=晴 1=轻云 2=阴 3=小雨 4=大雨 5=暴雨``，只有 **≥3** 才是湿地。
+    此前误按 4 档枚举写成 ``weather >= 1``，把轻云/阴天干地判成湿地，
+    导致所有参数被乘湿地保守系数——实际数据可证：车手在 ``m_weather=1``
+    的 Hungaroring 用的是 C5/C4 干胎。
     """
     if not telemetry:
         return False
@@ -100,8 +106,13 @@ def _is_wet_weather(telemetry: dict[str, Any] | None) -> bool:
     if isinstance(weather, str):
         return weather.lower() in {"wet", "rainy", "rain", "drizzle"}
     if isinstance(weather, (int, float)):
-        # F1 UDP m_weather: 0=clear, 1=4light rain, 2=heavy rain, 3=storm
-        return weather >= 1
+        # 官方 6 档枚举：≥3（小雨/大雨/暴雨）才是湿地。
+        # 注意 0 会被上面的 `or` 丢掉（`0 or ...` 为假值），因此这里
+        # 只处理 1-5：1/2 非湿，3/4/5 湿。
+        # 延迟导入：保持引擎对遥测层的单向依赖，避免包初始化顺序问题。
+        from setup_tuner.telemetry.packets import WET_WEATHER_MIN
+
+        return int(weather) >= WET_WEATHER_MIN
     return False
 
 

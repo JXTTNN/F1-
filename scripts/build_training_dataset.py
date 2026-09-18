@@ -34,11 +34,13 @@ if str(_PROJECT_ROOT) not in sys.path:
 from setup_tuner.domain.setup import ALL_SETUP_FIELDS  # noqa: E402
 from setup_tuner.domain.track import get_track_by_udp_id  # noqa: E402
 from setup_tuner.engine.holistic import track_demand  # noqa: E402
+from setup_tuner.telemetry.packets import (  # noqa: E402
+    is_wet_weather_code,
+    weather_label,
+)
 
 #: 归一化用：特征取值域（保证跨数据集一致）
 _COMPOUND_CLASS = {"soft": 0.0, "medium": 0.5, "hard": 1.0, "wet": 0.75}
-
-VALID_WEATHER = {0: 0.0, 1: 1.0}  # 0=dry 1=wet（F1 规范）
 
 
 def compound_class(code: int | None) -> str:
@@ -85,7 +87,9 @@ def build_row(sample: dict[str, Any]) -> dict[str, Any] | None:
     # ── 工况 ──
     cc = compound_class(agg.get("tyre_compound"))
     weather_raw = sample.get("weather")
-    weather = VALID_WEATHER.get(weather_raw, 0.0) if weather_raw is not None else 0.0
+    # 官方 6 档枚举：只有 ≥3（小雨/大雨/暴雨）才是湿地；
+    # 1=轻云 / 2=阴 仍是干地（此前误按 4 档把轻云当湿地）。
+    weather_wet = 1.0 if is_wet_weather_code(weather_raw) else 0.0
 
     # ── 路肩特征 ──
     kerb = agg.get("kerb_corners") or []
@@ -108,7 +112,13 @@ def build_row(sample: dict[str, Any]) -> dict[str, Any] | None:
         "tyre_class_medium": 1.0 if cc == "medium" else 0.0,
         "tyre_class_hard": 1.0 if cc == "hard" else 0.0,
         "tyre_class_wet": 1.0 if cc == "wet" else 0.0,
-        "weather_wet": weather,
+        "weather_wet": weather_wet,
+        # 原始档位也保留（0-5），让模型能区分轻云/阴/小雨/暴雨的强度
+        "weather_code": (
+            float(weather_raw)
+            if isinstance(weather_raw, int) and not isinstance(weather_raw, bool)
+            else -1.0
+        ),
         "track_temp": sample.get("track_temp"),
         "air_temp": sample.get("air_temp"),
         # 路肩
@@ -142,6 +152,9 @@ def build_row(sample: dict[str, Any]) -> dict[str, Any] | None:
             "lap_time_ms": int(lap_time),
             "tyre_class": cc,
             "tyre_compound_raw": agg.get("tyre_compound"),
+            "weather_code": weather_raw,
+            "weather_label": weather_label(weather_raw),
+            "weather_wet": bool(weather_wet),
         },
     }
 

@@ -63,6 +63,42 @@ class TestCompoundClass:
         assert compound_class(None) == "unknown"
 
 
+class TestWeatherMapping:
+    """官方 6 档枚举：只有 ≥3 是湿地（task-82 修正，附实测证据）。"""
+
+    def test_light_cloud_is_dry(self) -> None:
+        """weather=1（轻云）→ 非湿地。
+
+        实测证据：车手在 Hungaroring m_weather=1 时用的是 C5/C4 **干胎**；
+        此前误按 4 档枚举判为湿地，会污染训练样本工况标签。
+        """
+        row = build_row(_sample(weather=1))
+        assert row["features"]["weather_wet"] == 0.0
+        assert row["meta"]["weather_label"] == "轻云"
+
+    def test_overcast_is_dry(self) -> None:
+        assert build_row(_sample(weather=2))["features"]["weather_wet"] == 0.0
+
+    def test_storm_is_wet(self) -> None:
+        """weather=5（暴雨）→ 湿地（实测：Las Vegas m_weather=5 用雨胎）。"""
+        row = build_row(_sample(weather=5))
+        assert row["features"]["weather_wet"] == 1.0
+        assert row["meta"]["weather_label"] == "暴雨"
+
+    def test_rain_codes_are_wet(self) -> None:
+        for w in (3, 4):
+            assert build_row(_sample(weather=w))["features"]["weather_wet"] == 1.0
+
+    def test_raw_code_kept_as_feature(self) -> None:
+        """原始档位保留（0-5），让模型区分轻云/阴/小雨/暴雨强度。"""
+        assert build_row(_sample(weather=2))["features"]["weather_code"] == 2.0
+
+    def test_missing_weather_defaults_dry(self) -> None:
+        row = build_row(_sample(weather=None))
+        assert row["features"]["weather_wet"] == 0.0
+        assert row["features"]["weather_code"] == -1.0
+
+
 class TestBuildRow:
     def test_valid_row_has_universal_features(self) -> None:
         row = build_row(_sample())

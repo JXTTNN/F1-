@@ -548,8 +548,10 @@ class TestTelemetrySummaryFlow:
               → generate_suggestion(telemetry=summary)
         """
         # 构造 Session + LapData 两个包
+        # m_weather=3（小雨）才是湿地；旧按 4 档枚举误用 1（轻云=干地），
+        # 会让"天气是否被消费"的断言失去意义（task-82 修正）。
         session_data = _build_header(packet_id=1) + _build_session_body(
-            track_id=2, weather=1,  # 雨天
+            track_id=2, weather=3,  # 小雨（湿地）
         )
         lap_data = _build_header(packet_id=2) + _build_lap_data_body(
             last_lap_ms=95000,
@@ -569,7 +571,7 @@ class TestTelemetrySummaryFlow:
         # 提取遥测摘要
         from setup_tuner.report.builder import extract_telemetry_summary
         summary = extract_telemetry_summary(all_latest)
-        assert summary["weather"] == 1
+        assert summary["weather"] == 3
         assert summary["track_id_udp"] == 2
         assert summary["last_lap_time_ms"] == 95000
 

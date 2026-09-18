@@ -182,6 +182,51 @@ def _slice_player_car(
 # --------------------------------------------------------------------------- #
 # Packet 1 — Session（全局会话数据，非按车分组）
 # --------------------------------------------------------------------------- #
+# ── m_weather 官方枚举（Packet 1 / WeatherForecastSample 共用）─────────────
+# Source: EA F1 25 UDP Telemetry Specification, Packet 1 (Session)
+#   uint8 m_weather — 0 = clear, 1 = light cloud, 2 = overcast,
+#                     3 = light rain, 4 = heavy rain, 5 = storm
+# **只有 3/4/5 是湿地**（需中性胎/雨胎）；1 = 轻云、2 = 阴天仍属干地。
+# 此处曾把 weather >= 1 判为湿地，导致轻云干地被套上"湿地保守系数"。
+WEATHER_CLEAR = 0
+WEATHER_LIGHT_CLOUD = 1
+WEATHER_OVERCAST = 2
+WEATHER_LIGHT_RAIN = 3
+WEATHER_HEAVY_RAIN = 4
+WEATHER_STORM = 5
+#: 判为湿地的最小 m_weather 代码（官方：小雨及以上）。
+WET_WEATHER_MIN = WEATHER_LIGHT_RAIN
+#: m_weather 代码 → 中文名（未知代码回落为 ``未知(n)``）。
+WEATHER_NAMES: dict[int, str] = {
+    WEATHER_CLEAR: "晴",
+    WEATHER_LIGHT_CLOUD: "轻云",
+    WEATHER_OVERCAST: "阴",
+    WEATHER_LIGHT_RAIN: "小雨",
+    WEATHER_HEAVY_RAIN: "大雨",
+    WEATHER_STORM: "暴雨",
+}
+
+
+def weather_label(code: Any) -> str:
+    """m_weather 代码 → 中文名（非法值返回 ``未知``）。"""
+    if isinstance(code, bool) or not isinstance(code, int):
+        return "未知"
+    return WEATHER_NAMES.get(code, f"未知({code})")
+
+
+def is_wet_weather_code(code: Any) -> bool:
+    """m_weather 代码是否属于湿地（官方规范：**≥3** = 降雨/暴雨）。
+
+    1（轻云）与 2（阴天）**不是**湿地——这是被实际数据验证过的边界：
+    车手在 Hungaroring ``m_weather=1`` 时用的是 C5/C4 干胎。
+    """
+    return (
+        isinstance(code, int)
+        and not isinstance(code, bool)
+        and code >= WET_WEATHER_MIN
+    )
+
+
 # Source: EA F1 25 UDP Telemetry Specification, Packet 1 (Session)
 # 包体开头 16 字段（小端）：
 #   uint8  m_weather

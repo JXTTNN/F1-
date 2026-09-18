@@ -24,9 +24,11 @@ from setup_tuner.telemetry.packets import (
     SUPPORTED_PACKET_IDS,
     PacketHeader,
     PacketTooShortError,
+    is_wet_weather_code,
     packet_name,
     parse_header,
     parse_packet,
+    weather_label,
 )
 
 
@@ -64,6 +66,44 @@ def build_header(
         player_car_index,
         secondary_player,
     )
+
+
+# ===========================================================================
+# 0. m_weather 官方枚举（Packet 1）
+# ===========================================================================
+class TestWeatherEnum:
+    """官方 6 档枚举：0=晴 1=轻云 2=阴 3=小雨 4=大雨 5=暴雨；只有 ≥3 是湿地。
+
+    此边界曾被写错（按 4 档枚举用 ``>=1``），导致轻云/阴天**干地**被判定为
+    湿地并套上保守系数。实测证据：车手在 ``m_weather=1`` 的 Hungaroring
+    使用 C5/C4 干胎；``m_weather=5`` 的 Las Vegas 使用雨胎。
+    """
+
+    def test_light_cloud_and_overcast_are_dry(self) -> None:
+        assert is_wet_weather_code(0) is False
+        assert is_wet_weather_code(1) is False
+        assert is_wet_weather_code(2) is False
+
+    def test_rain_and_storm_are_wet(self) -> None:
+        assert is_wet_weather_code(3) is True
+        assert is_wet_weather_code(4) is True
+        assert is_wet_weather_code(5) is True
+
+    def test_invalid_codes_are_dry(self) -> None:
+        """非法值（None/字符串/布尔）一律不判湿，避免误触发保守系数。"""
+        assert is_wet_weather_code(None) is False
+        assert is_wet_weather_code("rain") is False
+        assert is_wet_weather_code(True) is False
+
+    def test_labels(self) -> None:
+        assert weather_label(0) == "晴"
+        assert weather_label(1) == "轻云"
+        assert weather_label(2) == "阴"
+        assert weather_label(3) == "小雨"
+        assert weather_label(4) == "大雨"
+        assert weather_label(5) == "暴雨"
+        assert weather_label(99) == "未知(99)"
+        assert weather_label(None) == "未知"
 
 
 # ===========================================================================

@@ -495,17 +495,29 @@ class TestTelemetryGain:
             assert max(diffs) > 1e-6, f"weather={wet_str!r} 未触发衰减"
 
     def test_wet_weather_numeric_m_weather(self, default_setup) -> None:
-        """m_weather >= 1（数值）触发湿地衰减。"""
+        """m_weather=3（小雨）触发湿地衰减（官方枚举 ≥3 才是湿地）。"""
         symptoms = [("understeer", 3)]
         r_dry = generate_suggestion(symptoms, default_setup, "t", None)
         r_wet = generate_suggestion(
-            symptoms, default_setup, "t", {"m_weather": 1}
+            symptoms, default_setup, "t", {"m_weather": 3}
         )
         diffs = [
             abs(r_dry["setup_delta"][p] - r_wet["setup_delta"][p])
             for p in PARAM_NAMES
         ]
-        assert max(diffs) > 1e-6, "m_weather=1 未触发衰减"
+        assert max(diffs) > 1e-6, "m_weather=3 未触发衰减"
+
+    def test_light_cloud_weather_is_dry(self, default_setup) -> None:
+        """m_weather=1（轻云）**干地**：与无遥测结果一致（回归防线）。
+
+        曾把 >=1 判为湿地 → 轻云干地被乘 0.7 保守系数，建议被无谓削弱。
+        """
+        symptoms = [("understeer", 3)]
+        r_none = generate_suggestion(symptoms, default_setup, "t", None)
+        r_cloud = generate_suggestion(
+            symptoms, default_setup, "t", {"m_weather": 1}
+        )
+        assert r_none["setup_delta"] == r_cloud["setup_delta"]
 
     def test_clear_weather_no_gain(self, default_setup) -> None:
         """晴天（m_weather=0）不衰减。"""

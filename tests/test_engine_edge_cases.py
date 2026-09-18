@@ -122,10 +122,23 @@ class TestTelemetryGain:
         assert all(v == 0.7 for v in gain.values())
 
     def test_wet_numeric_m_weather(self) -> None:
-        """m_weather 数字 >=1 → ×0.7。"""
-        for w in (1, 2, 3):
+        """m_weather >=3（小雨/大雨/暴雨）→ ×0.7。
+
+        官方 6 档枚举：0=晴 1=轻云 2=阴 3=小雨 4=大雨 5=暴雨。
+        此处曾误按 4 档写成 >=1，把轻云/阴天干地也套上湿地保守系数
+        （实测：车手在 m_weather=1 的 Hungaroring 用 C5/C4 干胎）。
+        """
+        for w in (3, 4, 5):
             gain = _derive_telemetry_gain({"m_weather": w})
             assert all(v == 0.7 for v in gain.values()), f"m_weather={w} 未生效"
+
+    def test_light_cloud_and_overcast_are_dry(self) -> None:
+        """m_weather=1（轻云）/2（阴）**不是**湿地 → ×1.0（回归防线）。"""
+        for w in (1, 2):
+            gain = _derive_telemetry_gain({"m_weather": w})
+            assert all(v == 1.0 for v in gain.values()), (
+                f"m_weather={w} 是干地（轻云/阴），不应触发湿地系数"
+            )
 
     def test_clear_numeric_m_weather(self) -> None:
         """m_weather=0 (clear) → ×1.0。"""
@@ -401,12 +414,12 @@ class TestValidateEngine:
         assert result["confidence"] == "high"
 
     def test_generate_suggestion_wet_telemetry(self, default_setup) -> None:
-        """湿地遥测 → delta 幅度减小。"""
+        """湿地遥测（m_weather=3 小雨）→ delta 幅度减小。"""
         result_dry = generate_suggestion(
             [("understeer", 3)], default_setup, "test", {"m_weather": 0},
         )
         result_wet = generate_suggestion(
-            [("understeer", 3)], default_setup, "test", {"m_weather": 1},
+            [("understeer", 3)], default_setup, "test", {"m_weather": 3},
         )
         # 湿地非零 delta 绝对值之和应小于晴天
         dry_sum = sum(abs(v) for v in result_dry["setup_delta"].values())
