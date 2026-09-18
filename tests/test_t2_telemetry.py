@@ -189,20 +189,25 @@ class TestPacketDispatch:
     """parse_packet 分发逻辑。"""
 
     def test_unknown_packet_id_returns_none(self) -> None:
-        """未知 packetId 应返回 None（跳过不崩溃）。"""
-        # 0 (Motion) 不在本版 6 类支持范围内
-        data = build_header(packet_id=0) + b"\x00" * 64
+        """未知 packetId 应返回 None（跳过不崩溃）。
+
+        2026 全量接入后仅剩 9 (LobbyInfo) / 14 (TimeTrial) 未解析。
+        """
+        # 9 (LobbyInfo) 不支持（单机竞速不发送）
+        data = build_header(packet_id=9) + b"\x00" * 64
         assert parse_packet(data) is None
-        # 3 (Event) 不支持
-        data = build_header(packet_id=3) + b"\x00" * 64
+        # 14 (TimeTrial) 不支持
+        data = build_header(packet_id=14) + b"\x00" * 64
         assert parse_packet(data) is None
         # 99 完全未知
         data = build_header(packet_id=99) + b"\x00" * 64
         assert parse_packet(data) is None
 
     def test_supported_packet_ids(self) -> None:
-        """SUPPORTED_PACKET_IDS 应为 {1,2,5,6,7,13}。"""
-        assert SUPPORTED_PACKET_IDS == frozenset({1, 2, 5, 6, 7, 13})
+        """SUPPORTED_PACKET_IDS 为 2026 全量接入后的 15 类包。"""
+        assert SUPPORTED_PACKET_IDS == frozenset({
+            0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 15, 16,
+        })
 
     def test_packet_name_known_and_unknown(self) -> None:
         """packet_name 已知返回名称，未知返回 Unknown(<id>)。"""

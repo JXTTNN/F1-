@@ -112,6 +112,8 @@ class TrainingExporter:
         style = StyleExtractor()
         current_setup: dict[str, Any] = {}
         session_uid: str | None = None
+        last_session_uid: str | None = None
+        player_car_index: int | None = None
         track_id: int | None = None
         kerb_wired: int | None = None
         session_weather: int | None = None
@@ -149,6 +151,20 @@ class TrainingExporter:
                         session_uid = str(header.session_uid)
                     pid = header.packet_id
 
+                    # 玩家车号：SessionHistory 按车发送，必须过滤（否则读到他车圈速）
+                    pci = getattr(header, "player_car_index", None)
+                    if (isinstance(pci, int) and not isinstance(pci, bool)
+                            and pci != player_car_index):
+                        player_car_index = pci
+                        lap_agg.set_player_car_index(pci)
+                    # 会话切换：整场会话级数据（官方逐圈历史）必须清空，否则串号
+                    uid_now = str(header.session_uid)
+                    if last_session_uid is not None and uid_now != last_session_uid:
+                        lap_agg.reset()
+                        lap_agg.set_player_car_index(player_car_index)
+                        kerb_wired = None
+                    last_session_uid = uid_now
+
                     if pid == 1 and "m_trackId" in parsed:
                         track_id = parsed["m_trackId"]
                         # 天气/温度：训练样本需要区分干/湿与温度工况（普世化特征）
@@ -175,7 +191,7 @@ class TrainingExporter:
                         if snap:
                             current_setup = snap
 
-                    # 逐圈聚合器只认 lap_data / telemetry / motion_ex / car_status
+                    # 逐圈聚合器：喂入全部与整圈统计相关的包
                     if pid == 2:
                         lap_agg.on_lap_data(parsed)
                         style.on_lap_data(parsed)
@@ -188,6 +204,15 @@ class TrainingExporter:
                         lap_agg.on_motion_ex(parsed)
                     elif pid == 7:
                         lap_agg.on_car_status(parsed)
+                    # task-82：新增包也进训练样本（损伤/G 值/2026 空力/官方圈有效位）
+                    elif pid == 0:
+                        lap_agg.on_motion(parsed)
+                    elif pid == 10:
+                        lap_agg.on_car_damage(parsed)
+                    elif pid == 11:
+                        lap_agg.on_session_history(parsed)
+                    elif pid == 16:
+                        lap_agg.on_car_telemetry_2(parsed)
 
                     completed = lap_agg.take_completed_lap()
                     if completed is not None:
@@ -201,11 +226,34 @@ class TrainingExporter:
                             "air_temp": session_air_temp,
                             "lap_number": completed.get("lap_number"),
                             "lap_time_ms": completed.get("lap_time_ms"),
-                            # 近似：取圈末最近一帧的当前圈无效标志
+                            # 圈有效性：**优先用官方 SessionHistory 的有效位**
+                            # （m_lapValidBitFlags，权威）；无该包时回落到
+                            # 圈末最近一帧的 m_currentLapInvalid（近似）。
                             "lap_valid": (
-                                last_seen_invalid == 0
-                                if last_seen_invalid is not None else None
+                                completed.get("official_lap_valid")
+                                if completed.get("official_lap_valid") is not None
+                                else (
+                                    last_seen_invalid == 0
+                                    if last_seen_invalid is not None else None
+                                )
                             ),
+                            "lap_valid_source": (
+                                "session_history"
+                                if completed.get("official_lap_valid") is not None
+                                else "lap_data_approx"
+                            ),
+                            "official_lap": completed.get("official_lap"),
+                            # 损伤/胎耗（训练数据混淆控制：损伤拖慢圈速）
+                            "damage_severe": completed.get("damage_severe"),
+                            "damage_max": completed.get("damage_max"),
+                            "tyres_wear": completed.get("tyres_wear"),
+                            # G 值极值（极限抓地/制动能力）
+                            "max_g_lateral": completed.get("max_g_lateral"),
+                            "max_g_longitudinal": completed.get("max_g_longitudinal"),
+                            "min_g_longitudinal": completed.get("min_g_longitudinal"),
+                            # 2026 主动空力与超车模式
+                            "aero_straight_ratio": completed.get("aero_straight_ratio"),
+                            "overtake_active_ratio": completed.get("overtake_active_ratio"),
                             "setup": dict(current_setup),
                             "style": style_vec,
                             "lap_agg": completed,

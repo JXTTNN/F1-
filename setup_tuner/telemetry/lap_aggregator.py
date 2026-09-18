@@ -118,6 +118,12 @@ class LapAggregator:
         # 赛道上下文：跨圈保持（_reset_acc 不重置它），由 set_track_context 注入
         self._track_length: float | None = None
         self._corner_locator: Any = None
+        # 官方逐圈历史（Packet 11）与轮胎分段：**整场会话**数据，跨圈保持
+        self._history_laps: dict[int, dict[str, Any]] = {}
+        self._history_stints: list[dict[str, Any]] = []
+        # 玩家车号：SessionHistory 是**按车发送**的（实测同一会话含多车记录），
+        # 必须按玩家车号过滤，否则会把别车的圈速当成自己的。
+        self._player_car_index: int | None = None
         self._reset_acc()
         self._lap_time_ms: int | None = None
         self._lap_number: int | None = None
@@ -162,6 +168,20 @@ class LapAggregator:
         self._corner_rough_n: dict[int, int] = {}
         self._corner_rough_left: dict[int, float] = {}
         self._corner_rough_right: dict[int, float] = {}
+        # task-82 新增包累积量：损伤 / G 值 / 2026 主动空力与超车模式 / 官方圈有效位
+        self._damage_frames = 0
+        self._tyres_wear: list[float] | None = None
+        self._damage_severe = False
+        self._damage_max = 0
+        self._floor_damage = 0
+        self._wing_damage_max = 0
+        self._motion_n = 0
+        self._g_lat_max = 0.0
+        self._g_long_max = 0.0
+        self._g_long_min = 0.0
+        self._aero_n = 0
+        self._aero_straight_frames = 0
+        self._overtake_active_frames = 0
         # Packet 7 累积量：轮胎配方/胎龄/燃油/ERS/刹车平衡
         # 这些是"整圈不变或单调变化"的状态量，取最后一次有效值即可。
         self._status_frames = 0
@@ -184,6 +204,24 @@ class LapAggregator:
         if isinstance(value, bool) or not isinstance(value, (int, float)):
             return None
         return float(value)
+
+    def _official_matches_lap(self, official: dict[str, Any]) -> bool:
+        """官方 SessionHistory 圈记录是否与实测圈速自洽（调用方须持锁）。
+
+        **为什么需要这道闸**：SessionHistory 是**按车发送**的（游戏为每辆车都发），
+        且实测发现玩家车号与会话中"带圈数据的车号"并不总是一致
+        （某会话玩家车号 21、而带圈数据的是 20）。若仅按圈号取值，会把
+        别车的圈速/有效性当成自己的 → 训练数据被错标。
+
+        判据：官方圈速与实测圈速之差 ≤ max(0.5s, 实测的 2%)。
+        不满足则不采纳（回落到 LapData 近似标注）——**宁缺勿错**。
+        """
+        official_ms = official.get("lap_time_ms")
+        measured = self._lap_time_ms
+        if not isinstance(official_ms, int) or not isinstance(measured, int):
+            return False
+        tolerance = max(500, int(measured * 0.02))
+        return abs(official_ms - measured) <= tolerance
 
     def _kerb_corners_locked(self) -> list[dict[str, Any]]:
         """挑出「压路肩」的弯（调用方须持锁）。
@@ -270,6 +308,35 @@ class LapAggregator:
             kerb = self._kerb_corners_locked()
             if kerb:
                 snapshot["kerb_corners"] = kerb
+        # task-82：新增包派生量（损伤 / G 值 / 2026 主被动空力与超车模式）
+        if self._damage_frames:
+            snapshot["car_damage_frames"] = self._damage_frames
+            if self._tyres_wear is not None:
+                snapshot["tyres_wear"] = [round(v, 2) for v in self._tyres_wear]
+            snapshot["damage_severe"] = self._damage_severe
+            snapshot["damage_max"] = self._damage_max
+            snapshot["floor_damage"] = self._floor_damage
+            snapshot["wing_damage_max"] = self._wing_damage_max
+        if self._motion_n:
+            snapshot["motion_frames"] = self._motion_n
+            snapshot["max_g_lateral"] = round(self._g_lat_max, 3)
+            snapshot["max_g_longitudinal"] = round(self._g_long_max, 3)
+            snapshot["min_g_longitudinal"] = round(self._g_long_min, 3)
+        if self._aero_n:
+            snapshot["aero_frames"] = self._aero_n
+            snapshot["aero_straight_ratio"] = round(
+                self._aero_straight_frames / self._aero_n, 4,
+            )
+            snapshot["overtake_active_ratio"] = round(
+                self._overtake_active_frames / self._aero_n, 4,
+            )
+        # 官方逐圈用时/扇区/有效位（SessionHistory，整场累积，按当前圈号取）
+        if self._lap_number is not None:
+            official = self._history_laps.get(self._lap_number)
+            if official is not None:
+                # 优先采纳官方数据；若实测与官方不一致，后续可在上层做校验
+                snapshot["official_lap"] = dict(official)
+                snapshot["official_lap_valid"] = official.get("lap_valid")
         # Packet 7：车辆状态（轮胎配方/胎龄/燃油/ERS/刹车平衡）
         if self._status_frames:
             snapshot["car_status_frames"] = self._status_frames
@@ -324,6 +391,15 @@ class LapAggregator:
         with self._lock:
             self._track_length = track_length
             self._corner_locator = corner_locator
+
+    def set_player_car_index(self, player_car_index: int | None) -> None:
+        """设置玩家车号（用于过滤按车发送的包，如 SessionHistory）。
+
+        SessionHistory 每个包只含**一辆车**的逐圈历史，且游戏会对多辆车发送；
+        不设车号时不采纳该包数据（宁可缺数据，不可错数据）。
+        """
+        with self._lock:
+            self._player_car_index = player_car_index
 
     # ------------------------------------------------------------------ #
     # 输入
@@ -493,6 +569,110 @@ class LapAggregator:
                             self._corner_rough_right.get(corner, 0.0) + rough_right
                         )
 
+    def on_car_damage(self, frame: dict[str, Any]) -> None:
+        """接收 Packet 10 (CarDamage)：累积损伤/胎耗。
+
+        **训练数据质量的关键**：损伤会拖慢圈速。此前未解析 →
+        样本里"圈速慢"无法区分"调教不好"与"车撞坏了"。整圈取最坏值
+        （损伤不可逆，取极值才有意义）。
+        """
+        wear = frame.get("m_tyresWear")
+        with self._lock:
+            self._damage_frames += 1
+            if isinstance(wear, list) and len(wear) >= 4:
+                vals = [float(v) for v in wear[:4]]
+                if self._tyres_wear is None:
+                    self._tyres_wear = vals
+                else:
+                    self._tyres_wear = [
+                        max(a, b)
+                        for a, b in zip(self._tyres_wear, vals, strict=True)
+                    ]
+            floor = frame.get("m_floorDamage")
+            wing = max(
+                frame.get("m_frontLeftWingDamage") or 0,
+                frame.get("m_frontRightWingDamage") or 0,
+            )
+            if isinstance(floor, int):
+                self._floor_damage = max(self._floor_damage, floor)
+            self._wing_damage_max = max(self._wing_damage_max, int(wing))
+            if frame.get("damage_severe"):
+                self._damage_severe = True
+            worst = max(
+                self._wing_damage_max, self._floor_damage,
+                int(frame.get("m_rearWingDamage") or 0),
+            )
+            self._damage_max = max(self._damage_max, worst)
+
+    def on_motion(self, frame: dict[str, Any]) -> None:
+        """接收 Packet 0 (Motion)：累积三轴 G 值极值。
+
+        横向 G 峰值 = 过弯极限抓地（调教是否真的提升了机械/空力抓地）；
+        纵向 G 负峰值 = 制动能力。G 值已由解析器按官方 /1000 量化还原。
+        """
+        lat = frame.get("m_gForceLateral")
+        lon = frame.get("m_gForceLongitudinal")
+        with self._lock:
+            self._motion_n += 1
+            if isinstance(lat, (int, float)) and not isinstance(lat, bool):
+                self._g_lat_max = max(self._g_lat_max, abs(float(lat)))
+            if isinstance(lon, (int, float)) and not isinstance(lon, bool):
+                self._g_long_max = max(self._g_long_max, float(lon))
+                self._g_long_min = min(self._g_long_min, float(lon))
+
+    def on_car_telemetry_2(self, frame: dict[str, Any]) -> None:
+        """接收 Packet 16 (CarTelemetry2)：累积 2026 主动空力与超车模式占比。
+
+        主动空力模式（弯道/直道）直接决定直道阻力与弯中下压力；超车模式
+        是否激活决定额外动力。二者是 F1 2026 独有的工况特征。
+        """
+        mode = frame.get("m_activeAeroMode")
+        overtake = frame.get("m_overtakeActive")
+        with self._lock:
+            self._aero_n += 1
+            if mode == 1:  # Straight mode
+                self._aero_straight_frames += 1
+            if overtake == 1:
+                self._overtake_active_frames += 1
+
+    def on_session_history(self, frame: dict[str, Any]) -> None:
+        """接收 Packet 11 (SessionHistory)：记录**官方**逐圈用时/扇区/有效位。
+
+        ``m_lapValidBitFlags``（0x01 圈有效、0x02/0x04/0x08 扇区有效）是
+        官方权威的圈有效性来源，比 LapData 单帧 ``m_currentLapInvalid`` 可靠。
+
+        ⚠️ 本包**按车发送**：实测同一会话内混有多个车号的记录，若不过滤会
+        把他车圈速当成自己的（曾出现"匈牙利第 3 圈读到蒙扎第 3 圈时间"）。
+        因此仅在 ``m_carIdx`` 等于玩家车号时采纳；未设置车号时不采纳
+        （宁可缺数据，不可错数据）。
+        """
+        car_idx = frame.get("m_carIdx")
+        if self._player_car_index is None:
+            return
+        if car_idx != self._player_car_index:
+            return
+        laps = frame.get("lap_history")
+        if not isinstance(laps, list):
+            return
+        with self._lock:
+            for entry in laps:
+                if not isinstance(entry, dict):
+                    continue
+                no = entry.get("lap_number")
+                t = entry.get("m_lapTimeInMS")
+                if not isinstance(no, int) or not isinstance(t, int) or t <= 0:
+                    continue
+                self._history_laps[no] = {
+                    "lap_time_ms": t,
+                    "sector1_ms": entry.get("sector1_ms"),
+                    "sector2_ms": entry.get("sector2_ms"),
+                    "sector3_ms": entry.get("sector3_ms"),
+                    "lap_valid": entry.get("lap_valid"),
+                    "flags": entry.get("m_lapValidBitFlags"),
+                }
+            if frame.get("tyre_stints") is not None:
+                self._history_stints = list(frame["tyre_stints"])
+
     def on_car_status(self, frame: dict[str, Any]) -> None:
         """接收 Packet 7 (CarStatus)：累积轮胎配方 / 胎龄 / 燃油 / ERS / 刹车平衡。
 
@@ -571,7 +751,11 @@ class LapAggregator:
             return self._build_snapshot_locked()
 
     def reset(self) -> None:
-        """清空全部状态（供测试与切换赛道时使用）。"""
+        """清空全部状态（供测试、切换赛道/会话时使用）。
+
+        **必须在新会话（sessionUID 变化）时调用**：官方逐圈历史按圈号索引，
+        跨会话保留会串号（实测：匈牙利第 3 圈读到蒙扎第 3 圈的时间）。
+        """
         with self._lock:
             self._reset_acc()
             self._lap_number = None
@@ -579,6 +763,9 @@ class LapAggregator:
             self._on_straight = False
             self._last_completed = None
             self._frames_total = 0
+            # 整场会话级数据：新会话必须清空（避免跨会话串号）
+            self._history_laps.clear()
+            self._history_stints.clear()
 
     @property
     def frames_total(self) -> int:

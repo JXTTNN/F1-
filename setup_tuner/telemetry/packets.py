@@ -1,20 +1,35 @@
-"""F1 25 UDP 遥测包解析（纯 struct，零 numpy/torch）。
+"""F1 26 UDP 遥测包解析（纯 struct，零 numpy/torch）。
 
-本模块解析 EA F1 25（packetFormat=2026）UDP 遥测协议的 7 类核心包，
+本模块解析 EA F1 26（packetFormat=2026，即 F1 25 + 2026 Season Pack）
+UDP 遥测协议的 **14 类包**（除 LobbyInfo(9) 与 TimeTrial(14) 两个与调教无关者），
 **仅解析玩家车辆数据**（通过 ``playerCarIndex`` 索引，或如 MotionEx 般本就
 只含玩家车），剥离全部 ML 依赖。
+
+task-82 扩展：此前只解 6 类（1/2/5/6/7/13），其余 9 类**只存原始字节无法使用**。
+本次补齐 0 Motion / 3 Event / 4 Participants / 8 FinalClassification /
+10 CarDamage / 11 SessionHistory / 12 TyreSets / 15 LapPositions /
+16 CarTelemetry2，全部结构对照 EA 官方《2026 Season Pack Telemetry Output
+Structures》逐个核对（含包体大小实测一致性校验）。
 
 协议特征：
 - 小端（little-endian）、紧凑（无填充）。
 - Header 固定 29 字节。
-- 按车分包（LapData/CarSetups/CarTelemetry/CarStatus）含 24 个
-  车位固定数组（``NUM_CARS = 24``）；本版只解包玩家那一段，避免 60Hz 全量解包开销。
-- MotionEx（13）非按车分组，包体直接为玩家车 244 字节结构。
+- 按车分包（LapData/CarSetups/CarTelemetry/CarStatus/Motion/CarDamage/
+  CarTelemetry2）含 24 个车位固定数组（``NUM_CARS = 24``）；只解包玩家那一段，
+  避免 60Hz 全量解包开销。名单类（Participants/FinalClassification）低频，
+  故解全部车位。
+- MotionEx（13）/SessionHistory（11）/TyreSets（12）非按车分组，包体直接为
+  玩家数据。
 - 容错：短包抛 :class:`PacketTooShortError`；未知 packetId 跳过不崩溃。
 
 官方规范出处（每条字段映射均在行内注释中标注）：
-- **EA F1 25 UDP Telemetry Specification**（F1 25 官方 UDP 遥测规范）。
-  本模块字段偏移/类型/大小端均对照该规范。
+- **EA《2026 Season Pack Telemetry Output Structures》**（F1 26 官方结构定义，
+  ``.ref/f1_2026_structures.txt`` 本地参考，版权属 EA，不入库）。
+- 包体大小逐项与真实录制实测值一致（Motion 1325 / Session 926 / Lap 1399 /
+  Event 45 / Participants 1470 / CarSetups 1233 / CarTelemetry 1448 /
+  CarStatus 1445 / FinalClassification 1134 / CarDamage 1133 /
+  SessionHistory 1460 / TyreSets 231 / MotionEx 273 / LapPositions 1231 /
+  CarTelemetry2 269）。
 - 旧版 ``legacy/f1opt/telemetry/packets.py`` 仅用于**字段偏移核对**，
   逻辑全部重写（对齐 C-06：拒绝复用旧 bug 代码）。
 """
@@ -64,6 +79,7 @@ PACKET_NAMES: dict[int, str] = {
     13: "MotionEx",
     14: "TimeTrial",
     15: "LapPositions",
+    16: "CarTelemetry2",  # 2026 赛季包新增（主动空力 + 超车模式）
 
 }
 
@@ -735,17 +751,505 @@ def parse_motion_ex(data: bytes, player_car_index: int = 0) -> dict[str, Any]:
 
 
 # --------------------------------------------------------------------------- #
+# Packet 0 — Motion（按车分组：世界坐标/速度/方向/G 值/姿态）
+# --------------------------------------------------------------------------- #
+# Source: 2026 Season Pack Telemetry Output Structures (EA, F1 26 UDP spec)
+# CarMotionData = 54 字节（24 车 × 54 + 29 = 1325 ✓ 与实测一致）：
+#   float ×6  m_worldPosition{X,Y,Z} / m_worldVelocity{X,Y,Z}（米、米/秒）
+#   int16 ×6  m_worldForwardDir{X,Y,Z} / m_worldRightDir{X,Y,Z}（归一化，/32767）
+#   int16 ×3  m_gForce{Lateral,Longitudinal,Vertical}  ← **量化值，除以 1000.0**
+#   float ×3  m_yaw / m_pitch / m_roll（弧度）
+# 注意：G 值量化除数官方为 **1000.0**（部分第三方解析器误用 100）。
+_MOTION_CAR = struct.Struct("<ffffffhhhhhhhhhfff")
+assert _MOTION_CAR.size == 54, _MOTION_CAR.size
+#: Motion G 值量化除数（官方规范原文：divide by 1000.0f）。
+MOTION_G_DIVISOR = 1000.0
+
+
+def parse_motion(data: bytes, player_car_index: int = 0) -> dict[str, Any]:
+    """解析 Packet 0 (Motion) — 玩家车世界坐标/速度/G 值/姿态。
+
+    用途：世界坐标可还原理想线（与赛道 SVG 几何对齐），三轴 G 值可做
+    纵向/横向加速度分析（刹车点、最大侧向 G、路肩冲击）。
+
+    Raises:
+        PacketTooShortError: 包体不足以覆盖玩家车辆结构。
+    """
+    v = _slice_player_car(data, _MOTION_CAR, player_car_index)
+    return {
+        "m_worldPositionX": v[0], "m_worldPositionY": v[1], "m_worldPositionZ": v[2],
+        "m_worldVelocityX": v[3], "m_worldVelocityY": v[4], "m_worldVelocityZ": v[5],
+        "m_worldForwardDirX": v[6], "m_worldForwardDirY": v[7], "m_worldForwardDirZ": v[8],
+        "m_worldRightDirX": v[9], "m_worldRightDirY": v[10], "m_worldRightDirZ": v[11],
+        # 量化 G 值 → 实际 G（官方：float(m_gForceLateral) / 1000.0f）
+        "m_gForceLateral": v[12] / MOTION_G_DIVISOR,
+        "m_gForceLongitudinal": v[13] / MOTION_G_DIVISOR,
+        "m_gForceVertical": v[14] / MOTION_G_DIVISOR,
+        "m_yaw": v[15], "m_pitch": v[16], "m_roll": v[17],
+    }
+
+
+# --------------------------------------------------------------------------- #
+# Packet 3 — Event（会话事件）
+# --------------------------------------------------------------------------- #
+# Source: 2026 Season Pack Telemetry Output Structures — PacketEventData
+# header(29) + uint8 m_eventStringCode[4] + union EventDataDetails(12) = 45 ✓
+_EVENT_DETAIL = struct.Struct("<12s")
+_EVENT_CODES: dict[str, str] = {
+    "SSTA": "会话开始", "SEND": "会话结束", "FTLP": "最快圈",
+    "RTMT": "退赛", "DRSE": "DRS 启用", "DRSD": "DRS 禁用",
+    "TMPT": "队友进站", "CHQF": "挥方格旗", "RCWN": "比赛冠军",
+    "PENA": "判罚", "SPTP": "测速点", "STLG": "起步灯亮",
+    "LGOT": "起步灯灭", "DTSV": "通过处罚已执行", "SGSV": "停走处罚已执行",
+    "FLBK": "回放", "BUTN": "按钮状态", "RDFL": "红旗",
+    "OVTK": "超车", "SCAR": "安全车", "COLL": "碰撞",
+}
+_EVENT_SAFETY_CAR_TYPE = {0: "无安全车", 1: "实体安全车", 2: "虚拟安全车", 3: "编队圈安全车"}
+_EVENT_SAFETY_CAR_ACTION = {0: "部署", 1: "回站中", 2: "已回站", 3: "恢复比赛"}
+_EVENT_COLLISION_SEVERITY = {0: "轻微", 1: "中等", 2: "严重"}
+
+
+def parse_event(data: bytes, player_car_index: int = 0) -> dict[str, Any] | None:
+    """解析 Packet 3 (Event) — 会话事件（最快圈/判罚/安全车/碰撞…）。
+
+    事件明细是 **union**（同一 12 字节按事件类型解释），故先取事件码再按码分支；
+    未知事件码保留 ``m_eventDetailsRaw``（hex）以便后续补解析，不臆测字段。
+
+    ``player_car_index`` 仅为与 :data:`_PARSERS` 统一签名保留。
+    """
+    end = HEADER_SIZE + 4 + _EVENT_DETAIL.size
+    if len(data) < end:
+        raise PacketTooShortError(
+            f"packet too short for Event: {len(data)} bytes < {end}",
+        )
+    code = data[HEADER_SIZE:HEADER_SIZE + 4].decode("ascii", errors="replace")
+    detail = data[HEADER_SIZE + 4:end]
+    out: dict[str, Any] = {
+        "m_eventStringCode": code,
+        "event_label": _EVENT_CODES.get(code, f"未知({code})"),
+        "m_eventDetailsRaw": detail.hex(),
+    }
+    if code == "FTLP":
+        veh, lap_time = struct.unpack_from("<Bf", detail, 0)
+        out.update(m_vehicleIdx=veh, m_lapTime=lap_time)
+    elif code == "RTMT":
+        veh, reason = struct.unpack_from("<BB", detail, 0)
+        out.update(m_vehicleIdx=veh, m_reason=reason)
+    elif code == "SPTP":
+        veh, speed, overall, driver, fast_veh, fast_speed = struct.unpack_from(
+            "<BfBBfB", detail, 0,
+        )
+        out.update(
+            m_vehicleIdx=veh, m_speed=speed,
+            m_isOverallFastestInSession=overall,
+            m_isDriverFastestInSession=driver,
+            m_fastestVehicleIdxInSession=fast_veh,
+            m_fastestSpeedInSession=fast_speed,
+        )
+    elif code == "SCAR":
+        sc_type, ev_type = struct.unpack_from("<BB", detail, 0)
+        out.update(
+            m_safetyCarType=sc_type,
+            m_eventType=ev_type,
+            safety_car_label=(
+                f"{_EVENT_SAFETY_CAR_TYPE.get(sc_type, '?')}"
+                f"·{_EVENT_SAFETY_CAR_ACTION.get(ev_type, '?')}"
+            ),
+        )
+    elif code == "COLL":
+        v1, v2, sev = struct.unpack_from("<BBB", detail, 0)
+        out.update(
+            m_vehicle1Idx=v1, m_vehicle2Idx=v2, m_severity=sev,
+            collision_label=_EVENT_COLLISION_SEVERITY.get(sev, "?"),
+        )
+    elif code == "PENA":
+        vals = struct.unpack_from("<BBBBBBB", detail, 0)
+        out.update(
+            m_penaltyType=vals[0], m_infringementType=vals[1],
+            m_vehicleIdx=vals[2], m_otherVehicleIdx=vals[3],
+            m_time=vals[4], m_lapNum=vals[5], m_placesGained=vals[6],
+        )
+    elif code == "STLG":
+        out["m_numLights"] = struct.unpack_from("<B", detail, 0)[0]
+    elif code == "OVTK":
+        a, b = struct.unpack_from("<BB", detail, 0)
+        out.update(m_overtakingVehicleIdx=a, m_beingOvertakenVehicleIdx=b)
+    elif code == "DRSD":
+        out["m_reason"] = struct.unpack_from("<B", detail, 0)[0]
+    elif code in ("TMPT", "RCWN", "DTSV"):
+        out["m_vehicleIdx"] = struct.unpack_from("<B", detail, 0)[0]
+    elif code == "SGSV":
+        veh, stop_time = struct.unpack_from("<Bf", detail, 0)
+        out.update(m_vehicleIdx=veh, m_stopTime=stop_time)
+    elif code == "FLBK":
+        frame, session_time = struct.unpack_from("<If", detail, 0)
+        out.update(m_flashbackFrameIdentifier=frame, m_flashbackSessionTime=session_time)
+    elif code == "BUTN":
+        out["m_buttonStatus"] = struct.unpack_from("<I", detail, 0)[0]
+    return out
+
+
+# --------------------------------------------------------------------------- #
+# Packet 4 — Participants（参赛者名单）
+# --------------------------------------------------------------------------- #
+# Source: 2026 Season Pack Telemetry Output Structures — ParticipantData
+# 60 字节/车（24 车 × 60 + 29 + 1 = 1470 ✓）：
+#   uint8 m_aiControlled; uint16 m_driverId; uint16 m_networkId; uint16 m_teamId;
+#   uint8 m_myTeam; uint8 m_raceNumber; uint8 m_nationality;
+#   char[32] m_name; uint8 m_yourTelemetry; uint8 m_showOnlineNames;
+#   uint16 m_techLevel; uint8 m_platform; uint8 m_numColours;
+#   LiveryColour[4] m_liveryColours (uint8 rgb ×3 ×4)
+_PARTICIPANT = struct.Struct("<BHHHBBB32sBBHBB" + "B" * 12)
+assert _PARTICIPANT.size == 60, _PARTICIPANT.size
+
+
+def parse_participants(data: bytes, player_car_index: int = 0) -> dict[str, Any]:
+    """解析 Packet 4 (Participants) — 参赛者名单（含玩家标记/车队/名字）。
+
+    与既有解析器不同，本包**解全部车位**：名单低频（实测 358 包/会话）且
+    "谁在场上"是分析多车数据的前提。名字为 UTF-8 定长字段，尾部 NUL 截断。
+    """
+    need = HEADER_SIZE + 1 + _PARTICIPANT.size * NUM_CARS
+    if len(data) < HEADER_SIZE + 1:
+        raise PacketTooShortError(f"packet too short for Participants: {len(data)}")
+    num_active = data[HEADER_SIZE]
+    # 包体可能不含全部 24 槽（游戏中通常补齐）——按实际长度解到哪算哪
+    available = max(0, min(NUM_CARS, (len(data) - HEADER_SIZE - 1) // _PARTICIPANT.size))
+    cars: list[dict[str, Any]] = []
+    for i in range(available):
+        off = HEADER_SIZE + 1 + i * _PARTICIPANT.size
+        v = _PARTICIPANT.unpack_from(data, off)
+        name = v[7].split(b"\x00", 1)[0].decode("utf-8", errors="replace")
+        cars.append({
+            "car_index": i,
+            "m_aiControlled": v[0],
+            "m_driverId": v[1],
+            "m_networkId": v[2],
+            "m_teamId": v[3],
+            "m_myTeam": v[4],
+            "m_raceNumber": v[5],
+            "m_nationality": v[6],
+            "m_name": name,
+            "m_yourTelemetry": v[8],
+            "m_showOnlineNames": v[9],
+            "m_techLevel": v[10],
+            "m_platform": v[11],
+            "m_numColours": v[12],
+        })
+    player = cars[player_car_index] if 0 <= player_car_index < len(cars) else None
+    return {
+        "m_numActiveCars": num_active,
+        "participants": cars,
+        "player": player,
+        # 便于落库/报告：玩家名字与车队
+        "m_playerName": player["m_name"] if player else None,
+        "m_playerTeamId": player["m_teamId"] if player else None,
+        "_needFull": need,
+    }
+
+
+# --------------------------------------------------------------------------- #
+# Packet 8 — FinalClassification（最终名次）
+# --------------------------------------------------------------------------- #
+# Source: 2026 Season Pack Telemetry Output Structures — FinalClassificationData
+# 46 字节/车（24 车 × 46 + 29 + 1 = 1134 ✓）：
+#   uint8 ×7 position/numLaps/gridPosition/points/numPitStops/resultStatus/resultReason
+#   uint32 m_bestLapTimeInMS; double m_totalRaceTime;
+#   uint8 penaltiesTime/numPenalties/numTyreStints;
+#   uint8[8] m_tyreStintsActual / m_tyreStintsVisual / m_tyreStintsEndLaps
+_FINAL_CLASS = struct.Struct("<" + "B" * 7 + "Id" + "B" * 3 + "B" * 24)
+assert _FINAL_CLASS.size == 46, _FINAL_CLASS.size
+
+
+def parse_final_classification(data: bytes, player_car_index: int = 0) -> dict[str, Any]:
+    """解析 Packet 8 (FinalClassification) — 最终名次/最佳圈/轮胎分段。"""
+    if len(data) < HEADER_SIZE + 1:
+        raise PacketTooShortError(f"packet too short for FinalClassification: {len(data)}")
+    num_cars = data[HEADER_SIZE]
+    available = max(0, min(NUM_CARS, (len(data) - HEADER_SIZE - 1) // _FINAL_CLASS.size))
+    cars: list[dict[str, Any]] = []
+    for i in range(available):
+        off = HEADER_SIZE + 1 + i * _FINAL_CLASS.size
+        v = _FINAL_CLASS.unpack_from(data, off)
+        cars.append({
+            "car_index": i,
+            "m_position": v[0], "m_numLaps": v[1], "m_gridPosition": v[2],
+            "m_points": v[3], "m_numPitStops": v[4],
+            "m_resultStatus": v[5], "m_resultReason": v[6],
+            "m_bestLapTimeInMS": v[7], "m_totalRaceTime": v[8],
+            "m_penaltiesTime": v[9], "m_numPenalties": v[10],
+            "m_numTyreStints": v[11],
+            "m_tyreStintsActual": list(v[12:20]),
+            "m_tyreStintsVisual": list(v[20:28]),
+            "m_tyreStintsEndLaps": list(v[28:36]),
+        })
+    return {"m_numCars": num_cars, "classification": cars}
+
+
+# --------------------------------------------------------------------------- #
+# Packet 10 — CarDamage（车辆损伤）
+# --------------------------------------------------------------------------- #
+# Source: 2026 Season Pack Telemetry Output Structures — CarDamageData
+# 46 字节/车（24 车 × 46 + 29 = 1133 ✓）：
+#   float[4] m_tyresWear（胎耗 %）
+#   uint8[4] m_tyresDamage / m_brakesDamage / m_tyreBlisters
+#   uint8 ×18 前左翼/前右翼/尾翼/底板/扩散器/侧箱/DRS 故障/ERS 故障/
+#             变速箱/引擎/MGU-H/ES/CE/ICE/MGU-K/TC/引擎爆缸/引擎卡死
+_CAR_DAMAGE = struct.Struct("<ffff" + "B" * 30)
+assert _CAR_DAMAGE.size == 46, _CAR_DAMAGE.size
+#: 除胎耗外的 uint8 损伤字段名（顺序严格按官方结构）。
+_DAMAGE_BYTE_FIELDS = (
+    "m_tyresDamage", "m_brakesDamage", "m_tyreBlisters",
+    "m_frontLeftWingDamage", "m_frontRightWingDamage", "m_rearWingDamage",
+    "m_floorDamage", "m_diffuserDamage", "m_sidepodDamage",
+    "m_drsFault", "m_ersFault", "m_gearBoxDamage", "m_engineDamage",
+    "m_engineMGUHWear", "m_engineESWear", "m_engineCEWear", "m_engineICEWear",
+    "m_engineMGUKWear", "m_engineTCWear", "m_engineBlown", "m_engineSeized",
+)
+
+
+def parse_car_damage(data: bytes, player_car_index: int = 0) -> dict[str, Any]:
+    """解析 Packet 10 (CarDamage) — 玩家车损伤/胎耗/胎泡。
+
+    关键用途：**损伤会拖慢圈速**。此前未解析，训练样本里"圈速慢"无法区分
+    "调教不好"还是"车撞坏了"——损伤标签是训练数据质量的必要混淆控制。
+    """
+    v = _slice_player_car(data, _CAR_DAMAGE, player_car_index)
+    out: dict[str, Any] = {"m_tyresWear": [v[0], v[1], v[2], v[3]]}
+    for i, name in enumerate(_DAMAGE_BYTE_FIELDS):
+        if i < 3:
+            # 前 3 项（胎损/刹车损/胎泡）是 4 元素数组
+            out[name] = [v[4 + i * 4 + k] for k in range(4)]
+        else:
+            out[name] = v[16 + (i - 3)]
+    # 是否需要"明显损伤"快捷标志（供引擎/报告直接判污染）
+    wing = max(out["m_frontLeftWingDamage"], out["m_frontRightWingDamage"])
+    out["damage_severe"] = bool(
+        wing >= 20 or out["m_rearWingDamage"] >= 20 or out["m_floorDamage"] >= 20
+        or out["m_diffuserDamage"] >= 20 or out["m_engineBlown"] or out["m_engineSeized"]
+    )
+    return out
+
+
+# --------------------------------------------------------------------------- #
+# Packet 11 — SessionHistory（逐圈历史 + 轮胎分段）
+# --------------------------------------------------------------------------- #
+# Source: 2026 Season Pack Telemetry Output Structures — PacketSessionHistoryData
+# LapHistoryData = 14 字节（含扇区分/秒两段编码 + 有效位标志）
+# 100 圈 × 14 + 8 段 × 3 + 29 + 7 = 1460 ✓
+_LAP_HISTORY = struct.Struct("<IHBHBHBB")
+_TYRE_STINT_HISTORY = struct.Struct("<BBB")
+_CS_MAX_LAPS_HISTORY = 100
+_CS_MAX_TYRE_STINTS = 8
+
+
+def parse_session_history(data: bytes, player_car_index: int = 0) -> dict[str, Any]:
+    """解析 Packet 11 (SessionHistory) — 逐圈用时/扇区/有效位 + 轮胎分段。
+
+    这是**唯一带官方"圈有效位标志"**的来源（``m_lapValidBitFlags``：
+    0x01 圈有效、0x02/0x04/0x08 对应三个扇区有效），比 LapData 的
+    单帧 ``m_currentLapInvalid`` 更适合训练数据标注。
+    """
+    need = HEADER_SIZE + 7
+    if len(data) < need:
+        raise PacketTooShortError(f"packet too short for SessionHistory: {len(data)}")
+    off = HEADER_SIZE
+    car_idx = data[off]
+    num_laps = data[off + 1]
+    num_stints = data[off + 2]
+    best_lap = data[off + 3]
+    best_s1, best_s2, best_s3 = data[off + 4], data[off + 5], data[off + 6]
+    off += 7
+
+    laps: list[dict[str, Any]] = []
+    max_parsable = max(0, min(_CS_MAX_LAPS_HISTORY, (len(data) - off) // _LAP_HISTORY.size))
+    for i in range(max_parsable):
+        v = _LAP_HISTORY.unpack_from(data, off + i * _LAP_HISTORY.size)
+        s1 = v[1] + v[2] * 60000
+        s2 = v[3] + v[4] * 60000
+        s3 = v[5] + v[6] * 60000
+        flags = v[7]
+        laps.append({
+            "lap_number": i + 1,
+            "m_lapTimeInMS": v[0],
+            "sector1_ms": s1, "sector2_ms": s2, "sector3_ms": s3,
+            "m_lapValidBitFlags": flags,
+            "lap_valid": bool(flags & 0x01),
+            "sector1_valid": bool(flags & 0x02),
+            "sector2_valid": bool(flags & 0x04),
+            "sector3_valid": bool(flags & 0x08),
+        })
+    off += max_parsable * _LAP_HISTORY.size
+
+    stints: list[dict[str, Any]] = []
+    max_stints = max(0, min(_CS_MAX_TYRE_STINTS, (len(data) - off) // _TYRE_STINT_HISTORY.size))
+    for i in range(max_stints):
+        v = _TYRE_STINT_HISTORY.unpack_from(data, off + i * _TYRE_STINT_HISTORY.size)
+        stints.append({
+            "m_endLap": v[0],
+            "m_tyreActualCompound": v[1],
+            "m_tyreVisualCompound": v[2],
+            "is_current": v[0] == 255,
+        })
+    return {
+        "m_carIdx": car_idx,
+        "m_numLaps": num_laps,
+        "m_numTyreStints": num_stints,
+        "m_bestLapTimeLapNum": best_lap,
+        "m_bestSector1LapNum": best_s1,
+        "m_bestSector2LapNum": best_s2,
+        "m_bestSector3LapNum": best_s3,
+        "lap_history": laps,
+        "tyre_stints": stints,
+    }
+
+
+# --------------------------------------------------------------------------- #
+# Packet 12 — TyreSets（轮胎组）
+# --------------------------------------------------------------------------- #
+# Source: 2026 Season Pack Telemetry Output Structures — PacketTyreSetsData
+# 10 字节/套（20 套 × 10 + 29 + 1 + 1 = 231 ✓）：
+#   uint8 actual/visual compound, wear, available, recommendedSession,
+#         lifeSpan, usableLife; int16 m_lapDeltaTime; uint8 m_fitted
+_CS_MAX_TYRE_SETS = 20
+_TYRE_SET = struct.Struct("<BBBBBBBhB")
+assert _TYRE_SET.size == 10, _TYRE_SET.size
+
+
+def parse_tyre_sets(data: bytes, player_car_index: int = 0) -> dict[str, Any]:
+    """解析 Packet 12 (TyreSets) — 可用轮胎组/磨损/寿命/圈速差。
+
+    ``m_lapDeltaTime``（与已装配组的圈速差，毫秒）是**配方选择的直接依据**；
+    ``m_lifeSpan`` / ``m_usableLife`` 支撑"这套胎还能跑几圈"的策略判断。
+    """
+    if len(data) < HEADER_SIZE + 2:
+        raise PacketTooShortError(f"packet too short for TyreSets: {len(data)}")
+    car_idx = data[HEADER_SIZE]
+    sets: list[dict[str, Any]] = []
+    off = HEADER_SIZE + 1
+    available = max(0, min(_CS_MAX_TYRE_SETS, (len(data) - off) // _TYRE_SET.size))
+    for i in range(available):
+        v = _TYRE_SET.unpack_from(data, off + i * _TYRE_SET.size)
+        sets.append({
+            "index": i,
+            "m_actualTyreCompound": v[0],
+            "m_visualTyreCompound": v[1],
+            "m_wear": v[2],
+            "m_available": v[3],
+            "m_recommendedSession": v[4],
+            "m_lifeSpan": v[5],
+            "m_usableLife": v[6],
+            "m_lapDeltaTime": v[7],
+            "m_fitted": v[8],
+        })
+    fitted_idx = None
+    tail = off + available * _TYRE_SET.size
+    if len(data) > tail:
+        fitted_idx = data[tail]
+    fitted = next((s for s in sets if s["m_fitted"]), None)
+    return {
+        "m_carIdx": car_idx,
+        "tyre_sets": sets,
+        "m_fittedIdx": fitted_idx,
+        "fitted": fitted,
+    }
+
+
+# --------------------------------------------------------------------------- #
+# Packet 15 — LapPositions（逐圈位置矩阵）
+# --------------------------------------------------------------------------- #
+# Source: 2026 Season Pack Telemetry Output Structures — PacketLapPositionsData
+# uint8 m_numLaps + uint8 m_lapStart + uint8[50][24] → 29 + 2 + 1200 = 1231 ✓
+_CS_MAX_LAPS_LAP_POSITIONS = 50
+
+
+def parse_lap_positions(data: bytes, player_car_index: int = 0) -> dict[str, Any]:
+    """解析 Packet 15 (LapPositions) — 每圈起点的全部车位置（可画位置图）。
+
+    位置矩阵为 50 圈 × 24 车；``0`` 表示该圈无记录。
+    """
+    if len(data) < HEADER_SIZE + 2:
+        raise PacketTooShortError(f"packet too short for LapPositions: {len(data)}")
+    num_laps = data[HEADER_SIZE]
+    lap_start = data[HEADER_SIZE + 1]
+    base = HEADER_SIZE + 2
+    laps: list[list[int]] = []
+    for lap in range(min(num_laps, _CS_MAX_LAPS_LAP_POSITIONS)):
+        off = base + lap * NUM_CARS
+        if off + NUM_CARS > len(data):
+            break
+        laps.append(list(data[off:off + NUM_CARS]))
+    return {
+        "m_numLaps": num_laps,
+        "m_lapStart": lap_start,
+        "positions": laps,
+    }
+
+
+# --------------------------------------------------------------------------- #
+# Packet 16 — CarTelemetry2（2026 赛季包新增：主动空力 + 超车模式）
+# --------------------------------------------------------------------------- #
+# Source: 2026 Season Pack Telemetry Output Structures — CarTelemetry2Data
+# 10 字节/车（24 车 × 10 + 29 = 269 ✓）：
+#   uint8  m_activeAeroMode                // 0 = Corner mode, 1 = Straight mode
+#   uint8  m_activeAeroAvailable           // 0/1
+#   uint16 m_activeAeroActivationDistance  // 0=不可用，非 0=还有 X 米可用
+#   uint8  m_overtakeAvailable
+#   uint8  m_overtakeActive
+#   uint16 m_overtakeActivationDistance
+#   uint8  m_2026Regulations               // 1 = 适用 2026 规则
+#   uint8  m_drivingWrongWay
+# 实测校验：玩家数据 offset8 恒为 1（m_2026Regulations）→ 结构与实车行为吻合。
+_CAR_TELEMETRY2 = struct.Struct("<BBHBBHBB")
+assert _CAR_TELEMETRY2.size == 10, _CAR_TELEMETRY2.size
+ACTIVE_AERO_CORNER = 0
+ACTIVE_AERO_STRAIGHT = 1
+
+
+def parse_car_telemetry_2(data: bytes, player_car_index: int = 0) -> dict[str, Any]:
+    """解析 Packet 16 (CarTelemetry2) — 2026 主动空力模式 + 超车模式状态。
+
+    F1 2026 引入主动空力（Corner/Straight 两种模式）与超车模式，本包是其
+    **唯一遥测出口**；此前未解析 → 工具看不到空力模式切换与超车模式可用性
+    （而空力模式直接决定直道阻力与弯中下压力）。
+    """
+    v = _slice_player_car(data, _CAR_TELEMETRY2, player_car_index)
+    return {
+        "m_activeAeroMode": v[0],
+        "active_aero_mode_label": (
+            "直道模式" if v[0] == ACTIVE_AERO_STRAIGHT else "弯道模式"
+        ),
+        "m_activeAeroAvailable": v[1],
+        "m_activeAeroActivationDistance": v[2],
+        "m_overtakeAvailable": v[3],
+        "m_overtakeActive": v[4],
+        "m_overtakeActivationDistance": v[5],
+        "m_2026Regulations": v[6],
+        "m_drivingWrongWay": v[7],
+    }
+
+
+# --------------------------------------------------------------------------- #
 
 # 主入口：按 packetId 分发
 # --------------------------------------------------------------------------- #
 # 本版支持的 7 类包及其解析函数
 _PARSERS: dict[int, Any] = {
+    0: parse_motion,
     1: parse_session,
     2: parse_lap_data,
+    3: parse_event,
+    4: parse_participants,
     5: parse_car_setups,
     6: parse_car_telemetry,
     7: parse_car_status,
+    8: parse_final_classification,
+    10: parse_car_damage,
+    11: parse_session_history,
+    12: parse_tyre_sets,
     13: parse_motion_ex,
+    15: parse_lap_positions,
+    16: parse_car_telemetry_2,
 }
 
 # 支持的 packetId 集合（供外部查询）

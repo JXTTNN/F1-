@@ -89,3 +89,6 @@ scripts/real_circuits/render/
 # 车手真实遥测与训练数据（个人数据，绝不入库）
 data/recordings/
 data/training/
+
+# 官方 UDP 规范参考（EA 版权，仅本地参考，不得入库）
+.ref/

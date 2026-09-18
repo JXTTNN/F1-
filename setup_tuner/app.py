@@ -224,6 +224,35 @@ def _wire_track_context(app: FastAPI, aggregator: Any, session: dict[str, Any]) 
     )
 
 
+def _sync_session(app: FastAPI, aggregator: Any, parsed: dict[str, Any]) -> None:
+    """会话切换检测 + 玩家车号同步（每个包调用，必须廉价）。
+
+    两件事：
+    1. **玩家车号**：SessionHistory 是**按车发送**的（一包只含一辆车），
+       必须按玩家车号过滤，否则会把他车圈速当成自己的。
+    2. **会话切换**：官方逐圈历史按圈号索引，跨会话保留会串号
+       （实测：匈牙利第 3 圈读到蒙扎第 3 圈的时间）→ 新 sessionUID 时
+       整体重置聚合器与路肩赛道上下文。
+    """
+    header = parsed.get("header")
+    if header is None:
+        return
+    pci = getattr(header, "player_car_index", None)
+    if (isinstance(pci, int) and not isinstance(pci, bool)
+            and pci != getattr(app.state, "_player_car_index", None)):
+        aggregator.set_player_car_index(pci)
+        app.state._player_car_index = pci
+    uid = getattr(header, "session_uid", None)
+    if uid is None:
+        return
+    prev = getattr(app.state, "_session_uid", None)
+    if prev is not None and uid != prev:
+        aggregator.reset()
+        app.state._kerb_track_udp_id = None
+        logger.info("检测到新会话（sessionUID 变化），整圈聚合器已重置")
+    app.state._session_uid = uid
+
+
 def _make_packet_handler(app: FastAPI) -> Callable[[dict[str, Any]], None]:
     """构造 UDP 包处理函数：写入 TelemetryStream，并喂给整圈聚合器。
 
@@ -242,6 +271,8 @@ def _make_packet_handler(app: FastAPI) -> Callable[[dict[str, Any]], None]:
         aggregator = getattr(app.state, "lap_aggregator", None)
         if aggregator is None:
             return
+        # 会话切换 + 玩家车号（廉价守卫：只在变化时加锁写入）
+        _sync_session(app, aggregator, parsed)
         if packet_id == 6:
             aggregator.on_telemetry(parsed)
             extractor = getattr(app.state, "style_extractor", None)
@@ -264,6 +295,29 @@ def _make_packet_handler(app: FastAPI) -> Callable[[dict[str, Any]], None]:
             # 赛道长度 + 弧长表才能把「圈内距离」归因到具体弯道
             # （MotionEx 本身不带距离，这是唯一的定位来源）。
             _wire_track_context(app, aggregator, parsed)
+        # ── task-82：此前只存原始字节、无法使用的包，全部接入 ──
+        elif packet_id == 0:
+            # Packet 0 (Motion)：世界坐标 + 三轴 G 值（纵向 G 看制动、横向 G 看极限抓地）
+            aggregator.on_motion(parsed)
+        elif packet_id == 10:
+            # Packet 10 (CarDamage)：损伤/胎耗 —— 训练数据质量的必要混淆控制
+            # （损伤拖慢圈速，不记录就会被误当成调教问题）
+            aggregator.on_car_damage(parsed)
+        elif packet_id == 11:
+            # Packet 11 (SessionHistory)：官方逐圈用时/扇区/有效位（权威圈有效性）
+            aggregator.on_session_history(parsed)
+        elif packet_id == 16:
+            # Packet 16 (CarTelemetry2)：2026 主动空力模式 + 超车模式状态
+            aggregator.on_car_telemetry_2(parsed)
+        elif packet_id == 3:
+            # Packet 3 (Event)：会话事件（最快圈/判罚/安全车/碰撞）——保留最近一条供报告引用
+            app.state.last_event = parsed
+            label = parsed.get("event_label")
+            if label and label not in ("按钮状态", "回放"):
+                logger.info(
+                    "会话事件：%s（%s）%s",
+                    label, parsed.get("m_eventStringCode"), parsed.get("m_eventDetailsRaw"),
+                )
         # task-62 M1：一圈结束时把整圈快照与风格向量交给落库线程
         completed = aggregator.take_completed_lap()
         if completed is not None:

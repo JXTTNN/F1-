@@ -285,10 +285,20 @@ class TelemetryRecorder:
     def _write_f1rec_record(
         self, timestamp: float, data: bytes,
     ) -> tuple[int, bytes]:
-        """写入 .f1rec 单条记录（含 zstd 压缩），返回 (raw_len, compressed)。"""
+        """写入 .f1rec 单条记录（含 zstd 压缩），返回 (raw_len, compressed)。
+
+        **压缩无收益时回落存原始字节**：读取端以 ``compressed_len != raw_len``
+        判定"是否压缩"，若压缩结果恰好等于原始长度（实测 273 字节 MotionEx
+        用 zstd level 1 压出来正好 273 字节），该判据会把压缩块误当原始字节，
+        导致回放时这类包被静默丢弃（实测占全部 MotionEx 的 19%）。
+        回落策略同时保证：不压缩时绝不比原始更大。
+        """
         raw_len = len(data)
         if self._zstd_compressor is not None:
             compressed = self._zstd_compressor.compress(data)
+            if len(compressed) >= raw_len:
+                # 压缩无收益（甚至膨胀）→ 存原始，保证 compressed_len != raw_len
+                compressed = data
         else:
             compressed = data  # 无 zstd 时直接存原始字节
         compressed_len = len(compressed)
@@ -584,6 +594,24 @@ class TelemetryRecorder:
 # --------------------------------------------------------------------------- #
 # ReplayReader — 从 .f1rec 文件回放遥测数据
 # --------------------------------------------------------------------------- #
+#: zstd 帧魔数（小端字节序 0xFD2FB528）。
+_ZSTD_MAGIC = b"\x28\xb5\x2f\xfd"
+
+
+def _looks_like_zstd_frame(data: bytes) -> bool:
+    """数据是否以 zstd 帧魔数开头（用于修复历史录制的误判）。
+
+    背景：旧写入端在"压缩后长度恰好等于原始长度"时（实测 273B MotionEx 用
+    zstd level 1 压缩后正好 273B）会写下 ``compressed_len == raw_len``，
+    而读取端以长度相等判定"未压缩"，于是把压缩块当原始字节返回，
+    回放时这些包解析失败被静默丢弃（实测占全部 MotionEx 的 19%）。
+
+    安全性：F1 UDP 包头前两字节是 packetFormat（2025/2026 → ``e9 07`` /
+    ``ea 07``），不可能等于 zstd 魔数 ``28 b5 2f fd``，故不会误伤真实未压缩包。
+    """
+    return data[:4] == _ZSTD_MAGIC
+
+
 class ReplayReader:
     """从 .f1rec 文件读取原始字节并回放。
 
@@ -663,7 +691,9 @@ class ReplayReader:
         if len(compressed_data) < compressed_len:
             return None  # truncated
 
-        if self._zstd_decompressor is not None and compressed_len != raw_len:
+        if self._zstd_decompressor is not None and (
+            compressed_len != raw_len or _looks_like_zstd_frame(compressed_data)
+        ):
             raw_bytes = self._zstd_decompressor.decompress(compressed_data)
         else:
             raw_bytes = compressed_data
