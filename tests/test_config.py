@@ -28,7 +28,9 @@ class TestConfigDataclass:
     def test_default_values(self) -> None:
         """Config 缺省值正确。"""
         c = Config()
-        assert c.udp_host == "127.0.0.1"
+        # 默认绑所有网卡：F1 游戏「UDP 广播模式」把包发往 255.255.255.255，
+        # 只绑回环会一个包都收不到（2026-09-17 真实踩坑）。
+        assert c.udp_host == "0.0.0.0"
         assert c.udp_port == 20777
         assert c.api_host == "127.0.0.1"
         assert c.api_port == 8000
@@ -137,7 +139,7 @@ class TestLoadConfig:
             for key in ("UDP_HOST", "UDP_PORT", "API_HOST", "API_PORT", "DATA_DIR", "LOG_LEVEL"):
                 os.environ.pop(key, None)
             c = load_config(env_path=env)
-        assert c.udp_host == "127.0.0.1"
+        assert c.udp_host == "0.0.0.0"
         assert c.udp_port == 20777
         assert c.api_host == "127.0.0.1"
         assert c.api_port == 8000

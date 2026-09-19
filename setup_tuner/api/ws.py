@@ -28,6 +28,15 @@ from typing import Any
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
+from setup_tuner.domain._track_arcs import TRACK_CORNER_ARCS
+from setup_tuner.domain.corner_groups import (
+    build_corner_groups,
+    group_for_progress,
+    nearest_member,
+)
+from setup_tuner.domain.corner_locator import locate_corner
+from setup_tuner.telemetry.packets import to_sector_1based
+
 logger = logging.getLogger(__name__)
 
 # WebSocket 路由
@@ -107,30 +116,16 @@ def _map_corner(
     lap_distance: float,
     track_length: float,
     corners: list[Any],
+    track_id: str | None = None,
 ) -> int | None:
-    """根据圈距离映射当前弯道编号。
+    """根据圈内距离映射当前弯道编号（委托 domain 层唯一实现）。
 
-    将 lap_distance 按赛道长度归一化为 0~1 的进度，再映射到弯道列表的编号。
-    弯道锚点沿椭圆分布（见 domain/track.py _estimate_anchor），此处用
-    弯道编号在总弯道数中的均匀分布近似定位。
-
-    Args:
-        lap_distance: 当前圈距离（米）。
-        track_length: 赛道长度（米）。
-        corners: 弯道列表（domain.Corner）。
-
-    Returns:
-        当前弯道编号（1-based）；无法映射时返回 None。
+    本函数只做转调：算法与弧长表缓存统一在
+    :func:`domain.corner_locator.locate_corner`（遥测层按弯累积数据时也要用它，
+    两处各写一份必然漂移）。行为与历史实现逐位一致，``tests/test_track_arcs.py``
+    继续锁定。
     """
-    if track_length <= 0 or not corners:
-        return None
-    progress = (lap_distance % track_length) / track_length
-    total = len(corners)
-    # 均匀分布映射：progress * total → 弯道编号
-    idx = int(progress * total)
-    if idx >= total:
-        idx = total - 1
-    return corners[idx].number
+    return locate_corner(lap_distance, track_length, corners, track_id)
 
 
 # =========================================================================== #
@@ -151,10 +146,19 @@ async def _push_telemetry_status(
 
 
 async def _push_telemetry_frame(ws_manager: Any, all_latest: dict[int, dict[str, Any]]) -> None:
-    """推送遥测关键帧（Packet 6 CarTelemetry）。"""
+    """推送遥测关键帧（Packet 6 CarTelemetry + Packet 2 LapData 的圈速/扇区）。
+
+    字段契约（前端 ``ui/app.js::onTelemetry`` 读取）：
+        ``speed / throttle / brake / steer / gear / engine_rpm / drs /
+        lap_time_ms / sector``（sector 为 1 基）。
+
+    修正记录：早期只推 ``engine_rpm``，而前端读 ``t.rpm``；且完全不推
+    ``lap_time_ms`` / ``sector`` → 实时面板的「转速」「圈速」恒为 "—"。
+    """
     telemetry_data = all_latest.get(6)
     if telemetry_data is None:
         return
+    lap_data = all_latest.get(2) or {}
     payload = {
         "speed": telemetry_data.get("m_speed"),
         "throttle": telemetry_data.get("m_throttle"),
@@ -163,9 +167,51 @@ async def _push_telemetry_frame(ws_manager: Any, all_latest: dict[int, dict[str,
         "gear": telemetry_data.get("m_gear"),
         "engine_rpm": telemetry_data.get("m_engineRPM"),
         "drs": telemetry_data.get("m_drs"),
+        "lap_time_ms": lap_data.get("m_lastLapTimeInMS"),
+        "sector": to_sector_1based(lap_data.get("m_sector")),
     }
     if ws_manager is not None:
         await ws_manager.broadcast(event="telemetry", payload=payload)
+
+
+_GROUPS_CACHE: dict[str, list[dict[str, Any]]] = {}
+
+
+def _get_groups(track_id: str) -> list[dict[str, Any]]:
+    """按赛道缓存弯道段（TRACK_CORNER_ARCS 静态，进程内缓存即可）。"""
+    if track_id not in _GROUPS_CACHE:
+        _GROUPS_CACHE[track_id] = build_corner_groups(
+            TRACK_CORNER_ARCS.get(track_id, {}),
+        )
+    return _GROUPS_CACHE[track_id]
+
+
+def _map_corner_segment(
+    lap_distance: float, track_length: float, track_id: str,
+    corners: list[Any],
+) -> tuple[int | None, str | None, list[int] | None]:
+    """task-63：段化定位 —— 进度 → 段（区间归属）→ 段内最近成员。
+
+    连续弯（全赛道 39% 相邻弯对间距 < 4% 圈长）在单弯最近邻下会随微小
+    偏移高频跳变；段级映射把跳变收敛到段边界。无弧长表的赛道回退
+    :func:`_map_corner`。
+
+    Returns:
+        ``(corner_number, group_name, group_members)``；group 仅在
+        多弯段时非 None（单弯段无需段表达）。
+    """
+    arcs = TRACK_CORNER_ARCS.get(track_id)
+    if not arcs or track_length <= 0:
+        return _map_corner(lap_distance, track_length, corners, track_id), None, None
+
+    progress = (lap_distance / track_length) % 1.0
+    group = group_for_progress(progress, _get_groups(track_id))
+    if group is None:
+        return _map_corner(lap_distance, track_length, corners, track_id), None, None
+    corner = nearest_member(progress, group, arcs)
+    if len(group["members"]) > 1:
+        return corner, group["name"], list(group["members"])
+    return corner, None, None
 
 
 async def _push_corner_highlight(
@@ -177,7 +223,7 @@ async def _push_corner_highlight(
     if lap_data is None:
         return last_corner
     lap_distance = lap_data.get("m_lapDistance")
-    sector = lap_data.get("m_sector")
+    sector = to_sector_1based(lap_data.get("m_sector"))
     current_track_id = getattr(app_state, "current_track_id", None)
     if lap_distance is None or current_track_id is None:
         return last_corner
@@ -186,8 +232,8 @@ async def _push_corner_highlight(
     track = get_track_by_id(current_track_id)
     if track is None:
         return last_corner
-    corner_number = _map_corner(
-        float(lap_distance), track.length_m, track.corners,
+    corner_number, group_name, group_members = _map_corner_segment(
+        float(lap_distance), track.length_m, current_track_id, track.corners,
     )
     if corner_number is not None and corner_number != last_corner:
         if ws_manager is not None:
@@ -196,17 +242,27 @@ async def _push_corner_highlight(
                 payload={
                     "track_id": current_track_id,
                     "corner_number": corner_number,
+                    "corner_group": group_name,
+                    "corner_group_members": group_members,
                     "sector": sector,
                 },
             )
     return corner_number if corner_number is not None else last_corner
 
 
-async def _telemetry_push_loop(ws: WebSocket, app_state: Any) -> None:
-    """遥测推送循环 —— 从 TelemetryStream 读取最新帧并推送。
+async def _telemetry_push_loop(app_state: Any) -> None:
+    """应用级**单一**推送循环（所有连接共享）。
 
-    节流 ≤ 60Hz（每帧间隔 ≥ 16.67ms）。
+    设计要点（性能）：
+        此前是「每个连接各起一个推送循环」，而每个循环都调用
+        ``ws_manager.broadcast()`` 向**所有**连接发送，于是 N 个客户端
+        每 tick 产生 **N×N** 次快照读取 + 序列化 + 发送（实测 N=8 时
+        每 tick 64 次、60Hz 下占单核 0.74%，并随 N² 增长）。
+        现在改为单个应用级任务：每 tick 只取一次快照、只序列化一次，
+        由 ``broadcast`` 完成 O(N) 扇出。
+
     推送事件：telemetry / corner / telemetry_status。
+    节流 ≤ 60Hz（每帧间隔 ≥ 16.67ms）。
     """
     last_push_time = 0.0
     last_corner: int | None = None
@@ -217,6 +273,11 @@ async def _telemetry_push_loop(ws: WebSocket, app_state: Any) -> None:
     ws_manager = getattr(app_state, "ws_manager", None)
 
     while True:
+        if ws_manager is None or ws_manager.connection_count == 0:
+            # 无客户端时不空转，等下一个 tick 再检查
+            await asyncio.sleep(_THROTTLE_INTERVAL_SEC)
+            continue
+
         await asyncio.sleep(_THROTTLE_INTERVAL_SEC)
 
         # 节流：距上次推送不足一个间隔则跳过
@@ -240,6 +301,27 @@ async def _telemetry_push_loop(ws: WebSocket, app_state: Any) -> None:
 
         # ③ 当前弯道高亮推送（落点映射变化时）
         last_corner = await _push_corner_highlight(ws_manager, all_latest, app_state, last_corner)
+
+
+def _ensure_pusher(app_state: Any) -> None:
+    """确保应用级推送任务存在（幂等；无客户端时由 _stop_pusher_if_idle 停掉）。"""
+    task = getattr(app_state, "ws_pusher_task", None)
+    if task is None or task.done():
+        app_state.ws_pusher_task = asyncio.create_task(
+            _telemetry_push_loop(app_state),
+        )
+
+
+async def _stop_pusher_if_idle(app_state: Any, ws_manager: Any) -> None:
+    """最后一个连接断开后停掉推送任务，避免无人订阅时后台空转。"""
+    if ws_manager is not None and ws_manager.connection_count > 0:
+        return
+    task = getattr(app_state, "ws_pusher_task", None)
+    app_state.ws_pusher_task = None
+    if task is not None and not task.done():
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
 
 
 # =========================================================================== #
@@ -305,6 +387,9 @@ async def websocket_endpoint(ws: WebSocket) -> None:
     前端→服务消息（JSON）：
         - {"action": "select_track", "track_id": "suzuka"}
         - {"action": "request_suggestion", "track_id": "suzuka"}
+
+    性能：遥测推送由**应用级单一任务**负责（首个连接接入时启动，
+    最后一个连接断开时停止），本端点只处理连接注册与消息收发。
     """
     app_state = ws.app.state
     ws_manager = getattr(app_state, "ws_manager", None)
@@ -315,9 +400,7 @@ async def websocket_endpoint(ws: WebSocket) -> None:
         app_state.ws_manager = ws_manager
 
     await ws_manager.connect(ws)
-
-    # 启动遥测推送循环（后台任务）
-    push_task = asyncio.create_task(_telemetry_push_loop(ws, app_state))
+    _ensure_pusher(app_state)
 
     try:
         await _ws_receive_loop(ws, ws_manager, app_state)
@@ -326,7 +409,5 @@ async def websocket_endpoint(ws: WebSocket) -> None:
     except Exception:
         logger.exception("WS endpoint error")
     finally:
-        push_task.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await push_task
         await ws_manager.disconnect(ws)
+        await _stop_pusher_if_idle(app_state, ws_manager)

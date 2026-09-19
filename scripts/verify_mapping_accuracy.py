@@ -1,17 +1,27 @@
 #!/usr/bin/env python3
 """验证距离比例映射的弯道坐标是否落在赛道线上。
 计算每个映射弯道点到最近赛道采样点的距离。"""
-import sys
 import math
+import sys
 from pathlib import Path
 
+# 仓库根目录（本脚本位于 <root>/scripts/），避免硬编码绝对路径
+ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-sys.path.insert(0, "D:/F1OPT-Test/legacy")
+sys.path.insert(0, str(ROOT / "legacy"))
 from convert_track_svgs import (
-    path_to_points, scale_points, download_svg, extract_path_d,
-    CANVAS_W, CANVAS_H, MARGIN, TRACK_LAYOUT_MAP, TRACK_CORNERS_COUNT,
+    CANVAS_H,
+    CANVAS_W,
+    MARGIN,
+    TRACK_CORNERS_COUNT,
+    TRACK_LAYOUT_MAP,
+    download_svg,
+    extract_path_d,
+    path_to_points,
+    scale_points,
 )
 from f1opt.data.track_maps import TRACK_MAPS
+
 
 def compute_arc_lengths(points):
     arc_lens = [0.0]

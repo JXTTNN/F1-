@@ -82,16 +82,16 @@ jobs:
           API_HOST=127.0.0.1 API_PORT=8000 UDP_PORT=20777 \
             nohup uvicorn setup_tuner.app:create_app --factory --host 127.0.0.1 --port 8000 > server.log 2>&1 &
           for i in $(seq 1 120); do
-            if curl -sf http://127.0.0.1:8000/api/health >/dev/null 2>&1; then
+            if curl -sf http://127.0.0.1:8000/api/v1/health >/dev/null 2>&1; then
               echo "server up after ${i}s"; break
             fi
             sleep 1
           done
-          echo '--- /api/health ---'
-          curl -s http://127.0.0.1:8000/api/health || echo 'HEALTH UNAVAILABLE'
+          echo '--- /api/v1/health ---'
+          curl -s http://127.0.0.1:8000/api/v1/health || echo 'HEALTH UNAVAILABLE'
 
       - name: Run UI click audit
-        continue-on-error: true
+        # task-62：审计已重写为现役 UI 真实主流程 → 改为阻断（H4 修复）
         run: python -u cloud_audit/ui_click_audit.py
 
       - name: Dump server log tail
@@ -136,7 +136,7 @@ jobs:
         run: |
           python -m pip install -q ruff
           mkdir -p reports
-          ruff check setup_tuner/ cloud_audit/ --output-format concise > reports/ruff.txt 2>&1 || true
+          ruff check setup_tuner/ tests/ cloud_audit/ --output-format concise > reports/ruff.txt 2>&1 || true
           echo "ruff lines: $(wc -l < reports/ruff.txt)"
           head -n 60 reports/ruff.txt
 

@@ -41,18 +41,18 @@ class TestUnit:
         """submit_feedback 返回含 id/category/strength 的记录字典。"""
         result = feedback_service.submit_feedback(
             track_id="suzuka", corner_number=1,
-            symptom="understeer", strength=4,
+            symptom="understeer", strength=3,
         )
         assert result["id"] >= 1
         assert result["track_id"] == "suzuka"
         assert result["symptom"] == "understeer"
         assert result["category"] == "entry"
-        assert result["strength"] == 4
+        assert result["strength"] == 3
 
     def test_get_feedbacks(self, feedback_service: FeedbackService) -> None:
         """get_feedbacks 返回已提交反馈列表。"""
         feedback_service.submit_feedback("suzuka", 1, "understeer", 3)
-        feedback_service.submit_feedback("suzuka", 2, "oversteer", 4)
+        feedback_service.submit_feedback("suzuka", 2, "oversteer", 3)
         rows = feedback_service.get_feedbacks("suzuka")
         assert len(rows) == 2
 
@@ -61,7 +61,7 @@ class TestUnit:
     ) -> None:
         """get_corner_feedbacks 按弯道编号分组。"""
         feedback_service.submit_feedback("suzuka", 1, "understeer", 3)
-        feedback_service.submit_feedback("suzuka", 1, "oversteer", 4)
+        feedback_service.submit_feedback("suzuka", 1, "oversteer", 3)
         feedback_service.submit_feedback("suzuka", 2, "lockup", 2)
         grouped = feedback_service.get_corner_feedbacks("suzuka")
         assert len(grouped[1]) == 2
@@ -70,7 +70,7 @@ class TestUnit:
     def test_get_normal_corners(self, feedback_service: FeedbackService) -> None:
         """get_normal_corners 返回无反馈的弯道编号。"""
         feedback_service.submit_feedback("suzuka", 1, "understeer", 3)
-        feedback_service.submit_feedback("suzuka", 3, "oversteer", 4)
+        feedback_service.submit_feedback("suzuka", 3, "oversteer", 3)
         normal = feedback_service.get_normal_corners("suzuka", total_corners=5)
         assert normal == [2, 4, 5]
 
@@ -181,7 +181,8 @@ class TestUnit:
         """load_config 无 .env 文件返回全缺省值。"""
         # tmp_path 下无 .env
         config = load_config(env_path=tmp_path / "nonexistent.env")
-        assert config.udp_host == "127.0.0.1"
+        # 默认绑所有网卡以兼容 F1 游戏广播模式（2026-09-17）
+        assert config.udp_host == "0.0.0.0"
         assert config.udp_port == 20777
         assert config.api_host == "127.0.0.1"
         assert config.api_port == 8000
@@ -215,19 +216,27 @@ class TestBoundary:
         with pytest.raises(ValueError, match="越界"):
             feedback_service.submit_feedback("suzuka", 1, "understeer", -1)
 
-    def test_submit_feedback_strength_boundary_zero(
+    def test_submit_feedback_strength_lower_bound(
         self, feedback_service: FeedbackService,
     ) -> None:
-        """submit_feedback strength=0（边界）正常入库。"""
-        result = feedback_service.submit_feedback("suzuka", 1, "understeer", 0)
-        assert result["strength"] == 0
+        """submit_feedback strength=1（下边界）正常入库。"""
+        result = feedback_service.submit_feedback("suzuka", 1, "understeer", 1)
+        assert result["strength"] == 1
 
-    def test_submit_feedback_strength_boundary_five(
+    def test_submit_feedback_strength_upper_bound(
         self, feedback_service: FeedbackService,
     ) -> None:
-        """submit_feedback strength=5（边界）正常入库。"""
-        result = feedback_service.submit_feedback("suzuka", 1, "understeer", 5)
-        assert result["strength"] == 5
+        """submit_feedback strength=3（上边界）正常入库。"""
+        result = feedback_service.submit_feedback("suzuka", 1, "understeer", 3)
+        assert result["strength"] == 3
+
+    def test_submit_feedback_strength_out_of_range(
+        self, feedback_service: FeedbackService,
+    ) -> None:
+        """task-61：0 / 4 / 5 均越界（合法范围 [1, 3]）。"""
+        for bad in (0, 4, 5):
+            with pytest.raises(ValueError, match="越界"):
+                feedback_service.submit_feedback("suzuka", 1, "understeer", bad)
 
     def test_get_normal_corners_empty(
         self, feedback_service: FeedbackService,
@@ -333,7 +342,7 @@ class TestProperty:
     ) -> None:
         """正常弯道数 + 已点击弯道数 = 总弯道数。"""
         feedback_service.submit_feedback("suzuka", 1, "understeer", 3)
-        feedback_service.submit_feedback("suzuka", 3, "oversteer", 4)
+        feedback_service.submit_feedback("suzuka", 3, "oversteer", 3)
         total = 5
         normal = feedback_service.get_normal_corners("suzuka", total_corners=total)
         # 已点击弯道（去重）
@@ -469,7 +478,7 @@ class TestSmoke:
             client.post("/api/v1/tracks/current", json={"track_id": "suzuka"})
             client.post("/api/v1/feedback", json={
                 "track_id": "suzuka", "corner_number": 1,
-                "symptom": "understeer", "strength": 4,
+                "symptom": "understeer", "strength": 3,
             })
             r = client.post("/api/v1/suggest", json={"track_id": "suzuka"})
             assert r.status_code == 200

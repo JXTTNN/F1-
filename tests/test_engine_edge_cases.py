@@ -7,7 +7,6 @@
 4. _build_param_detail — 空症状/多症状/联动说明/tradeoff
 5. assess_confidence — 模糊/矛盾/明确+遥测/明确无遥测
 6. compute_dx — 强度类型非法/浮点强度
-7. get_rule — 未知症状返回 None
 8. 边界值：强度 0/5、全部症状最大强度叠加
 """
 
@@ -41,7 +40,6 @@ from setup_tuner.engine.engine import (
     generate_suggestion,
     validate_engine,
 )
-from setup_tuner.engine.rules import get_all_rules, get_rule, load_rules, validate_rules
 
 
 @pytest.fixture
@@ -104,7 +102,7 @@ class TestTelemetryGain:
     def test_none_telemetry(self) -> None:
         """None 返回全 1.0 增益。"""
         gain = _derive_telemetry_gain(None)
-        assert len(gain) == 21
+        assert len(gain) == 20
         assert all(v == 1.0 for v in gain.values())
 
     def test_empty_telemetry(self) -> None:
@@ -124,10 +122,23 @@ class TestTelemetryGain:
         assert all(v == 0.7 for v in gain.values())
 
     def test_wet_numeric_m_weather(self) -> None:
-        """m_weather 数字 >=1 → ×0.7。"""
-        for w in (1, 2, 3):
+        """m_weather >=3（小雨/大雨/暴雨）→ ×0.7。
+
+        官方 6 档枚举：0=晴 1=轻云 2=阴 3=小雨 4=大雨 5=暴雨。
+        此处曾误按 4 档写成 >=1，把轻云/阴天干地也套上湿地保守系数
+        （实测：车手在 m_weather=1 的 Hungaroring 用 C5/C4 干胎）。
+        """
+        for w in (3, 4, 5):
             gain = _derive_telemetry_gain({"m_weather": w})
             assert all(v == 0.7 for v in gain.values()), f"m_weather={w} 未生效"
+
+    def test_light_cloud_and_overcast_are_dry(self) -> None:
+        """m_weather=1（轻云）/2（阴）**不是**湿地 → ×1.0（回归防线）。"""
+        for w in (1, 2):
+            gain = _derive_telemetry_gain({"m_weather": w})
+            assert all(v == 1.0 for v in gain.values()), (
+                f"m_weather={w} 是干地（轻云/阴），不应触发湿地系数"
+            )
 
     def test_clear_numeric_m_weather(self) -> None:
         """m_weather=0 (clear) → ×1.0。"""
@@ -144,7 +155,7 @@ class TestTelemetryGain:
         gain = _derive_telemetry_gain({"weather": None})
         assert all(v == 1.0 for v in gain.values())
 
-    def test_gain_covers_all_23_params(self) -> None:
+    def test_gain_covers_all_20_params(self) -> None:
         """增益覆盖全部 23 参数。"""
         gain = _derive_telemetry_gain({"weather": "wet"})
         assert set(gain.keys()) == set(PARAM_NAMES)
@@ -181,7 +192,7 @@ class TestComputeSetupDelta:
         d2 = compute_setup_delta(dx, default_setup)
         assert d1 == d2
 
-    def test_delta_keys_cover_23_params(self, default_setup) -> None:
+    def test_delta_keys_cover_20_params(self, default_setup) -> None:
         """delta 键覆盖全部 23 参数。"""
         dx = compute_dx([("understeer", 3)])
         delta = compute_setup_delta(dx, default_setup)
@@ -348,45 +359,6 @@ class TestComputeDxEdgeCases:
 class TestRulesEdgeCases:
     """规则库边界条件。"""
 
-    def test_get_rule_unknown_returns_none(self) -> None:
-        """未知症状 get_rule 返回 None。"""
-        assert get_rule("nonexistent_symptom") is None
-
-    def test_get_rule_known(self) -> None:
-        """已知症状 get_rule 返回规则字典。"""
-        rule = get_rule("understeer")
-        assert rule is not None
-        assert rule["symptom"] == "understeer"
-        assert rule["id"] == "rule_understeer"
-        assert "delta_table" in rule
-        assert len(rule["delta_table"]) == 21
-
-    def test_load_rules_count_15(self) -> None:
-        """load_rules 返回 15 条规则（task-60 扩展）。"""
-        rules = load_rules()
-        assert len(rules) == 15
-
-    def test_get_all_rules_same_as_load(self) -> None:
-        """get_all_rules 与 load_rules 一致。"""
-        assert get_all_rules() == load_rules()
-
-    def test_validate_rules_passes(self) -> None:
-        """validate_rules 通过。"""
-        validate_rules()
-
-    def test_every_rule_delta_table_covers_23(self) -> None:
-        """每条规则 delta_table 覆盖 21 参数。"""
-        rules = load_rules()
-        for symptom, rule in rules.items():
-            assert len(rule["delta_table"]) == 21, f"规则 {symptom!r} delta_table 非 21 项"
-
-    def test_every_rule_has_source(self) -> None:
-        """每条规则 source 非空。"""
-        rules = load_rules()
-        for symptom, rule in rules.items():
-            assert rule["source"], f"规则 {symptom!r} source 为空"
-
-
 # ===========================================================================
 # 8. 耦合矩阵边界
 # ===========================================================================
@@ -402,7 +374,7 @@ class TestCouplingMatrixEdgeCases:
     def test_get_row_unknown_diag(self) -> None:
         """get_row 未知维度 → 全 None。"""
         row = get_row("nonexistent_diag")
-        assert len(row) == 21
+        assert len(row) == 20
         assert all(v is None for v in row.values())
 
     def test_get_coupling_both_unknown(self) -> None:
@@ -442,12 +414,12 @@ class TestValidateEngine:
         assert result["confidence"] == "high"
 
     def test_generate_suggestion_wet_telemetry(self, default_setup) -> None:
-        """湿地遥测 → delta 幅度减小。"""
+        """湿地遥测（m_weather=3 小雨）→ delta 幅度减小。"""
         result_dry = generate_suggestion(
             [("understeer", 3)], default_setup, "test", {"m_weather": 0},
         )
         result_wet = generate_suggestion(
-            [("understeer", 3)], default_setup, "test", {"m_weather": 1},
+            [("understeer", 3)], default_setup, "test", {"m_weather": 3},
         )
         # 湿地非零 delta 绝对值之和应小于晴天
         dry_sum = sum(abs(v) for v in result_dry["setup_delta"].values())

@@ -99,7 +99,7 @@ class TestUnit:
         """CarSetup.to_dict 应返回 21 字段扁平字典。"""
         s = CarSetup.default()
         d = s.to_dict()
-        assert len(d) == 21
+        assert len(d) == 20
         assert d["front_wing"] == 25.0
 
     def test_unit_car_setup_from_dict(self) -> None:
@@ -114,7 +114,7 @@ class TestUnit:
     def test_unit_get_symptoms_by_category(self) -> None:
         """get_symptoms_by_category 应返回该类别下全部症状。"""
         entry = get_symptoms_by_category(SymptomCategory.ENTRY)
-        assert len(entry) == 5
+        assert len(entry) == 6
         assert Symptom.UNDERSTEER in entry
 
     def test_unit_get_symptom_label(self) -> None:
@@ -129,7 +129,7 @@ class TestUnit:
 
     def test_unit_validate_intensity_in_range(self) -> None:
         """validate_intensity 对合法值应原样返回。"""
-        for v in (0, 1, 3, 5):
+        for v in (1, 2, 3):
             assert validate_intensity(v) == v
 
     def test_unit_get_track_by_id(self) -> None:
@@ -141,7 +141,8 @@ class TestUnit:
 
     def test_unit_get_track_by_udp_id(self) -> None:
         """get_track_by_udp_id 应返回对应赛道。"""
-        t = get_track_by_udp_id(2)
+        # 官方 m_trackId：suzuka = 13（早期按赛历轮次分配为 2，会认错赛道）
+        t = get_track_by_udp_id(13)
         assert t is not None
         assert t.track_id == "suzuka"
 
@@ -236,10 +237,10 @@ class TestProperty:
         restored = CarSetup.from_dict(d)
         assert restored.to_dict() == d
 
-    def test_property_default_to_dict_has_23_fields(self) -> None:
+    def test_property_default_to_dict_has_20_fields(self) -> None:
         """不变量：default().to_dict() 恰好含 21 个字段。"""
         d = CarSetup.default().to_dict()
-        assert len(d) == 21
+        assert len(d) == 20
 
     def test_property_default_is_idempotent(self) -> None:
         """幂等性：多次调用 default() 结果一致。"""
@@ -300,9 +301,9 @@ class TestProperty:
 class TestStatic:
     """静态分析：验证数量与值域约束。"""
 
-    def test_static_setup_field_count_is_21(self) -> None:
+    def test_static_setup_field_count_is_20(self) -> None:
         """数量约束：ALL_SETUP_FIELDS 恰好 21 项。"""
-        assert len(ALL_SETUP_FIELDS) == 21
+        assert len(ALL_SETUP_FIELDS) == 20
 
     def test_static_group_count_is_6(self) -> None:
         """数量约束：ALL_GROUPS 恰好 6 大类。"""
@@ -312,9 +313,9 @@ class TestStatic:
             "Suspension", "Brakes", "Tyres",
         ]
 
-    def test_static_symptom_count_is_15(self) -> None:
-        """数量约束：Symptom 枚举恰好 15 项（task-60 扩展）。"""
-        assert len(list(Symptom)) == 15
+    def test_static_symptom_count_is_22(self) -> None:
+        """数量约束：Symptom 枚举恰好 22 项（task-82 扩展）。"""
+        assert len(list(Symptom)) == 22
 
     def test_static_track_count_is_24(self) -> None:
         """数量约束：ALL_TRACKS 恰好 24 条赛道。"""
@@ -336,10 +337,10 @@ class TestStatic:
         assert field.step > 0
 
     def test_static_intensity_constants(self) -> None:
-        """值域约束：强度常量 INTENSITY_MIN=0, MAX=5, DEFAULT=3。"""
-        assert INTENSITY_MIN == 0
-        assert INTENSITY_MAX == 5
-        assert DEFAULT_INTENSITY == 3
+        """值域约束：强度常量 INTENSITY_MIN=1, MAX=3, DEFAULT=2（task-61）。"""
+        assert INTENSITY_MIN == 1
+        assert INTENSITY_MAX == 3
+        assert DEFAULT_INTENSITY == 2
 
     @pytest.mark.parametrize("sym", list(Symptom))
     def test_static_each_symptom_has_info(self, sym: Symptom) -> None:
@@ -414,12 +415,12 @@ class TestSmoke:
             assert fetched.track_id == track.track_id
             assert fetched.udp_track_id == track.udp_track_id
 
-    def test_smoke_all_15_symptoms_categorized(self) -> None:
-        """冒烟：全部 15 症状可按类别检索（task-60 扩展）。"""
+    def test_smoke_all_22_symptoms_categorized(self) -> None:
+        """冒烟：全部 22 症状可按类别检索（task-82 扩展）。"""
         all_categorized: list[Symptom] = []
         for cat in SymptomCategory:
             all_categorized.extend(get_symptoms_by_category(cat))
-        assert len(all_categorized) == 15
+        assert len(all_categorized) == 22
         assert set(all_categorized) == set(Symptom)
 
     def test_smoke_setup_roundtrip_with_modifications(self) -> None:

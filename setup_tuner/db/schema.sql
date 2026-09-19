@@ -40,9 +40,9 @@ CREATE TABLE IF NOT EXISTS feedback (
   setup_id          INTEGER REFERENCES setup(id),
   track_id          TEXT NOT NULL,
   corner_number     INTEGER,               -- 点击弯道；NULL 表示「全局」症状
-  symptom           TEXT NOT NULL,         -- 12 症状标识之一
-  category          TEXT NOT NULL,         -- entry|apex|exit|global
-  strength          INTEGER NOT NULL DEFAULT 3 CHECK(strength BETWEEN 0 AND 5),
+  symptom           TEXT NOT NULL,         -- 症状标识之一
+  category          TEXT NOT NULL,         -- entry|apex|exit|global（即反馈阶段）
+  strength          INTEGER NOT NULL DEFAULT 2 CHECK(strength BETWEEN 1 AND 3),
   created_at        TEXT NOT NULL
 );
 
@@ -63,11 +63,57 @@ CREATE TABLE IF NOT EXISTS iteration (
   before_setup_id   INTEGER REFERENCES setup(id),
   after_setup_id    INTEGER REFERENCES setup(id),
   suggestion_id     INTEGER REFERENCES suggestion(id),
-  created_at        TEXT NOT NULL
+  created_at        TEXT NOT NULL,
+  -- task-62 M1：效果闭环字段（旧库由 Store 迁移补列）
+  lap_time_before_ms INTEGER,
+  lap_time_after_ms  INTEGER,
+  outcome_delta_ms   REAL,
+  applied_delta_json TEXT,
+  style_vector_json  TEXT
+);
+
+-- driver：车手档案（task-62 个性化 M1；单机默认 1 号车手，为多人留位）
+CREATE TABLE IF NOT EXISTS driver (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  name        TEXT NOT NULL UNIQUE,
+  created_at  TEXT NOT NULL
+);
+
+-- lap_record：整圈落库（LapAggregator 固化快照 + 圈时与工况）
+CREATE TABLE IF NOT EXISTS lap_record (
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  driver_id      INTEGER NOT NULL REFERENCES driver(id),
+  track_id       TEXT NOT NULL,
+  session_uid    INTEGER,
+  lap_number     INTEGER,
+  lap_time_ms    INTEGER,
+  is_valid       INTEGER NOT NULL DEFAULT 1,
+  tyre_compound  TEXT,
+  tyre_age_laps  INTEGER,
+  fuel_kg        REAL,
+  weather        INTEGER,
+  track_temp     REAL,
+  air_temp       REAL,
+  setup_id       INTEGER REFERENCES setup(id),
+  telemetry_json TEXT NOT NULL,
+  created_at     TEXT NOT NULL
+);
+
+-- driver_style：车手风格向量（EMA 平滑，sample_count 为样本圈数）
+CREATE TABLE IF NOT EXISTS driver_style (
+  driver_id    INTEGER NOT NULL REFERENCES driver(id),
+  track_id     TEXT NOT NULL,
+  vector_json  TEXT NOT NULL,
+  sample_count INTEGER NOT NULL DEFAULT 0,
+  updated_at   TEXT NOT NULL,
+  PRIMARY KEY (driver_id, track_id)
 );
 
 -- 索引：加速按赛道查询反馈/建议/迭代历史
 CREATE INDEX IF NOT EXISTS idx_feedback_track ON feedback(track_id);
+-- 复合索引：加速 get_feedbacks 的 WHERE track_id=? ORDER BY created_at
+-- （/suggest 每次都会拉取该赛道全部反馈，原实现只命中 track_id 后需再排序）
+CREATE INDEX IF NOT EXISTS idx_feedback_track_created ON feedback(track_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_feedback_setup ON feedback(setup_id);
 CREATE INDEX IF NOT EXISTS idx_setup_track ON setup(track_id);
 CREATE INDEX IF NOT EXISTS idx_suggestion_track ON suggestion(track_id);
@@ -83,3 +129,6 @@ CREATE INDEX IF NOT EXISTS idx_suggestion_track_created_at
 -- get_latest_round: WHERE track_id=? 聚合 MAX(round_no)
 CREATE INDEX IF NOT EXISTS idx_iteration_track_round
   ON iteration(track_id, round_no DESC);
+-- task-62：车手/赛道维度查圈史
+CREATE INDEX IF NOT EXISTS idx_lap_driver_track
+  ON lap_record(driver_id, track_id, created_at);

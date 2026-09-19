@@ -1,40 +1,17 @@
 """创建F1OPT桌面快捷方式"""
 import os
-import struct
 import sys
+from pathlib import Path
 
+# 仓库根目录（本脚本位于 <root>/scripts/），避免硬编码绝对路径
+ROOT = Path(__file__).resolve().parents[1]
 def create_shortcut(target_path, shortcut_path, description="", working_dir=""):
-    """用Python标准库创建Windows .lnk快捷方式文件。
+    """（未实现）曾打算用 ctypes 直接调 Shell COM 接口写 .lnk。
 
-    .lnk文件格式参考：MS-SHLLINK规范。
-    这里使用最小化二进制格式创建可用的快捷方式。
+    MS-SHLLINK 的 CLSID/IID 与 IPersistFile 调用链过于繁琐，
+    已改为下方 ``create_shortcut_powershell``（走 WScript.Shell COM）。
+    保留本函数仅为记录该决策，勿调用 —— 它恒返回 False。
     """
-    # 使用ctypes调用Windows Shell API
-    import ctypes
-    from ctypes import wintypes
-
-    # 加载shell32
-    shell32 = ctypes.windll.shell32
-    ole32 = ctypes.windll.ole32
-
-    # 初始化COM
-    ole32.CoInitialize(0)
-
-    # CLSID for ShellLink
-    clsid = ctypes.c_buffer(b'\x01\x14\x02\x00\x00\x00\x00\x00\xc0\x00\x00\x00\x00\x00\x00\x46', 16)
-
-    # IID for IShellLinkW
-    iid = ctypes.c_buffer(b'\x41\x14\x02\x00\x00\x00\x00\x00\xc0\x00\x00\x00\x00\x00\x00\x46', 16)
-
-    # 定义IPersistFile接口的IID
-    iid_persist_file = ctypes.c_buffer(
-        b'\x03\x01\x00\x00\x00\x00\x00\x00\xc0\x00\x00\x00\x00\x00\x00\x46', 16
-    )
-
-    # 使用CoCreateInstance创建IShellLinkW对象
-    # 这个方法太复杂了，改用更简单的方式
-
-    ole32.CoUninitialize()
     return False
 
 
@@ -71,10 +48,10 @@ Write-Output "OK"
 
 
 if __name__ == "__main__":
-    target = r"D:\F1OPT-Test\dist\F1OPT.exe"
+    target = ROOT / "dist" / "f1opt" / "f1opt.exe"
     desktop = os.path.join(os.environ["USERPROFILE"], "Desktop")
     shortcut = os.path.join(desktop, "F1OPT.lnk")
-    work_dir = r"D:\F1OPT-Test\dist"
+    work_dir = ROOT / "dist" / "f1opt"
     desc = "F1调教优化助手"
 
     print(f"目标: {target}")
@@ -95,5 +72,5 @@ if __name__ == "__main__":
     if success:
         print(f"\n✅ 桌面快捷方式已创建: {shortcut}")
     else:
-        print(f"\n❌ 创建快捷方式失败")
+        print("\n❌ 创建快捷方式失败")
         sys.exit(1)

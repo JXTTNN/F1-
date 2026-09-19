@@ -1,5 +1,6 @@
 """验证calibrator.py — 用最快圈数据运行校准"""
 import json
+
 from setup_tuner.domain.setup import CarSetup
 from setup_tuner.domain.track import get_track_by_id
 from setup_tuner.physics.calibrator import Calibrator, TelemetryBenchmark

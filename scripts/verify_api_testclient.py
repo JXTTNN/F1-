@@ -3,9 +3,12 @@
 import sys
 from pathlib import Path
 
-sys.path.insert(0, "D:/F1OPT-Test")
-from setup_tuner.app import create_app
+# 仓库根目录（本脚本位于 <root>/scripts/），避免硬编码绝对路径
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
 from fastapi.testclient import TestClient
+
+from setup_tuner.app import create_app
 
 app = create_app()
 client = TestClient(app)
@@ -22,7 +25,7 @@ else:
     all_ok = False
 
 # 2. 验证单条赛道数据
-print(f"\n--- 弯道数据验证 ---")
+print("\n--- 弯道数据验证 ---")
 for tid in ["melbourne", "monaco", "spa", "silverstone", "singapore", "mexico_city"]:
     resp = client.get(f"/tracks/{tid}")
     if resp.status_code == 200:
@@ -34,7 +37,7 @@ for tid in ["melbourne", "monaco", "spa", "silverstone", "singapore", "mexico_ci
         all_ok = False
 
 # 3. 验证SVG静态文件
-print(f"\n--- SVG静态文件验证 ---")
+print("\n--- SVG静态文件验证 ---")
 for tid in ["melbourne", "monaco", "spa", "silverstone", "singapore", "mexico_city"]:
     resp = client.get(f"/static/tracks/{tid}.svg")
     if resp.status_code == 200:
@@ -49,7 +52,7 @@ for tid in ["melbourne", "monaco", "spa", "silverstone", "singapore", "mexico_ci
         all_ok = False
 
 # 4. 验证首页加载（包含前端HTML）
-print(f"\n--- 首页加载验证 ---")
+print("\n--- 首页加载验证 ---")
 resp = client.get("/")
 if resp.status_code == 200:
     content = resp.text

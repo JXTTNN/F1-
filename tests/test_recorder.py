@@ -474,3 +474,97 @@ class TestModuleConstants:
     def test_zstd_available_or_graceful(self) -> None:
         """zstd 可用或降级标志为 False。"""
         assert isinstance(recorder._HAS_ZSTD, bool)
+
+# ===========================================================================
+# 8. 查询降级路径必须留痕（不静默失效）
+# ===========================================================================
+class TestQueryDegradationIsLogged:
+    """查询失败回落到零值/默认值时必须写日志。
+
+    这些分支在 UI 上表现为"包数偏少 / 起始时间缺失"，若静默吞掉，
+    数据问题会被误判为"本来就没录到"，无从排查。
+    """
+
+    def test_query_db_packet_count_logs_on_failure(self, tmp_path, caplog) -> None:
+        """SQLite 文件存在但不可读（非库文件）时回落估算且记 warning。"""
+        bad_db = tmp_path / "broken.db"
+        bad_db.write_bytes(b"this is not a sqlite database")
+
+        with caplog.at_level("WARNING", logger="setup_tuner.telemetry.recorder"):
+            count = TelemetryRecorder._query_db_packet_count(bad_db, 1234)
+
+        assert count == 1234, "应回落到估算值"
+        assert any(
+            "读取录制包数失败" in r.getMessage() for r in caplog.records
+        ), "降级未留痕"
+
+    def test_query_db_packet_count_no_log_on_clean_path(self, tmp_path, caplog) -> None:
+        """文件不存在属正常回落，不应产生噪声日志。"""
+        with caplog.at_level("WARNING", logger="setup_tuner.telemetry.recorder"):
+            count = TelemetryRecorder._query_db_packet_count(tmp_path / "nope.db", 42)
+
+        assert count == 42
+        assert not [r for r in caplog.records if r.levelno >= 30]
+
+    def test_read_f1rec_header_logs_on_corrupt(self, tmp_path, caplog) -> None:
+        """头部被截断/损坏时返回 (None, 0) 且记 warning。"""
+        corrupt = tmp_path / "x.f1rec"
+        corrupt.write_bytes(b"F1R\x00\x01")  # 远短于 69 字节文件头
+
+        with caplog.at_level("WARNING", logger="setup_tuner.telemetry.recorder"):
+            result = TelemetryRecorder(tmp_path)._read_f1rec_header(corrupt)
+
+        # 短头走早返回（无异常），断言不崩且为空结果
+        assert result == (None, 0)
+
+    def test_read_f1rec_header_logs_on_io_error(self, tmp_path, caplog, monkeypatch) -> None:
+        """文件已存在但读取时抛异常：返回 (None, 0) 且记 warning。"""
+        good = tmp_path / "y.f1rec"
+        good.write_bytes(
+            struct.pack(recorder._FILE_HEADER_FMT, _MAGIC, 1, b"sid", b"2026-01-01")
+        )
+        real_stat = Path.stat
+        # 只对目标文件注入 IO 错误，不影响 pytest 自身对 tmp_path 的 stat
+        monkeypatch.setattr(
+            Path, "stat",
+            lambda self, *a, **kw: (
+                (_ for _ in ()).throw(OSError("模拟 IO 错误"))
+                if self.name == good.name else real_stat(self, *a, **kw)
+            ),
+        )
+
+        with caplog.at_level("WARNING", logger="setup_tuner.telemetry.recorder"):
+            result = TelemetryRecorder(tmp_path)._read_f1rec_header(good)
+
+        assert result == (None, 0)
+        logged = [r for r in caplog.records if r.levelno >= 30]
+        assert logged, "IO 异常降级未留痕"
+        assert any("f1rec" in r.getMessage() for r in logged)
+
+
+class TestRecordingStatsDegradationIsLogged:
+    """_query_db_recording_stats 失败留痕（get_recording_detail 的数据源）。"""
+
+    def test_stats_logs_warning_on_broken_db(self, tmp_path, caplog) -> None:
+        """库损坏时返回零值元组且记 warning。"""
+        bad_db = tmp_path / "broken.db"
+        bad_db.write_bytes(b"not a database at all")
+
+        with caplog.at_level("WARNING", logger="setup_tuner.telemetry.recorder"):
+            count, end_time, by_type = TelemetryRecorder(
+                tmp_path
+            )._query_db_recording_stats(bad_db)
+
+        assert (count, end_time, by_type) == (0, None, [])
+        assert any("查询录制统计失败" in r.getMessage()
+                   for r in caplog.records), "统计降级未留痕"
+
+    def test_stats_missing_file_returns_zeros_silently(self, tmp_path, caplog) -> None:
+        """文件不存在属正常情况：返回零值且不产生 warning。"""
+        with caplog.at_level("WARNING", logger="setup_tuner.telemetry.recorder"):
+            count, end_time, by_type = TelemetryRecorder(
+                tmp_path
+            )._query_db_recording_stats(tmp_path / "missing.db")
+
+        assert (count, end_time, by_type) == (0, None, [])
+        assert not [r for r in caplog.records if r.levelno >= 30]

@@ -23,7 +23,7 @@ jobs:
           pip install -e ".[dev]"
 
       - name: Lint (ruff)
-        run: ruff check setup_tuner/
+        run: ruff check setup_tuner/ tests/
 
       - name: Test (pytest)
         run: pytest tests/ -v --timeout=30

@@ -319,7 +319,132 @@ class TelemetrySimulator:
             self._current_corner = new_corner
             self._dispatch(self._build_corner_event(track, frame, new_corner))
         self._dispatch(frame)
+        self._dispatch(self._build_motion_frame(frame, rng))
+        self._dispatch(
+            self._build_car_status_frame(frame, setup, rng, n_frames_per_lap),
+        )
         self._advance_frame(n_frames_per_lap, track.track_id)
+
+    def _build_car_status_frame(
+        self, telem_frame: dict[str, Any], setup: CarSetup,
+        rng: random.Random, n_frames_per_lap: int,
+    ) -> dict[str, Any]:
+        """由 CarTelemetry 帧与当前调教派生一帧 CarStatus（对齐 Packet 7 字段名）。
+
+        模拟数据需覆盖 Packet 7 的状态量，否则聚合器的 ``on_car_status``
+        在无真实 F1 游戏时永远收不到帧（与 MotionEx 同一类问题）。
+
+        - 轮胎配方取 ``setup`` 的胎压倾向，使配方相关的阈值分支可被端到端验证；
+        - 刹车平衡直接读 ``setup.brake_bias``，保证「写入值 == 游戏内读数」；
+        - 燃油随圈内进度线性消耗。
+        """
+        frame_idx = self._current_frame
+        lap_progress = (frame_idx % max(1, n_frames_per_lap)) / max(
+            1, n_frames_per_lap,
+        )
+        # 配方：默认 C3(18)；胎压偏低时倾向软胎、偏高时倾向硬胎，覆盖分支
+        compound = 18
+        try:
+            front_pressure = float(setup.front_left_tyre_pressure)
+        except (AttributeError, TypeError, ValueError):
+            front_pressure = 23.0
+        if front_pressure < 22.0:
+            compound = 16  # C5 软胎
+        elif front_pressure > 25.0:
+            compound = 20  # C1 硬胎
+
+        fuel_capacity = 110.0
+        remaining = max(0.0, fuel_capacity * (1.0 - 0.35 * lap_progress))
+
+        return {
+            "packet_id": 7,
+            "name": "CarStatus",
+            # 轮胎配方与胎龄
+            "m_actualTyreCompound": compound,
+            "m_visualTyreCompound": compound,
+            "m_tyresAgeLaps": rng.randint(0, 5),
+            # 燃油
+            "m_fuelInTank": round(remaining, 3),
+            "m_fuelCapacity": fuel_capacity,
+            "m_fuelRemainingLaps": round(remaining / 2.4, 3),
+            # 刹车平衡（与调教写入值一致，供核对）
+            "m_frontBrakeBias": float(getattr(setup, "brake_bias", 58.0)),
+            # ERS
+            "m_ersStoreEnergy": round(
+                3_000_000.0 + 1_000_000.0 * (1 - lap_progress), 1,
+            ),
+            "m_ersDeployMode": 2,
+            # 辅助电子系统
+            "m_tractionControl": 1,
+            "m_antiLockBrakes": 1,
+            "m_fuelMix": 1,
+            "m_maxRPM": 15000,
+            "m_idleRPM": 4000,
+            "m_drsAllowed": 1,
+            "m_pitLimiterStatus": 0,
+            "m_maxGears": 8,
+        }
+
+    def _build_motion_frame(
+        self, telem_frame: dict[str, Any], rng: random.Random,
+    ) -> dict[str, Any]:
+        """由 CarTelemetry 帧派生一帧 MotionEx（对齐 Packet 13 解析后字段名）。
+
+        底板离地高度随速度/刹车/弯中状态变化：高速与刹车重压时底盘下沉，
+        弯中车身侧倾使单侧前缘更低。这样模拟数据能覆盖「刮底」与「正常」
+        两种情形，使规则9 在无真实 F1 游戏时同样可端到端验证。
+        """
+        speed = float(telem_frame.get("speed", 0.0))
+        brake = float(telem_frame.get("brake", 0.0))
+        steer = abs(float(telem_frame.get("steer", 0.0)))
+        in_corner = bool(telem_frame.get("in_corner"))
+
+        # 基准离地高度 25mm，随速度（气动下压）与刹车（俯仰）下沉
+        sink = speed / 350.0 * 0.012 + brake * 0.010 + (0.004 if in_corner else 0.0)
+        front = max(0.003, 0.030 - sink + rng.uniform(-0.002, 0.002))
+        rear = max(0.004, 0.034 - sink * 0.7 + rng.uniform(-0.002, 0.002))
+        # 弯中侧倾：单侧悬挂压缩更多
+        roll = 0.004 * steer
+        susp = [
+            round(0.030 - roll + rng.uniform(-0.001, 0.001), 5),  # RL
+            round(0.030 + roll + rng.uniform(-0.001, 0.001), 5),  # RR
+            round(0.032 - roll + rng.uniform(-0.001, 0.001), 5),  # FL
+            round(0.032 + roll + rng.uniform(-0.001, 0.001), 5),  # FR
+        ]
+        return {
+            "packet_id": 13,
+            "name": "MotionEx",
+            "m_suspensionPosition": susp,
+            "m_suspensionVelocity": [0.0] * 4,
+            "m_suspensionAcceleration": [0.0] * 4,
+            "m_wheelSpeed": [round(speed / 3.6, 3)] * 4,
+            "m_wheelSlipRatio": [0.0] * 4,
+            "m_wheelSlipAngle": [0.0] * 4,
+            "m_wheelLatForce": [0.0] * 4,
+            "m_wheelLongForce": [0.0] * 4,
+            "m_heightOfCOGAboveGround": 0.30,
+            "m_localVelocityX": round(speed / 3.6, 3),
+            "m_localVelocityY": 0.0,
+            "m_localVelocityZ": 0.0,
+            "m_angularVelocityX": 0.0,
+            "m_angularVelocityY": 0.0,
+            "m_angularVelocityZ": 0.0,
+            "m_angularAccelerationX": 0.0,
+            "m_angularAccelerationY": 0.0,
+            "m_angularAccelerationZ": 0.0,
+            "m_frontWheelsAngle": round(steer * 0.5, 4),
+            "m_wheelVertForce": [0.0] * 4,
+            "m_frontAeroHeight": round(front, 5),
+            "m_rearAeroHeight": round(rear, 5),
+            "m_frontRollAngle": round(roll, 5),
+            "m_rearRollAngle": round(roll * 0.8, 5),
+            "m_chassisYaw": 0.0,
+            "m_chassisPitch": round(-brake * 0.02, 5),
+            "m_wheelCamber": [0.0] * 4,
+            "m_wheelCamberGain": [0.0] * 4,
+            "lap_number": telem_frame.get("lap_number"),
+            "track_id": telem_frame.get("track_id"),
+        }
 
     def _build_corner_event(
         self, track: Track, frame: dict[str, Any], new_corner: int | None,

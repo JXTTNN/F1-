@@ -29,12 +29,17 @@ PyTorch 为可选依赖（optional），本模块在无 PyTorch 环境下可安�
 
 from __future__ import annotations
 
+import logging
+import threading
 from pathlib import Path
 from typing import Any
 
 from setup_tuner.domain.setup import ALL_SETUP_FIELDS
 from setup_tuner.domain.symptoms import Symptom
+from setup_tuner.domain.track import ALL_TRACKS
 from setup_tuner.engine.diagnostic import DIAG_DIMS
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # PyTorch 可选导入：不可用时定义占位，保证模块可安全导入
@@ -77,21 +82,28 @@ except ImportError:
 
 
 # ---------------------------------------------------------------------------
-# 常量：输入特征维度
+# 常量：输入特征维度（**从领域模型动态推导**，避免 schema 变更后静默失配）
 # ---------------------------------------------------------------------------
-# 12 症状 + 9 诊断 + 23 当前参数 + 24 赛道 = 68
-_NUM_SYMPTOMS = 12
-_NUM_DIAG_DIMS = 9
-_NUM_SETUP_PARAMS = 23
-_NUM_TRACKS = 24
-_INPUT_SIZE = _NUM_SYMPTOMS + _NUM_DIAG_DIMS + _NUM_SETUP_PARAMS + _NUM_TRACKS  # 68
-_OUTPUT_SIZE = _NUM_SETUP_PARAMS  # 23
+# 历史问题：这里曾硬编码 ``_NUM_SYMPTOMS = 12`` / ``_NUM_SETUP_PARAMS = 23``，
+# 而实现后来演进为 15 症状 / 21 参数 → 构造出的输入向量长度（66）与网络输入层
+# 声明（68）不符，``predict`` 里的 ``except`` 把维度异常吞掉，神经网络分支
+# 实际永远返回 None（"混合模型"退化成了纯规则引擎，且无从察觉）。
+# 现在全部改为 len(...)，并在模块导入时做一次一致性自检。
+_NUM_SYMPTOMS = len(Symptom)
+_NUM_DIAG_DIMS = len(DIAG_DIMS)
+_NUM_SETUP_PARAMS = len(ALL_SETUP_FIELDS)
+_NUM_TRACKS = len(ALL_TRACKS)
+_INPUT_SIZE = _NUM_SYMPTOMS + _NUM_DIAG_DIMS + _NUM_SETUP_PARAMS + _NUM_TRACKS
+_OUTPUT_SIZE = _NUM_SETUP_PARAMS
 
-# 症状强度归一化因子（0-5 → 0-1）
-_SYMPTOM_INTENSITY_MAX = 5.0
+# 症状强度归一化因子（1-3 → 0-1；task-61 强度档位由 0-5 收敛为 1-3）
+_SYMPTOM_INTENSITY_MAX = 3.0
 
 # Dx 归一化因子（Dx 分量绝对值上限约 10，用 tanh 压缩；这里用线性归一化）
 _DX_NORMALIZE_SCALE = 5.0
+
+# 症状字符串 → 枚举下标（模块级预构建，避免每次调用重建 dict）
+_SYMPTOM_INDEX: dict[str, int] = {s.value: i for i, s in enumerate(Symptom)}
 
 # 赛道 ID → 索引 映射（延迟构建）
 _TRACK_ID_TO_INDEX: dict[str, int] | None = None
@@ -155,18 +167,20 @@ else:
 # 归一化 / 反归一化工具
 # ---------------------------------------------------------------------------
 def _normalize_symptoms(symptoms: list[tuple[str, int]]) -> list[float]:
-    """将症状强度归一化为 12 维向量（0-1）。
+    """将症状强度归一化为 ``len(Symptom)`` 维向量（0-1）。
+
+    症状数由枚举长度决定（当前 15），因此新增症状不会再触发下标越界。
+    未知症状键按 0 处理（跳过，不抛错）。
 
     Args:
         symptoms: 症状列表 [(symptom_key, strength), ...]。
 
     Returns:
-        长度 12 的浮点列表，按 Symptom 枚举顺序排列，每维 ∈ [0, 1]。
+        长度 = ``len(Symptom)`` 的浮点列表，按 Symptom 枚举顺序排列，每维 ∈ [0, 1]。
     """
-    symptom_map = {s.value: i for i, s in enumerate(Symptom)}
     vec = [0.0] * _NUM_SYMPTOMS
     for key, strength in symptoms:
-        idx = symptom_map.get(key)
+        idx = _SYMPTOM_INDEX.get(key)
         if idx is not None:
             vec[idx] = float(strength) / _SYMPTOM_INTENSITY_MAX
     return vec
@@ -362,6 +376,19 @@ class NNModelManager:
         try:
             # 构建输入向量
             input_vec = build_input_vector(symptoms, dx, current_setup, track_id)
+            # 维度自检：network 输入层大小必须与向量长度一致。
+            # 早期硬编码 12/23/68 与实现（15/21/66）不符，异常被下方 except 吞掉，
+            # 神经网络分支静默失效 —— 这里改为显式报错并输出维度明细。
+            expected = getattr(getattr(self.model, "fc1", None), "in_features", None)
+            if expected is not None and len(input_vec) != expected:
+                logger.error(
+                    "NN 输入维度不匹配：向量 %d 维 vs 网络 %d 维"
+                    "（症状 %d / 诊断 %d / 参数 %d / 赛道 %d）—— "
+                    "请检查 engine/nn_model.py 的维度常量推导",
+                    len(input_vec), expected, _NUM_SYMPTOMS, _NUM_DIAG_DIMS,
+                    _NUM_SETUP_PARAMS, _NUM_TRACKS,
+                )
+                return None
             # 转为 tensor（无梯度）
             with torch.no_grad():  # type: ignore[union-attr]
                 x = torch.tensor(  # type: ignore[union-attr]
@@ -377,7 +404,8 @@ class NNModelManager:
             # 反归一化
             return _denormalize_delta(normalized_delta)
         except Exception:
-            # 推理异常时返回 None，触发降级
+            # 推理异常时返回 None，触发降级（记录日志，避免静默失效）
+            logger.warning("NN 推理失败，本次降级为纯规则引擎", exc_info=True)
             return None
 
     def save_weights(self, path: str | Path | None = None) -> bool:
@@ -405,13 +433,17 @@ class NNModelManager:
 # 模块级单例（延迟初始化，供 engine.py 使用）
 # ---------------------------------------------------------------------------
 _NN_MANAGER: NNModelManager | None = None
+# 初始化锁：FastAPI 默认线程池会并发处理请求，若不串行化，
+# 两个线程可能同时进入 ``_NN_MANAGER is None`` 分支，各自构造一次
+# NNModelManager（含 F1SetupNet 构建 / torch.load），造成重复开销。
+_NN_MANAGER_LOCK = threading.Lock()
 
 
 def get_nn_manager(weights_path: str | Path = "data/nn_weights.pt") -> NNModelManager:
     """获取神经网络模型管理器单例。
 
-    延迟初始化，首次调用时构造 NNModelManager。
-    后续调用返回同一实例（忽略 weights_path 参数变化）。
+    延迟初始化，首次调用时构造 NNModelManager，此后复用。
+    首次初始化受模块级锁保护，并发调用不会重复构造。
 
     Args:
         weights_path: 权重文件路径（仅首次调用生效）。
@@ -421,14 +453,18 @@ def get_nn_manager(weights_path: str | Path = "data/nn_weights.pt") -> NNModelMa
     """
     global _NN_MANAGER
     if _NN_MANAGER is None:
-        _NN_MANAGER = NNModelManager(weights_path)
+        with _NN_MANAGER_LOCK:
+            # 双重检查：等待锁期间可能已有线程完成初始化
+            if _NN_MANAGER is None:
+                _NN_MANAGER = NNModelManager(weights_path)
     return _NN_MANAGER
 
 
 def reset_nn_manager() -> None:
     """重置神经网络模型管理器单例（供测试使用）。"""
     global _NN_MANAGER
-    _NN_MANAGER = None
+    with _NN_MANAGER_LOCK:
+        _NN_MANAGER = None
 
 
 def is_torch_available() -> bool:

@@ -1,7 +1,9 @@
 """检查所有赛道SVG中的弯道标号与track.py定义是否一致"""
 import re
 from pathlib import Path
+
 from setup_tuner.domain.track import ALL_TRACKS
+
 
 def extract_svg_corner_numbers(svg_path: Path) -> list[int]:
     """从SVG文件中提取弯道编号"""

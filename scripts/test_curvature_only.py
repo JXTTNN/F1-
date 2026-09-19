@@ -1,14 +1,23 @@
 #!/usr/bin/env python3
 """测试曲率分析方案：直接在SVG path上检测弯道，确保弯道标注落在赛道线上。"""
-import sys
 import math
+import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from convert_track_svgs import (
-    path_to_points, scale_points, download_svg, extract_path_d,
-    detect_corners, CANVAS_W, CANVAS_H, MARGIN, TRACK_LAYOUT_MAP, TRACK_CORNERS_COUNT,
+    CANVAS_H,
+    CANVAS_W,
+    MARGIN,
+    TRACK_CORNERS_COUNT,
+    TRACK_LAYOUT_MAP,
+    detect_corners,
+    download_svg,
+    extract_path_d,
+    path_to_points,
+    scale_points,
 )
+
 
 def min_dist_to_track(pt, scaled_points):
     min_d = float('inf')

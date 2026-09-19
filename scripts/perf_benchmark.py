@@ -356,7 +356,12 @@ def bench_api_endpoints() -> dict[str, dict]:
             samples_suggest: list[float] = []
             for _ in range(200):
                 t0 = time.perf_counter()
-                client.post("/api/v1/suggest", json={"track_id": "suzuka"})
+                # 显式关闭"生成后清除反馈"（2026-09-19 起的默认行为）：
+                # 基准要连续 200 次测**成功路径**；默认清除会让第 2 次起
+                # 无反馈可用（400），测到的是错误路径耗时。
+                client.post("/api/v1/suggest",
+                            json={"track_id": "suzuka",
+                                  "clear_feedback_after_suggest": False})
                 samples_suggest.append(time.perf_counter() - t0)
 
             samples_feedback: list[float] = []

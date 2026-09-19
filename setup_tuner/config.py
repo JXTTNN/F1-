@@ -15,7 +15,10 @@ class Config:
     """运行时配置。"""
 
     # UDP 遥测监听
-    udp_host: str = "127.0.0.1"
+    # 默认绑所有网卡（而非仅回环）：F1 游戏「UDP 广播模式」开启时，包会发往
+    # 255.255.255.255 广播地址，只绑 127.0.0.1 会**一个包都收不到**（真实踩坑）。
+    # 绑 0.0.0.0 可同时接收：单播到回环/局域网 IP + 广播。
+    udp_host: str = "0.0.0.0"
     udp_port: int = 20777
 
     # API 服务
@@ -78,7 +81,7 @@ def load_config(env_path: str | Path | None = None) -> Config:
         return os.environ.get(key, env_vars.get(key, default))
 
     return Config(
-        udp_host=_get("UDP_HOST", "127.0.0.1"),
+        udp_host=_get("UDP_HOST", "0.0.0.0"),
         udp_port=int(_get("UDP_PORT", "20777")),
         api_host=_get("API_HOST", "127.0.0.1"),
         api_port=int(_get("API_PORT", "8000")),

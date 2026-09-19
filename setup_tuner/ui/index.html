@@ -6,6 +6,8 @@
   <meta name="color-scheme" content="dark" />
   <meta name="theme-color" content="#0a0e14" />
   <meta name="description" content="F1OPT 赛车调教优化助手 — 基于 F1 转播遥测数据的赛车调教参数优化工具" />
+  <!-- inline favicon: avoids default /favicon.ico request (404) -->
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230d0d12'/%3E%3Ctext x='16' y='22' font-size='16' text-anchor='middle' fill='%233b9eff'%3EF1%3C/text%3E%3C/svg%3E" />
   <title>F1OPT · 赛车调教优化助手</title>
   <link rel="stylesheet" href="/static/style.css" />
 </head>
@@ -64,7 +66,16 @@
               <span class="record-dot" aria-hidden="true"></span>
               <span class="record-label">录制</span>
             </button>
+            <button id="btn-recordings" class="btn btn-ghost btn-sm" type="button" aria-label="打开录制库">录制库</button>
+            <button id="btn-export-training" class="btn btn-ghost btn-sm" type="button" aria-label="导出最近一次录制的逐圈训练样本">导出训练</button>
           </div>
+        </div>
+        <!-- 遥测采集状态条：打开系统即收，点「录制」即自动落盘（无需额外工具） -->
+        <div class="collect-bar" role="note">
+          <span id="collect-dot" class="collect-dot" aria-hidden="true"></span>
+          <span id="collect-state" class="collect-state" aria-live="polite">遥测采集 · 检查中…</span>
+          <span id="collect-addr" class="collect-addr">UDP —</span>
+          <span class="collect-tip">游戏内：设置 → 遥测设置 → UDP 遥测开启、端口 20777（IP 填本机地址；开「广播模式」亦可）</span>
         </div>
         <div class="telemetry-grid" role="region" aria-label="实时遥测数据">
           <div class="tel-item tel-gauge" data-kind="speed">
@@ -141,15 +152,18 @@
           <div class="report-actions">
             <label class="model-select-label" for="model-type-select">模型</label>
             <select id="model-type-select" class="model-select" aria-label="选择建议模型">
-              <option value="hybrid">混合</option>
-              <option value="rule">规则</option>
-              <option value="nn">神经网络</option>
+              <option value="hybrid" title="规则 + 神经网络；未安装 PyTorch 时自动降级为规则">混合</option>
+              <option value="rule" title="纯规则引擎（确定性，无额外依赖）">规则</option>
+              <option value="nn" title="需要 PyTorch 与训练权重；未安装时自动降级为规则">神经网络</option>
             </select>
+            <span class="model-hint" style="font-size:11px;color:var(--text-tertiary,#8b93a7);margin-left:6px;"
+                  title="nn/混合 需要 PyTorch 与训练权重">未装 PyTorch 时 nn/混合自动降级</span>
             <button id="btn-generate-suggest" class="btn btn-primary" type="button" aria-label="生成调教建议">生成建议</button>
           </div>
         </div>
         <div id="report-summary" class="report-summary" aria-live="polite"></div>
         <div id="report-table-wrap" class="report-table-wrap" role="region" aria-label="建议报告表格">
+  <div id="style-profile" class="style-profile" aria-label="车手风格画像"></div>
           <div class="report-empty">暂无建议，请先点击赛道图上的问题弯道录入反馈，再点击「生成建议」</div>
         </div>
       </div>
@@ -180,15 +194,15 @@
           <span id="fb-corner-number" class="fb-corner-num">—</span>
           <span id="fb-corner-name" class="fb-corner-name"></span>
         </div>
-        <p id="fb-tip" class="fb-tip">可同时勾选多个症状（checkbox 多选）。入弯/弯中/出弯类症状绑定当前弯道；全局类症状作用于整条赛道（corner_number=null）。每个选中症状都有独立的强度滑块（0-5）。</p>
+        <p id="fb-tip" class="fb-tip">可同时勾选多个症状（checkbox 多选）。入弯/弯中/出弯类症状绑定当前弯道；全局类症状作用于整条赛道（corner_number=null）。每个选中症状都有独立的强度档位（1-3：轻微/明显/严重）。</p>
 
-        <!-- 15 症状分 4 类，每类可展开；checkbox 多选 -->
+        <!-- 18 症状分 4 类（UI 展示 17 项：lap_slow 降级为综合结论）；checkbox 多选 -->
         <div id="fb-symptom-groups" class="fb-symptom-groups" role="group" aria-label="症状多选">
           <!-- 入弯 entry -->
           <div class="sym-group" data-category="entry">
             <div class="sym-group-head" role="button" tabindex="0" aria-label="入弯症状组">
               <span class="sym-group-arrow" aria-hidden="true">▶</span>
-              <span class="sym-group-title">入弯（5）</span>
+              <span class="sym-group-title">入弯（6）</span>
               <span class="sym-group-count" data-count-for="entry">0</span>
             </div>
             <div class="sym-group-body">
@@ -197,6 +211,7 @@
               <label class="sym-option"><input type="checkbox" name="symptom" value="turnin_unresponsive" aria-label="转向不灵敏" /><span class="sym-name">转向不灵敏</span><span class="sym-desc">转动方向盘后车辆响应迟缓。</span></label>
               <label class="sym-option"><input type="checkbox" name="symptom" value="brake_long" aria-label="刹车距离长" /><span class="sym-name">刹车距离长</span><span class="sym-desc">制动距离过长，入弯点偏晚。</span></label>
               <label class="sym-option"><input type="checkbox" name="symptom" value="lockup" aria-label="轮胎锁死" /><span class="sym-name">轮胎锁死</span><span class="sym-desc">制动时车轮抱死打滑。</span></label>
+              <label class="sym-option"><input type="checkbox" name="symptom" value="brake_instability" aria-label="刹车中车身不稳" /><span class="sym-name">刹车中车身不稳</span><span class="sym-desc">重刹时车尾摆动或车身晃动，难以稳定把车速降下来。</span></label>
             </div>
           </div>
           <!-- 弯中 apex -->
@@ -216,27 +231,32 @@
           <div class="sym-group" data-category="exit">
             <div class="sym-group-head" role="button" tabindex="0" aria-label="出弯症状组">
               <span class="sym-group-arrow" aria-hidden="true">▶</span>
-              <span class="sym-group-title">出弯（2）</span>
+              <span class="sym-group-title">出弯（4）</span>
               <span class="sym-group-count" data-count-for="exit">0</span>
             </div>
             <div class="sym-group-body">
               <label class="sym-option"><input type="checkbox" name="symptom" value="exit_wheelspin" aria-label="出弯打滑" /><span class="sym-name">出弯打滑</span><span class="sym-desc">出弯加速时车轮空转打滑。</span></label>
               <label class="sym-option"><input type="checkbox" name="symptom" value="exit_oversteer" aria-label="出弯甩尾" /><span class="sym-name">出弯甩尾</span><span class="sym-desc">出弯加速时车尾外甩，后轮抓地不足。</span></label>
+              <label class="sym-option"><input type="checkbox" name="symptom" value="exit_understeer" aria-label="出弯转向不足" /><span class="sym-name">出弯转向不足</span><span class="sym-desc">出弯给油后车头推向外侧，前轴抓地不足。</span></label>
+              <label class="sym-option"><input type="checkbox" name="symptom" value="exit_unstable" aria-label="出弯车身不稳" /><span class="sym-name">出弯车身不稳</span><span class="sym-desc">出弯阶段车身姿态晃动，难以保持线路。</span></label>
             </div>
           </div>
           <!-- 全局 global -->
           <div class="sym-group" data-category="global">
             <div class="sym-group-head" role="button" tabindex="0" aria-label="全局症状组">
               <span class="sym-group-arrow" aria-hidden="true">▶</span>
-              <span class="sym-group-title">全局（5）</span>
+              <span class="sym-group-title">全局（8）</span>
               <span class="sym-group-count" data-count-for="global">0</span>
             </div>
             <div class="sym-group-body">
-              <label class="sym-option"><input type="checkbox" name="symptom" value="bottoming" aria-label="直道刮底" /><span class="sym-name">直道刮底</span><span class="sym-desc">底盘在直道或颠簸处触地刮底。</span></label>
+              <label class="sym-option"><input type="checkbox" name="symptom" value="bottoming" aria-label="刮底" /><span class="sym-name">刮底</span><span class="sym-desc">底盘或底板触地刮擦（直道、快弯压缩或颠簸处都可能）。</span></label>
               <label class="sym-option"><input type="checkbox" name="symptom" value="tyre_wear" aria-label="胎耗偏高" /><span class="sym-name">胎耗偏高</span><span class="sym-desc">轮胎磨损速率偏高（轮胎寿命维度，非胎温）。</span></label>
               <label class="sym-option"><input type="checkbox" name="symptom" value="straight_slow" aria-label="直道速度低" /><span class="sym-name">直道速度低</span><span class="sym-desc">直道尾速不足。</span></label>
-              <label class="sym-option"><input type="checkbox" name="symptom" value="lap_slow" aria-label="圈速不高" /><span class="sym-name">圈速不高</span><span class="sym-desc">整体圈速未达预期。</span></label>
+              <label class="sym-option"><input type="checkbox" name="symptom" value="tyre_overheat" aria-label="胎温过高" /><span class="sym-name">胎温过高</span><span class="sym-desc">轮胎工作温度超出最佳窗口，抓地力衰减。</span></label>
               <label class="sym-option"><input type="checkbox" name="symptom" value="high_speed_instability" aria-label="高速不稳" /><span class="sym-name">高速不稳</span><span class="sym-desc">高速段方向不稳定，车身抖动。</span></label>
+              <label class="sym-option"><input type="checkbox" name="symptom" value="kerb_instability" aria-label="压路肩弹跳失控" /><span class="sym-name">压路肩弹跳失控</span><span class="sym-desc">压路肩后车身弹跳剧烈甚至失稳——路肩不得不压。</span></label>
+              <label class="sym-option"><input type="checkbox" name="symptom" value="tyre_graining" aria-label="轮胎粒化" /><span class="sym-name">轮胎粒化</span><span class="sym-desc">轮胎表面因滑动起粒、抓地骤降（与磨损/过热不同的失效模式）。</span></label>
+              <label class="sym-option"><input type="checkbox" name="symptom" value="brake_fade" aria-label="刹车过热衰减" /><span class="sym-name">刹车过热衰减</span><span class="sym-desc">长刹车段之后踏板变软、制动力明显下降。</span></label>
             </div>
           </div>
         </div>
@@ -250,6 +270,29 @@
         <span id="fb-error" class="fb-error" role="alert" aria-live="assertive"></span>
         <span id="fb-selected-count" class="fb-selected-count">已选 0 个症状</span>
         <button id="fb-submit" class="btn btn-primary" type="button" aria-label="批量提交反馈">提交反馈</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== 录制库面板（列表 + 回放） ==================== -->
+  <div id="rec-overlay" class="fb-overlay" hidden>
+    <div class="fb-panel rec-panel" role="dialog" aria-modal="true" aria-labelledby="rec-title">
+      <div class="fb-header">
+        <h3 id="rec-title">录制库 · 回放</h3>
+        <button id="rec-close" class="fb-close" type="button" aria-label="关闭录制库">&times;</button>
+      </div>
+      <div class="fb-body">
+        <p id="rec-tip" class="fb-tip">录制文件保存在 data/recordings/。回放会把历史遥测按原时间轴重新送入分析链路，用于复盘调教改动前后的差异。「导出训练」会把某次录制转成逐圈训练样本（JSONL，含赛道/圈时/调教/驾驶风格）。</p>
+        <div id="rec-status" class="rec-status" aria-live="polite">未在回放</div>
+        <div id="rec-list" class="rec-list" role="list" aria-label="录制会话列表">
+          <div class="fb-strength-empty">正在加载…</div>
+        </div>
+      </div>
+      <div class="fb-footer">
+        <span id="rec-error" class="fb-error" role="alert" aria-live="assertive"></span>
+        <span id="rec-count" class="fb-selected-count">—</span>
+        <button id="rec-replay-stop" class="btn btn-ghost btn-sm" type="button" aria-label="停止回放" hidden>停止回放</button>
+        <button id="rec-refresh" class="btn btn-ghost btn-sm" type="button" aria-label="刷新列表">刷新</button>
       </div>
     </div>
   </div>

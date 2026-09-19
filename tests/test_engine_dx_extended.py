@@ -19,8 +19,8 @@ from __future__ import annotations
 
 import pytest
 
-from setup_tuner.engine.engine import _derive_telemetry_dx
 from setup_tuner.engine.diagnostic import DIAG_DIMS
+from setup_tuner.engine.engine import _derive_telemetry_dx
 
 
 # ===========================================================================
@@ -96,15 +96,21 @@ class TestOriginalRules:
         assert dx["tyre_life_req"] == pytest.approx(0.3)
 
     def test_rule1_tyre_temp_high_front(self) -> None:
-        """规则1: 胎温过高且前轮更高 → front_grip_req += 0.2。"""
-        telemetry = _make_telemetry(m_tyresSurfaceTemperature=[115, 115, 105, 105])
+        """规则1: 胎温过高且前轮更高 → front_grip_req += 0.2。
+
+        官方车轮顺序为 [RL, RR, FL, FR]，故前轮是索引 2,3。
+        """
+        telemetry = _make_telemetry(m_tyresSurfaceTemperature=[105, 105, 115, 115])
         dx = _derive_telemetry_dx(telemetry)
         assert dx["tyre_life_req"] == pytest.approx(0.3)
         assert dx["front_grip_req"] == pytest.approx(0.2)
 
     def test_rule1_tyre_temp_high_rear(self) -> None:
-        """规则1: 胎温过高且后轮更高 → rear_grip_req += 0.2。"""
-        telemetry = _make_telemetry(m_tyresSurfaceTemperature=[105, 105, 115, 115])
+        """规则1: 胎温过高且后轮更高 → rear_grip_req += 0.2。
+
+        官方车轮顺序为 [RL, RR, FL, FR]，故后轮是索引 0,1。
+        """
+        telemetry = _make_telemetry(m_tyresSurfaceTemperature=[115, 115, 105, 105])
         dx = _derive_telemetry_dx(telemetry)
         assert dx["tyre_life_req"] == pytest.approx(0.3)
         assert dx["rear_grip_req"] == pytest.approx(0.2)
@@ -117,11 +123,15 @@ class TestOriginalRules:
         assert dx["rear_grip_req"] == pytest.approx(0.3)
 
     def test_rule3_tyre_pressure_abnormal(self) -> None:
-        """规则3: 胎压 > 26.0 或 < 22.0 → 对应轴 grip_req += 0.15。"""
+        """规则3: 胎压 > 26.0 或 < 22.0 → 对应轴 grip_req += 0.15。
+
+        官方车轮顺序 [RL, RR, FL, FR]：索引 2,3 是前轮，0,1 是后轮。
+        数据 [27.0, 24.0, 21.0, 23.0] → RL=27(后轮异常)、FL=21(前轮异常)。
+        """
         telemetry = _make_telemetry(m_tyresPressure=[27.0, 24.0, 21.0, 23.0])
         dx = _derive_telemetry_dx(telemetry)
-        assert dx["front_grip_req"] == pytest.approx(0.15)  # FL > 26
-        assert dx["rear_grip_req"] == pytest.approx(0.15)   # RL < 22
+        assert dx["front_grip_req"] == pytest.approx(0.15)  # FL(索引2) < 22
+        assert dx["rear_grip_req"] == pytest.approx(0.15)   # RL(索引0) > 26
 
     def test_rule4_brake_temp_too_high(self) -> None:
         """规则4: 刹车温度均值 > 500°C → brake_stab_req += 0.3。"""
@@ -446,3 +456,81 @@ class TestDxInvariants:
         dx1 = _derive_telemetry_dx(telemetry)
         dx2 = _derive_telemetry_dx(telemetry)
         assert dx1 == dx2
+
+# ===========================================================================
+# 7. 官方车轮顺序（RL, RR, FL, FR）防回潮
+# ===========================================================================
+class TestOfficialWheelOrder:
+    """锁定 F1 UDP 官方车轮数组顺序，防止前后轮判断再次颠倒。
+
+    Source: EA F1 25 UDP Telemetry Specification —
+    "All wheel arrays have the following order: RL, RR, FL, FR"
+    FAQ 进一步明确：
+        0 – Rear Left (RL), 1 – Rear Right (RR),
+        2 – Front Left (FL), 3 – Front Right (FR)
+
+    历史缺陷：早期实现把 ``[:2]`` 当前轮、``[2:4]`` 当后轮（即按
+    FL, FR, RL, RR 理解），导致规则1/3 的「前轮 vs 后轮」判断完全颠倒。
+    """
+
+    def test_pressure_front_axis_is_index_2_3(self) -> None:
+        """只让索引 2 越界 → 必须只影响 front_grip_req。"""
+        telemetry = _make_telemetry(m_tyresPressure=[23.5, 23.5, 27.5, 23.5])
+        dx = _derive_telemetry_dx(telemetry)
+        assert dx["front_grip_req"] == pytest.approx(0.15)
+        assert dx["rear_grip_req"] == pytest.approx(0.0)
+
+    def test_pressure_rear_axis_is_index_0_1(self) -> None:
+        """只让索引 0 越界 → 必须只影响 rear_grip_req。"""
+        telemetry = _make_telemetry(m_tyresPressure=[27.5, 23.5, 23.5, 23.5])
+        dx = _derive_telemetry_dx(telemetry)
+        assert dx["rear_grip_req"] == pytest.approx(0.15)
+        assert dx["front_grip_req"] == pytest.approx(0.0)
+
+    def test_pressure_index_3_is_front(self) -> None:
+        """索引 3 (FR) 异常 → front_grip_req。"""
+        telemetry = _make_telemetry(m_tyresPressure=[23.5, 23.5, 23.5, 21.0])
+        dx = _derive_telemetry_dx(telemetry)
+        assert dx["front_grip_req"] == pytest.approx(0.15)
+        assert dx["rear_grip_req"] == pytest.approx(0.0)
+
+    def test_pressure_index_1_is_rear(self) -> None:
+        """索引 1 (RR) 异常 → rear_grip_req。"""
+        telemetry = _make_telemetry(m_tyresPressure=[23.5, 21.0, 23.5, 23.5])
+        dx = _derive_telemetry_dx(telemetry)
+        assert dx["rear_grip_req"] == pytest.approx(0.15)
+        assert dx["front_grip_req"] == pytest.approx(0.0)
+
+    def test_temp_hot_front_is_index_2_3(self) -> None:
+        """仅索引 2,3 更热 → 规则1 归因前轮。"""
+        telemetry = _make_telemetry(
+            m_tyresSurfaceTemperature=[105.0, 105.0, 120.0, 120.0],
+        )
+        dx = _derive_telemetry_dx(telemetry)
+        assert dx["tyre_life_req"] == pytest.approx(0.3)
+        assert dx["front_grip_req"] == pytest.approx(0.2)
+        assert dx["rear_grip_req"] == pytest.approx(0.0)
+
+    def test_temp_hot_rear_is_index_0_1(self) -> None:
+        """仅索引 0,1 更热 → 规则1 归因后轮。"""
+        telemetry = _make_telemetry(
+            m_tyresSurfaceTemperature=[120.0, 120.0, 105.0, 105.0],
+        )
+        dx = _derive_telemetry_dx(telemetry)
+        assert dx["tyre_life_req"] == pytest.approx(0.3)
+        assert dx["rear_grip_req"] == pytest.approx(0.2)
+        assert dx["front_grip_req"] == pytest.approx(0.0)
+
+    def test_symmetric_input_falls_to_rear_branch(self) -> None:
+        """前后均温相同时 ``front_avg > rear_avg`` 为假 → 走 else 抬后轮。
+
+        这是既有语义（前后对称时归因后轮），此处锁定而非修改，
+        目的是让「对称输入的取向」显式化，日后若改成不偏袒任一轴会立刻可见。
+        """
+        telemetry = _make_telemetry(
+            m_tyresSurfaceTemperature=[110.0, 110.0, 110.0, 110.0],
+        )
+        dx = _derive_telemetry_dx(telemetry)
+        assert dx["tyre_life_req"] == pytest.approx(0.3)
+        assert dx["front_grip_req"] == pytest.approx(0.0)
+        assert dx["rear_grip_req"] == pytest.approx(0.2)

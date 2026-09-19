@@ -68,3 +68,27 @@ __pycache__/
 htmlcov/
 coverage.xml
 
+
+# SQLite 临时文件与本地录制产物（task-62 清理）
+*.db-shm
+*.db-wal
+*.f1rec
+
+# 本地 UI 审计产物（task-62）
+shots/
+reports/
+
+# 历史测试/审计输出（不入库）
+test_result.txt
+deep_check_*.txt
+api_test_result*.json
+
+# 赛道渲染产物（由 scripts/render_real_tracks.py 生成，可随时重建）
+scripts/real_circuits/render/
+
+# 车手真实遥测与训练数据（个人数据，绝不入库）
+data/recordings/
+data/training/
+
+# 官方 UDP 规范参考（EA 版权，仅本地参考，不得入库）
+.ref/

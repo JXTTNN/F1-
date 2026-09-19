@@ -3,7 +3,9 @@
 import re
 from pathlib import Path
 
-track_dir = Path('D:/F1OPT-Test/setup_tuner/ui/tracks')
+# 仓库根目录（本脚本位于 <root>/scripts/），避免硬编码绝对路径
+ROOT = Path(__file__).resolve().parents[1]
+track_dir = ROOT / "setup_tuner" / "ui" / "tracks"
 expected_corners = {
     'melbourne': 14, 'shanghai': 16, 'suzuka': 18, 'sakhir': 15,
     'jeddah': 27, 'miami': 19, 'montreal': 14, 'monaco': 19,

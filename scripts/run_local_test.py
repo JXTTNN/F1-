@@ -13,7 +13,8 @@ from concurrent.futures import ThreadPoolExecutor
 
 import httpx
 
-
+# 仓库根目录（本脚本位于 <root>/scripts/），避免硬编码绝对路径
+ROOT = pathlib.Path(__file__).resolve().parents[1]
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--host", default="127.0.0.1")
@@ -49,7 +50,7 @@ def main() -> int:
         check("B2 health 200", r.status_code == 200)
         check("B3 status=ok", d.get("status") == "ok", f"status={d.get('status')}")
         check("B4 telemetry_connected字段", "telemetry_connected" in d)
-        check("B5 udp_host=127.0.0.1", d.get("udp_host") == "127.0.0.1")
+        check("B5 udp_host=0.0.0.0", d.get("udp_host") == "0.0.0.0")
         check("B6 udp_port=20777", d.get("udp_port") == 20777)
         check("B7 current_track_id=None", d.get("current_track_id") is None)
         check("B8 code=0", body.get("code") == 0)
@@ -184,7 +185,7 @@ def main() -> int:
     try:
         r = client.post(
             f"{api}/feedback",
-            json={"track_id": "suzuka", "corner_number": 1, "symptom": "oversteer", "strength": 4},
+            json={"track_id": "suzuka", "corner_number": 1, "symptom": "oversteer", "strength": 3},
             timeout=30.0,
         )
         check("E12 第二条feedback 200", r.status_code == 200)
@@ -265,7 +266,7 @@ def main() -> int:
             h_ok = False
             break
     check("F9 连续50次health无错误", h_ok)
-    db = pathlib.Path("D:/F1OPT-Test/data/f1opt.db")
+    db = pathlib.ROOT / "data" / "f1opt.db"
     if db.exists():
         db_mb = db.stat().st_size / (1024 * 1024)
         check("F10 数据库<10MB", db_mb < 10, f"{db_mb:.2f}MB")

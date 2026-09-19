@@ -27,6 +27,26 @@ _CONFLICT_PAIRS: frozenset[tuple[str, str]] = frozenset({
 })
 
 
+# 有效遥测佐证字段集合（模块级常量，避免每次调用重建集合）
+_TELEMETRY_EVIDENCE_KEYS: frozenset[str] = frozenset({
+    "m_tyresAgeLaps",
+    "tyres_age_laps",
+    "m_brake",
+    "brake",
+    "m_weather",
+    "weather",
+    "m_lastLapTimeInMS",
+    "last_lap_time_ms",
+    "m_sector1TimeInMS",
+    "sector1_time_ms",
+    "m_sector2TimeInMS",
+    "sector2_time_ms",
+    "tyres_surface_temperature",
+    "front_tyre_temp",
+    "rear_tyre_temp",
+})
+
+
 def _has_telemetry_evidence(telemetry: dict[str, Any] | None) -> bool:
     """判断遥测是否提供有效佐证。
 
@@ -34,42 +54,36 @@ def _has_telemetry_evidence(telemetry: dict[str, Any] | None) -> bool:
     """
     if not telemetry:
         return False
-    evidence_keys = {
-        "m_tyresAgeLaps",
-        "tyres_age_laps",
-        "m_brake",
-        "brake",
-        "m_weather",
-        "weather",
-        "m_lastLapTimeInMS",
-        "last_lap_time_ms",
-        "m_sector1TimeInMS",
-        "sector1_time_ms",
-        "m_sector2TimeInMS",
-        "sector2_time_ms",
-        "tyres_surface_temperature",
-        "front_tyre_temp",
-        "rear_tyre_temp",
-    }
-    return any(k in telemetry and telemetry[k] is not None for k in evidence_keys)
+    return any(
+        k in telemetry and telemetry[k] is not None
+        for k in _TELEMETRY_EVIDENCE_KEYS
+    )
 
 
 def _has_conflict(symptoms: list[tuple[str, int]]) -> bool:
-    """判断症状列表是否包含矛盾对（且两者强度均 ≥ 2）。"""
-    active = {s for s, strength in symptoms if strength >= 2}
+    """判断症状列表是否包含矛盾对（且两者强度均 ≥ 2）。
+
+    兼容二元 (symptom, strength) 与三元 (symptom, strength, stage)。"""
+    active = {s for s, strength, *_ in symptoms if strength >= 2}
     return any(a in active and b in active for a, b in _CONFLICT_PAIRS)
 
 
 def _is_feedback_clear(symptoms: list[tuple[str, int]]) -> bool:
     """判断反馈是否明确（至少一条强度 ≥ 2 的有效症状）。"""
-    return any(symptom in SYMPTOM_TO_DX and strength >= 2 for symptom, strength in symptoms)
+    return any(
+        symptom in SYMPTOM_TO_DX and strength >= 2
+        for symptom, strength, *_ in symptoms
+    )
 
 
 def _is_feedback_vague(symptoms: list[tuple[str, int]]) -> bool:
     """判断反馈是否模糊（全部强度 ≤ 1 或无有效症状）。"""
     if not symptoms:
         return True
-    return all(not (symptom in SYMPTOM_TO_DX and strength >= 2) for symptom, strength in symptoms)
+    return all(
+        not (symptom in SYMPTOM_TO_DX and strength >= 2)
+        for symptom, strength, *_ in symptoms
+    )
 
 
 def assess_confidence(

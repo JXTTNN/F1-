@@ -13,10 +13,13 @@
 from __future__ import annotations
 
 import json
+import logging
 import statistics
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 # --------------------------------------------------------------------------- #
@@ -61,7 +64,7 @@ class LapTelemetrySummary:
     avg_steer: float  # 平均转向绝对值
     max_steer: float  # 最大转向绝对值
 
-    # 四轮温度/胎压统计 [FL, FR, RL, RR]
+    # 四轮温度/胎压统计（官方车轮顺序 [RL, RR, FL, FR]）
     avg_tyre_surface_temp: list[float]
     avg_tyre_inner_temp: list[float]
     avg_brake_temp: list[float]
@@ -134,7 +137,7 @@ def _abs_max(values: list[float]) -> float:
 
 
 def _per_wheel_avg(samples: list[dict[str, Any]], key: str) -> list[float]:
-    """从 samples 中提取四轮列表字段，计算每轮均值 [FL, FR, RL, RR]。"""
+    """从 samples 中提取四轮列表字段，计算每轮均值（保持官方顺序 [RL, RR, FL, FR]）。"""
     if not samples:
         return [0.0, 0.0, 0.0, 0.0]
     # 收集四轮各自的所有帧值
@@ -148,7 +151,7 @@ def _per_wheel_avg(samples: list[dict[str, Any]], key: str) -> list[float]:
 
 
 def _per_wheel_max(samples: list[dict[str, Any]], key: str) -> list[float]:
-    """从 samples 中提取四轮列表字段，计算每轮最大值 [FL, FR, RL, RR]。"""
+    """从 samples 中提取四轮列表字段，计算每轮最大值（保持官方顺序 [RL, RR, FL, FR]）。"""
     if not samples:
         return [0.0, 0.0, 0.0, 0.0]
     wheel_data: list[list[float]] = [[] for _ in range(4)]
@@ -161,7 +164,7 @@ def _per_wheel_max(samples: list[dict[str, Any]], key: str) -> list[float]:
 
 
 def _per_wheel_min(samples: list[dict[str, Any]], key: str) -> list[float]:
-    """从 samples 中提取四轮列表字段，计算每轮最小值 [FL, FR, RL, RR]。"""
+    """从 samples 中提取四轮列表字段，计算每轮最小值（保持官方顺序 [RL, RR, FL, FR]）。"""
     if not samples:
         return [0.0, 0.0, 0.0, 0.0]
     wheel_data: list[list[float]] = [[] for _ in range(4)]
@@ -195,7 +198,7 @@ def _extract_scalar_fields(
 def _compute_wheel_stats(
     samples: list[dict[str, Any]],
 ) -> dict[str, list[float]]:
-    """从 samples 计算四轮温度/胎压统计 [FL, FR, RL, RR]。
+    """从 samples 计算四轮温度/胎压统计（官方车轮顺序 [RL, RR, FL, FR]）。
 
     胎压从 samples 取（setup 中为科学记数法异常值）。
 
@@ -299,7 +302,9 @@ def import_laps_from_directory(dirpath: str) -> list[LapTelemetrySummary]:
             summary = import_lap_json(str(jf))
             summaries.append(summary)
         except (json.JSONDecodeError, KeyError):
-            # 跳过损坏的 JSON 文件，不中断整体导入
+            # 跳过损坏的 JSON 文件，不中断整体导入；但必须留痕，
+            # 否则"圈史少了几圈"会被误判为数据本身缺失
+            logger.warning("跳过损坏的圈 JSON：%s", jf, exc_info=True)
             continue
     summaries.sort(key=lambda s: s.lap_number)
     return summaries

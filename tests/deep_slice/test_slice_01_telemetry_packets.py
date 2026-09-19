@@ -1,7 +1,7 @@
 """切片 1 深度测试：UDP 遥测包解析（setup_tuner.telemetry.packets）。
 
-覆盖 5 类包：Session(1) / LapData(2) / CarSetups(5) / CarTelemetry(6) /
-CarStatus(7)。
+覆盖 6 类包：Session(1) / LapData(2) / CarSetups(5) / CarTelemetry(6) /
+CarStatus(7) / MotionEx(13)。
 
 5 种测试方式：
     1. unit     — 每个公开解析函数的正常输入正确性
@@ -210,10 +210,20 @@ class TestBoundary:
             parse_lap_data(data, bad_index)
 
     def test_boundary_unknown_packet_id_returns_none(self) -> None:
-        """未知 packetId 应返回 None（跳过不崩溃）。"""
-        for pid in (0, 3, 4, 8, 9, 10, 11, 12, 13, 14, 15, 99):
+        """未知 packetId 应返回 None（跳过不崩溃）。
+
+        2026 全量接入后，仅剩 9 (LobbyInfo) / 14 (TimeTrial) 与越界 id
+        未解析 —— 这两类游戏在单机竞速场景不发送（实测 0 包）。
+        """
+        for pid in (9, 14, 99):
             data = build_header(packet_id=pid) + b"\x00" * 64
-            assert parse_packet(data) is None
+            assert parse_packet(data) is None, f"packet_id={pid} 应为未知包"
+
+    def test_boundary_supported_packet_id_13_not_unknown(self) -> None:
+        """packetId 13 (MotionEx) 已支持：包头+64 字节应因短包抛错而非返回 None。"""
+        data = build_header(packet_id=13) + b"\x00" * 64
+        with pytest.raises(PacketTooShortError):
+            parse_packet(data)
 
 
     def test_boundary_session_with_max_weather_samples(self) -> None:
@@ -276,7 +286,7 @@ class TestProperty:
         assert original == rebuilt
 
     def test_property_roundtrip_all_supported_packets(self) -> None:
-        """往返一致性：6 类包构造 → 解析 → 关键字段对照一致。"""
+        """往返一致性：各支持包构造 → 解析 → 关键字段对照一致。"""
         cases = [
             (1, build_session_body(track_id=3), {"m_trackId": 3}),
             (2, build_lap_per_car(last_lap_ms=77777), {"m_lastLapTimeInMS": 77777}),
@@ -315,8 +325,16 @@ class TestStatic:
         assert NUM_CARS == 24
 
     def test_static_supported_packet_ids_exact(self) -> None:
-        """不变量约束：SUPPORTED_PACKET_IDS 必须为 {1,2,5,6,7}。"""
-        assert SUPPORTED_PACKET_IDS == frozenset({1, 2, 5, 6, 7})
+        """不变量约束：SUPPORTED_PACKET_IDS 为 2026 全量接入后的 15 类包。
+
+        2026-09-18「全部接进来」：新增 0 Motion / 3 Event / 4 Participants /
+        8 FinalClassification / 10 CarDamage / 11 SessionHistory / 12 TyreSets /
+        15 LapPositions / 16 CarTelemetry2（2026 新增包）。
+        未解析：9 LobbyInfo / 14 TimeTrial（单机竞速实测 0 包）。
+        """
+        assert SUPPORTED_PACKET_IDS == frozenset({
+            0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 15, 16,
+        })
 
     @pytest.mark.parametrize("pid,name", [
         (0, "Motion"), (1, "Session"), (2, "LapData"), (3, "Event"),
@@ -324,6 +342,7 @@ class TestStatic:
         (7, "CarStatus"), (8, "FinalClassification"), (9, "LobbyInfo"),
         (10, "CarDamage"), (11, "SessionHistory"), (12, "TyreSets"),
         (13, "MotionEx"), (14, "TimeTrial"), (15, "LapPositions"),
+        (16, "CarTelemetry2"),
     ])
     def test_static_packet_names_complete(self, pid: int, name: str) -> None:
         """参数化：PACKET_NAMES 覆盖全部已知 packet_id 且名称正确。"""
@@ -446,14 +465,17 @@ class TestSmoke:
         assert result["m_tyresAgeLaps"] == 10
         assert result["m_ersDeployMode"] == 2
 
-    def test_smoke_all_5_packet_types_in_sequence(self) -> None:
-        """冒烟：连续解析 5 类包，全部成功且 packet_id 正确。"""
+    def test_smoke_all_supported_packet_types_in_sequence(self) -> None:
+        """冒烟：连续解析全部支持包类型，全部成功且 packet_id 正确。"""
         packets = [
             (1, build_session_body()),
             (2, build_lap_per_car()),
             (5, build_setup_per_car()),
             (6, build_telem_per_car()),
             (7, build_status_per_car()),
+            # Packet 13 (MotionEx)：非按车分组，包体直接 244 字节
+            (13, struct.pack("<" + "4f" * 8 + "f" * 11 + "4f" + "f" * 6 + "4f" * 2,
+                             *([0.0] * 61))),
         ]
         for pid, body in packets:
             data = build_header(packet_id=pid) + body

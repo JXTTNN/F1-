@@ -1,8 +1,16 @@
-"""云端真人式 UI 审计。
+"""云端真人式 UI 审计 —— 针对现役 UI（index.html）的完整主流程。
 
-约束: 只做「人能做的事」——点击页面元素、在输入框/下拉里输入。
-不直接调用任何 HTTP API，不读服务端日志；结论只依据页面呈现的内容与前端异常。
-HTTP 状态码仅作旁证收集（不参与交互）。
+2026-09-16 重写：旧版指向已废弃的 /dashboard.html 与 #predict-btn 等
+旧 UI 选择器（9/9 不存在），等于空跑。新版对齐现役 UI 的真实主流程：
+
+    选赛道 → 赛道图热区 → 点击弯道 → 反馈面板（17 症状/三档强度）→
+    提交 → 生成建议（21 参数报告）→ 遥测面板 → 赛道级全局反馈 → 控制台体检
+
+约束不变：只做「人能做的事」——点击页面元素、在输入框/下拉里输入；
+不直接调用任何写 API；结论只依据页面呈现的内容与前端异常。
+（HTTP 状态码仅作旁证收集，不参与交互。）
+
+浏览器：CI 由 workflow 安装 chromium；本地可用 AUDIT_CHANNEL=msedge 复用 Edge。
 """
 
 from __future__ import annotations
@@ -10,15 +18,9 @@ from __future__ import annotations
 import json
 import os
 import pathlib
-import re
-import signal
-import socket
-import subprocess
 import sys
-import time
 
-# Opt-EXE-AUDIT: Windows 控制台默认 cp1252, 中文 print 直接 UnicodeEncodeError
-# (曾掩盖整个审计明细)。强制 UTF-8 输出。
+# Windows 控制台默认 cp1252，强制 UTF-8 输出避免中文明细被吞
 for _stream in (sys.stdout, sys.stderr):
     if hasattr(_stream, "reconfigure"):
         try:
@@ -26,8 +28,7 @@ for _stream in (sys.stdout, sys.stderr):
         except Exception:  # noqa: BLE001
             pass
 
-from playwright.sync_api import TimeoutError as PWTimeout
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import sync_playwright  # noqa: E402
 
 BASE = os.environ.get("AUDIT_BASE", "http://127.0.0.1:8000").rstrip("/")
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -36,585 +37,146 @@ SHOTS = ROOT / "shots"
 REPORTS.mkdir(parents=True, exist_ok=True)
 SHOTS.mkdir(parents=True, exist_ok=True)
 
-#: 内置 LLM 审计: mock Ollama 返回内容的标记 (见 cloud_audit/mock_ollama.py)。
-LLM_MARKER = "[MOCK-LLM]"
-#: 内置小模型 (builtin) 输出标记 + 审计后端选择 (local=外部 LLM+mock, builtin=内置)。
-BUILTIN_MARKER = "【内置小模型】"
-AUDIT_LLM_BACKEND = os.environ.get("AUDIT_LLM_BACKEND", "local")
-
-RESULTS: list[dict] = []
-CONSOLE_ERR: list[str] = []
-PAGE_ERR: list[str] = []
-NET_FAIL: list[str] = []
-HTTP_BAD: list[str] = []
+RESULTS: list[tuple[str, str, str]] = []
+CONSOLE_ERRORS: list[str] = []
+PAGE_ERRORS: list[str] = []
+BAD_RESPONSES: list[str] = []
 
 
-def rec(name: str, ok: bool, detail: str = "") -> None:
-    RESULTS.append({"name": name, "ok": bool(ok), "detail": str(detail)[:800]})
-    tag = "PASS" if ok else "FAIL"
-    line = f"[{tag}] {name}"
-    if detail:
-        line += " :: " + str(detail)[:300]
-    print(line, flush=True)
+def item(tag: str, ok: bool, detail: str = "") -> None:
+    RESULTS.append((tag, "PASS" if ok else "FAIL", detail))
+    print(f"[{'PASS' if ok else 'FAIL'}] {tag}" + (f" :: {detail}" if detail else ""),
+          flush=True)
 
 
-def snap(page, tag: str) -> None:
-    try:
-        page.screenshot(path=str(SHOTS / f"{tag}.png"), full_page=True)
-    except Exception:  # noqa: BLE001
-        pass
+def group_counts(page) -> dict[str, int]:
+    """{category: 组内症状条目数}（与折叠状态无关）。"""
+    out: dict[str, int] = {}
+    for g in page.locator(".sym-group").all():
+        cat = g.get_attribute("data-category")
+        out[cat] = g.locator('input[name="symptom"]').count() if g.is_visible() else 0
+    return out
 
 
-def guard(name: str, fn):
-    try:
-        detail = fn()
-        rec(name, True, detail if isinstance(detail, str) else "")
-    except PWTimeout as exc:
-        rec(name, False, "TIMEOUT " + str(exc)[:250])
-    except AssertionError as exc:
-        rec(name, False, "ASSERT " + str(exc)[:250])
-    except Exception as exc:  # noqa: BLE001
-        rec(name, False, f"{type(exc).__name__}: {str(exc)[:250]}")
+def expand_all_groups(page) -> None:
+    """像真实用户一样点组头，展开入弯/弯中/出弯三组。"""
+    for cat in ("entry", "apex", "exit"):
+        for head in page.locator(f'.sym-group[data-category="{cat}"] .sym-group-head').all():
+            head.click()
+            page.wait_for_timeout(120)
 
 
-def err_count() -> int:
-    return len(CONSOLE_ERR) + len(PAGE_ERR)
+def run(page) -> None:
+    # ── ① 首页 ──
+    page.goto(BASE + "/", wait_until="domcontentloaded", timeout=60000)
+    page.wait_for_timeout(1200)
+    item("①首页加载", "F1OPT" in page.title(), f"title={page.title()!r}")
+    page.screenshot(path=str(SHOTS / "01_home.png"), full_page=True)
 
+    # ── ② 选赛道 + 赛道图 ──
+    page.select_option("#track-select", "suzuka")
+    page.wait_for_timeout(1500)
+    hotzones = page.locator("#track-map-wrap .hotzone").count()
+    item("②选择赛道并渲染", hotzones == 18, f"热区={hotzones}（suzuka 应为 18）")
+    page.screenshot(path=str(SHOTS / "02_track.png"), full_page=True)
 
-# --------------------------------------------------------------------------
-# 内置 LLM 审计夹具: mock Ollama 子进程 (OpenAI 兼容端点 127.0.0.1:11434)。
-# 夹具生命周期属于测试环境管理, 不属于「对被测应用的操作」——审计本身
-# 仍然只点击 UI / 在输入框输入。
-# --------------------------------------------------------------------------
-_MOCK_PROC: subprocess.Popen | None = None
-_MOCK_EXTERNAL = False  # mock 由工作流提前拉起 (非本脚本子进程)
-
-
-def _port_open(port: int) -> bool:
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.settimeout(0.5)
-        return s.connect_ex(("127.0.0.1", port)) == 0
-
-
-def start_mock_llm() -> subprocess.Popen | None:
-    """确保 mock Ollama 在 127.0.0.1:11434 可用。
-
-    优先复用工作流已拉起的实例 (preload 时序需要 mock 先于 API server
-    启动); 仅当端口无人监听时才由本脚本拉起子进程。
-    """
-    global _MOCK_PROC, _MOCK_EXTERNAL
-    if _port_open(11434):
-        _MOCK_EXTERNAL = True
-        print("[mock-llm] already running (workflow-started), reusing", flush=True)
-        return None
-    try:
-        _MOCK_PROC = subprocess.Popen(
-            [sys.executable, str(ROOT / "cloud_audit" / "mock_ollama.py")],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-    except Exception as exc:  # noqa: BLE001
-        print(f"[mock-llm] start failed: {exc}", flush=True)
-        return None
-    deadline = time.time() + 15.0
-    while time.time() < deadline:
-        if _port_open(11434):
-            print("[mock-llm] ready on 127.0.0.1:11434", flush=True)
-            return _MOCK_PROC
-        if _MOCK_PROC.poll() is not None:
-            print("[mock-llm] process exited early", flush=True)
-            return None
-        time.sleep(0.3)
-    print("[mock-llm] not ready in 15s", flush=True)
-    return None
-
-
-def stop_mock_llm() -> None:
-    """终止 mock Ollama (模拟 LLM 服务掉线)。
-
-    外部实例 (工作流拉起) 通过 pid 文件精准终止; 本脚本的子进程直接
-    terminate。终止后等待端口真正关闭, 保证后续回退检查时序正确。
-    """
-    global _MOCK_PROC, _MOCK_EXTERNAL
-    if _MOCK_PROC is not None and _MOCK_PROC.poll() is None:
-        _MOCK_PROC.terminate()
-        try:
-            _MOCK_PROC.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            _MOCK_PROC.kill()
-    elif _MOCK_EXTERNAL:
-        pid_file = ROOT / "reports" / "mock_ollama.pid"
-        try:
-            pid = int(pid_file.read_text(encoding="ascii").strip())
-            os.kill(pid, signal.SIGTERM)
-        except (OSError, ValueError) as exc:
-            print(f"[mock-llm] external stop failed: {exc}", flush=True)
-    _MOCK_PROC = None
-    _MOCK_EXTERNAL = False
-    deadline = time.time() + 5.0
-    while time.time() < deadline and _port_open(11434):
-        time.sleep(0.2)
-
-
-LAPS_PAYLOAD = {
-    "reference_lap": {"lap_time": 90.0, "sector_times": [30.0, 30.0, 30.0]},
-    "laps": [
-        {"lap_time": 89.5, "sector_times": [29.8, 30.0, 29.7]},
-        {"lap_time": 90.4, "sector_times": [30.2, 30.1, 30.1]},
-        {"lap_time": 89.9, "sector_times": [29.9, 30.0, 30.0]},
-    ],
-}
-DRIVER_LAPS = [
-    {"lap_time": 90.0, "sector_times": [30.0, 30.0, 30.0]},
-    {"lap_time": 90.3, "sector_times": [30.1, 30.1, 30.1]},
-]
-TEAMMATE_LAPS = [
-    {"lap_time": 90.2, "sector_times": [30.1, 30.0, 30.1]},
-    {"lap_time": 90.1, "sector_times": [30.0, 30.0, 30.1]},
-]
-
-
-# --------------------------------------------------------------------------
-# 首页（实时面板）
-# --------------------------------------------------------------------------
-def audit_index(page) -> None:
-    def load():
-        page.goto(BASE + "/", wait_until="domcontentloaded", timeout=60000)
-        # <option> 在折叠的 <select> 内没有可见盒模型，必须用 attached 等。
-        page.wait_for_selector("#track-select option", state="attached", timeout=60000)
-        opts = page.eval_on_selector_all("#track-select option", "els => els.length")
-        assert opts > 1, f"赛道下拉仅 {opts} 项"
-        return f"赛道下拉 {opts} 项"
-
-    guard("首页加载 / 赛道下拉填充", load)
-
-    def health():
-        page.wait_for_function(
-            "() => { const b = document.getElementById('health-badge');"
-            " return b && b.textContent && !b.textContent.includes('…'); }",
-            timeout=60000,
-        )
-        return page.inner_text("#health-badge")
-
-    guard("健康检查徽标显示 API 状态", health)
-
-    def pick_track():
-        page.select_option("#track-select", index=1)
+    # ── ③ 弯道反馈（17 症状 / 三档强度）──
+    page.locator("#track-map-wrap .hotzone").nth(0).click(force=True)
+    page.wait_for_timeout(800)
+    panel = page.locator("#feedback-overlay").is_visible()
+    item("③反馈面板弹出", panel)
+    if panel:
+        total = page.locator('#feedback-overlay input[name="symptom"]').count()
+        item("③症状条目=17", total == 17, f"实际 {total}（lap_slow 已降级）")
+        expand_all_groups(page)
+        counts = group_counts(page)
+        item("③分组 5/3/4/5", counts == {"entry": 5, "apex": 3, "exit": 4, "global": 0},
+             f"{counts}")
+        visible = page.locator('#feedback-overlay input[name="symptom"]:visible')
+        n_visible = visible.count()
+        item("③可见症状>0", n_visible > 0, f"可见 {n_visible}")
+        if n_visible:
+            visible.nth(0).check()
         page.wait_for_timeout(300)
-        return page.inner_text("#track-info")
-
-    guard("切换赛道 → 赛道信息更新", pick_track)
-
-    def predict():
-        page.click("#predict-btn")
-        page.wait_for_function(
-            "() => { const e = document.getElementById('predict-out');"
-            " return e && e.textContent && !e.textContent.includes('预测中'); }",
-            timeout=180000,
-        )
-        txt = page.inner_text("#predict-out").strip()
-        assert txt, "预测输出为空"
-        assert "预测不可用" not in txt, f"预测失败: {txt}"
-        return txt
-
-    guard("点击「预测圈速」", predict)
-
-    def feedback():
-        page.fill("#feedback-input", "T1 入弯总推头怎么办？")
-        page.click("#feedback-btn")
-        page.wait_for_function(
-            "() => { const e = document.getElementById('fb-summary');"
-            " return e && e.textContent && !e.textContent.startsWith('点击'); }",
-            timeout=180000,
-        )
-        txt = page.inner_text("#fb-summary").strip()
-        assert txt, "反馈摘要为空"
-        assert "反馈不可用" not in txt, f"反馈失败: {txt}"
-        return txt[:160]
-
-    guard("输入框提问 → 点击「获取反馈」", feedback)
-
-    def search():
-        page.select_option("#driver-style-select", "aggressive")
-        page.select_option("#tire-wear-select", "2")
-        page.click("#search-btn")
-        page.wait_for_selector("#search-results-wrap:not(.hidden)", timeout=300000)
-        gain = page.inner_text("#search-gain-val").strip()
-        rows = page.eval_on_selector_all("#search-diff-body tr", "els => els.length")
-        return f"收益 {gain} / 差异行 {rows}"
-
-    guard("点击「调教搜索」→ 结果面板出现", search)
-
-    def apply_rec():
-        page.click("#apply-recommended-btn")
-        page.wait_for_function(
-            "() => { const e = document.getElementById('apply-status');"
-            " return e && e.textContent.trim(); }",
-            timeout=30000,
-        )
-        txt = page.inner_text("#apply-status").strip()
-        assert "无推荐" not in txt, txt
-        return txt
-
-    guard("点击「应用推荐调教」", apply_rec)
-
-    def chat():
-        page.fill("#chat-input", "为什么推头？")
-        page.click("#chat-send")
-        page.wait_for_function(
-            "() => { const ms = document.querySelectorAll('#conv-log .msg.bot');"
-            " if (ms.length < 1) return false;"
-            " const last = ms[ms.length - 1].textContent || '';"
-            " return !last.includes('分析中'); }",
-            timeout=180000,
-        )
-        msgs = page.eval_on_selector_all("#conv-log .msg", "els => els.length")
-        last = page.eval_on_selector_all(
-            "#conv-log .msg.bot", "els => els.length ? els[els.length-1].textContent : ''"
-        )
-        assert "反馈不可用" not in last, f"对话返回异常: {last[:200]}"
-        return f"消息数 {msgs} / 末条 {last[:80]}"
-
-    guard("对话输入框提问 → 点击「发送」", chat)
-
-    def empty_chat():
-        before = err_count()
-        page.fill("#chat-input", "")
-        page.click("#chat-send")
-        page.wait_for_timeout(800)
-        assert err_count() == before, "空输入触发前端异常"
-        return "无异常"
-
-    guard("空输入点击发送（健壮性）", empty_chat)
-
-    def iters():
-        page.click("#iter-link")
-        page.wait_for_selector("#iter-panel:not(.hidden)", timeout=30000)
-        page.wait_for_function(
-            "() => { const l = document.getElementById('iter-list');"
-            " return l && l.textContent && !l.textContent.includes('加载中'); }",
-            timeout=30000,
-        )
-        items = page.eval_on_selector_all("#iter-list .iter-item", "els => els.length")
-        detail = page.inner_text("#iter-detail").strip()
-        assert "加载失败" not in detail, detail[:200]
-        return f"迭代 {items} 条 / 详情 {detail[:60]}"
-
-    guard("点击「迭代历史」", iters)
-    page.click("#iter-link")
-    page.wait_for_timeout(300)
-
-    def extreme():
-        """越界输入：应被输入侧钳制，不再打出 400。"""
-        before_bad = len(HTTP_BAD)
-        inp = page.query_selector('#setup-container input[data-field="front_wing"]')
-        if inp is None:
-            return "SKIP 未找到调教输入框"
-        max_attr = inp.get_attribute("max")
-        inp.fill("9999")
-        inp.dispatch_event("change")
-        page.wait_for_timeout(300)
-        clamped = inp.input_value()
-        page.click("#predict-btn")
-        page.wait_for_function(
-            "() => { const e = document.getElementById('predict-out');"
-            " return e && e.textContent && !e.textContent.includes('预测中'); }",
-            timeout=180000,
-        )
-        txt = page.inner_text("#predict-out").strip()
-        new_bad = [b for b in HTTP_BAD[before_bad:] if "predict" in b]
-        assert not new_bad, f"越界输入仍触发 4xx: {new_bad}"
-        assert "预测不可用" not in txt, f"预测失败: {txt}"
-        return f"max={max_attr} 钳制后={clamped} / {txt[:100]}"
-
-    guard("越界调教值（9999）→ 输入钳制 + 预测", extreme)
-
-    def export_setup():
-        with page.expect_download(timeout=30000) as dl:
-            page.click("#export-setup-btn")
-        return f"下载文件 {dl.value.suggested_filename}"
-
-    guard("点击「导出调教」→ 触发下载", export_setup)
-
-    def export_samples():
-        with page.expect_download(timeout=60000) as dl:
-            page.click("#export-samples-btn")
-        return f"下载文件 {dl.value.suggested_filename}"
-
-    guard("点击「导出样本 (Parquet)」→ 触发下载", export_samples)
-
-    def llm_enhanced():
-        """外部 LLM (local) 增强: 点击「获取反馈」, 摘要应含 mock 标记。
-
-        前置: 服务以 F1OPT_LLM_BACKEND=local 启动并已 preload, mock 在线。
-        """
-        mock_up = _MOCK_EXTERNAL or (
-            _MOCK_PROC is not None and _MOCK_PROC.poll() is None
-        )
-        if not mock_up:
-            return "SKIP mock Ollama 不可用"
-        page.fill("#feedback-input", "弯中推头，请给一句话建议")
-        page.click("#feedback-btn")
-        page.wait_for_function(
-            "() => { const e = document.getElementById('fb-summary');"
-            " return e && e.textContent && !e.textContent.startsWith('点击'); }",
-            timeout=180000,
-        )
-        txt = page.inner_text("#fb-summary").strip()
-        assert txt, "反馈摘要为空"
-        assert LLM_MARKER in txt, f"LLM 增强未生效, 摘要无标记: {txt[:120]}"
-        return txt[:140]
-
-    def llm_builtin_basic():
-        """内置小模型: 点击「获取反馈」→ 摘要含针对性调教修正。"""
-        page.fill("#feedback-input", "T2 连续弯推头，怎么针对性调整？")
-        page.click("#feedback-btn")
-        page.wait_for_function(
-            "() => { const e = document.getElementById('fb-summary');"
-            " return e && e.textContent && !e.textContent.startsWith('点击'); }",
-            timeout=180000,
-        )
-        txt = page.inner_text("#fb-summary").strip()
-        assert txt.startswith(BUILTIN_MARKER), f"内置小模型未生效: {txt[:120]}"
-        assert "修正" in txt or "调整" in txt, f"缺少调教修正内容: {txt[:200]}"
-        return txt[:160]
-
-    def llm_builtin_learning():
-        """内置小模型: 再次反馈同类问题 → 经验样本数应累积 (收集→改进闭环)。"""
-        page.fill("#feedback-input", "T2 又推头了，继续调")
-        page.click("#feedback-btn")
-        page.wait_for_function(
-            "() => { const e = document.getElementById('fb-summary');"
-            " return e && e.textContent && !e.textContent.startsWith('点击'); }",
-            timeout=180000,
-        )
-        txt = page.inner_text("#fb-summary").strip()
-        assert txt.startswith(BUILTIN_MARKER), f"内置小模型未生效: {txt[:120]}"
-        m = re.search(r"(\d+) 条同类反馈", txt)
-        assert m, f"摘要未包含经验样本数: {txt[:200]}"
-        assert int(m.group(1)) >= 1, f"同类反馈样本未累积: {m.group(1)}"
-        return f"同类经验 {m.group(1)} 条 / {txt[:120]}"
-
-    if AUDIT_LLM_BACKEND == "builtin":
-        guard("内置小模型：点击「获取反馈」→ 针对性调教建议", llm_builtin_basic)
-        guard("内置小模型：反馈学习闭环 → 同类经验累积", llm_builtin_learning)
-    else:
-        guard("内置 LLM 增强：点击「获取反馈」→ 摘要含 LLM 改写", llm_enhanced)
-
-    def llm_fallback():
-        """LLM 服务掉线: 应静默回退规则引擎, 摘要非空且无标记、无前端异常。"""
-        before_err = err_count()
-        stop_mock_llm()
-        page.fill("#feedback-input", "LLM 掉线后还能用吗？")
-        page.click("#feedback-btn")
-        page.wait_for_function(
-            "() => { const e = document.getElementById('fb-summary');"
-            " return e && e.textContent && !e.textContent.startsWith('点击'); }",
-            timeout=180000,
-        )
-        txt = page.inner_text("#fb-summary").strip()
-        assert txt, "回退后摘要为空"
-        assert LLM_MARKER not in txt, "LLM 已掉线但仍返回了 LLM 内容"
-        assert err_count() == before_err, "LLM 掉线触发前端异常"
-        return f"回退规则引擎 / 摘要 {txt[:100]}"
-
-    if AUDIT_LLM_BACKEND != "builtin":
-        guard("LLM 服务中断 → 静默回退规则引擎（健壮性）", llm_fallback)
-    snap(page, "index-final")
-
-
-# --------------------------------------------------------------------------
-# 仪表盘（智能分析中心）—— 逐页签真人操作
-# --------------------------------------------------------------------------
-def audit_dashboard(page) -> None:
-    def load():
-        page.goto(BASE + "/dashboard.html", wait_until="domcontentloaded", timeout=60000)
-        page.wait_for_selector("#str-track option", state="attached", timeout=60000)
-        return page.title()
-
-    guard("仪表盘页面加载", load)
-
-    def strategy():
-        page.fill("#str-laps", "58")
-        page.fill("#str-fuel", "105.5")
-        page.click("#str-run")
-        page.wait_for_selector("#str-result-panel:not(.hidden)", timeout=120000)
-        txt = page.inner_text("#str-result-panel").strip()
-        assert "失败" not in txt[:200], txt[:200]
-        return (
-            f"策略 {page.inner_text('#str-type')} / 停 {page.inner_text('#str-stops-count')}"
-            f" / 总时 {page.inner_text('#str-total')}"
-        )
-
-    guard("仪表盘-赛道策略：填表 → 生成策略", strategy)
-
-    def bayes():
-        page.click('.tab[data-tab="search"]')
-        page.wait_for_timeout(300)
-        page.click("#bayes-run")
-        page.wait_for_selector("#bayes-result-panel:not(.hidden)", timeout=240000)
-        rows = page.eval_on_selector_all("#bayes-setup-table tbody tr", "els => els.length")
-        assert rows > 0, "贝叶斯推荐调教表为空"
-        return f"收益 {page.inner_text('#bayes-gain')} / 调教行 {rows}"
-
-    guard("仪表盘-调教搜索：贝叶斯", bayes)
-
-    def pareto():
-        page.click('.subtab[data-subtab="pareto"]')
-        page.wait_for_timeout(300)
-        page.click("#pareto-run")
-        page.wait_for_selector("#pareto-result-panel:not(.hidden)", timeout=240000)
-        dots = page.eval_on_selector_all("#pareto-scatter circle", "els => els.length")
-        first_row = page.eval_on_selector(
-            "#pareto-setups-table tbody tr",
-            "el => el.textContent.replace(/\\s+/g,' ').trim()",
-        )
-        # 真实数据校验: 散点不应为空, 且「圈速」列不再是恒定的 "—"
-        assert dots > 0, "Pareto 散点图无点"
-        assert "—" not in first_row.split("关键")[0][:24], f"目标值列仍为空: {first_row}"
-        return (
-            f"前沿 {page.inner_text('#pareto-front-size')} / 散点 {dots} / 首行 {first_row[:80]}"
-        )
-
-    guard("仪表盘-调教搜索：Pareto 真实前沿", pareto)
-
-    def compare():
-        page.click('.tab[data-tab="compare"]')
-        page.wait_for_timeout(300)
-        page.fill("#cmp-input", json.dumps(LAPS_PAYLOAD, ensure_ascii=False))
-        page.click("#cmp-run")
-        page.wait_for_selector("#cmp-result-panel:not(.hidden)", timeout=120000)
-        rows = page.eval_on_selector_all("#cmp-table tbody tr", "els => els.length")
-        bars = page.eval_on_selector_all("#cmp-sector-chart rect", "els => els.length")
-        strength = page.inner_text("#cmp-strength").strip()
-        assert rows == len(LAPS_PAYLOAD["laps"]), f"对比行 {rows}"
-        assert bars == 3, f"扇区柱状图应 3 根柱, 实际 {bars}"
-        # 后端 strength/weakness 已是 1-based, 展示必须在 S1..S3 内
-        assert re.search(r"强 S[1-3] / 弱 S[1-3]", strength), f"强弱扇区越界: {strength}"
-        return f"行 {rows} / 扇区柱 {bars} / {strength}"
-
-    guard("仪表盘-圈速对比：扇区 Δ 图与强弱扇区", compare)
-
-    def bad_json():
-        before = err_count()
-        page.fill("#cmp-input", "{ 这不是 JSON")
-        page.click("#cmp-run")
+        rng = page.locator(".fb-strength-item-range")
+        item("③强度档位 1-3（默认 2）",
+             rng.count() >= 1 and rng.first.get_attribute("min") == "1"
+             and rng.first.get_attribute("max") == "3",
+             f"min={rng.first.get_attribute('min') if rng.count() else '-'} "
+             f"max={rng.first.get_attribute('max') if rng.count() else '-'}")
+        page.screenshot(path=str(SHOTS / "03_feedback.png"), full_page=True)
+        page.click("#fb-submit")
         page.wait_for_timeout(1200)
-        toast = page.inner_text("#toast").strip()
-        assert err_count() == before, "非法 JSON 触发前端异常"
-        assert "JSON" in toast, f"未给出可读提示: {toast}"
-        return f"提示: {toast[:80]}"
+        item("③提交后面板关闭", not page.locator("#feedback-overlay").is_visible())
 
-    guard("仪表盘-圈速对比：非法 JSON 输入提示", bad_json)
+    # ── ④ 生成建议（21 参数报告）──
+    page.click("#btn-generate-suggest")
+    page.wait_for_timeout(2500)
+    rows = page.locator("#report-table-wrap table tr").count()
+    item("④报告生成", rows > 0, f"表格行数={rows}")
+    item("④报告参数行=21", rows - 1 == 21, f"数据行={rows - 1}")
+    page.screenshot(path=str(SHOTS / "04_report.png"), full_page=True)
 
-    def teammates():
-        page.fill("#tm-driver", json.dumps(DRIVER_LAPS))
-        page.fill("#tm-teammate", json.dumps(TEAMMATE_LAPS))
-        page.click("#tm-run")
-        page.wait_for_selector("#tm-result-panel:not(.hidden)", timeout=120000)
-        verdict = page.inner_text("#tm-verdict").strip()
-        assert verdict and verdict != "—", "队友对比无裁决"
-        return f"裁决 {verdict[:90]}"
+    # ── ⑤ 遥测面板 ──
+    for tid, label in (("tel-rpm", "转速"), ("tel-laptime", "圈速"),
+                       ("tel-sector", "扇区"), ("tel-corner", "当前弯")):
+        item(f"⑤遥测面板含{label}", page.locator(f"#{tid}").count() == 1)
 
-    guard("仪表盘-队友对比", teammates)
+    # ── ⑥ 赛道级全局反馈 ──
+    page.click("#track-feedback-btn")
+    page.wait_for_timeout(600)
+    counts = group_counts(page)
+    item("⑥赛道模式仅全局组", counts.get("global", 0) == 5
+         and counts.get("entry") == 0, f"{counts}")
+    gvals = [
+        page.locator('.sym-group[data-category="global"] input[name="symptom"]').nth(i)
+        .get_attribute("value")
+        for i in range(counts.get("global", 0))
+    ]
+    item("⑥全局组含胎温过高", "tyre_overheat" in gvals, f"{gvals}")
+    page.locator('.sym-group[data-category="global"] input[name="symptom"]').nth(0).check()
+    page.click("#fb-submit")
+    page.wait_for_timeout(1200)
+    item("⑥全局反馈提交", not page.locator("#feedback-overlay").is_visible())
+    page.screenshot(path=str(SHOTS / "05_track_feedback.png"), full_page=True)
 
-    def weather():
-        page.click('.tab[data-tab="weather"]')
-        page.wait_for_timeout(300)
-        page.click("#w-run")
-        page.wait_for_selector("#w-result-panel:not(.hidden)", timeout=120000)
-        grip = page.inner_text("#w-grip").strip()
-        assert grip and grip != "—", "抓地力无结果"
-        return (
-            f"抓地 {grip} / Δ {page.inner_text('#w-delta')} / 配方 {page.inner_text('#w-compound')}"
-        )
-
-    guard("仪表盘-天气影响", weather)
-
-    def health():
-        page.click('.tab[data-tab="health"]')
-        page.wait_for_timeout(300)
-        page.click("#h-refresh")
-        page.wait_for_selector("#h-result-panel:not(.hidden)", timeout=60000)
-        st = page.inner_text("#h-status-val").strip()
-        assert st == "ok", f"健康状态异常: {st}"
-        mods = page.eval_on_selector_all("#h-modules .chip", "els => els.length")
-        return f"状态 {st} / 模型 {page.inner_text('#h-model')} / 模块 {mods}"
-
-    guard("仪表盘-系统健康（扩展接口连通性）", health)
-    snap(page, "dashboard-final")
+    # ── ⑦ 前端体检 ──
+    item("⑦无 console error", not CONSOLE_ERRORS, "; ".join(CONSOLE_ERRORS[:3]))
+    item("⑦无 4xx 响应", not BAD_RESPONSES, "; ".join(BAD_RESPONSES[:5]))
+    item("⑦无 page error", not PAGE_ERRORS, "; ".join(PAGE_ERRORS[:3]))
 
 
-def main() -> None:
-    if AUDIT_LLM_BACKEND == "local":
-        start_mock_llm()
+def main() -> int:
+    channel = os.environ.get("AUDIT_CHANNEL") or None
     with sync_playwright() as p:
-        browser = p.chromium.launch(args=["--no-sandbox"])
-        ctx = browser.new_context(viewport={"width": 1600, "height": 1100}, accept_downloads=True)
-        page = ctx.new_page()
-
-        def on_console(msg):
-            if msg.type == "error":
-                CONSOLE_ERR.append(msg.text[:400])
-
-        def on_pageerror(exc):
-            PAGE_ERR.append(str(exc)[:400])
-
-        def on_requestfailed(req):
-            try:
-                NET_FAIL.append(f"{req.url} :: {req.failure}")
-            except Exception:  # noqa: BLE001
-                NET_FAIL.append(req.url)
-
-        def on_response(resp):
-            try:
-                if resp.status >= 400:
-                    HTTP_BAD.append(f"{resp.request.method} {resp.url} -> {resp.status}")
-            except Exception:  # noqa: BLE001
-                pass
-
-        page.on("console", on_console)
-        page.on("pageerror", on_pageerror)
-        page.on("requestfailed", on_requestfailed)
-        page.on("response", on_response)
-
+        browser = p.chromium.launch(channel=channel, headless=True)
+        page = browser.new_page(viewport={"width": 1440, "height": 1000})
+        page.on("console", lambda m: CONSOLE_ERRORS.append(m.text)
+                if m.type == "error" else None)
+        page.on("pageerror", lambda e: PAGE_ERRORS.append(str(e)))
+        page.on("response", lambda r: BAD_RESPONSES.append(f"{r.status} {r.url}")
+                 if r.status >= 400 else None)
         try:
-            audit_index(page)
-            audit_dashboard(page)
+            run(page)
+        except Exception as e:  # noqa: BLE001
+            item("⑧流程异常", False, f"{type(e).__name__}: {e}")
+            page.screenshot(path=str(SHOTS / "99_error.png"), full_page=True)
         finally:
-            snap(page, "final-state")
-            ctx.close()
             browser.close()
-            stop_mock_llm()
 
-    rec("无未捕获 JS 异常", not PAGE_ERR, "; ".join(PAGE_ERR[:5]))
-    rec("无 console.error", not CONSOLE_ERR, "; ".join(CONSOLE_ERR[:5]))
-    rec(
-        "无 4xx/5xx 响应",
-        not HTTP_BAD,
-        "; ".join(sorted(set(HTTP_BAD))[:8]),
+    (REPORTS / "ui_click_audit_result.json").write_text(
+        json.dumps([{"tag": t, "verdict": v, "detail": d} for t, v, d in RESULTS],
+                   ensure_ascii=False, indent=2),
+        encoding="utf-8",
     )
-
-    payload = {
-        "base": BASE,
-        "total": len(RESULTS),
-        "passed": sum(1 for r in RESULTS if r["ok"]),
-        "failed": sum(1 for r in RESULTS if not r["ok"]),
-        "results": RESULTS,
-        "console_errors": CONSOLE_ERR[:60],
-        "page_errors": PAGE_ERR[:60],
-        "request_failed": NET_FAIL[:60],
-        "http_bad": sorted(set(HTTP_BAD))[:60],
-    }
-    (REPORTS / "ui_audit.json").write_text(
-        json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
-    )
-    print(
-        f"\n== UI AUDIT {payload['passed']}/{payload['total']} passed, "
-        f"{payload['failed']} failed ==",
-        flush=True,
-    )
+    from collections import Counter
+    c = Counter(v for _, v, _ in RESULTS)
+    print("汇总：" + " ".join(f"{k}={c.get(k, 0)}" for k in ("PASS", "FAIL")))
+    for t, v, d in RESULTS:
+        if v == "FAIL":
+            print(f"  [FAIL] {t} :: {d}")
+    return 1 if c.get("FAIL", 0) else 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

@@ -3,7 +3,7 @@
    -------------------------------------------------------------------------
    职责：
       1. 赛道选择 → 加载 SVG + 弯道热区（SVG 缓存）
-      2. 热区点击 → 反馈面板（15 症状 4 类 checkbox 多选 + 每症状独立强度 0-5）
+      2. 热区点击 → 反馈面板（17 症状 4 类 checkbox 多选 + 每症状独立强度 1-3）
        3. 21 项调教参数手动输入面板（6 大类分组，滑块+数值输入，保存/重置/导入）
        4. WebSocket 订阅遥测/当前弯高亮/建议结果/连接状态（指数退避重连）
        5. 建议报告渲染（21 参数表格 + 可视化条形图 + 中文参数名映射）
@@ -45,8 +45,8 @@
   const FLASH_DURATION_MS = 200;
   // 热区 pulse 动画持续时间（ms）
   const PULSE_DURATION_MS = 1000;
-  // 默认症状强度（0-5 滑块初始值）
-  const DEFAULT_STRENGTH = 3;
+  // 默认症状强度（1-3 档位初始值：2=明显）
+  const DEFAULT_STRENGTH = 2;
   // 速度仪表盘最大值（km/h，用于进度条计算）
   const SPEED_MAX = 350;
   // 调整量条形图缩放因子与半宽百分比
@@ -59,8 +59,9 @@
   // 默认锚点位置（弯道锚点缺失时的归一化中心位置）
   const DEFAULT_ANCHOR = 0.5;
   // 症状强度滑块范围
-  const STRENGTH_MIN = 0;
-  const STRENGTH_MAX = 5;
+  // task-61：强度收敛为 1-3（轻微/明显/严重）
+  const STRENGTH_MIN = 1;
+  const STRENGTH_MAX = 3;
 
   // 症状 → 类别映射（与 domain/symptoms.py 逐字对齐）
   const SYMPTOM_CATEGORY = {
@@ -68,7 +69,10 @@
     brake_long: "entry", lockup: "entry",
     midcorner_understeer: "apex", midcorner_unstable: "apex", midcorner_traction: "apex",
     exit_wheelspin: "exit", exit_oversteer: "exit",
-    bottoming: "global", tyre_wear: "global", straight_slow: "global", lap_slow: "global", high_speed_instability: "global",
+    exit_understeer: "exit", exit_unstable: "exit",
+    bottoming: "global", tyre_wear: "global", straight_slow: "global",
+    // lap_slow 已降级为综合结论，不再出现在反馈面板；映射保留兼容旧数据
+    lap_slow: "global", high_speed_instability: "global", tyre_overheat: "global",
   };
   const GLOBAL_CATEGORY = "global";
 
@@ -78,7 +82,10 @@
     brake_long: "刹车距离长", lockup: "轮胎锁死",
     midcorner_understeer: "弯中推头", midcorner_unstable: "车身不稳定", midcorner_traction: "弯中不能稳定加速",
     exit_wheelspin: "出弯打滑", exit_oversteer: "出弯甩尾",
-    bottoming: "直道刮底", tyre_wear: "胎耗偏高", straight_slow: "直道速度低", lap_slow: "圈速不高", high_speed_instability: "高速不稳",
+    exit_understeer: "出弯转向不足", exit_unstable: "出弯车身不稳",
+    bottoming: "直道刮底", tyre_wear: "胎耗偏高", straight_slow: "直道速度低",
+    // lap_slow 已从 UI 可勾列表降级为综合结论；标签保留用于展示旧数据
+    lap_slow: "圈速不高", high_speed_instability: "高速不稳", tyre_overheat: "胎温过高",
   };
 
   // 21 参数中文显示名映射（前端 fallback，优先使用 GET /api/v1/setup/fields 返回的 label_zh）
@@ -90,7 +97,6 @@
     front_anti_roll_bar: "前防倾杆", rear_anti_roll_bar: "后防倾杆",
     front_ride_height: "前行驶高度", rear_ride_height: "后行驶高度",
     brake_pressure: "刹车压力", brake_bias: "刹车偏置",
-    engine_braking: "引擎制动",
     front_left_tyre_pressure: "前左胎压", front_right_tyre_pressure: "前右胎压",
     rear_left_tyre_pressure: "后左胎压", rear_right_tyre_pressure: "后右胎压",
   };
@@ -102,7 +108,7 @@
     "Brakes": "刹车", "Tyres": "轮胎",
   };
 
-  // 21 参数前端 fallback 定义（与后端 setup.py ALL_SETUP_FIELDS 对齐；API 不可用时使用）
+  // 20 参数前端 fallback 定义（与后端 setup.py ALL_SETUP_FIELDS 对齐；API 不可用时使用）
   const FALLBACK_SETUP_FIELDS = [
     { name: "front_wing", group: "Aerodynamics", label: "前翼", min: 0, max: 50, step: 1, default: 25, unit: "级" },
     { name: "rear_wing", group: "Aerodynamics", label: "后翼", min: 0, max: 50, step: 1, default: 25, unit: "级" },
@@ -120,7 +126,6 @@
     { name: "rear_ride_height", group: "Suspension", label: "后行驶高度", min: 40, max: 60, step: 1, default: 50, unit: "级" },
     { name: "brake_pressure", group: "Brakes", label: "刹车压力", min: 80, max: 100, step: 1, default: 90, unit: "%" },
     { name: "brake_bias", group: "Brakes", label: "刹车偏置", min: 50, max: 70, step: 1, default: 58, unit: "%" },
-    { name: "engine_braking", group: "Brakes", label: "引擎制动", min: 0, max: 100, step: 1, default: 50, unit: "%" },
     { name: "front_left_tyre_pressure", group: "Tyres", label: "前左胎压", min: 22.5, max: 29.5, step: 0.1, default: 23.5, unit: "psi" },
     { name: "front_right_tyre_pressure", group: "Tyres", label: "前右胎压", min: 22.5, max: 29.5, step: 0.1, default: 23.5, unit: "psi" },
     { name: "rear_left_tyre_pressure", group: "Tyres", label: "后左胎压", min: 20.5, max: 26.5, step: 0.1, default: 22.0, unit: "psi" },
@@ -168,6 +173,17 @@
     // 遥测录制
     btnRecord: $("btn-record-toggle"),
     btnListenerToggle: $("btn-listener-toggle"),
+    btnExportTraining: $("btn-export-training"),
+    // 遥测采集状态条
+    collectBar: document.querySelector(".collect-bar"),
+    collectState: $("collect-state"),
+    collectAddr: $("collect-addr"),
+    // 录制库（列表 + 回放）
+    btnRecordings: $("btn-recordings"),
+    recOverlay: $("rec-overlay"), recClose: $("rec-close"),
+    recList: $("rec-list"), recStatus: $("rec-status"),
+    recError: $("rec-error"), recCount: $("rec-count"),
+    recRefresh: $("rec-refresh"), recReplayStop: $("rec-replay-stop"),
   };
 
   /* ---------- 运行时状态 ---------- */
@@ -178,6 +194,8 @@
     feedbackCorners: new Set(),
     selectedCorner: null,
     feedbackMode: null, // "corner" | "track"
+    cornerGroups: [], // task-63：当前赛道的弯道段
+    selectedSegment: null, // task-63：反馈面板当前绑定的连续弯段
     currentCorner: null,
     ws: null,
     wsReconnectCount: 0,
@@ -198,6 +216,8 @@
     // 遥测录制状态
     isRecording: false,
     isListening: true,  // 默认监听器已启动
+    isReplaying: false, // 回放中
+    replaySessionId: null,
   };
 
   /* ---------- 工具函数 ---------- */
@@ -401,6 +421,8 @@
       const track = data.track || data;
       const corners = data.corners || track.corners || [];
       state.corners = corners;
+      // task-63：弯道段（连续弯分组），热区点击与当前弯高亮都以段为单位
+      state.cornerGroups = data.segments || [];
       dom.trackMeta.textContent = `${track.circuit_name || ""} · ${track.country || ""} · ${(track.length_m / 1000).toFixed(3)} km · ${corners.length} 弯`;
       renderTrackMap(trackId, corners);
       loadExistingFeedback(trackId);
@@ -492,7 +514,7 @@
     hz.addEventListener("click", () => {
       hz.classList.add("pulse");
       setTimeout(() => hz.classList.remove("pulse"), PULSE_DURATION_MS);
-      openFeedbackPanel(num, c.name, "corner");
+      openFeedbackPanel(num, c.name, "corner", groupOfCorner(num));
     });
     layer.appendChild(hz);
   }
@@ -546,13 +568,20 @@
    *  @param {number|null} cornerNumber — 弯道编号，null 表示清除高亮
    *  @returns {void}
    */
-  function highlightCurrentCorner(cornerNumber) {
-    const prev = dom.mapWrap.querySelector(".hotzone.current-corner");
-    if (prev) prev.classList.remove("current-corner");
+  function highlightCurrentCorner(cornerNumber, groupMembers) {
+    dom.mapWrap.querySelectorAll(".hotzone.current-corner").forEach((el) => {
+      el.classList.remove("current-corner");
+    });
     state.currentCorner = cornerNumber;
     if (cornerNumber == null) return;
-    const hz = dom.mapWrap.querySelector(`.hotzone[data-corner="${cornerNumber}"]`);
-    if (hz) hz.classList.add("current-corner");
+    // task-63：连续弯段 → 段内全部成员一起高亮（消除单弯跳变观感）
+    const targets = Array.isArray(groupMembers) && groupMembers.length > 1
+      ? groupMembers
+      : [cornerNumber];
+    targets.forEach((n) => {
+      const hz = dom.mapWrap.querySelector(`.hotzone[data-corner="${n}"]`);
+      if (hz) hz.classList.add("current-corner");
+    });
   }
 
   /* ========================================================================
@@ -564,12 +593,24 @@
    *  @param {string|null} cornerName — 弯道名称
    *  @returns {void}
    */
-  function configureCornerMode(cornerNumber, cornerName) {
+  function configureCornerMode(cornerNumber, cornerName, segment) {
     state.selectedCorner = { number: cornerNumber, name: cornerName || "" };
-    dom.fbCornerNum.textContent = `T${cornerNumber}`;
+    // task-63：多弯段 → 反馈绑定整段（提交时展开为段内逐弯）
+    state.selectedSegment = segment && segment.members && segment.members.length > 1
+      ? segment : null;
+    const segName = state.selectedSegment ? state.selectedSegment.name : "";
+    dom.fbCornerNum.textContent = state.selectedSegment ? segName : `T${cornerNumber}`;
     dom.fbCornerName.textContent = cornerName || "";
-    if (dom.fbTitle) dom.fbTitle.textContent = "弯道反馈 · 多症状录入";
-    if (dom.fbTip) dom.fbTip.textContent = "可同时勾选多个症状（checkbox 多选）。入弯/弯中/出弯类症状绑定当前弯道。每个选中症状都有独立的强度滑块（0-5）。";
+    if (dom.fbTitle) {
+      dom.fbTitle.textContent = state.selectedSegment
+        ? `连续弯段反馈 · ${segName}`
+        : "弯道反馈 · 多症状录入";
+    }
+    if (dom.fbTip) {
+      dom.fbTip.textContent = state.selectedSegment
+        ? `连续弯段（${segName}）：勾选的症状将作用于段内全部弯号（${state.selectedSegment.members.map((n) => "T" + n).join("、")}）。每个选中症状都有独立的强度档位（1-3）。`
+        : "可同时勾选多个症状（checkbox 多选）。入弯/弯中/出弯类症状绑定当前弯道。每个选中症状都有独立的强度档位（1-3）。";
+    }
     dom.fbOverlay.querySelectorAll('.sym-group').forEach((g) => {
       g.style.display = g.dataset.category === 'global' ? 'none' : '';
     });
@@ -580,10 +621,11 @@
    */
   function configureTrackMode() {
     state.selectedCorner = { number: null, name: "赛道级" };
+    state.selectedSegment = null;
     dom.fbCornerNum.textContent = "—";
     dom.fbCornerName.textContent = "赛道级";
     if (dom.fbTitle) dom.fbTitle.textContent = "赛道反馈 · 全局症状";
-    if (dom.fbTip) dom.fbTip.textContent = "可同时勾选多个全局症状（checkbox 多选）。全局类症状作用于整条赛道（corner_number=null）。每个选中症状都有独立的强度滑块（0-5）。";
+    if (dom.fbTip) dom.fbTip.textContent = "可同时勾选多个全局症状（checkbox 多选）。全局类症状作用于整条赛道（corner_number=null）。每个选中症状都有独立的强度档位（1-3）。";
     dom.fbOverlay.querySelectorAll('.sym-group').forEach((g) => {
       g.style.display = g.dataset.category === 'global' ? '' : 'none';
     });
@@ -595,7 +637,14 @@
    *  @param {("corner"|"track")} mode — 反馈模式
    *  @returns {void}
    */
-  function openFeedbackPanel(cornerNumber, cornerName, mode) {
+  /** task-63：按弯号查所属弯道段（无段数据返回 null）。 */
+  function groupOfCorner(cornerNumber) {
+    return (state.cornerGroups || []).find(
+      (g) => Array.isArray(g.members) && g.members.includes(cornerNumber),
+    ) || null;
+  }
+
+  function openFeedbackPanel(cornerNumber, cornerName, mode, segment) {
     const fbMode = mode === "track" ? "track" : "corner";
     state.feedbackMode = fbMode;
 
@@ -603,7 +652,7 @@
     if (fbMode === "track") {
       configureTrackMode();
     } else {
-      configureCornerMode(cornerNumber, cornerName);
+      configureCornerMode(cornerNumber, cornerName, segment);
     }
 
     // 重置所有 checkbox
@@ -723,7 +772,16 @@
       return;
     }
     const corner = state.selectedCorner;
-    const feedbacks = collectFeedbacks();
+    let feedbacks = collectFeedbacks();
+    // task-63：连续弯段 → 展开为段内逐弯反馈（批量接口天然支持）
+    const seg = state.selectedSegment;
+    if (seg && Array.isArray(seg.members) && seg.members.length > 1) {
+      const expanded = [];
+      feedbacks.forEach((fb) => {
+        seg.members.forEach((m) => expanded.push({ ...fb, corner_number: m }));
+      });
+      feedbacks = expanded;
+    }
     const payload = { track_id: state.currentTrackId, feedbacks: feedbacks };
 
     dom.fbSubmit.disabled = true;
@@ -785,6 +843,12 @@
       const data = await fetchJSON(`/feedback?track_id=${encodeURIComponent(trackId)}`);
       const list = Array.isArray(data) ? data : (data && data.items) || [];
       state.feedbacks = list;
+      // 先重置旧标记再按最新列表重标：生成建议后后端会清除本圈反馈，
+      // 若只累加标记，赛道图上会残留"已反馈"圆点（与后端数据不一致）。
+      state.feedbackCorners.clear();
+      dom.mapWrap.querySelectorAll(".hotzone.feedback-done").forEach((hz) => {
+        hz.classList.remove("feedback-done");
+      });
       list.forEach((f) => {
         if (f.corner_number != null) markCornerFeedbackDone(f.corner_number);
       });
@@ -845,14 +909,17 @@
     if (!dom.btnRecord) return;
     dom.btnRecord.disabled = true;
     try {
+      // 后端 RecordToggleRequest 要求 action 必填（start | stop），
+      // 早期前端传 {} 会直接 422 —— 录制按钮点了没反应。
       const data = await fetchJSON("/telemetry/record/toggle", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ action: state.isRecording ? "stop" : "start" }),
       });
       // 后端返回 {recording: bool, session_id: str?}
       state.isRecording = data && data.recording === true;
       updateRecordingUI();
+      refreshCollectBar();
       if (state.isRecording) {
         showToast("遥测录制已开始", "success");
       } else {
@@ -875,6 +942,299 @@
     if (label) label.textContent = state.isRecording ? "停止" : "录制";
   }
 
+  /* ========================================================================
+     3.6 录制库（GET /api/v1/telemetry/recordings + 回放控制）
+     ======================================================================== */
+
+  /** 打开录制库面板并加载列表。
+   *  @returns {Promise<void>}
+   */
+  async function openRecordings() {
+    if (!dom.recOverlay) return;
+    dom.recOverlay.hidden = false;
+    setRecError("");
+    await refreshRecordings();
+  }
+
+  /** 关闭录制库面板。
+   *  @returns {void}
+   */
+  function closeRecordings() {
+    if (dom.recOverlay) dom.recOverlay.hidden = true;
+  }
+
+  /** 设置录制库错误提示。
+   *  @param {string} msg
+   *  @returns {void}
+   */
+  function setRecError(msg) {
+    if (dom.recError) dom.recError.textContent = msg || "";
+  }
+
+  /** 把某个录制会话导出为逐圈训练样本。
+   *  产物为录制目录下的 `<session>_laps.jsonl`，每行一圈样本
+   *  （赛道 ID / 圈时 / 有效性 / 调教 22 项 / 驾驶风格 / 圈级聚合）。
+   *  @param {string} sessionId
+   *  @param {HTMLButtonElement} btn
+   *  @returns {Promise<void>}
+   */
+  async function exportTrainingSamples(sessionId, btn) {
+    if (!sessionId) return;
+    const oldText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = "导出中…";
+    setRecError("");
+    try {
+      const d = await fetchJSON(
+        `/telemetry/recordings/${encodeURIComponent(sessionId)}/export`,
+        { method: "POST" },
+      );
+      showToast(
+        `已导出 ${d.laps || 0} 圈训练样本（跳过坏包 ${d.parse_errors || 0}）：${d.out_path || ""}`,
+        "success",
+      );
+    } catch (e) {
+      setRecError("导出训练样本失败：" + e.message);
+      showToast("导出训练样本失败：" + e.message, "error");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = oldText;
+    }
+  }
+
+  /** 加载并渲染录制会话列表。
+   *  @returns {Promise<void>}
+   */
+  async function refreshRecordings() {
+    if (!dom.recList) return;
+    dom.recList.innerHTML = '<div class="fb-strength-empty">正在加载…</div>';
+    try {
+      const [list, status] = await Promise.all([
+        fetchJSON("/telemetry/recordings"),
+        fetchJSON("/telemetry/replay/status").catch(() => null),
+      ]);
+      renderReplayStatus(status);
+      renderRecordingList(Array.isArray(list) ? list : []);
+    } catch (e) {
+      dom.recList.innerHTML = '<div class="fb-strength-empty">加载失败</div>';
+      setRecError("加载录制列表失败：" + e.message);
+    }
+  }
+
+  /** 渲染回放状态行 + 停止按钮可见性。
+   *  @param {object|null} status — {replaying, session_id, packet_count?}
+   *  @returns {void}
+   */
+  function renderReplayStatus(status) {
+    const replaying = !!(status && status.replaying);
+    state.isReplaying = replaying;
+    state.replaySessionId = (status && status.session_id) || null;
+    if (dom.recStatus) {
+      if (replaying) {
+        const n = status && status.packet_count != null ? `（${status.packet_count} 包）` : "";
+        dom.recStatus.textContent = `回放中：${state.replaySessionId || "—"}${n}`;
+        dom.recStatus.classList.add("active");
+      } else {
+        dom.recStatus.textContent = "未在回放";
+        dom.recStatus.classList.remove("active");
+      }
+    }
+    if (dom.recReplayStop) dom.recReplayStop.hidden = !replaying;
+    // 回放中禁用各会话的回放按钮
+    if (dom.recList) {
+      dom.recList.querySelectorAll("button[data-replay]").forEach((b) => {
+        b.disabled = replaying;
+      });
+    }
+  }
+
+  /** 渲染录制会话列表。
+   *  @param {Array<object>} items
+   *  @returns {void}
+   */
+  function renderRecordingList(items) {
+    if (dom.recCount) dom.recCount.textContent = `共 ${items.length} 个会话`;
+    if (!items.length) {
+      dom.recList.innerHTML =
+        '<div class="fb-strength-empty">暂无录制会话。点击「录制」开始采集，停止后此处会出现记录。</div>';
+      return;
+    }
+    dom.recList.innerHTML = "";
+    items.forEach((it) => {
+      const row = document.createElement("div");
+      row.className = "rec-item";
+      row.setAttribute("role", "listitem");
+
+      const line = document.createElement("div");
+      line.className = "rec-line";
+
+      const meta = document.createElement("div");
+      meta.className = "rec-meta";
+      const name = document.createElement("span");
+      name.className = "rec-name";
+      name.textContent = it.session_id || "—";
+      const sub = document.createElement("span");
+      sub.className = "rec-sub";
+      const parts = [];
+      if (it.start_time) parts.push(it.start_time);
+      if (it.packet_count != null) parts.push(`${it.packet_count} 包`);
+      if (it.file_size != null) parts.push(formatBytes(it.file_size));
+      sub.textContent = parts.join(" · ") || "无元数据";
+      meta.appendChild(name);
+      meta.appendChild(sub);
+
+      const actions = document.createElement("div");
+      actions.className = "rec-actions";
+
+      const btnDetail = document.createElement("button");
+      btnDetail.className = "btn btn-ghost btn-sm";
+      btnDetail.type = "button";
+      btnDetail.textContent = "详情";
+      btnDetail.setAttribute("aria-label", `查看会话 ${it.session_id} 详情`);
+      btnDetail.setAttribute("aria-expanded", "false");
+      btnDetail.addEventListener("click", () => toggleRecordingDetail(it.session_id, row, btnDetail));
+
+      const btnReplay = document.createElement("button");
+      btnReplay.className = "btn btn-ghost btn-sm";
+      btnReplay.type = "button";
+      btnReplay.dataset.replay = it.session_id || "";
+      btnReplay.textContent = "回放";
+      btnReplay.disabled = !!state.isReplaying;
+      btnReplay.setAttribute("aria-label", `回放会话 ${it.session_id}`);
+      btnReplay.addEventListener("click", () => startReplay(it.session_id, btnReplay));
+
+      const btnExport = document.createElement("button");
+      btnExport.className = "btn btn-ghost btn-sm";
+      btnExport.type = "button";
+      btnExport.textContent = "导出训练";
+      btnExport.setAttribute("aria-label", `把会话 ${it.session_id} 导出为逐圈训练样本`);
+      btnExport.addEventListener("click", () => exportTrainingSamples(it.session_id, btnExport));
+
+      actions.appendChild(btnDetail);
+      actions.appendChild(btnReplay);
+      actions.appendChild(btnExport);
+      line.appendChild(meta);
+      line.appendChild(actions);
+      row.appendChild(line);
+      dom.recList.appendChild(row);
+    });
+  }
+
+  /** 展开/收起单个会话的详情（包类型统计）。
+   *  @param {string} sessionId
+   *  @param {HTMLElement} row
+   *  @param {HTMLButtonElement} btn
+   *  @returns {Promise<void>}
+   */
+  async function toggleRecordingDetail(sessionId, row, btn) {
+    const existing = row.querySelector(".rec-detail");
+    if (existing) {
+      existing.remove();
+      btn.setAttribute("aria-expanded", "false");
+      btn.textContent = "详情";
+      return;
+    }
+    btn.disabled = true;
+    btn.textContent = "加载中";
+    try {
+      const d = await fetchJSON(`/telemetry/recordings/${encodeURIComponent(sessionId)}`);
+      const box = document.createElement("div");
+      box.className = "rec-detail";
+
+      const lines = [];
+      if (d.start_time) lines.push(`开始：${d.start_time}`);
+      if (d.end_time) lines.push(`结束：${d.end_time}`);
+      if (d.packet_count != null) lines.push(`包数：${d.packet_count}`);
+
+      const head = document.createElement("div");
+      head.className = "rec-detail-head";
+      head.textContent = lines.join("　·　") || "无元数据";
+      box.appendChild(head);
+
+      const types = Array.isArray(d.by_packet_type) ? d.by_packet_type : [];
+      if (types.length) {
+        const ul = document.createElement("div");
+        ul.className = "rec-detail-types";
+        types.forEach((t) => {
+          const chip = document.createElement("span");
+          chip.className = "rec-chip";
+          chip.textContent = `${t.packet_name || "?"} × ${t.count}`;
+          ul.appendChild(chip);
+        });
+        box.appendChild(ul);
+      } else {
+        const empty = document.createElement("div");
+        empty.className = "fb-strength-empty";
+        empty.textContent = "无按类型统计（可能未写入 SQLite 索引）";
+        box.appendChild(empty);
+      }
+
+      row.appendChild(box);
+      btn.setAttribute("aria-expanded", "true");
+      btn.textContent = "收起";
+    } catch (e) {
+      setRecError("加载会话详情失败：" + e.message);
+      btn.textContent = "详情";
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  /** 字节数人类可读化。
+   *  @param {number} n
+   *  @returns {string}
+   */
+  function formatBytes(n) {
+    if (!Number.isFinite(n) || n < 0) return "—";
+    if (n < 1024) return `${n} B`;
+    if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+    if (n < 1024 * 1024 * 1024) return `${(n / 1024 / 1024).toFixed(1)} MB`;
+    return `${(n / 1024 / 1024 / 1024).toFixed(2)} GB`;
+  }
+
+  /** 开始回放指定会话 → POST /api/v1/telemetry/replay/start
+   *  @param {string} sessionId
+   *  @param {HTMLButtonElement} btn
+   *  @returns {Promise<void>}
+   */
+  async function startReplay(sessionId, btn) {
+    if (!sessionId) return;
+    if (btn) btn.disabled = true;
+    setRecError("");
+    try {
+      await fetchJSON("/telemetry/replay/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_id: sessionId }),
+      });      showToast(`开始回放 ${sessionId}`, "success");
+      await refreshRecordings();
+    } catch (e) {
+      setRecError("回放启动失败：" + e.message);
+      showToast("回放启动失败：" + e.message, "error");
+      if (btn) btn.disabled = false;
+    }
+  }
+
+  /** 停止回放 → POST /api/v1/telemetry/replay/stop
+   *  @returns {Promise<void>}
+   */
+  async function stopReplay() {
+    if (dom.recReplayStop) dom.recReplayStop.disabled = true;
+    try {
+      await fetchJSON("/telemetry/replay/stop", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      showToast("回放已停止", "success");
+      await refreshRecordings();
+    } catch (e) {
+      setRecError("停止回放失败：" + e.message);
+    } finally {
+      if (dom.recReplayStop) dom.recReplayStop.disabled = false;
+    }
+  }
+
   /** 切换遥测收集开关 → POST /api/v1/telemetry/listener/toggle
    *  @returns {Promise<void>}
    */
@@ -890,6 +1250,7 @@
       });
       state.isListening = data && data.listening === true;
       updateListenerUI();
+      refreshCollectBar();
       if (state.isListening) {
         showToast("遥测收集已开启", "success");
       } else {
@@ -910,6 +1271,69 @@
     dom.btnListenerToggle.classList.toggle("listening", state.isListening);
     const label = dom.btnListenerToggle.querySelector(".listener-label");
     if (label) label.textContent = state.isListening ? "收集" : "关闭";
+  }
+
+  /** 刷新「遥测采集」状态条：监听地址 / 监听状态 / 录制状态。
+   *  系统内一站式采集——打开系统即监听，点「录制」即自动落盘。
+   *  健康检查失败不打断界面（沿用本地状态）。
+   *  @returns {Promise<void>}
+   */
+  async function refreshCollectBar() {
+    if (!dom.collectBar) return;
+    let connected = state.isListening;
+    let addr = "";
+    try {
+      const h = await fetchJSON("/health");
+      connected = !!h.telemetry_connected;
+      addr = `UDP ${h.udp_host}:${h.udp_port}`;
+    } catch (_) {
+      /* 健康检查失败：保留本地状态，不弹错 */
+    }
+    state.isListening = connected;
+    updateListenerUI();
+    dom.collectBar.classList.toggle("on", connected && !state.isRecording);
+    dom.collectBar.classList.toggle("rec", !!state.isRecording);
+    if (dom.collectAddr && addr) dom.collectAddr.textContent = addr;
+    if (dom.collectState) {
+      if (!connected) {
+        dom.collectState.textContent = "遥测采集 · 已停止（点「收集」开启）";
+      } else if (state.isRecording) {
+        dom.collectState.textContent = "遥测采集 · 录制中（数据自动保存）";
+      } else {
+        dom.collectState.textContent = "遥测采集 · 监听中（点「录制」开始保存）";
+      }
+    }
+  }
+
+  /** 主页「导出训练」：把最近一次录制导出为逐圈训练样本。
+   *  @param {HTMLButtonElement} btn
+   *  @returns {Promise<void>}
+   */
+  async function exportLatestTraining(btn) {
+    const oldText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = "导出中…";
+    try {
+      const list = await fetchJSON("/telemetry/recordings");
+      if (!Array.isArray(list) || !list.length) {
+        showToast("暂无录制：先点「录制」跑几圈再导出", "error");
+        return;
+      }
+      const latest = list[0].session_id;  // 后端按时间倒序，[0] 为最近
+      const d = await fetchJSON(
+        `/telemetry/recordings/${encodeURIComponent(latest)}/export`,
+        { method: "POST" },
+      );
+      showToast(
+        `已导出 ${d.laps || 0} 圈训练样本（跳过坏包 ${d.parse_errors || 0}）：${d.out_path || ""}`,
+        "success",
+      );
+    } catch (e) {
+      showToast("导出训练样本失败：" + e.message, "error");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = oldText;
+    }
   }
 
   /* ========================================================================
@@ -996,6 +1420,8 @@
 
   /** 遥测数据 → 更新显示（数值变化添加 flash 过渡 + 仪表盘进度条）。 */
   /** 更新扇区显示（数值 + 三色编码标签）。F1 扇区三色编码：S1=紫、S2=绿、S3=黄。
+   *  入参为 **1 基**扇区（1/2/3）—— 后端 `to_sector_1based` 已把 UDP 的 0/1/2 转换好，
+   *  早期前端直读 0 基值导致显示 "S0/S1/S2" 且 sector-0 样式类不存在。
    *  @param {number} sector — 扇区编号（1/2/3）
    */
   function updateSectorDisplay(sector) {
@@ -1011,6 +1437,8 @@
   }
 
   /** 遥测数据 → 更新显示（数值变化添加 flash 过渡 + 仪表盘进度条）。
+   *  字段契约与后端 `api/ws.py::_push_telemetry_frame` 一致：
+   *  speed / throttle / brake / steer / gear / engine_rpm / drs / lap_time_ms / sector(1 基)。
    *  @param {Object} t — 遥测数据对象
    *  @returns {void}
    */
@@ -1030,9 +1458,10 @@
       setGaugeBar(dom.telBrakeBar, pct, PERCENT_MAX);
     }
     if (t.gear != null) { updateTelValue(dom.telGear, t.gear < 0 ? "R" : String(t.gear)); }
-    if (t.rpm != null) { updateTelValue(dom.telRpm, String(Math.round(t.rpm))); }
+    // 后端字段名为 engine_rpm（原实现误读 t.rpm → 转速恒为 "—"）
+    if (t.engine_rpm != null) { updateTelValue(dom.telRpm, String(Math.round(t.engine_rpm))); }
     if (t.lap_time_ms != null) { updateTelValue(dom.telLaptime, fmtLapTime(t.lap_time_ms)); }
-    else if (t.last_lap_time_ms != null) { updateTelValue(dom.telLaptime, fmtLapTime(t.last_lap_time_ms)); }
+    // sector 由后端统一转为 1 基（S1/S2/S3）
     if (t.sector != null) updateSectorDisplay(t.sector);
   }
 
@@ -1042,7 +1471,7 @@
    */
   function onCornerEvent(c) {
     const num = c.corner_number;
-    highlightCurrentCorner(num);
+    highlightCurrentCorner(num, c.corner_group_members);
     updateTelValue(dom.telCorner, num != null ? `T${num}` : "—");
     if (c.sector != null) updateSectorDisplay(c.sector);
   }
@@ -1056,6 +1485,12 @@
     const report = s.report_json || s.report;
     if (report) renderReport(report);
     showToast("新建议已生成", "success");
+    // 生成成功后后端默认已清除本圈反馈（消除跨圈串味）：同步刷新反馈摘要
+    // 与赛道图标记。仅当事件属于当前赛道时刷新（其他赛道不影响本页显示）；
+    // WS 事件与 HTTP 响应双路径都会刷新，幂等。
+    if (state.currentTrackId && report && report.track_id === state.currentTrackId) {
+      void loadExistingFeedback(state.currentTrackId);
+    }
   }
 
   /* ========================================================================
@@ -1077,6 +1512,9 @@
     const modelType = dom.modelTypeSelect ? dom.modelTypeSelect.value : "hybrid";
     // 更新顶栏模式显示
     if (dom.topbarMode) dom.topbarMode.textContent = modelType.toUpperCase();
+    // 2026-09-19：后端生成成功后默认"消费并清除"本圈反馈（跨圈不串味），
+    // 先生成前记下是否有反馈，用于生成后如实的提示语。
+    const hadFeedback = state.feedbacks.length > 0;
     try {
       const data = await fetchJSON("/suggest", {
         method: "POST",
@@ -1085,9 +1523,23 @@
       });
       // ★ Bug 修复：后端 SuggestionView 字段名为 report（非 report_json）
       const report = data && data.report ? data.report : data;
-      if (report) renderReport(report);
-      else loadLatestSuggestion(state.currentTrackId);
-      showToast("建议已生成", "success");
+      if (report) {
+        renderReport(report);
+        void loadStyleProfile();
+        // task-62：如实提示模型降级（请求了 nn/hybrid 但实际按规则引擎生成）
+        if (modelType !== "rule" && report.model_type === "rule") {
+          showToast("当前环境未启用神经网络（缺 PyTorch/权重），已按规则引擎生成", "info");
+        }
+      } else {
+        loadLatestSuggestion(state.currentTrackId);
+      }
+      // 反馈可能已被后端清除：重新拉取列表，让摘要面板与赛道图标记同步刷新
+      if (hadFeedback) {
+        await loadExistingFeedback(state.currentTrackId);
+        showToast("建议已生成；本圈反馈已清除，下一圈请重新录入", "success");
+      } else {
+        showToast("建议已生成", "success");
+      }
     } catch (e) {
       if (e.status === 400) {
         showToast("请先点击赛道图上的问题弯道并录入反馈", "error");
@@ -1117,9 +1569,89 @@
    *  @param {Object} report — 建议报告对象
    *  @returns {void}
    */
+  /** task-62 M4：拉取车手风格画像并渲染 12 维条形 + 调制状态。
+   *  数据源：GET /api/v1/driver/style（样本 ≥3 圈才启用调制）。
+   *  @returns {Promise<void>}
+   */
+  async function loadStyleProfile() {
+    const wrap = document.getElementById("style-profile");
+    if (!wrap) return;
+    try {
+      const res = await fetchJSON("/driver/style");
+      const d = res.data || res;
+      const dims = d.dims || [];
+      const vector = d.vector || [];
+      const zh = {
+        steer_aggression: "攻弯强度", steer_smoothness: "转向平滑度",
+        throttle_aggression: "油门激进", brake_aggression: "刹车激进",
+        trail_braking: "循迹刹车", throttle_onset: "出弯给油",
+        tyre_management: "轮胎管理", slip_ratio: "滑移迹象",
+        straight_speed_ratio: "直道末速", brake_thermal: "制动热负荷",
+        slow_corner_ratio: "慢弯占比", lap_consistency: "圈速一致",
+      };
+      const badge = d.style_applied
+        ? `<span class="style-badge on">已应用风格调制（${d.sample_count} 圈样本）</span>`
+        : `<span class="style-badge off">风格采集中（${d.sample_count}/3 圈，暂用规则引擎）</span>`;
+      const rows = dims.map((dim, i) => {
+        const v = Math.round((vector[i] ?? 0.5) * 100);
+        return `<div class="style-row"><span class="style-name">${esc(zh[dim] || dim)}</span>`
+          + `<span class="style-bar"><span class="style-bar-fill" style="width:${v}%"></span></span>`
+          + `<span class="style-val">${v}</span></div>`;
+      }).join("");
+      wrap.innerHTML = `<div class="style-head">${badge}</div>${rows}`;
+    } catch (e) {
+      wrap.innerHTML = "";
+    }
+  }
+
+  /** 渲染「整体分析」区块：赛道画像 / 逐弯依据 / 跨类别冲突 / 圈级优化 / 收口。
+   *  这是"为什么这么调"的依据链 —— 让车手看到整体权衡，而不是只看到数字。
+   *  @param {Object} h — report.holistic
+   *  @returns {string} HTML 片段
+   */
+  function buildHolisticHtml(h) {
+    if (!h) return "";
+    const group = (title, items, cls) => {
+      if (!Array.isArray(items) || !items.length) return "";
+      return `<div class="holistic-group ${cls}">` +
+        `<div class="holistic-title">${esc(title)}（${items.length}）</div>` +
+        items.map((t) => `<div class="holistic-item">${esc(t)}</div>`).join("") +
+        `</div>`;
+    };
+    const demandLine = h.demand
+      ? `<div class="holistic-line"><span class="holistic-tag">赛道画像</span>${esc(h.demand)}</div>`
+      : "";
+
+    // 圈级优化：目标是"圈级需求缺口 + 代价（阻力/刮底/胎温/改动幅度）"的总和，越小越好
+    let optLine = "";
+    const o = h.optimization;
+    if (o) {
+      const gain = (o.per_class_gain) || {};
+      const cls = [["slow", "慢弯"], ["medium", "中速弯"], ["fast", "快弯"]]
+        .filter(([k]) => Math.abs(gain[k] || 0) > 1e-4)
+        .map(([k, label]) => `${label}${(gain[k] || 0) > 0 ? "↓" : "↑"}${Math.abs(gain[k]).toFixed(4)}`)
+        .join("　");
+      optLine = `<div class="holistic-line"><span class="holistic-tag">圈级优化</span>` +
+        `目标 ${(o.objective_before ?? 0).toFixed(4)} → ${(o.objective_after ?? 0).toFixed(4)}` +
+        `（改善 ${(o.improvement ?? 0).toFixed(4)}）${cls ? "　残差：" + cls : ""}</div>`;
+    }
+
+    const body = [
+      group("逐弯加权依据", h.corner_notes, "holistic-corner"),
+      group("跨弯道类别冲突（已折中）", h.conflicts, "holistic-conflict"),
+      group("整体取舍说明", o && o.tradeoff, "holistic-tradeoff"),
+      group("改动轨迹（逐步接受的最优改动）", (o && o.trace || []).slice(0, 10),
+            "holistic-trace"),
+      group("整体收口与取舍", h.coherence_notes, "holistic-coherence"),
+    ].join("");
+    if (!demandLine && !optLine && !body) return "";
+    return `<div class="holistic">${demandLine}${optLine}${body}</div>`;
+  }
+
   function renderReportSummary(report) {
     if (report.summary) {
       dom.reportSummary.innerHTML = `<div>${esc(report.summary)}</div>` +
+        buildHolisticHtml(report.holistic) +
         (report.generated_at ? `<div class="meta">生成时间：${esc(report.generated_at)}</div>` : "");
       dom.reportSummary.classList.add("visible");
     } else {
@@ -1175,6 +1707,7 @@
     }
 
     renderReportSummary(report);
+    void loadStyleProfile();
 
     // 使用 DocumentFragment 批量插入表格行
     const table = document.createElement("table");
@@ -1669,6 +2202,22 @@
   function bindFeedbackEvents() {
     // 遥测录制
     if (dom.btnRecord) dom.btnRecord.addEventListener("click", toggleRecording);
+    // 录制库（列表 + 回放）
+    if (dom.btnRecordings) dom.btnRecordings.addEventListener("click", openRecordings);
+    // 主页一键导出最近一次录制的训练样本
+    if (dom.btnExportTraining) {
+      dom.btnExportTraining.addEventListener(
+        "click", () => exportLatestTraining(dom.btnExportTraining),
+      );
+    }
+    if (dom.recClose) dom.recClose.addEventListener("click", closeRecordings);
+    if (dom.recRefresh) dom.recRefresh.addEventListener("click", refreshRecordings);
+    if (dom.recReplayStop) dom.recReplayStop.addEventListener("click", stopReplay);
+    if (dom.recOverlay) {
+      dom.recOverlay.addEventListener("click", (e) => {
+        if (e.target === dom.recOverlay) closeRecordings();
+      });
+    }
     // 遥测收集开关
     if (dom.btnListenerToggle) dom.btnListenerToggle.addEventListener("click", toggleListener);
 
@@ -1693,6 +2242,10 @@
       if (e.target === dom.fbOverlay) closeFeedbackPanel();
     });
     document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && dom.recOverlay && !dom.recOverlay.hidden) {
+        closeRecordings();
+        return;
+      }
       if (e.key === "Escape" && !dom.fbOverlay.hidden) closeFeedbackPanel();
     });
 
@@ -1738,6 +2291,7 @@
     loadSetupFields();
     connectWebSocket();
     updateListenerUI();
+    refreshCollectBar();
   }
 
   if (document.readyState === "loading") {

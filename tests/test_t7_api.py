@@ -106,7 +106,7 @@ def test_feedback_and_suggest():
                 "track_id": "suzuka",
                 "corner_number": 1,
                 "symptom": "understeer",
-                "strength": 4,
+                "strength": 3,
             },
         )
         assert resp.status_code == 200
@@ -132,7 +132,7 @@ def test_feedback_and_suggest():
         assert "generated_at" in report
         assert "parameters" in report
         assert "summary" in report
-        assert len(report["parameters"]) == 21
+        assert len(report["parameters"]) == 20
         # 每参数含必要字段
         for p in report["parameters"]:
             assert "param" in p

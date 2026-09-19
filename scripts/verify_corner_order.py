@@ -6,20 +6,25 @@
 3. 将弯道按编号排序，计算每个弯道在赛道线上的最近点索引
 4. 检查索引是否单调递增（允许小范围回绕）
 """
-import re
 import math
+import re
 import sys
-import xml.etree.ElementTree as ET
 from pathlib import Path
 
+# 仓库根目录（本脚本位于 <root>/scripts/），避免硬编码绝对路径
+ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from convert_track_svgs import (
-    path_to_points, scale_points, extract_path_d,
-    CANVAS_W, CANVAS_H, MARGIN,
+    CANVAS_H,
+    CANVAS_W,
+    MARGIN,
+    extract_path_d,
+    path_to_points,
+    scale_points,
 )
 
-TRACK_DIR = Path("D:/F1OPT-Test/setup_tuner/ui/tracks")
-RAW_DIR = Path("D:/F1OPT-Test/scripts/raw_svgs")
+TRACK_DIR = ROOT / "setup_tuner" / "ui" / "tracks"
+RAW_DIR = ROOT / "scripts" / "raw_svgs"
 
 # layout映射
 LAYOUT_MAP = {

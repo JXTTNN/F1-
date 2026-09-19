@@ -1401,6 +1401,11 @@ h1, h2, h3 {
   border-color: rgba(0, 255, 157, 0.3);
   color: var(--success);
 }
+
+.toast.toast-info {
+  border-color: var(--info, #378ADD);
+  color: var(--info, #378ADD);
+}
 .toast.toast-leaving { animation: toast-slide-out 0.24s ease-in forwards; }
 @keyframes toast-slide-in {
   from { opacity: 0; transform: translateY(-12px); }
@@ -1496,4 +1501,195 @@ h1, h2, h3 {
 :focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+
+/* ==========================================================================
+   录制库面板（列表 + 回放）
+   ========================================================================== */
+.rec-panel { max-width: 620px; }
+
+.rec-status {
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: var(--ls-normal);
+  color: var(--text-dim);
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-inset);
+  margin-bottom: 10px;
+}
+.rec-status.active {
+  color: var(--accent);
+  border-color: var(--accent-soft);
+  background: var(--accent-soft);
+}
+
+.rec-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow-y: auto;
+  max-height: 46vh;
+}
+
+.rec-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-card-2);
+  transition: var(--transition-fast);
+}
+.rec-item:hover {
+  border-color: var(--border-glow);
+  background: var(--bg-inset);
+}
+
+.rec-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.rec-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.rec-name {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rec-sub {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-dim);
+  letter-spacing: var(--ls-normal);
+}
+
+.rec-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.rec-detail {
+  border-top: 1px dashed var(--border);
+  padding-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.rec-detail-head {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-dim);
+  letter-spacing: var(--ls-normal);
+}
+.rec-detail-types {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.rec-chip {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--data);
+  border: 1px solid var(--data-soft);
+  background: var(--data-soft);
+  border-radius: 6px;
+  padding: 1px 6px;
+  letter-spacing: var(--ls-normal);
+}
+/* ── 整体分析区块（报告摘要内）：赛道画像 / 逐弯依据 / 跨类别冲突 / 收口取舍 ── */
+.holistic {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border, #3a3a44);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.holistic-line {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  flex-wrap: wrap;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.holistic-tag {
+  flex: 0 0 auto;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+  background: var(--accent-soft, rgba(120, 160, 255, .16));
+  color: var(--accent, #7aa2ff);
+}
+.holistic-group {
+  border-left: 3px solid var(--border, #3a3a44);
+  padding-left: 8px;
+}
+.holistic-group.holistic-conflict { border-left-color: #e0a33c; }
+.holistic-group.holistic-coherence { border-left-color: #5cb87a; }
+.holistic-title {
+  font-size: 12px;
+  font-weight: 600;
+  opacity: .85;
+  margin-bottom: 3px;
+}
+.holistic-item {
+  font-size: 12px;
+  line-height: 1.55;
+  opacity: .9;
+}
+.holistic-group.holistic-tradeoff { border-left-color: #7aa2ff; }
+.holistic-group.holistic-trace { border-left-color: #8d8d99; }
+.holistic-group.holistic-trace .holistic-item {
+  font-family: var(--mono);
+  font-size: 11px;
+  opacity: .75;
+}
+
+/* ---------- 遥测采集状态条（系统内一站式采集，无需额外工具） ---------- */
+.collect-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 0 0 10px;
+  padding: 7px 10px;
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+  background: var(--bg-inset);
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: var(--ls-normal);
+}
+.collect-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-ghost);
+  flex: 0 0 auto;
+  transition: var(--transition-fast);
+}
+/* 监听中：数据青；录制中：F1 红（与「涨红」无关，此处为采集中标识） */
+.collect-bar.on .collect-dot { background: var(--data); box-shadow: 0 0 6px var(--data); }
+.collect-bar.rec .collect-dot { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+.collect-state { color: var(--text-body); font-weight: 500; }
+.collect-bar.rec .collect-state { color: var(--accent); }
+.collect-addr { color: var(--data); }
+.collect-tip { color: var(--text-faint); margin-left: auto; }
+@media (max-width: 720px) {
+  .collect-tip { margin-left: 0; }
 }

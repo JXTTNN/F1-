@@ -36,6 +36,7 @@ from typing import Any
 from fastapi import APIRouter, Query, Request
 from pydantic import BaseModel, Field
 
+from setup_tuner.domain._track_arcs import TRACK_CORNER_ARCS
 from setup_tuner.domain.setup import ALL_SETUP_FIELDS, CarSetup
 from setup_tuner.domain.symptoms import (
     DEFAULT_INTENSITY,
@@ -49,11 +50,12 @@ from setup_tuner.domain.track import (
     get_track_by_udp_id,
 )
 from setup_tuner.engine.engine import generate_suggestion
+from setup_tuner.engine.telemetry_diagnosis import diagnose_from_telemetry
 from setup_tuner.report.builder import (
+    aggregate_feedback_symptoms,
     build_report,
     extract_setup_from_packet5,
     extract_telemetry_summary,
-    feedbacks_to_symptoms,
 )
 from setup_tuner.telemetry.importer import (
     LapTelemetrySummary,
@@ -99,10 +101,14 @@ class CornerView(BaseModel):
 
 
 class TrackDetail(BaseModel):
-    """赛道详情视图（含弯道锚点列表）。"""
+    """赛道详情视图（含弯道锚点列表与弯道段）。"""
 
     track: TrackRef
     corners: list[CornerView]
+    segments: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="弯道段（连续弯分组，task-63）：name/members/arc_start/arc_end",
+    )
 
 
 class SelectTrackRequest(BaseModel):
@@ -119,7 +125,7 @@ class SelectTrackResponse(BaseModel):
 
 
 class SetupSnapshot(BaseModel):
-    """调教快照视图（20 参数 + 元数据）。"""
+    """调教快照视图（21 参数 + 元数据）。"""
 
     setup_id: int | None = None
     track_id: str
@@ -138,7 +144,7 @@ class FeedbackItem(BaseModel):
         default=DEFAULT_INTENSITY,
         ge=INTENSITY_MIN,
         le=INTENSITY_MAX,
-        description="强度 0-5，默认 3",
+        description="强度 1-3（1 轻微 / 2 明显 / 3 严重），默认 2",
     )
 
 
@@ -159,7 +165,7 @@ class FeedbackRequest(BaseModel):
         default=DEFAULT_INTENSITY,
         ge=INTENSITY_MIN,
         le=INTENSITY_MAX,
-        description="强度 0-5，默认 3",
+        description="强度 1-3（1 轻微 / 2 明显 / 3 严重），默认 2",
     )
     # 批量格式（新）
     feedbacks: list[FeedbackItem] | None = Field(
@@ -187,6 +193,15 @@ class SuggestRequest(BaseModel):
     model_type: str = Field(
         default="hybrid",
         description="模型类型：rule（纯规则）| nn（纯神经网络）| hybrid（混合）",
+    )
+    clear_feedback_after_suggest: bool = Field(
+        default=True,
+        description=(
+            "生成成功后是否清除本赛道反馈（默认 True）。"
+            "本次生成已把反馈'消费'掉：清除后，下一圈录入的新反馈不会与"
+            "上一圈混在一起。设为 False 保留累积行为（连续重新生成、"
+            "性能基准等场景）"
+        ),
     )
 
 
@@ -271,6 +286,7 @@ def _get_services(request: Request) -> dict[str, Any]:
         "iteration_service": getattr(state, "iteration_service", None),
         "telemetry_listener": getattr(state, "telemetry_listener", None),
         "telemetry_stream": getattr(state, "telemetry_stream", None),
+        "lap_aggregator": getattr(state, "lap_aggregator", None),
         "current_track_id": getattr(state, "current_track_id", None),
         "current_track_source": getattr(state, "current_track_source", "manual"),
     }
@@ -370,9 +386,12 @@ async def get_track(track_id: str) -> dict[str, Any]:
             code=4040,
             http_status=404,
         )
+    from setup_tuner.domain.corner_groups import build_corner_groups
+
     data = TrackDetail(
         track=_track_to_ref(track),
         corners=[_corner_to_view(c) for c in track.corners],
+        segments=build_corner_groups(TRACK_CORNER_ARCS.get(track_id, {})),
     )
     return ok(data=data.model_dump())
 
@@ -437,7 +456,7 @@ async def import_setup(request: Request) -> dict[str, Any]:
             http_status=409,
         )
 
-    # 提取 20 参数快照
+    # 提取 21 参数快照
     params = extract_setup_from_packet5(packet5)
 
     # 确定赛道：优先用当前选定赛道，其次用遥测 Session 包的 m_trackId
@@ -774,11 +793,18 @@ def _validate_feedback_available(feedback_service: Any, track_id: str) -> None:
 def _safe_generate_suggestion(
     symptoms: list, current_setup: dict[str, float],
     track_id: str, telemetry_summary: Any, model_type: str,
+    style_vector: list[float] | None = None,
+    feedbacks: list[dict[str, Any]] | None = None,
 ) -> Any:
-    """调用 generate_suggestion，失败转换为 fail 异常。"""
+    """调用 generate_suggestion，失败转换为 fail 异常。
+
+    ``feedbacks`` 为逐弯原始反馈；传下去后引擎会按弯道类别重加权 Dx，
+    并做整体性收口（胎压对称 / 前后翼平衡窗口 / 改动预算）。
+    """
     try:
         return _invoke_generate_suggestion(
             symptoms, current_setup, track_id, telemetry_summary, model_type,
+            style_vector, feedbacks,
         )
     except Exception as e:
         logger.exception("generate_suggestion failed")
@@ -804,19 +830,29 @@ def _resolve_current_setup(store: Any, track_id: str) -> tuple[dict[str, float],
     return CarSetup.default().to_dict(), None
 
 
-def _extract_telemetry_summary(stream: Any) -> dict[str, Any] | None:
-    """从遥测流提取摘要，stream 为 None 时返回 None。"""
+def _extract_telemetry_summary(stream: Any, aggregator: Any = None) -> dict[str, Any] | None:
+    """从遥测流 + 整圈聚合器提取摘要，stream 为 None 时返回 None。
+
+    ``aggregator`` 为 ``LapAggregator`` 时，会带上整圈统计
+    （max_speed / avg_steer / max_steer / on_straight / 四轮均值 …），
+    这是遥测规则 6/7/10/15 能生效的前提。
+    """
     if stream is None:
         return None
     all_latest = stream.get_all_latest()
-    return extract_telemetry_summary(all_latest)
+    lap_stats = None
+    if aggregator is not None:
+        lap_stats = aggregator.best_snapshot()
+    return extract_telemetry_summary(all_latest, lap_stats)
 
 
 def _invoke_generate_suggestion(
     symptoms: list, current_setup: dict[str, float],
     track_id: str, telemetry_summary: Any, model_type: str,
+    style_vector: list[float] | None = None,
+    feedbacks: list[dict[str, Any]] | None = None,
 ) -> Any:
-    """调用 generate_suggestion，兼容未支持 model_type 参数的旧版本。"""
+    """调用 generate_suggestion，兼容未支持新参数的旧版本。"""
     try:
         return generate_suggestion(
             symptoms=symptoms,
@@ -824,9 +860,11 @@ def _invoke_generate_suggestion(
             track_id=track_id,
             telemetry=telemetry_summary,
             model_type=model_type,
+            style_vector=style_vector,
+            feedbacks=feedbacks,
         )
     except TypeError:
-        # generate_suggestion 尚未支持 model_type 参数（降级为纯规则引擎）
+        # generate_suggestion 尚未支持新参数（降级为纯规则引擎）
         return generate_suggestion(
             symptoms=symptoms,
             current_setup=current_setup,
@@ -870,8 +908,15 @@ async def suggest(
 ) -> dict[str, Any]:
     """触发建议生成。
 
-    流程：校验有反馈 → Dx → SetupDelta → 报告 → 落库 → WS 推送。
-    无反馈时返回 400 引导消息。
+    流程：校验有反馈 → Dx → SetupDelta → 报告 → 落库 → WS 推送
+    → 清除反馈（默认，可关）。
+
+    反馈闸门（2026-09-18 修订）：无车手反馈但遥测自动诊断出问题时仍出建议
+    （标 telemetry_only）；两者都无 → 400 引导消息。
+
+    反馈生命周期（2026-09-19）：生成成功后默认**清除本赛道反馈**
+    （`clear_feedback_after_suggest`，默认 True）——本次生成已消费这些反馈，
+    避免下一圈录入的新反馈与上一圈混在一起。落库失败时不清除（保留供重试）。
     """
     svc = _get_services(request)
     store = svc["store"]
@@ -880,22 +925,105 @@ async def suggest(
         raise fail(message="服务未初始化", code=5001, http_status=500)
 
     _validate_suggest_request(body)
-    _validate_feedback_available(feedback_service, body.track_id)
 
-    symptoms = feedbacks_to_symptoms(feedback_service.get_feedbacks(body.track_id))
+    # 反馈按 (弯道, 症状) 聚合后再转三元组：同一条反馈重复提交不再线性放大 Dx；
+    # 取最近 500 条，防止反馈无限增长拖慢查询（task-62）
+    # 同时保留**原始逐弯反馈**透传给引擎：弯道号是"结合弯道特性"的前提，
+    # 聚合后的三元组已丢失它（慢发夹与高速弯的同类症状会退化为等价）。
+    raw_feedbacks = feedback_service.get_feedbacks(body.track_id, limit=500)
+    symptoms = aggregate_feedback_symptoms(raw_feedbacks)
     current_setup, setup_id = _resolve_current_setup(store, body.track_id)
-    telemetry_summary = _extract_telemetry_summary(svc["telemetry_stream"])
+    telemetry_summary = _extract_telemetry_summary(
+        svc["telemetry_stream"], svc.get("lap_aggregator"),
+    )
 
+    # --- 新增：从遥测提取逐弯实际用时，供 surrogate残差诊断使用 ---
+    # 1. 从所有已缓存帧里提取 m_lapDistance（圈内距离）与 m_currentLapTime
+    # 2. 用 corner_locator 将距离映射为弯号
+    # 3. 组成 {corner_number: lap_time_ms} 字典，传给 diagnose_from_telemetry
+    from setup_tuner.domain.corner_locator import locate_corner
+    from setup_tuner.domain._track_arcs import TRACK_CORNER_ARCS
+
+    all_latest = svc["telemetry_stream"].get_all_latest()
+    corner_times: dict[int, float] = {}
+    track_id_for_locator = body.track_id
+
+    # 获取赛道长度（若有弧长表则精确，无则退回均匀近似）
+    arc_info = TRACK_CORNER_ARCS.get(track_id_for_locator)
+    if arc_info:
+        fractions, corner_nums = zip(*sorted(arc_info.items()))
+        track_length = fractions[-1]  # 最后一个弧长占比即为总圈长比例（归一化）
+    else:
+        track_length = None
+
+    # 遍历已缓存的帧，提取圈内距离与圈速
+    for pid, frame in all_latest.items():
+        # Packet 3 (LapData) 通常带 m_lapDistance；也尝试 Packet 1 (Motion)
+        lap_distance = frame.get("m_lapDistance") if isinstance(frame, dict) else None
+        if lap_distance is None:
+            lap_distance = frame.get("m_lapDistance") if isinstance(frame, dict) else None
+        # 取最近一圈的 lap_time_ms（来自 LapData packet 3 或累计时间）
+        lap_time_ms = frame.get("m_currentLapTime") if isinstance(frame, dict) else None
+        if lap_distance is not None and lap_time_ms is not None and lap_time_ms > 0:
+            # 将 lap_distance 映射为弯号（1-based）
+            corners = arc_info and [
+                c.number for c in arc_info
+            ] or None
+            corner_num = locate_corner(
+                lap_distance, track_length or 0.0,
+                corners or [], track_id_for_locator,
+            )
+            if corner_num is not None:
+                corner_times[int(corner_num)] = lap_time_ms / 1000.0  # ms → s
+
+    # 将提取的 corner_times 传给 diagnose_from_telemetry，由其中的 _from_surrogate_residual
+    # 用 surrogate 模型算期望用时，实测偏慢则推断隐式症状
+    telemetry_findings = diagnose_from_telemetry(telemetry_summary, body.track_id, corner_times=corner_times)
+    if not raw_feedbacks and not telemetry_findings:
+        _validate_feedback_available(feedback_service, body.track_id)
+    telemetry_only = not raw_feedbacks and bool(telemetry_findings)
+
+    # task-62 M3：车手风格调制（样本 ≥3 圈才启用，否则退化为 L0）
+    style_entry = None
+    if store is not None:
+        style_entry = store.get_driver_style(1, body.track_id)
+    style_vector = (
+        style_entry["vector"]
+        if style_entry and style_entry.get("sample_count", 0) >= 3 else None
+    )
     suggestion_result = _safe_generate_suggestion(
-        symptoms, current_setup, body.track_id, telemetry_summary, body.model_type,
+        symptoms, current_setup, body.track_id, telemetry_summary,
+        body.model_type, style_vector, raw_feedbacks,
     )
     report = build_report(
         suggestion_result=suggestion_result,
         track_id=body.track_id,
         setup_id=setup_id,
     )
+    if telemetry_only:
+        # 明确告知前端/用户：本次没有车手反馈，问题是**遥测自动发现**的
+        report["telemetry_only"] = True
+        report["telemetry_discovered"] = len(telemetry_findings)
+        report["summary"] = (
+            f"本次没有车手反馈；遥测自动发现 {len(telemetry_findings)} 个问题，"
+            f"已据此给出调教方案。" + str(report.get("summary") or "")
+        )
     suggestion_id = _persist_suggestion(store, body, report, setup_id)
     _record_iteration(svc["iteration_service"], body.track_id, setup_id, suggestion_id)
+
+    # 反馈生命周期收口（2026-09-19）：本次生成已经把 raw_feedbacks "消费"掉了。
+    # 默认清除本赛道反馈，保证**下一圈录入的新反馈从干净状态开始**，不会与
+    # 上一圈混在一起（用户诉求："要不然杂着后一圈吗"）。
+    # 时序：落库成功之后、WS 推送之前 —— 若 WS 推送后前端立刻刷新反馈列表，
+    # 清除已完成才不会读回旧数据。生成/落库失败时异常提前抛出，反馈保留供重试。
+    # 清除失败非致命（建议已落库）：记日志 + 如实返回，不把已成功的生成打成 500。
+    cleared_feedback = 0
+    if body.clear_feedback_after_suggest and raw_feedbacks:
+        try:
+            cleared_feedback = store.clear_track_feedback(body.track_id)
+        except Exception:
+            logger.exception("clear_track_feedback failed (non-fatal)")
+
     await _push_suggestion_via_ws(request, suggestion_id, report)
 
     data = SuggestionView(
@@ -904,7 +1032,48 @@ async def suggest(
         created_at=None,
         report=report,
     )
-    return ok(data=data.model_dump(), message="建议已生成")
+    if cleared_feedback:
+        # 如实告知：清了多少条、下一圈要重新录（用户不会困惑"反馈怎么没了"）
+        msg = (
+            f"建议已生成；已清除本赛道 {cleared_feedback} 条反馈"
+            f"（本次已消费，下一圈请重新录入）"
+        )
+    else:
+        msg = "建议已生成"
+    return ok(data=data.model_dump(), message=msg)
+
+
+@router.get("/driver/style")
+async def get_driver_style_profile(
+    request: Request,
+    track_id: str | None = Query(default=None, description="赛道标识；缺省用当前赛道"),
+) -> dict[str, Any]:
+    """读取车手风格画像（12 维，含样本数与是否已启用调制）。
+
+    task-62 M4：报告页"风格画像"的数据源。样本 <3 圈时 style_applied=False
+    （引擎自动退化为 L0，不臆测）。
+    """
+    svc = _get_services(request)
+    store = svc["store"]
+    if store is None:
+        raise fail(message="服务未初始化", code=5001, http_status=500)
+    tid = track_id or svc["current_track_id"]
+    if tid is None:
+        raise fail(message="未指定赛道，且无当前赛道", code=4093, http_status=409)
+    from setup_tuner.domain.style_coefficients import STYLE_VECTOR_LEN
+    from setup_tuner.telemetry.style_extractor import STYLE_DIMS
+
+    entry = store.get_driver_style(1, tid)
+    sample_count = entry["sample_count"] if entry else 0
+    vector = entry["vector"] if entry else [0.5] * len(STYLE_DIMS)
+    return ok(data={
+        "track_id": tid,
+        "dims": STYLE_DIMS,
+        "vector": vector,
+        "sample_count": sample_count,
+        "style_applied": sample_count >= 3 and len(vector) == STYLE_VECTOR_LEN,
+        "min_samples": 3,
+    })
 
 
 @router.get("/suggest/latest")
@@ -928,11 +1097,11 @@ async def get_latest_suggestion(
 
     row = store.get_latest_suggestion(tid)
     if row is None:
-        raise fail(
-            message=f"赛道 {tid} 无建议报告",
-            code=4042,
-            http_status=404,
-        )
+        # task-62：改为探测语义（200 + data=null）。
+        # 前端在选赛道/加载后会轮询本端点；全新环境下"还没有建议"是常态，
+        # 用 404 会让浏览器 console 持续出现资源加载错误（前端虽已 catch，
+        # 但网络层 404 无法静默）。data=null 由前端判空跳过渲染。
+        return ok(data=None, message="暂无建议报告")
 
     try:
         report = json.loads(row["report_json"])
@@ -1005,7 +1174,13 @@ def _validate_telemetry_simulate_request(body: TelemetrySimulateRequest) -> None
 
 
 def _get_or_create_simulator(request: Request) -> Any:
-    """从 app.state 获取或创建 TelemetrySimulator 实例。"""
+    """从 app.state 获取或创建 TelemetrySimulator 实例。
+
+    创建时**必须把 ``app.state.packet_handler`` 注册为帧回调**，
+    否则模拟出的遥测帧只会在模拟器内部空转派发（无任何订阅者），
+    ``TelemetryStream`` / ``LapAggregator`` / ``StyleExtractor`` 全部收不到数据，
+    ``/suggest`` 便永远拿不到整圈统计 —— 模拟模式形同虚设。
+    """
     simulator = getattr(request.app.state, "telemetry_simulator", None)
     if simulator is None:
         try:
@@ -1018,6 +1193,10 @@ def _get_or_create_simulator(request: Request) -> Any:
                 http_status=500,
             ) from e
         request.app.state.telemetry_simulator = simulator
+
+    handler = getattr(request.app.state, "packet_handler", None)
+    if handler is not None:
+        simulator.add_handler(handler)
     return simulator
 
 
@@ -1185,11 +1364,14 @@ def _get_or_create_recorder(request: Request) -> Any:
     if recorder is not None:
         return recorder
     # 延迟初始化
+    # index_json=False：data_json 列只服务调试且体量巨大（实测一次 45 分钟
+    # 会话 .f1rec 281MB / .db 878MB，3.1 倍膨胀）。主数据源是 .f1rec 无损
+    # 原始字节，随时可用更新版解析器重放；SQLite 只保留索引/统计所需列。
     from setup_tuner.telemetry.recorder import TelemetryRecorder
     config = getattr(request.app.state, "config", None)
     data_dir = getattr(config, "data_dir", "data") if config else "data"
     recordings_dir = str(Path(data_dir) / "recordings")
-    recorder = TelemetryRecorder(data_dir=recordings_dir)
+    recorder = TelemetryRecorder(data_dir=recordings_dir, index_json=False)
     request.app.state.telemetry_recorder = recorder
     return recorder
 
@@ -1294,6 +1476,55 @@ async def get_recording_detail(
         db_path=detail.get("db_path"),
     )
     return ok(data=data.model_dump())
+
+
+@router.post("/telemetry/recordings/{session_id}/export")
+def export_recording_training_samples(
+    session_id: str, request: Request,
+) -> dict[str, Any]:
+    """把某个录制会话导出为逐圈训练样本（JSONL）。
+
+    产物写在录制目录下 ``<session_id>_laps.jsonl``，每行一圈样本：
+    赛道 ID / 圈号 / 圈时 / 有效性 / 调教 22 项 / 驾驶风格 / 圈级聚合。
+
+    同步端点（``def``）——FastAPI 会自动放线程池执行，重放解析不阻塞事件循环。
+    """
+    # 路径穿越防护：会话 ID 只能是文件名，不得含分隔符或 ..
+    if not session_id or "/" in session_id or "\\" in session_id or ".." in session_id:
+        raise fail(message=f"非法的会话 ID：{session_id!r}", code=4004, http_status=400)
+
+    recorder = _get_or_create_recorder(request)
+    detail = recorder.get_recording_detail(session_id)
+    if detail is None or not detail.get("f1rec_path"):
+        raise fail(
+            message=f"录制会话 {session_id} 不存在",
+            code=4044,
+            http_status=404,
+        )
+
+    from setup_tuner.telemetry.training_export import TrainingExporter
+
+    f1rec = Path(str(detail["f1rec_path"]))
+    out_path = f1rec.with_name(f"{session_id}_laps.jsonl")
+    try:
+        stats = TrainingExporter().export(f1rec, out_path)
+    except Exception as exc:  # noqa: BLE001 —— 导出失败按 500 返回，附原因
+        raise fail(
+            message=f"导出训练样本失败：{exc}",
+            code=5002,
+            http_status=500,
+        ) from exc
+
+    return ok(
+        data={
+            "session_id": session_id,
+            "out_path": str(out_path),
+            "laps": stats["laps"],
+            "packets": stats["packets"],
+            "parse_errors": stats["parse_errors"],
+        },
+        message=f"已导出 {stats['laps']} 圈训练样本",
+    )
 
 
 # =========================================================================== #
@@ -1487,7 +1718,7 @@ class LapTelemetrySummaryView(BaseModel):
     avg_steer: float
     max_steer: float
 
-    # 四轮温度/胎压统计 [FL, FR, RL, RR]
+    # 四轮温度/胎压统计（官方车轮顺序 [RL, RR, FL, FR]）
     avg_tyre_surface_temp: list[float]
     avg_tyre_inner_temp: list[float]
     avg_brake_temp: list[float]
@@ -1615,6 +1846,11 @@ class TelemetryExperimentRequest(BaseModel):
     """调教实验对比请求。
 
     提供两份调教参数和遥测数据，分别生成建议并对比差异。
+
+    遥测可共享也可分侧：两侧都未单独提供时使用 ``telemetry``；
+    真实 A/B 实验（同一弯道分别用方案 A / B 各跑一趟）应提供
+    ``telemetry_a`` / ``telemetry_b``，否则两次诊断输入完全相同，
+    ``dx_diff`` 恒为空 —— 该字段就无法反映方案差异。
     """
 
     track_id: str = Field(..., description="赛道标识")
@@ -1622,7 +1858,15 @@ class TelemetryExperimentRequest(BaseModel):
     setup_b: dict[str, float] = Field(..., description="调教方案 B 的参数字典")
     telemetry: dict[str, Any] = Field(
         default_factory=dict,
-        description="遥测数据字典（avg_speed/max_speed/avg_throttle 等）",
+        description="共享遥测数据字典（两侧均未单独提供时使用）",
+    )
+    telemetry_a: dict[str, Any] | None = Field(
+        default=None,
+        description="方案 A 专属遥测；为空时回退到 telemetry",
+    )
+    telemetry_b: dict[str, Any] | None = Field(
+        default=None,
+        description="方案 B 专属遥测；为空时回退到 telemetry",
     )
 
 
@@ -1705,13 +1949,18 @@ def _describe_confidence_diff(conf_a: str, conf_b: str) -> str:
     return f"方案 B 置信度更高（{conf_b} > {conf_a})"
 
 
-@router.post("/telemetry/experiment")
 def _generate_experiment_suggestion(
     setup: dict[str, float],
     track_id: str,
     telemetry: dict[str, Any] | None,
 ) -> dict[str, Any]:
     """为实验对比生成单份调教建议（无车手反馈，仅遥测驱动）。
+
+    内部辅助函数，**不是**端点：由 ``telemetry_experiment`` 各调用一次。
+    历史上这里曾误挂 ``@router.post`` 装饰器，导致 FastAPI 把本函数注册成
+    ``/telemetry/experiment`` 的处理函数（把 ``setup``/``telemetry`` 当作 body、
+    ``track_id`` 当作 query），真正的端点反倒成了死代码 —— 按文档契约调用
+    必然 422。勿再为本函数添加路由装饰器。
 
     Args:
         setup: 调教参数字典。
@@ -1764,6 +2013,7 @@ def _build_experiment_comparison(
     )
 
 
+@router.post("/telemetry/experiment")
 async def telemetry_experiment(
     body: TelemetryExperimentRequest,
 ) -> dict[str, Any]:
@@ -1772,6 +2022,10 @@ async def telemetry_experiment(
     分别用 setup_a 和 setup_b 作为当前调教，结合遥测数据调用
     ``engine.generate_suggestion`` 生成建议，对比两份方案的
     Dx 向量 / SetupDelta / 置信度差异。
+
+    遥测取值优先级：``telemetry_a``/``telemetry_b`` 优先，缺省回退到
+    共享的 ``telemetry``。两侧输入相同则 Dx 必然相同（``dx_diff`` 全零），
+    这是正确结果 —— 想看到 Dx 差异就必须提供分侧遥测。
 
     请求体示例：
         ``{"track_id": "abu_dhabi", "setup_a": {...}, "setup_b": {...}, "telemetry": {...}}``
@@ -1787,12 +2041,17 @@ async def telemetry_experiment(
     # 校验两份调教参数
     _validate_experiment_setups(body.setup_a, body.setup_b)
 
-    # 遥测数据（空字典时传 None 给 engine）
-    telemetry = body.telemetry if body.telemetry else None
+    # 遥测数据（分侧优先，缺省回退共享；空字典时传 None 给 engine）
+    telem_a = body.telemetry_a if body.telemetry_a else body.telemetry
+    telem_b = body.telemetry_b if body.telemetry_b else body.telemetry
 
     # 分别生成建议（无车手反馈，仅遥测驱动）
-    suggestion_a = _generate_experiment_suggestion(body.setup_a, body.track_id, telemetry)
-    suggestion_b = _generate_experiment_suggestion(body.setup_b, body.track_id, telemetry)
+    suggestion_a = _generate_experiment_suggestion(
+        body.setup_a, body.track_id, telem_a if telem_a else None,
+    )
+    suggestion_b = _generate_experiment_suggestion(
+        body.setup_b, body.track_id, telem_b if telem_b else None,
+    )
 
     # 构建对比结果
     data = _build_experiment_comparison(body, suggestion_a, suggestion_b)

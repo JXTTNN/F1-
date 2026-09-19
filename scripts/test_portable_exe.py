@@ -892,7 +892,7 @@ def test_deep(
     if proc is None:
         # 启动失败，剩余检查全失败并跳过后续阶段
         for label in ["B2 API 20秒就绪", "B3 health 200", "B4 status=ok",
-                      "B5 telemetry_connected字段存在", "B6 udp_host=127.0.0.1",
+                      "B5 telemetry_connected字段存在", "B6 udp_host=0.0.0.0",
                       "B7 udp_port=20777", "B8 current_track_id=None",
                       "B9 启动<15秒", "B10 内存<200MB"]:
             check(label, False, "exe未启动")
@@ -929,9 +929,9 @@ def test_deep(
             check("B5 telemetry_connected字段存在",
                   "telemetry_connected" in health_data,
                   f"telemetry_connected={health_data.get('telemetry_connected')}")
-            # B6. udp_host=127.0.0.1
-            check("B6 udp_host=127.0.0.1",
-                  health_data.get("udp_host") == "127.0.0.1",
+            # B6. udp_host=0.0.0.0
+            check("B6 udp_host=0.0.0.0",
+                  health_data.get("udp_host") == "0.0.0.0",
                   f"udp_host={health_data.get('udp_host')}")
             # B7. udp_port=20777
             check("B7 udp_port=20777",
@@ -944,13 +944,13 @@ def test_deep(
         except (httpx.HTTPError, AssertionError, KeyError) as e:
             for label in ["B3 health 200", "B4 status=ok",
                           "B5 telemetry_connected字段存在",
-                          "B6 udp_host=127.0.0.1", "B7 udp_port=20777",
+                          "B6 udp_host=0.0.0.0", "B7 udp_port=20777",
                           "B8 current_track_id=None"]:
                 check(label, False, str(e))
     else:
         for label in ["B3 health 200", "B4 status=ok",
                       "B5 telemetry_connected字段存在",
-                      "B6 udp_host=127.0.0.1", "B7 udp_port=20777",
+                      "B6 udp_host=0.0.0.0", "B7 udp_port=20777",
                       "B8 current_track_id=None"]:
             check(label, False, "API未就绪")
 

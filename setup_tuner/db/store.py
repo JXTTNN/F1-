@@ -80,6 +80,9 @@ class Store:
         self._init_schema()
         if seed:
             self._seed_track_data()
+        self._migrate_feedback_strength()
+        self._migrate_iteration_columns()
+        self._ensure_default_driver()
 
     # ------------------------------------------------------------------
     # 初始化
@@ -91,6 +94,57 @@ class Store:
             self._conn.executescript(ddl)
             self._conn.commit()
 
+    _ITERATION_NEW_COLUMNS: tuple[tuple[str, str], ...] = (
+        ("lap_time_before_ms", "INTEGER"),
+        ("lap_time_after_ms", "INTEGER"),
+        ("outcome_delta_ms", "REAL"),
+        ("applied_delta_json", "TEXT"),
+        ("style_vector_json", "TEXT"),
+    )
+
+    def _migrate_iteration_columns(self) -> None:
+        """task-62 M1：为旧库的 iteration 表补效果闭环列（幂等）。"""
+        existing = {
+            r["name"] for r in self._conn.execute(
+                "PRAGMA table_info(iteration)"
+            ).fetchall()
+        }
+        for column, col_type in self._ITERATION_NEW_COLUMNS:
+            if column in existing:
+                continue
+            self._conn.execute(
+                f"ALTER TABLE iteration ADD COLUMN {column} {col_type}"
+            )
+        self._conn.commit()
+
+    def _ensure_default_driver(self) -> None:
+        """确保默认车手存在（单机单用户；id=1）。"""
+        self._conn.execute(
+            "INSERT OR IGNORE INTO driver (id, name, created_at) "
+            "VALUES (1, '默认车手', ?)",
+            (_now_iso(),),
+        )
+        self._conn.commit()
+
+    def _migrate_feedback_strength(self) -> None:
+        """一次性迁移：强度档位 0–5 → 1–3（task-61）。
+
+        归并规则：{1}→1、{2,3}→2、{4,5}→3；0（=未反馈）保持不变。
+        幂等：已迁移的数据再跑一遍不会有任何变化。
+        """
+        with self._lock:
+            cur = self._conn.execute(
+                "SELECT COUNT(*) FROM feedback WHERE strength >= 4"
+            )
+            if cur.fetchone()[0] == 0:
+                return
+            self._conn.execute(
+                "UPDATE feedback SET strength = CASE "
+                "WHEN strength >= 4 THEN 3 ELSE 2 END WHERE strength >= 2"
+            )
+            self._conn.commit()
+            logger.info("feedback strength 迁移完成（0-5 → 1-3）")
+
     def _seed_track_data(self) -> None:
         """将 ALL_TRACKS 的 24 条赛道 + 弯道数据同步到数据库（幂等）。
 
@@ -100,6 +154,9 @@ class Store:
         from setup_tuner.domain.track import get_all_tracks
 
         tracks = get_all_tracks()
+        # 性能：所有 track/corner 的 upsert 共用一个事务，最后统一 commit。
+        # 原实现每条记录 commit 一次（24 + 404 = 428 次），WAL 下每次 commit
+        # 都要走一次事务边界；合并为单事务后启动路径只提交一次。
         for t in tracks:
             self.upsert_track(
                 track_id=t.track_id,
@@ -110,6 +167,7 @@ class Store:
                 corners=len(t.corners),
                 svg_path=t.svg_path,
                 udp_track_id=t.udp_track_id,
+                commit=False,
             )
             for c in t.corners:
                 self.upsert_corner(
@@ -120,7 +178,10 @@ class Store:
                     anchor_y=c.anchor.anchor_y,
                     name=c.name,
                     speed_kmh=c.speed_kmh,
+                    commit=False,
                 )
+        with self._lock:
+            self._conn.commit()
         logger.debug("seeded %d tracks with corners into database", len(tracks))
 
     def close(self) -> None:
@@ -150,8 +211,13 @@ class Store:
         corners: int,
         svg_path: str,
         udp_track_id: int | None = None,
+        commit: bool = True,
     ) -> None:
-        """插入或更新赛道主表记录（按 track_id 幂等）。"""
+        """插入或更新赛道主表记录（按 track_id 幂等）。
+
+        Args:
+            commit: 是否立即提交事务。批量 seed 时传 False，由调用方统一提交。
+        """
         with self._lock:
             self._conn.execute(
                 """
@@ -173,7 +239,8 @@ class Store:
                     length_m, corners, udp_track_id, svg_path,
                 ),
             )
-            self._conn.commit()
+            if commit:
+                self._conn.commit()
 
     def get_track(self, track_id: str) -> dict[str, Any] | None:
         """按 track_id 查询赛道主表。"""
@@ -192,8 +259,13 @@ class Store:
         anchor_y: float,
         name: str | None = None,
         speed_kmh: float | None = None,
+        commit: bool = True,
     ) -> None:
-        """插入或更新弯道记录（按 (track_id, corner_number) 幂等）。"""
+        """插入或更新弯道记录（按 (track_id, corner_number) 幂等）。
+
+        Args:
+            commit: 是否立即提交事务。批量 seed 时传 False，由调用方统一提交。
+        """
         with self._lock:
             self._conn.execute(
                 """
@@ -210,7 +282,8 @@ class Store:
                 """,
                 (track_id, corner_number, name, corner_type, speed_kmh, anchor_x, anchor_y),
             )
-            self._conn.commit()
+            if commit:
+                self._conn.commit()
 
     def get_corners(self, track_id: str) -> list[dict[str, Any]]:
         """查询某赛道的全部弯道（按 corner_number 升序）。"""
@@ -282,7 +355,7 @@ class Store:
         corner_number: int | None,
         symptom: str,
         category: str,
-        strength: int = 3,
+        strength: int = 2,
         setup_id: int | None = None,
     ) -> int:
         """录入一条玩家反馈。
@@ -290,9 +363,9 @@ class Store:
         Args:
             track_id: 赛道标识。
             corner_number: 弯道编号（1-based）；None 表示全局症状。
-            symptom: 12 症状标识之一。
-            category: entry|apex|exit|global。
-            strength: 强度 0–5，默认 3。
+            symptom: 症状标识之一。
+            category: entry|apex|exit|global（即反馈阶段，三元组的 stage）。
+            strength: 强度 1–3（1 轻微 / 2 明显 / 3 严重），默认 2。
             setup_id: 关联的调教快照 id（可选）。
 
         Returns:
@@ -312,14 +385,168 @@ class Store:
             assert cur.lastrowid is not None
             return int(cur.lastrowid)
 
-    def get_feedbacks(self, track_id: str) -> list[dict[str, Any]]:
-        """查询某赛道的全部反馈（按 created_at 升序）。"""
+    def get_feedbacks(self, track_id: str, limit: int | None = None) -> list[dict[str, Any]]:
+        """查询某赛道的反馈（按 created_at 升序）。
+
+        Args:
+            track_id: 赛道标识。
+            limit: 可选上限。给定时取**最近 limit 条**（仍按时间升序返回），
+                防止反馈无限增长拖慢 /suggest（task-62：1000 条约 1.5ms 且随
+                条数线性增长）。None = 不过滤（兼容旧调用与测试）。
+        """
+        with self._lock:
+            if limit is not None:
+                rows = self._conn.execute(
+                    "SELECT * FROM feedback WHERE track_id = ? "
+                    "ORDER BY id DESC LIMIT ?",
+                    (track_id, int(limit)),
+                ).fetchall()
+                rows = list(reversed(rows))
+            else:
+                rows = self._conn.execute(
+                    "SELECT * FROM feedback WHERE track_id = ? ORDER BY created_at",
+                    (track_id,),
+                ).fetchall()
+        return [dict(r) for r in rows]
+
+    # ------------------------------------------------------------------ #
+    # task-62 M1：车手 / 整圈落库 / 风格向量 / 效果闭环
+    # ------------------------------------------------------------------ #
+    def get_or_create_driver(self, name: str = "默认车手") -> int:
+        """按名字取车手 id，不存在则创建（幂等）。"""
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT id FROM driver WHERE name = ?", (name,),
+            ).fetchone()
+            if row is not None:
+                return int(row["id"])
+            cur = self._conn.execute(
+                "INSERT INTO driver (name, created_at) VALUES (?, ?)",
+                (name, _now_iso()),
+            )
+            self._conn.commit()
+            return int(cur.lastrowid)
+
+    def save_lap_record(
+        self,
+        driver_id: int,
+        track_id: str,
+        telemetry: dict[str, Any],
+        *,
+        lap_number: int | None = None,
+        lap_time_ms: int | None = None,
+        is_valid: bool = True,
+        session_uid: int | None = None,
+        tyre_compound: str | None = None,
+        tyre_age_laps: int | None = None,
+        fuel_kg: float | None = None,
+        weather: int | None = None,
+        track_temp: float | None = None,
+        air_temp: float | None = None,
+        setup_id: int | None = None,
+    ) -> int:
+        """落一条整圈记录（telemetry 为 LapAggregator 整圈快照）。"""
+        with self._lock:
+            cur = self._conn.execute(
+                "INSERT INTO lap_record (driver_id, track_id, session_uid, "
+                "lap_number, lap_time_ms, is_valid, tyre_compound, tyre_age_laps, "
+                "fuel_kg, weather, track_temp, air_temp, setup_id, telemetry_json, "
+                "created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    driver_id, track_id, session_uid, lap_number, lap_time_ms,
+                    1 if is_valid else 0, tyre_compound, tyre_age_laps, fuel_kg,
+                    weather, track_temp, air_temp, setup_id,
+                    json.dumps(telemetry, ensure_ascii=False, default=str),
+                    _now_iso(),
+                ),
+            )
+            self._conn.commit()
+            return int(cur.lastrowid)
+
+    def get_lap_records(
+        self, track_id: str, driver_id: int = 1, limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        """按车手 + 赛道查圈史（新 → 旧）。"""
         with self._lock:
             rows = self._conn.execute(
-                "SELECT * FROM feedback WHERE track_id = ? ORDER BY created_at",
-                (track_id,),
+                "SELECT * FROM lap_record WHERE driver_id = ? AND track_id = ? "
+                "ORDER BY id DESC LIMIT ?",
+                (driver_id, track_id, int(limit)),
             ).fetchall()
         return [dict(r) for r in rows]
+
+    def get_driver_style(
+        self, driver_id: int, track_id: str,
+    ) -> dict[str, Any] | None:
+        """读车手风格向量；无记录返回 None。"""
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT vector_json, sample_count, updated_at FROM driver_style "
+                "WHERE driver_id = ? AND track_id = ?",
+                (driver_id, track_id),
+            ).fetchone()
+        if row is None:
+            return None
+        try:
+            vector = json.loads(row["vector_json"])
+        except (json.JSONDecodeError, TypeError):
+            # 库内向量损坏：按"无记录"处理触发重新累积，但留痕以便察觉
+            logger.warning(
+                "车手风格向量 JSON 损坏，按无记录处理：driver=%s track=%s",
+                driver_id, track_id, exc_info=True,
+            )
+            return None
+        return {
+            "vector": vector,
+            "sample_count": int(row["sample_count"]),
+            "updated_at": row["updated_at"],
+        }
+
+    def save_driver_style(
+        self, driver_id: int, track_id: str, vector: list[float],
+        sample_count: int,
+    ) -> None:
+        """写入/更新车手风格向量（UPSERT）。"""
+        with self._lock:
+            self._conn.execute(
+                "INSERT INTO driver_style (driver_id, track_id, vector_json, "
+                "sample_count, updated_at) VALUES (?, ?, ?, ?, ?) "
+                "ON CONFLICT(driver_id, track_id) DO UPDATE SET "
+                "vector_json = excluded.vector_json, "
+                "sample_count = excluded.sample_count, "
+                "updated_at = excluded.updated_at",
+                (
+                    driver_id, track_id,
+                    json.dumps(vector, ensure_ascii=False),
+                    int(sample_count), _now_iso(),
+                ),
+            )
+            self._conn.commit()
+
+    def update_iteration_outcome(
+        self, iteration_id: int, *,
+        lap_time_before_ms: int | None = None,
+        lap_time_after_ms: int | None = None,
+        outcome_delta_ms: float | None = None,
+        applied_delta_json: str | None = None,
+        style_vector_json: str | None = None,
+    ) -> None:
+        """回写一条迭代的实际效果（S4 闭环的数据入口）。"""
+        with self._lock:
+            self._conn.execute(
+                "UPDATE iteration SET "
+                "lap_time_before_ms = COALESCE(?, lap_time_before_ms), "
+                "lap_time_after_ms = COALESCE(?, lap_time_after_ms), "
+                "outcome_delta_ms = COALESCE(?, outcome_delta_ms), "
+                "applied_delta_json = COALESCE(?, applied_delta_json), "
+                "style_vector_json = COALESCE(?, style_vector_json) "
+                "WHERE id = ?",
+                (
+                    lap_time_before_ms, lap_time_after_ms, outcome_delta_ms,
+                    applied_delta_json, style_vector_json, int(iteration_id),
+                ),
+            )
+            self._conn.commit()
 
     def has_feedback(self, track_id: str) -> bool:
         """判断某赛道是否至少有 1 条反馈记录。"""
@@ -328,6 +555,21 @@ class Store:
                 "SELECT 1 FROM feedback WHERE track_id = ? LIMIT 1", (track_id,),
             ).fetchone()
         return row is not None
+
+    def clear_track_feedback(self, track_id: str) -> int:
+        """清除某赛道的所有反馈记录，返回删除条数。
+
+        用途：`/suggest` 生成成功后"消费"本圈反馈（2026-09-19）——
+        本次生成已经用掉了这些反馈，若不清除，下一圈录入的新反馈会与
+        上一圈混在一起（用户诉求：跨圈不串味）。返回条数供接口层如实
+        告知用户清了多少条；清除空赛道返回 0，不报错。
+        """
+        with self._lock:
+            cur = self._conn.execute(
+                "DELETE FROM feedback WHERE track_id = ?", (track_id,),
+            )
+            self._conn.commit()
+        return int(cur.rowcount)
 
     # ------------------------------------------------------------------
     # suggestion（调教建议）

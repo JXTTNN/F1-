@@ -115,7 +115,7 @@ class TestTelemetryToEngine:
     协作模块：telemetry.packets ↔ report.builder ↔ engine.engine
     """
 
-    def test_packet5_to_setup_dict_covers_23_params(self) -> None:
+    def test_packet5_to_setup_dict_covers_20_params(self) -> None:
         """Packet 5 解析后经 extract_setup_from_packet5 应覆盖全部 21 参数。
 
         链路：parse_packet → extract_setup_from_packet5 → CarSetup.from_dict
@@ -130,14 +130,14 @@ class TestTelemetryToEngine:
         # 解析结果 → 21 参数字典
         setup_params = extract_setup_from_packet5(parsed)
         assert set(setup_params.keys()) == {f.name for f in ALL_SETUP_FIELDS}
-        assert len(setup_params) == 21
+        assert len(setup_params) == 20
 
         # 23 参数字典 → CarSetup 领域对象（不抛异常即合法）
         setup = CarSetup.from_dict(setup_params)
-        # uint8 字段经过值域转换：front_wing 7→0+7*50/250=1.4
-        assert setup.front_wing == pytest.approx(7 * 50 / 250)
-        assert setup.rear_wing == pytest.approx(3 * 50 / 250)
-        assert setup.brake_pressure == pytest.approx(80 + 85 * 20 / 200)
+        # 2026-09 修正：真实抓包证明 EA 下发即车库值 → 恒等映射（不再线性压缩）
+        assert setup.front_wing == pytest.approx(7)
+        assert setup.rear_wing == pytest.approx(3)
+        assert setup.brake_pressure == pytest.approx(85)
 
     def test_packet5_field_values_preserved_through_pipeline(self) -> None:
         """Packet 5 关键字段值经整条链路传递后不变形。
@@ -155,15 +155,15 @@ class TestTelemetryToEngine:
         setup_params = extract_setup_from_packet5(parsed)
         setup = CarSetup.from_dict(setup_params)
 
-        # uint8 字段经值域转换，float 字段直接透传
+        # 恒等映射（EA 下发即车库值）；float 字段同样直接透传
         assert parsed["m_frontWing"] == 9
-        assert setup.front_wing == pytest.approx(9 * 50 / 250)
+        assert setup.front_wing == pytest.approx(9)
         assert parsed["m_rearWing"] == 2
-        assert setup.rear_wing == pytest.approx(2 * 50 / 250)
+        assert setup.rear_wing == pytest.approx(2)
         assert parsed["m_brakePressure"] == 90
-        assert setup.brake_pressure == pytest.approx(80 + 90 * 20 / 200)
+        assert setup.brake_pressure == pytest.approx(90)
         assert parsed["m_brakeBias"] == 70
-        assert setup.brake_bias == pytest.approx(50 + 70 * 20 / 200)
+        assert setup.brake_bias == pytest.approx(70)
         # float 字段无需转换，直接透传
         assert setup.front_camber == pytest.approx(-3.0)
         assert setup.rear_camber == pytest.approx(-1.5)
@@ -186,8 +186,8 @@ class TestTelemetryToEngine:
             telemetry=None,
         )
         assert "setup_delta" in result
-        assert len(result["setup_delta"]) == 21
-        assert len(result["parameters"]) == 21
+        assert len(result["setup_delta"]) == 20
+        assert len(result["parameters"]) == 20
 
 
 # ===========================================================================
@@ -220,7 +220,7 @@ class TestDxToSetupDelta:
         # brake_long 应贡献 brake_power_req
         assert dx["brake_power_req"] > 0.0
 
-    def test_dx_to_setup_delta_covers_23_params(self) -> None:
+    def test_dx_to_setup_delta_covers_20_params(self) -> None:
         """Dx 向量经 compute_setup_delta 后应覆盖全部 23 参数。
 
         链路：compute_dx → compute_setup_delta → {param: delta}
@@ -232,7 +232,7 @@ class TestDxToSetupDelta:
 
         # SetupDelta 必须覆盖全部 23 参数
         assert set(setup_delta.keys()) == {f.name for f in ALL_SETUP_FIELDS}
-        assert len(setup_delta) == 21
+        assert len(setup_delta) == 20
 
     def test_dx_to_setup_delta_respects_bounds(self) -> None:
         """SetupDelta 每参数必须满足 |delta| <= max_delta 且 next ∈ [min, max]。
@@ -329,7 +329,7 @@ class TestFeedbackToReport:
 
         # 提交 3 条反馈
         submitted = [
-            svc.submit_feedback(track_id, 1, "understeer", 4),
+            svc.submit_feedback(track_id, 1, "understeer", 3),
             svc.submit_feedback(track_id, 5, "brake_long", 3),
             svc.submit_feedback(track_id, None, "bottoming", 2),
         ]
@@ -356,9 +356,9 @@ class TestFeedbackToReport:
         svc = FeedbackService(store)
         track_id = "monza"
 
-        svc.submit_feedback(track_id, 1, "understeer", 4)
+        svc.submit_feedback(track_id, 1, "understeer", 3)
         svc.submit_feedback(track_id, 3, "oversteer", 2)
-        svc.submit_feedback(track_id, None, "tyre_wear", 5)
+        svc.submit_feedback(track_id, None, "tyre_wear", 1)
 
         feedbacks = svc.get_feedbacks(track_id)
         symptoms = feedbacks_to_symptoms(feedbacks)
@@ -366,9 +366,9 @@ class TestFeedbackToReport:
         assert len(symptoms) == 3
         # 验证 (symptom, strength) 二元组完整保留
         sym_map = dict(symptoms)
-        assert sym_map["understeer"] == 4
+        assert sym_map["understeer"] == 3
         assert sym_map["oversteer"] == 2
-        assert sym_map["tyre_wear"] == 5
+        assert sym_map["tyre_wear"] == 1
 
     def test_full_pipeline_feedback_to_report(self, store: Store) -> None:
         """完整链路：提交反馈 → 检索 → 引擎生成建议 → 组装报告。
@@ -384,8 +384,8 @@ class TestFeedbackToReport:
         track_id = "suzuka"
 
         # 提交多弯道多症状反馈
-        svc.submit_feedback(track_id, 1, "understeer", 4)
-        svc.submit_feedback(track_id, 5, "brake_long", 3)
+        svc.submit_feedback(track_id, 1, "understeer", 3)
+        svc.submit_feedback(track_id, 5, "brake_long", 2)
         svc.submit_feedback(track_id, 10, "oversteer", 3)
         svc.submit_feedback(track_id, None, "bottoming", 2)
 
@@ -403,8 +403,8 @@ class TestFeedbackToReport:
             telemetry=None,
         )
         assert suggestion["track_id"] == track_id
-        assert len(suggestion["setup_delta"]) == 21
-        assert len(suggestion["parameters"]) == 21
+        assert len(suggestion["setup_delta"]) == 20
+        assert len(suggestion["parameters"]) == 20
         # 多症状非零 Dx → 应有非零调整
         assert not is_zero_dx(suggestion["dx"])
 
@@ -416,7 +416,7 @@ class TestFeedbackToReport:
         )
         assert report["track_id"] == track_id
         assert "generated_at" in report
-        assert len(report["parameters"]) == 21
+        assert len(report["parameters"]) == 20
         assert report["confidence"] in {"high", "medium", "low"}
         # 报告 setup_delta 与引擎 setup_delta 一致（不变形）
         assert report["setup_delta"] == suggestion["setup_delta"]
@@ -456,7 +456,7 @@ class TestFeedbackToReport:
         retrieved_report = json.loads(retrieved["report_json"])
         assert retrieved_report["track_id"] == track_id
         assert retrieved_report["setup_delta"] == report["setup_delta"]
-        assert len(retrieved_report["parameters"]) == 21
+        assert len(retrieved_report["parameters"]) == 20
 
 
 # ===========================================================================
@@ -519,7 +519,7 @@ class TestTrackSetupConsistency:
                 track_id=track.track_id,
             )
             assert suggestion["track_id"] == track.track_id
-            assert len(suggestion["setup_delta"]) == 21
+            assert len(suggestion["setup_delta"]) == 20
 
     def test_track_lookup_by_id_consistent(self) -> None:
         """get_track_by_id 返回的赛道与 get_all_tracks 中的一致。"""
@@ -548,8 +548,10 @@ class TestTelemetrySummaryFlow:
               → generate_suggestion(telemetry=summary)
         """
         # 构造 Session + LapData 两个包
+        # m_weather=3（小雨）才是湿地；旧按 4 档枚举误用 1（轻云=干地），
+        # 会让"天气是否被消费"的断言失去意义（task-82 修正）。
         session_data = _build_header(packet_id=1) + _build_session_body(
-            track_id=2, weather=1,  # 雨天
+            track_id=2, weather=3,  # 小雨（湿地）
         )
         lap_data = _build_header(packet_id=2) + _build_lap_data_body(
             last_lap_ms=95000,
@@ -569,7 +571,7 @@ class TestTelemetrySummaryFlow:
         # 提取遥测摘要
         from setup_tuner.report.builder import extract_telemetry_summary
         summary = extract_telemetry_summary(all_latest)
-        assert summary["weather"] == 1
+        assert summary["weather"] == 3
         assert summary["track_id_udp"] == 2
         assert summary["last_lap_time_ms"] == 95000
 
@@ -580,7 +582,7 @@ class TestTelemetrySummaryFlow:
             track_id="suzuka",
             telemetry=summary,
         )
-        assert len(result["setup_delta"]) == 21
+        assert len(result["setup_delta"]) == 20
 
         # 对比：无遥测 vs 有遥测，雨天增益应使调整幅度更保守
         result_no_telemetry = generate_suggestion(
@@ -589,7 +591,20 @@ class TestTelemetrySummaryFlow:
             track_id="suzuka",
             telemetry=None,
         )
-        # 雨天应至少有一个参数的 |delta| 更小或相等
-        deltas_wet = [abs(v) for v in result["setup_delta"].values()]
-        deltas_dry = [abs(v) for v in result_no_telemetry["setup_delta"].values()]
-        assert all(w <= d + 1e-9 for w, d in zip(deltas_wet, deltas_dry, strict=True))
+        # 雨天应整体更保守：总调整幅度 Σ|Δ| 不大于干地。
+        #
+        # 注意（2026-09-17 修订）：不再逐元素断言 |wet| <= |dry|。
+        # 新架构下 setup_delta 由**圈级优化器**产出，天气以"需求倾斜"
+        # （湿地抬高高稳定/出弯牵引需求、降低空力抓地收益）进入目标函数。
+        # 于是湿地可能把某个参数调得更大（如为稳定性增加后翼），同时在其他
+        # 参数上更保守 —— 逐元素单调性不再是湿地意图的正确表达。
+        # 真正要守住的意图有两条：①总幅度不增加；②湿地结果必须与干地不同。
+        # 第 ② 条正是能抓住"天气被优化器抹平"那类回归的断言。
+        sum_wet = sum(abs(v) for v in result["setup_delta"].values())
+        sum_dry = sum(abs(v) for v in result_no_telemetry["setup_delta"].values())
+        assert sum_wet <= sum_dry + 1e-9, (
+            f"雨天总调整幅度 {sum_wet:.2f} 不应大于干地 {sum_dry:.2f}"
+        )
+        assert result["setup_delta"] != result_no_telemetry["setup_delta"], (
+            "湿地与干地输出相同 —— 天气没有被模型消费（回归）"
+        )

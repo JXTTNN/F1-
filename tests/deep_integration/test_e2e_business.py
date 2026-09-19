@@ -195,7 +195,7 @@ class TestImportSetup:
             data = _assert_envelope(resp.json())
             assert data["track_id"] == "suzuka"
             assert data["setup_id"] > 0
-            assert len(data["params"]) == 21
+            assert len(data["params"]) == 20
 
     def test_get_current_setup_after_import(self) -> None:
         """导入后 GET /setup/current 应返回刚导入的快照。"""
@@ -212,7 +212,7 @@ class TestImportSetup:
             assert resp.status_code == 200
             data = _assert_envelope(resp.json())
             assert data["track_id"] == "suzuka"
-            assert len(data["params"]) == 21
+            assert len(data["params"]) == 20
 
 
 # ===========================================================================
@@ -233,13 +233,13 @@ class TestSubmitFeedback:
                     "track_id": "suzuka",
                     "corner_number": 1,
                     "symptom": "understeer",
-                    "strength": 4,
+                    "strength": 3,
                 },
             )
             assert resp.status_code == 200
             data = _assert_envelope(resp.json())
             assert data["symptom"] == "understeer"
-            assert data["strength"] == 4
+            assert data["strength"] == 3
             assert data["corner_number"] == 1
             assert data["id"] > 0
 
@@ -251,7 +251,7 @@ class TestSubmitFeedback:
             )
 
             feedbacks = [
-                {"track_id": "suzuka", "corner_number": 1, "symptom": "understeer", "strength": 4},
+                {"track_id": "suzuka", "corner_number": 1, "symptom": "understeer", "strength": 3},
                 {"track_id": "suzuka", "corner_number": 5, "symptom": "brake_long", "strength": 3},
                 {"track_id": "suzuka", "corner_number": 10, "symptom": "oversteer", "strength": 3},
                 {"track_id": "suzuka", "corner_number": None, "symptom": "bottoming", "strength": 2},
@@ -325,7 +325,7 @@ class TestGenerateSuggestion:
                 "/api/v1/feedback",
                 json={
                     "track_id": "suzuka", "corner_number": 1,
-                    "symptom": "understeer", "strength": 4,
+                    "symptom": "understeer", "strength": 3,
                 },
             )
 
@@ -338,7 +338,7 @@ class TestGenerateSuggestion:
             report = data["report"]
             assert report["track_id"] == "suzuka"
             assert "generated_at" in report
-            assert len(report["parameters"]) == 21
+            assert len(report["parameters"]) == 20
             assert report["confidence"] in {"high", "medium", "low"}
 
             # 每参数含必要字段
@@ -422,21 +422,25 @@ class TestMultiRoundConvergence:
         """相同反馈连续 3 轮生成建议，setup_delta 应完全一致。
 
         引擎为纯确定性函数，无反馈变化时建议应稳定。
+        注：2026-09-19 起 /suggest 成功后默认**消费并清除**本赛道反馈
+        （消除跨圈串味），因此每轮需重新录入同一份反馈再生成 —— 这正是
+        真实工作流：每圈录入本圈反馈 → 生成 → 下一圈重新录入。
         """
         with make_client() as client:
             client.post(
                 "/api/v1/tracks/current", json={"track_id": "suzuka"},
             )
-            client.post(
-                "/api/v1/feedback",
-                json={
-                    "track_id": "suzuka", "corner_number": 1,
-                    "symptom": "understeer", "strength": 3,
-                },
-            )
 
             deltas: list[dict] = []
             for _ in range(3):
+                resp = client.post(
+                    "/api/v1/feedback",
+                    json={
+                        "track_id": "suzuka", "corner_number": 1,
+                        "symptom": "understeer", "strength": 3,
+                    },
+                )
+                assert resp.status_code == 200, resp.text
                 resp = client.post("/api/v1/suggest", json={"track_id": "suzuka"})
                 assert resp.status_code == 200
                 deltas.append(resp.json()["data"]["report"]["setup_delta"])
@@ -445,20 +449,24 @@ class TestMultiRoundConvergence:
             assert deltas[0] == deltas[1] == deltas[2]
 
     def test_multi_round_iteration_history_grows(self) -> None:
-        """多轮生成建议后迭代历史应递增。"""
+        """多轮生成建议后迭代历史应递增。
+
+        注：2026-09-19 起生成成功后反馈被清除，每轮重新录入（真实工作流）。
+        """
         with make_client() as client:
             client.post(
                 "/api/v1/tracks/current", json={"track_id": "monza"},
             )
-            client.post(
-                "/api/v1/feedback",
-                json={
-                    "track_id": "monza", "corner_number": 1,
-                    "symptom": "oversteer", "strength": 4,
-                },
-            )
 
             for _ in range(3):
+                resp = client.post(
+                    "/api/v1/feedback",
+                    json={
+                        "track_id": "monza", "corner_number": 1,
+                        "symptom": "oversteer", "strength": 3,
+                    },
+                )
+                assert resp.status_code == 200, resp.text
                 resp = client.post("/api/v1/suggest", json={"track_id": "monza"})
                 assert resp.status_code == 200
 
@@ -475,7 +483,13 @@ class TestMultiRoundConvergence:
     def test_increasing_strength_increases_delta_magnitude(self) -> None:
         """反馈强度增加时，建议的 |setup_delta| 应不减（单调性）。
 
-        链路：strength=1 → suggest → strength=5 → suggest → 比较 |delta|
+        链路：同一弯道 strength=1 → suggest → strength=3 → suggest → 比较 |delta|。
+
+        2026-09-19 修正两处：
+        1. 原实现用 strength=5 —— 超出合法区间 [1,3]，POST /feedback 实际返回
+           422，反馈从未入库，断言"strong >= weak"比较的是同一份输入（假绿）。
+           现改为合法上限 3，并**断言每次 POST 的状态码**，杜绝静默失败。
+        2. 生成成功后反馈默认被清除，故第 2 轮重新录入（真实工作流）。
         """
         with make_client() as client:
             track_id = "silverstone"
@@ -484,25 +498,27 @@ class TestMultiRoundConvergence:
             )
 
             # 第 1 轮：强度 1
-            client.post(
+            resp = client.post(
                 "/api/v1/feedback",
                 json={
                     "track_id": track_id, "corner_number": 1,
                     "symptom": "understeer", "strength": 1,
                 },
             )
+            assert resp.status_code == 200, resp.text
             resp1 = client.post("/api/v1/suggest", json={"track_id": track_id})
             assert resp1.status_code == 200
             delta_weak = resp1.json()["data"]["report"]["setup_delta"]
 
-            # 第 2 轮：追加强度 5 的反馈
-            client.post(
+            # 第 2 轮：同一弯道强度 3（上一轮反馈已被消费清除，此为唯一输入）
+            resp = client.post(
                 "/api/v1/feedback",
                 json={
-                    "track_id": track_id, "corner_number": 2,
-                    "symptom": "understeer", "strength": 5,
+                    "track_id": track_id, "corner_number": 1,
+                    "symptom": "understeer", "strength": 3,
                 },
             )
+            assert resp.status_code == 200, resp.text
             resp2 = client.post("/api/v1/suggest", json={"track_id": track_id})
             assert resp2.status_code == 200
             delta_strong = resp2.json()["data"]["report"]["setup_delta"]
@@ -539,11 +555,11 @@ class TestFullClosedLoop:
             resp = client.post("/api/v1/setup/import")
             assert resp.status_code == 200
             setup_data = _assert_envelope(resp.json())
-            assert len(setup_data["params"]) == 21
+            assert len(setup_data["params"]) == 20
 
             # ③ 提交多弯道反馈
             for corner, symptom, strength in [
-                (1, "understeer", 4),
+                (1, "understeer", 3),
                 (5, "brake_long", 3),
                 (10, "oversteer", 3),
             ]:
@@ -563,7 +579,7 @@ class TestFullClosedLoop:
             assert resp.status_code == 200
             suggestion_data = _assert_envelope(resp.json())
             report = suggestion_data["report"]
-            assert len(report["parameters"]) == 21
+            assert len(report["parameters"]) == 20
             # 应有非零调整（多症状非零 Dx）
             nonzero_count = sum(
                 1 for v in report["setup_delta"].values() if abs(v) > 1e-9
@@ -579,6 +595,23 @@ class TestFullClosedLoop:
             assert len(iterations) >= 1
 
             # ⑥ 再跑一轮验证收敛性
+            # 2026-09-19：生成成功后反馈默认被消费清除，重录同一份再生成，
+            # 相同输入应得到相同建议（确定性收敛）。
+            for corner, symptom, strength in [
+                (1, "understeer", 3),
+                (5, "brake_long", 3),
+                (10, "oversteer", 3),
+            ]:
+                resp = client.post(
+                    "/api/v1/feedback",
+                    json={
+                        "track_id": track_id,
+                        "corner_number": corner,
+                        "symptom": symptom,
+                        "strength": strength,
+                    },
+                )
+                assert resp.status_code == 200
             resp2 = client.post("/api/v1/suggest", json={"track_id": track_id})
             assert resp2.status_code == 200
             report2 = resp2.json()["data"]["report"]

@@ -343,7 +343,7 @@ def _build_car_setups_packet(
         int(setup.front_anti_roll_bar), int(setup.rear_anti_roll_bar),
         int(setup.front_ride_height), int(setup.rear_ride_height),
         int(setup.brake_pressure), int(setup.brake_bias),
-        int(setup.engine_braking),
+        50,  # m_engineBraking —— Packet 5 固定占位字节（F1 2026 车库不可调）
         setup.rear_tyre_pressure, setup.rear_tyre_pressure,
         setup.front_tyre_pressure, setup.front_tyre_pressure,
         int(setup.ballast),

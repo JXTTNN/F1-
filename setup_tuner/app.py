@@ -19,7 +19,9 @@
 from __future__ import annotations
 
 import logging
+import queue
 import sys
+import threading
 from collections.abc import Callable
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -36,8 +38,10 @@ from setup_tuner.config import Config, load_config
 from setup_tuner.db.store import Store
 from setup_tuner.feedback.iteration import IterationService
 from setup_tuner.feedback.service import FeedbackService
+from setup_tuner.telemetry.lap_aggregator import LapAggregator
 from setup_tuner.telemetry.listener import TelemetryListener
 from setup_tuner.telemetry.stream import TelemetryStream
+from setup_tuner.telemetry.style_extractor import StyleExtractor
 
 logger = logging.getLogger(__name__)
 
@@ -90,10 +94,21 @@ def _init_app_services(app: FastAPI, config: Config) -> tuple[Store, TelemetryLi
 
     # ③ 遥测
     app.state.telemetry_stream = TelemetryStream()
+    app.state.lap_aggregator = LapAggregator()
+    app.state.style_extractor = StyleExtractor()
+    app.state.lap_write_queue: queue.Queue[dict[str, Any]] = queue.Queue()
+    app.state.lap_writer = threading.Thread(
+        target=_lap_writer_loop, args=(app,), name="f1opt-lap-writer",
+        daemon=True,
+    )
+    app.state.lap_writer.start()
     listener = TelemetryListener(
         host=config.udp_host, port=config.udp_port,
     )
-    listener.add_handler(_make_packet_handler(app))
+    # 包处理函数同时存入 state：遥测模拟器（无真实 F1 游戏时）需要复用同一
+    # 处理链路，否则模拟帧无人消费，/suggest 永远拿不到整圈统计。
+    app.state.packet_handler = _make_packet_handler(app)
+    listener.add_handler(app.state.packet_handler)
     listener.add_raw_handler(_make_raw_packet_handler(app))
     app.state.telemetry_listener = listener
 
@@ -106,12 +121,216 @@ def _init_app_services(app: FastAPI, config: Config) -> tuple[Store, TelemetryLi
     return store, listener
 
 
+def _lap_writer_loop(app: FastAPI) -> None:
+    """整圈落库线程：把队列里的整圈快照写入 lap_record + driver_style（EMA）。
+
+    质量门槛（不达标不入库）：样本帧数 ≥ 3000（≈50 秒）。
+    第 12 维（圈速一致性）由同车手同赛道的圈史计算后追加到向量。
+    EMA：新向量 = 0.8 × 旧向量 + 0.2 × 本圈向量（样本数 +1）。
+    """
+    MIN_FRAMES = 3000
+    EMA_ALPHA = 0.2
+    while True:
+        try:
+            job = app.state.lap_write_queue.get(timeout=1.0)
+        except queue.Empty:
+            # 正常的 1 秒轮询超时，继续等待
+            continue
+        except Exception:
+            # 队列被替换/关闭等异常：记录后继续，避免本线程静默死循环
+            logger.warning("整圈落库队列读取异常", exc_info=True)
+            continue
+        try:
+            snapshot = job.get("snapshot") or {}
+            track_id = job.get("track_id")
+            if not track_id or snapshot.get("lap_frames", 0) < MIN_FRAMES:
+                continue
+            store = getattr(app.state, "store", None)
+            if store is None:
+                continue
+            driver_id = store.get_or_create_driver("默认车手")
+            lap_time_ms = snapshot.get("lap_time_ms")
+            records = store.get_lap_records(track_id, driver_id, limit=10)
+            times = [r["lap_time_ms"] for r in records
+                     if r.get("lap_time_ms")]
+            mean_t = sum(times) / len(times) if times else 0.0
+            var = (sum((t - mean_t) ** 2 for t in times) / len(times)
+                   if times else 0.0)
+            cv = (var ** 0.5) / mean_t if mean_t else 1.0
+            consistency = max(0.0, min(1.0, 1.0 - cv / 0.05))
+
+            old = store.get_driver_style(driver_id, track_id)
+            new_vec = list(job.get("style_vector") or [])
+            if len(new_vec) >= 11:
+                base = old["vector"] if old and len(old["vector"]) >= 11                     else new_vec[:11]
+                blended = [
+                    round((1 - EMA_ALPHA) * b + EMA_ALPHA * n, 4)
+                    for b, n in zip(base, new_vec[:11], strict=True)
+                ]
+                blended.append(round(consistency, 4))
+                sample_count = (old["sample_count"] + 1) if old else 1
+                store.save_driver_style(driver_id, track_id, blended, sample_count)
+
+            snapshot["lap_consistency"] = round(consistency, 4)
+            snapshot["driver_id"] = driver_id
+            store.save_lap_record(
+                driver_id, track_id, snapshot,
+                lap_number=snapshot.get("lap_number"),
+                lap_time_ms=lap_time_ms,
+                is_valid=True,
+                session_uid=None,
+                setup_id=None,
+            )
+        except Exception:
+            logger.exception("整圈落库失败，跳过该圈")
+
+
+def _wire_track_context(app: FastAPI, aggregator: Any, session: dict[str, Any]) -> None:
+    """把 Session 包转成「圈内距离 → 弯号」定位回调并注入聚合器。
+
+    路肩（kerb）检测需要知道每一帧落在哪个弯：MotionEx 不带圈内距离，
+    只能靠 Session 包的 ``m_trackLength`` + 弧长表反查。
+
+    幂等：同一 ``m_trackId`` 只构造一次（Session 包每圈都会重发）。
+    """
+    udp_id = session.get("m_trackId")
+    if not isinstance(udp_id, int) or isinstance(udp_id, bool):
+        return
+    if getattr(app.state, "_kerb_track_udp_id", None) == udp_id:
+        return
+
+    length = session.get("m_trackLength")
+    if not isinstance(length, (int, float)) or isinstance(length, bool):
+        return
+
+    from setup_tuner.domain.corner_locator import locate_corner
+    from setup_tuner.domain.track import get_track_by_udp_id
+
+    track = get_track_by_udp_id(udp_id)
+    if track is None:
+        # 未知赛道：路肩按弯归因不可用，但绝不因此打断主流程
+        logger.info("未知 m_trackId=%s，路肩按弯归因降级为不可用", udp_id)
+        app.state._kerb_track_udp_id = udp_id
+        return
+
+    def _locate(dist: float) -> int | None:
+        return locate_corner(dist, track.length_m, track.corners, track.track_id)
+
+    aggregator.set_track_context(float(length), _locate)
+    app.state._kerb_track_udp_id = udp_id
+    logger.info(
+        "路肩检测已启用：%s（%d 弯，赛道长 %s m）",
+        track.track_id, len(track.corners), length,
+    )
+
+
+def _sync_session(app: FastAPI, aggregator: Any, parsed: dict[str, Any]) -> None:
+    """会话切换检测 + 玩家车号同步（每个包调用，必须廉价）。
+
+    两件事：
+    1. **玩家车号**：SessionHistory 是**按车发送**的（一包只含一辆车），
+       必须按玩家车号过滤，否则会把他车圈速当成自己的。
+    2. **会话切换**：官方逐圈历史按圈号索引，跨会话保留会串号
+       （实测：匈牙利第 3 圈读到蒙扎第 3 圈的时间）→ 新 sessionUID 时
+       整体重置聚合器与路肩赛道上下文。
+    """
+    header = parsed.get("header")
+    if header is None:
+        return
+    pci = getattr(header, "player_car_index", None)
+    if (isinstance(pci, int) and not isinstance(pci, bool)
+            and pci != getattr(app.state, "_player_car_index", None)):
+        aggregator.set_player_car_index(pci)
+        app.state._player_car_index = pci
+    uid = getattr(header, "session_uid", None)
+    if uid is None:
+        return
+    prev = getattr(app.state, "_session_uid", None)
+    if prev is not None and uid != prev:
+        aggregator.reset()
+        app.state._kerb_track_udp_id = None
+        logger.info("检测到新会话（sessionUID 变化），整圈聚合器已重置")
+    app.state._session_uid = uid
+
+
 def _make_packet_handler(app: FastAPI) -> Callable[[dict[str, Any]], None]:
-    """构造 UDP 包处理函数：将解析结果写入 TelemetryStream。"""
+    """构造 UDP 包处理函数：写入 TelemetryStream，并喂给整圈聚合器。
+
+    - Packet 6 (CarTelemetry)  → ``LapAggregator.on_telemetry``
+    - Packet 2 (LapData)       → ``LapAggregator.on_lap_data``
+    - Packet 13 (MotionEx)     → ``LapAggregator.on_motion_ex``
+    这样 ``/suggest`` 才能拿到 ``max_speed`` / ``avg_steer`` / ``max_steer`` /
+    ``on_straight`` 等整圈统计（此前只喂单帧，导致 5 条遥测规则永不触发），
+    以及底板离地高度（规则9 刮底检测的唯一信号源）。
+    """
     def _on_packet(parsed: dict[str, Any]) -> None:
         packet_id = parsed.get("packet_id")
-        if packet_id is not None:
-            app.state.telemetry_stream.update(int(packet_id), parsed)
+        if packet_id is None:
+            return
+        app.state.telemetry_stream.update(int(packet_id), parsed)
+        aggregator = getattr(app.state, "lap_aggregator", None)
+        if aggregator is None:
+            return
+        # 会话切换 + 玩家车号（廉价守卫：只在变化时加锁写入）
+        _sync_session(app, aggregator, parsed)
+        if packet_id == 6:
+            aggregator.on_telemetry(parsed)
+            extractor = getattr(app.state, "style_extractor", None)
+            if extractor is not None:
+                extractor.on_telemetry(parsed)
+        elif packet_id == 2:
+            aggregator.on_lap_data(parsed)
+            extractor = getattr(app.state, "style_extractor", None)
+            if extractor is not None:
+                extractor.on_lap_data(parsed)
+        elif packet_id == 13:
+            aggregator.on_motion_ex(parsed)
+        elif packet_id == 7:
+            # Packet 7 (CarStatus)：轮胎配方/胎龄/燃油/ERS/刹车平衡。
+            # parse_car_status 早已实现但此前从未分发，导致这些状态量
+            # 解析出来即丢弃（配方相关的阈值区分、刹车平衡核对全部失效）。
+            aggregator.on_car_status(parsed)
+        elif packet_id == 1:
+            # Packet 1 (Session)：注入赛道上下文 —— 路肩检测必须知道
+            # 赛道长度 + 弧长表才能把「圈内距离」归因到具体弯道
+            # （MotionEx 本身不带距离，这是唯一的定位来源）。
+            _wire_track_context(app, aggregator, parsed)
+        # ── task-82：此前只存原始字节、无法使用的包，全部接入 ──
+        elif packet_id == 0:
+            # Packet 0 (Motion)：世界坐标 + 三轴 G 值（纵向 G 看制动、横向 G 看极限抓地）
+            aggregator.on_motion(parsed)
+        elif packet_id == 10:
+            # Packet 10 (CarDamage)：损伤/胎耗 —— 训练数据质量的必要混淆控制
+            # （损伤拖慢圈速，不记录就会被误当成调教问题）
+            aggregator.on_car_damage(parsed)
+        elif packet_id == 11:
+            # Packet 11 (SessionHistory)：官方逐圈用时/扇区/有效位（权威圈有效性）
+            aggregator.on_session_history(parsed)
+        elif packet_id == 16:
+            # Packet 16 (CarTelemetry2)：2026 主动空力模式 + 超车模式状态
+            aggregator.on_car_telemetry_2(parsed)
+        elif packet_id == 3:
+            # Packet 3 (Event)：会话事件（最快圈/判罚/安全车/碰撞）——保留最近一条供报告引用
+            app.state.last_event = parsed
+            label = parsed.get("event_label")
+            if label and label not in ("按钮状态", "回放"):
+                logger.info(
+                    "会话事件：%s（%s）%s",
+                    label, parsed.get("m_eventStringCode"), parsed.get("m_eventDetailsRaw"),
+                )
+        # task-62 M1：一圈结束时把整圈快照与风格向量交给落库线程
+        completed = aggregator.take_completed_lap()
+        if completed is not None:
+            writer = getattr(app.state, "lap_write_queue", None)
+            if writer is not None:
+                writer.put({
+                    "snapshot": completed,
+                    "track_id": getattr(app.state, "current_track_id", None),
+                    "style_vector": (
+                        getattr(app.state, "style_extractor", None).
+                        take_completed()
+                    ),
+                })
     return _on_packet
 
 
@@ -250,6 +469,17 @@ def _mount_static_assets(app: FastAPI) -> None:
         StaticFiles(directory=str(_UI_DIR)),
         name="static-ui",
     )
+
+    # 静态资源协商缓存：文件一变，浏览器下次加载立即拿到新版；
+    # 未变化走 304，本地服务几乎零成本。
+    # 背景（task-79）：无此头时浏览器按 Last-Modified 启发式缓存旧
+    # SVG/app.js，出现「代码改了、地图还是旧圆点」的假象。
+    @app.middleware("http")
+    async def _static_revalidate(request: Request, call_next: Any) -> Any:
+        response = await call_next(request)
+        if request.url.path.startswith("/static/"):
+            response.headers["Cache-Control"] = "no-cache"
+        return response
 
 
 def _register_exception_handlers(app: FastAPI) -> None:

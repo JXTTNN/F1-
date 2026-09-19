@@ -2,7 +2,9 @@
 import sqlite3
 from pathlib import Path
 
-db_path = Path("D:/F1OPT-Test/dist/data/f1opt.db")
+# 仓库根目录（本脚本位于 <root>/scripts/），避免硬编码绝对路径
+ROOT = Path(__file__).resolve().parents[1]
+db_path = ROOT / "data" / "f1opt.db"
 print(f"DB exists: {db_path.exists()}, size: {db_path.stat().st_size if db_path.exists() else 0}")
 
 conn = sqlite3.connect(str(db_path))

@@ -1,16 +1,18 @@
-"""F1 25 (2026 赛季) 调教参数全集（21 项，6 大类）。
+"""F1 25 (2026 赛季) 调教参数全集（20 项，6 大类）。
 
 本模块定义调教参数的取值范围、步长、缺省值、单次建议最大调整量。
 参数严格对齐 EA F1 游戏（F1 25，UDP format=2026）CarSetups 包（Packet 5）
-的真实字段，去掉早期版本中臆造的参数（active_aero_z/x、damping 等）。
+的真实字段，去掉早期版本中臆造的参数（active_aero_z/x、damping 等），
+以及 **F1 2026 车库调教界面并不存在的 engine_braking（引擎制动）**
+——该字段虽在 Packet 5 字节布局中占位，但游戏中不可调，故不建模。
 
-6 大类 21 项（与游戏 Garage 调教界面一一对应）：
+6 大类 20 项（与游戏 Garage 调教界面一一对应）：
 - 空气动力学 Aerodynamics: front_wing / rear_wing
 - 变速箱 Transmission: on_throttle_diff / off_throttle_diff
 - 悬挂几何 Suspension Geometry: front_camber / rear_camber / front_toe / rear_toe
 - 悬挂 Suspension: front_suspension / rear_suspension / front_anti_roll_bar /
   rear_anti_roll_bar / front_ride_height / rear_ride_height
-- 刹车 Brakes: brake_pressure / brake_bias / engine_braking
+- 刹车 Brakes: brake_pressure / brake_bias
 - 轮胎 Tyres: front_left_tyre_pressure / front_right_tyre_pressure /
   rear_left_tyre_pressure / rear_right_tyre_pressure
 
@@ -82,7 +84,7 @@ class SetupField:
 
 
 # ---------------------------------------------------------------------------
-# 21 项调教参数定义（按 6 大类顺序排列）
+# 20 项调教参数定义（按 6 大类顺序排列）
 # ---------------------------------------------------------------------------
 _FIELD_DEFS: list[SetupField] = [
     # 1. 空气动力学 Aerodynamics (2)
@@ -282,18 +284,6 @@ _FIELD_DEFS: list[SetupField] = [
         max_delta=2.0,
         source=SRC_UDP_PACKET5,
     ),
-    SetupField(
-        name="engine_braking",
-        group="Brakes",
-        label="引擎制动",
-        min_val=0.0,
-        max_val=100.0,
-        step=1.0,
-        default=50.0,
-        unit="%",
-        max_delta=10.0,
-        source=SRC_UDP_PACKET5,
-    ),
     # 6. 轮胎 Tyres (4 个独立胎压)
     SetupField(
         name="front_left_tyre_pressure",
@@ -346,7 +336,7 @@ _FIELD_DEFS: list[SetupField] = [
 ]
 
 
-# 全部 21 项调教参数（按定义顺序，分组连续）
+# 全部 20 项调教参数（按定义顺序，分组连续）
 ALL_SETUP_FIELDS: list[SetupField] = list(_FIELD_DEFS)
 
 # 名称 → SetupField 的快速索引
@@ -395,11 +385,11 @@ def validate_value(name: str, value: float) -> float:
 
 
 # ---------------------------------------------------------------------------
-# CarSetup：一份完整调教（21 字段 + 校验）
+# CarSetup：一份完整调教（20 字段 + 校验）
 # ---------------------------------------------------------------------------
 @dataclass(slots=True)
 class CarSetup:
-    """一份完整的 F1 25 调教（21 项参数，与游戏 Garage 一一对应）。"""
+    """一份完整的 F1 25 调教（20 项参数，与游戏 Garage 一一对应）。"""
 
     # 1. 空气动力学 Aerodynamics
     front_wing: float = 25.0
@@ -422,7 +412,6 @@ class CarSetup:
     # 5. 刹车 Brakes
     brake_pressure: float = 90.0
     brake_bias: float = 58.0
-    engine_braking: float = 50.0
     # 6. 轮胎 Tyres
     front_left_tyre_pressure: float = 23.5
     front_right_tyre_pressure: float = 23.5
@@ -430,7 +419,7 @@ class CarSetup:
     rear_right_tyre_pressure: float = 22.0
 
     def validate(self) -> CarSetup:
-        """校验全部 21 字段的范围与步长档位对齐。"""
+        """校验全部 20 字段的范围与步长档位对齐。"""
         for spec in ALL_SETUP_FIELDS:
             validate_value(spec.name, getattr(self, spec.name))
         return self
@@ -477,5 +466,5 @@ class CarSetup:
         return changes
 
     def field_names(self) -> list[str]:
-        """返回全部 21 个字段名（按定义顺序）。"""
+        """返回全部 20 个字段名（按定义顺序）。"""
         return [spec.name for spec in ALL_SETUP_FIELDS]

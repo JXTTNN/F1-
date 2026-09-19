@@ -19,8 +19,6 @@
     - **耦合矩阵 C**（``coupling``）：
         - :class:`CouplingCell`、:data:`COUPLING_MATRIX`
         - :func:`get_coupling`、:func:`validate_matrix`
-    - **规则库**（``rules``）：
-        - :func:`load_rules`、:func:`get_rule`、:func:`get_all_rules`
     - **SetupDelta 引擎**（``engine``）：
         - :func:`compute_setup_delta`、:func:`generate_suggestion`
     - **置信度**（``confidence``）：
@@ -63,7 +61,6 @@ from .nn_model import (
     is_torch_available,
     reset_nn_manager,
 )
-from .rules import get_all_rules, get_rule, load_rules, validate_rules
 
 __all__ = [
     # 诊断向量
@@ -84,10 +81,6 @@ __all__ = [
     "validate_matrix",
     "matrix_stats",
     # 规则库
-    "load_rules",
-    "get_rule",
-    "get_all_rules",
-    "validate_rules",
     # 引擎
     "compute_setup_delta",
     "generate_suggestion",

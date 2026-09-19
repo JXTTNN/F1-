@@ -3,7 +3,9 @@
 import re
 from pathlib import Path
 
-track_dir = Path("D:/F1OPT-Test/setup_tuner/ui/tracks")
+# 仓库根目录（本脚本位于 <root>/scripts/），避免硬编码绝对路径
+ROOT = Path(__file__).resolve().parents[1]
+track_dir = ROOT / "setup_tuner" / "ui" / "tracks"
 
 for track_id in ["melbourne", "monaco", "suzuka", "jeddah"]:
     svg_path = track_dir / f"{track_id}.svg"
@@ -33,7 +35,7 @@ for track_id in ["melbourne", "monaco", "suzuka", "jeddah"]:
         for a, b, d in close_pairs:
             print(f"    弯{a}→弯{b}: {d:.1f}px ← 聚集!")
     else:
-        print(f"  ✓ 无聚集")
+        print("  ✓ 无聚集")
     
     # 打印所有弯道坐标
     for i, (x, y) in enumerate(circles, 1):

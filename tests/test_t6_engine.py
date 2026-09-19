@@ -42,7 +42,6 @@ from setup_tuner.engine.engine import (
     generate_suggestion,
     validate_engine,
 )
-from setup_tuner.engine.rules import get_all_rules, get_rule, validate_rules
 
 
 # ===========================================================================
@@ -144,15 +143,15 @@ class TestCouplingMatrix:
         """validate_matrix 3 条硬约束通过。"""
         validate_matrix()  # 不抛异常即通过
 
-    def test_matrix_shape_9x21(self) -> None:
+    def test_matrix_shape_9x20(self) -> None:
         """矩阵形状 9 行 × 21 列。"""
         assert len(COUPLING_MATRIX) == 9
         for diag in DIAG_DIMS:
-            assert len(COUPLING_MATRIX[diag]) == 21
+            assert len(COUPLING_MATRIX[diag]) == 20
 
-    def test_param_names_count_21(self) -> None:
+    def test_param_names_count_20(self) -> None:
         """PARAM_NAMES 21 项且与 ALL_SETUP_FIELDS 一致。"""
-        assert len(PARAM_NAMES) == 21
+        assert len(PARAM_NAMES) == 20
         assert PARAM_NAMES == [f.name for f in ALL_SETUP_FIELDS]
 
     def test_no_empty_column(self) -> None:
@@ -221,13 +220,13 @@ class TestCouplingMatrix:
     def test_get_row_returns_21_entries(self) -> None:
         """get_row 返回 21 个参数的耦合单元。"""
         row = get_row("front_grip_req")
-        assert len(row) == 21
+        assert len(row) == 20
         assert set(row.keys()) == set(PARAM_NAMES)
 
     def test_get_row_unknown_diag_returns_all_none(self) -> None:
         """get_row 未知维度返回全 None 行。"""
         row = get_row("nonexistent")
-        assert len(row) == 21
+        assert len(row) == 20
         assert all(v is None for v in row.values())
 
     def test_get_column_returns_9_entries(self) -> None:
@@ -265,8 +264,8 @@ class TestCouplingMatrix:
         """matrix_stats 返回完整统计。"""
         stats = matrix_stats()
         assert stats["diag_dims"] == 9
-        assert stats["params"] == 21
-        assert stats["total_cells"] == 9 * 21
+        assert stats["params"] == 20
+        assert stats["total_cells"] == 9 * 20
         assert stats["nonzero_cells"] > 0
         assert stats["density"] > 0
         assert isinstance(stats["sources_used"], list)
@@ -278,7 +277,7 @@ class TestCouplingMatrix:
 class TestSetupDeltaCoverage:
     """任意单症状产出 SetupDelta 覆盖全部 23 参数。"""
 
-    def test_every_single_symptom_covers_23_params(self, default_setup) -> None:
+    def test_every_single_symptom_covers_20_params(self, default_setup) -> None:
         """每个单症状（强度 3）的 SetupDelta 必须覆盖全部 23 参数。"""
         for sym in Symptom:
             result = generate_suggestion(
@@ -496,17 +495,29 @@ class TestTelemetryGain:
             assert max(diffs) > 1e-6, f"weather={wet_str!r} 未触发衰减"
 
     def test_wet_weather_numeric_m_weather(self, default_setup) -> None:
-        """m_weather >= 1（数值）触发湿地衰减。"""
+        """m_weather=3（小雨）触发湿地衰减（官方枚举 ≥3 才是湿地）。"""
         symptoms = [("understeer", 3)]
         r_dry = generate_suggestion(symptoms, default_setup, "t", None)
         r_wet = generate_suggestion(
-            symptoms, default_setup, "t", {"m_weather": 1}
+            symptoms, default_setup, "t", {"m_weather": 3}
         )
         diffs = [
             abs(r_dry["setup_delta"][p] - r_wet["setup_delta"][p])
             for p in PARAM_NAMES
         ]
-        assert max(diffs) > 1e-6, "m_weather=1 未触发衰减"
+        assert max(diffs) > 1e-6, "m_weather=3 未触发衰减"
+
+    def test_light_cloud_weather_is_dry(self, default_setup) -> None:
+        """m_weather=1（轻云）**干地**：与无遥测结果一致（回归防线）。
+
+        曾把 >=1 判为湿地 → 轻云干地被乘 0.7 保守系数，建议被无谓削弱。
+        """
+        symptoms = [("understeer", 3)]
+        r_none = generate_suggestion(symptoms, default_setup, "t", None)
+        r_cloud = generate_suggestion(
+            symptoms, default_setup, "t", {"m_weather": 1}
+        )
+        assert r_none["setup_delta"] == r_cloud["setup_delta"]
 
     def test_clear_weather_no_gain(self, default_setup) -> None:
         """晴天（m_weather=0）不衰减。"""
@@ -559,45 +570,6 @@ class TestConfidence:
 # ===========================================================================
 # 10. 规则库
 # ===========================================================================
-class TestRules:
-    """规则库校验。"""
-
-    def test_validate_rules_passes(self) -> None:
-        """validate_rules 通过。"""
-        validate_rules()
-
-    def test_rule_count_is_15(self) -> None:
-        """规则数 == 15（task-60 扩展）。"""
-        rules = get_all_rules()
-        assert len(rules) == 15
-
-    def test_every_rule_covers_23_params(self) -> None:
-        """每条规则 delta_table 覆盖 23 参数。"""
-        rules = get_all_rules()
-        expected = set(PARAM_NAMES)
-        for sym, rule in rules.items():
-            assert set(rule["delta_table"].keys()) == expected, (
-                f"规则 {sym!r} delta_table 参数集不匹配"
-            )
-
-    def test_get_rule_known(self) -> None:
-        """get_rule 已知症状返回规则。"""
-        rule = get_rule("understeer")
-        assert rule is not None
-        assert rule["symptom"] == "understeer"
-        assert rule["name_zh"] == "转向不足"
-
-    def test_get_rule_unknown_returns_none(self) -> None:
-        """get_rule 未知症状返回 None。"""
-        assert get_rule("nonexistent") is None
-
-    def test_rule_source_nonempty(self) -> None:
-        """每条规则 source 非空。"""
-        rules = get_all_rules()
-        for sym, rule in rules.items():
-            assert rule["source"], f"规则 {sym!r} source 为空"
-
-
 # ===========================================================================
 # 11. 引擎自校验
 # ===========================================================================
@@ -620,7 +592,7 @@ class TestEngineSelfValidation:
         assert "confidence" in result
         assert "summary" in result
         assert result["track_id"] == "suzuka"
-        assert len(result["parameters"]) == 21
+        assert len(result["parameters"]) == 20
 
     def test_summary_zero_dx(self, default_setup) -> None:
         """无有效症状时摘要含「无调整建议」。"""

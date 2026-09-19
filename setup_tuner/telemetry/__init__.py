@@ -11,6 +11,7 @@
 
 from __future__ import annotations
 
+from .lap_aggregator import LapAggregator
 from .listener import (
     DEFAULT_HOST,
     DEFAULT_PORT,
@@ -30,11 +31,13 @@ from .packets import (
     parse_car_telemetry,
     parse_header,
     parse_lap_data,
+    parse_motion_ex,
     parse_packet,
     parse_session,
 )
 from .simulator import TelemetrySimulator, generate_lap_snapshot
 from .stream import TelemetryStream
+from .style_extractor import STYLE_DIMS, StyleExtractor
 
 __all__ = [
     # packets
@@ -48,6 +51,7 @@ __all__ = [
     "parse_car_setups",
     "parse_car_telemetry",
     "parse_car_status",
+    "parse_motion_ex",
     "packet_name",
     "HEADER_SIZE",
     "NUM_CARS",
@@ -59,6 +63,11 @@ __all__ = [
     "DEFAULT_PORT",
     # stream
     "TelemetryStream",
+    # lap aggregator
+    "LapAggregator",
+    # style extractor
+    "StyleExtractor",
+    "STYLE_DIMS",
     # simulator
     "TelemetrySimulator",
     "generate_lap_snapshot",

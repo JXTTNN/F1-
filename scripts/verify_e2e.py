@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """端到端启动验证：启动F1OPT.exe，等待API就绪，验证赛道图API返回正确数据。"""
 import subprocess
+import sys
 import time
 import urllib.request
-import sys
 from pathlib import Path
 
-exe_path = Path("D:/F1OPT-Test/dist/F1OPT.exe")
+# 仓库根目录（本脚本位于 <root>/scripts/），避免硬编码绝对路径
+ROOT = Path(__file__).resolve().parents[1]
+exe_path = ROOT / "dist" / "f1opt" / "f1opt.exe"
 work_dir = exe_path.parent
 
 print(f"启动 {exe_path}...")

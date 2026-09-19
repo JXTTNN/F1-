@@ -1,17 +1,27 @@
 #!/usr/bin/env python3
 """验证所有24条赛道的弯道坐标是否落在赛道线上。"""
-import sys
 import math
+import sys
 from pathlib import Path
 
+# 仓库根目录（本脚本位于 <root>/scripts/），避免硬编码绝对路径
+ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-sys.path.insert(0, "D:/F1OPT-Test/legacy")
+sys.path.insert(0, str(ROOT / "legacy"))
 from convert_track_svgs import (
-    path_to_points, scale_points, download_svg, extract_path_d,
-    CANVAS_W, CANVAS_H, MARGIN, TRACK_LAYOUT_MAP, TRACK_CORNERS_COUNT, OUTPUT_DIR,
+    CANVAS_H,
+    CANVAS_W,
+    MARGIN,
+    TRACK_LAYOUT_MAP,
+    download_svg,
+    extract_path_d,
+    path_to_points,
+    scale_points,
 )
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "setup_tuner" / "domain"))
 from _track_anchors import TRACK_ANCHORS
+
 
 def min_dist_to_track(pt, scaled_points):
     """计算点到赛道线的最小距离。"""
@@ -36,7 +46,7 @@ for tid in sorted(TRACK_ANCHORS.keys()):
 
     corners = TRACK_ANCHORS[tid]
     max_dist = 0
-    for cn, (cx, cy) in corners.items():
+    for _cn, (cx, cy) in corners.items():
         d = min_dist_to_track((cx, cy), scaled_points)
         if d > max_dist:
             max_dist = d

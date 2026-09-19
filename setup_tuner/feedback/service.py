@@ -93,8 +93,8 @@ class FeedbackService:
             track_id: 赛道标识。
             corner_number: 弯道编号（1-based）；``None`` 表示全局症状
                 （如直道刮底、胎耗偏高、直道速度低、圈速不高）。
-            symptom: 12 症状标识之一（字符串值）。
-            strength: 强度 0–5，默认 3。
+            symptom: 症状标识之一（字符串值）。
+            strength: 强度 1–3（1 轻微 / 2 明显 / 3 严重），默认 2。
             setup_id: 关联的调教快照 id（可选）。
 
         Returns:
@@ -122,9 +122,9 @@ class FeedbackService:
     # ------------------------------------------------------------------
     # 查询
     # ------------------------------------------------------------------
-    def get_feedbacks(self, track_id: str) -> list[dict[str, Any]]:
-        """查询某赛道的全部反馈列表（按 created_at 升序）。"""
-        return self._store.get_feedbacks(track_id)
+    def get_feedbacks(self, track_id: str, limit: int | None = None) -> list[dict[str, Any]]:
+        """查询某赛道的反馈列表（按 created_at 升序；limit=取最近 N 条）。"""
+        return self._store.get_feedbacks(track_id, limit=limit)
 
     def get_corner_feedbacks(
         self, track_id: str,

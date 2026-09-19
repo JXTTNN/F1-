@@ -13,21 +13,30 @@
     - 6 条手工录入赛道的弯道序列（melbourne / suzuka / monaco / silverstone /
       monza / spa）核对自 ``legacy/f1opt/data/corners.py`` 的手填数据
       （弯角编号 / 名称 / 类型 / apex 速度）。
-    - 其余 18 条赛道的弯道序列由 :func:`_synthesize_corners` 基于赛道特征合成
+    - 其余 18 条赛道的逐弯元数据由 :mod:`_turn_data` 按游内弯号提供（task-63）
       （量级准确，弯角名称用编号占位）。
-    - ``udp_track_id`` 为 F1 25 UDP Session 包 ``m_trackId`` 枚举值；
-      legacy 无明确映射表，本版按赛历轮次顺序分配（round_number - 1），
-      **需对照 F1 25 官方 UDP 规范 m_trackId 枚举校准**。
+    - ``udp_track_id`` 为 EA UDP 规范 Session 包 ``m_trackId`` 枚举值。
+      取值来自官方枚举（F1 22–25 一致，由 f1-game-packet-parser 的 ``TrackId``
+      枚举、raweceek f1-22-udp 附录、f1-telemetry-go ``tracks.md`` 三处交叉核对）：
+      ``0 Melbourne / 2 Shanghai / 3 Sakhir / 4 Catalunya / 5 Monaco / 6 Montreal /
+      7 Silverstone / 9 Hungaroring / 10 Spa / 11 Monza / 12 Marina Bay /
+      13 Suzuka / 14 Yas Marina / 15 COTA / 16 Interlagos / 17 Red Bull Ring /
+      19 Mexico City / 20 Baku / 26 Zandvoort / 29 Jeddah / 30 Miami /
+      31 Las Vegas / 32 Losail``。
+      **不再使用「赛历轮次 - 1」的占位分配**（那会让 24 条赛道里 20 条认错赛道）。
+      ``madrid``（F1 25 2026 Season Pack 新增的 Madring）官方枚举尚无公开值，
+      暂按 33 并记入 ``UDP_TRACK_ID_UNVERIFIED``，待官方规范确认后更正。
     - 弯道锚点 (anchor_x / anchor_y) 优先取自
       ``legacy/f1opt/data/track_maps/__init__.py`` 中各赛道 ``corners`` 的真实
       像素坐标（由 :func:`_apply_real_anchors` 用 ``x_px/canvas_width``、
       ``y_px/canvas_height`` 归一化到 [0, 1]）。未在 track_maps 中出现的弯道
       退回 :func:`_estimate_anchor` 的椭圆分布估算。
  
- SVG 资产：24 条赛道 SVG 由 ``scripts/generate_track_svgs.py`` 从
- ``legacy/f1opt/data/track_maps`` 的 ``control_points`` / ``corners`` 重新生成
- （Catmull-Rom 平滑 path + 内外偏移线 + 起点红块 + 弯道圆圈），输出到
- ``setup_tuner/ui/tracks/``，文件名 = track_id（如 ``suzuka.svg``）。
+SVG 资产：24 条赛道 SVG 由 ``scripts/convert_track_svgs.py`` 从
+``julesr0y/f1-circuits-svg`` 的真实赛道 SVG 提取并归一化到 800×600 画布，
+输出到 ``setup_tuner/ui/tracks/``，文件名 = track_id（如 ``suzuka.svg``）；
+对应的弯道锚点像素坐标由同一脚本生成到 ``_track_anchors.py``。
+各弯道在路径上的弧长占比由 ``scripts/gen_track_arcs.py`` 生成到 ``_track_arcs.py``。
 """
 
 from __future__ import annotations
@@ -38,6 +47,10 @@ from dataclasses import dataclass
 from typing import Literal
 
 from ._track_anchors import TRACK_ANCHORS, TRACK_CANVAS
+from ._turn_data import TURNS as _AUTHORED_TURN_DATA
+
+# UDP m_trackId 尚未经官方规范确认的赛道（用于测试与文档显式标注，避免"看起来已校准"）
+UDP_TRACK_ID_UNVERIFIED: frozenset[str] = frozenset({"madrid"})
 
 # --------------------------------------------------------------------------- #
 # 数据类定义
@@ -192,203 +205,202 @@ def _build_corners(raw: list[_RawCorner]) -> list[Corner]:
     ]
 
 
-def _get_track_type_params(track_type: str) -> tuple[float, float, int]:
-    """根据赛道类型返回 (slow_frac, fast_frac, speed_max)。"""
-    if track_type == "high_speed_low_downforce":
-        return 0.25, 0.45, 280
-    if track_type == "street":
-        return 0.55, 0.10, 200
-    if track_type == "high_downforce":
-        return 0.40, 0.15, 230
-    if track_type == "mixed":
-        return 0.35, 0.25, 270
-    return 0.33, 0.22, 250  # medium
-
-
-def _synthesize_corners(track_type: str, n_corners: int) -> list[Corner]:
-    """为未手工录入的赛道合成弯道数据（基于赛道特征）。
-
-    核对自 legacy/f1opt/data/corners.py 的 :func:`generate_corner_profile`
-    合成逻辑（弯道类型分布 + apex 速度估算）。弯角名称用编号占位
-    （"Corner N"），非真实赛道图名称。
-
-    速度量级基于 F1 侧向加速度极限（~1.5g），量级准确但非 telemetry 实测。
-    """
-    # 赛道类型决定弯道速度分布（与 legacy generate_corner_profile 一致）
-    slow_frac, fast_frac, speed_max = _get_track_type_params(track_type)
-
-    n_slow = max(1, round(n_corners * slow_frac))
-    n_fast = max(1, round(n_corners * fast_frac))
-    n_med = max(1, n_corners - n_slow - n_fast)
-
-    # 交错分布弯道类型（避免同类聚集，与 legacy 一致）
-    types: list[str] = []
-    pool = (["slow"] * n_slow) + (["medium"] * n_med) + (["fast"] * n_fast)
-    while pool:
-        for t in ("slow", "medium", "fast"):
-            if t in pool:
-                types.append(t)
-                pool.remove(t)
-                break
-    types = types[:n_corners]
-    while len(types) < n_corners:
-        types.append("medium")
-
-    corners: list[Corner] = []
-    for i in range(n_corners):
-        t = types[i]
-        if t == "slow":
-            speed = 75 + (i * 7) % 30          # 75-105
-        elif t == "medium":
-            speed = 110 + (i * 13) % 80        # 110-190
-        else:
-            speed = 200 + (i * 17) % (speed_max - 200 + 1)  # 200-speed_max
-        corners.append(Corner(
-            number=i + 1,
-            name=f"Corner {i + 1}",
-            corner_type=t,  # type: ignore[arg-type]
-            speed_kmh=float(speed),
-            anchor=_estimate_anchor(i + 1, n_corners),
-        ))
-    return corners
-
-
 # --------------------------------------------------------------------------- #
 # 6 条手工录入赛道的弯道原始数据（核对自 legacy corners.py）
 # --------------------------------------------------------------------------- #
 
 def _melbourne_corners() -> list[Corner]:
-    """Albert Park Grand Prix Circuit (5.278 km, 14 弯, medium)。"""
+    """Albert Park Grand Prix Circuit (5.278 km, 14 弯, medium)。
+
+    按 2022 年改建后布局的官方 14 弯（F1 官方 Circuit Guide 逐字：
+    "Number of turns: 14"，并注明已拆除 "the chicane that used to be
+    Turns 9 and 10"）。
+
+    命名口径：F1 官方文档**未**对 Albert Park 逐弯命名，因此没有官方专名的弯
+    一律写作 "Turn N"（这正是官方对无专名弯的写法）。此前用
+    "Turn 3 Right" / "Waite Right" 这类**自造的方向描述**填充是错的：
+    它们既非官方名，又让人误以为是真名。
+    """
     return _build_corners([
-        (1, "Turn 1", "slow", 95),
-        (2, "Turn 2", "medium", 130),
-        (3, "Turn 3", "fast", 230),
-        (4, "Turn 4", "slow", 85),
-        (5, "Turn 5", "medium", 160),
-        (6, "Turn 6", "fast", 210),
-        (7, "Turn 7", "slow", 80),
-        (8, "Turn 8", "medium", 150),
-        (9, "Turn 9", "fast", 220),
-        (10, "Turn 10", "slow", 90),
-        (11, "Turn 11", "fast", 240),
+        (1, "Jones", "slow", 95),
+        (2, "Brabham", "medium", 130),
+        (3, "Turn 3", "slow", 85),
+        (4, "Turn 4", "medium", 160),
+        (5, "Whiteford", "fast", 210),
+        (6, "Turn 6", "medium", 175),
+        (7, "Marina", "fast", 230),
+        (8, "Lauda", "fast", 240),
+        (9, "Waite 1", "fast", 250),
+        (10, "Waite 2", "fast", 220),
+        (11, "Turn 11", "slow", 90),
         (12, "Turn 12", "medium", 155),
-        (13, "Turn 13", "slow", 85),
-        (14, "Turn 14", "medium", 140),
+        (13, "Ascari", "slow", 85),
+        (14, "Stewart", "medium", 140),
     ])
 
 
 def _suzuka_corners() -> list[Corner]:
-    """Suzuka International Racing Course (5.807 km, 18 弯, mixed)。"""
+    """Suzuka International Racing Course (5.807 km, 18 弯, mixed)。
+
+    task-64：按 FIA 官方弯号重排 —— T1/T2 First/Second Curve、
+    **T3-T7 Esses（S-Curves，五连弯，T7 即 Dunlop）**、T8/T9 Degner、
+    T10 Curve 10（Degner 与 Hairpin 之间的右弯）、T11 Hairpin、
+    T12 200R、T13/T14 Spoon、T15 130R、T16/T17 Casio Triangle、
+    T18 Final Corner。
+
+    旧数据把 Esses 压缩成 T3-T6 四弯、Dunlop 独立成 T7，使 Degner 之后
+    全部弯号前移一位；并用 "Sweep Right"/"Casio Chicane Left" 等
+    不规范命名填充。锚点取自 _track_anchors（真实 SVG 投影）。
+    """
     return _build_corners([
-        (1, "First", "fast", 230),
-        (2, "S-Curves entry", "medium", 150),
-        (3, "S-Curves", "medium", 170),
-        (4, "S-Curves", "medium", 175),
-        (5, "S-Curves exit", "medium", 180),
-        (6, "Dunlop", "medium", 160),
-        (7, "Degner 1", "slow", 95),
-        (8, "Degner 2", "slow", 85),
-        (9, "Hairpin", "slow", 70),
-        (10, "200R", "fast", 210),
-        (11, "Spoon", "medium", 140),
-        (12, "Spoon exit", "medium", 155),
-        (13, "130R", "fast", 295),
-        (14, "Casio Triangle entry", "slow", 80),
-        (15, "Casio Triangle", "slow", 75),
-        (16, "Casio Triangle exit", "slow", 85),
-        (17, "Final", "medium", 165),
-        (18, "Final chicane", "slow", 90),
+        (1, "First Curve", "fast", 230),
+        (2, "Second Curve", "medium", 150),
+        (3, "Esses 1", "medium", 165),
+        (4, "Esses 2", "medium", 175),
+        (5, "Esses 3", "medium", 180),
+        (6, "Esses 4", "medium", 170),
+        (7, "Dunlop Curve", "fast", 240),
+        (8, "Degner 1", "medium", 115),
+        (9, "Degner 2", "slow", 85),
+        (10, "Turn 10", "fast", 210),
+        (11, "Hairpin", "slow", 70),
+        (12, "200R", "fast", 250),
+        (13, "Spoon Curve", "medium", 140),
+        (14, "Spoon Curve 2", "medium", 155),
+        (15, "130R", "fast", 295),
+        (16, "Casio Triangle (Right)", "slow", 75),
+        (17, "Casio Triangle (Left)", "slow", 80),
+        (18, "Final Corner", "medium", 140),
     ])
 
 
 def _monaco_corners() -> list[Corner]:
-    """Circuit de Monaco (3.337 km, 19 弯, street)。"""
+    """Circuit de Monaco (3.337 km, 19 弯, street)。
+
+    task-64：按 FIA 官方弯号重排 —— T1 Sainte Devote、T2 Beau Rivage、
+    T3 Massenet、T4 Casino Square、T5 Mirabeau Haute、
+    **T6 Grand Hotel Hairpin（全场最慢，45 km/h）**、T7 Mirabeau Bas、
+    T8 Portier、T9 Tunnel、T10/T11 Nouvelle Chicane、T12 Tabac、
+    T13-T16 Swimming Pool（两段 chicane，T13/14 = Louis Chiron）、
+    T17 La Rascasse、T18/T19 Anthony Noghes。
+
+    旧数据把 Mirabeau Bas 排在 T6、Hairpin 排到 T7，使 Portier 之后
+    全部弯号前移一位；并用 "Tunnel entry/exit"、"Piscine entry"、
+    "Rascasse entry" 等占位名替换官方弯名。
+    """
     return _build_corners([
-        (1, "Sainte-Devote", "slow", 80),
+        (1, "Sainte Devote", "slow", 80),
         (2, "Beau Rivage", "medium", 130),
         (3, "Massenet", "medium", 120),
-        (4, "Casino", "medium", 135),
-        (5, "Mirabeau Haut", "slow", 75),
-        (6, "Mirabeau Bas", "slow", 65),
-        (7, "Grand Hotel Hairpin", "slow", 45),
+        (4, "Casino Square", "medium", 135),
+        (5, "Mirabeau Haute", "slow", 75),
+        (6, "Grand Hotel Hairpin", "slow", 45),
+        (7, "Mirabeau Bas", "slow", 65),
         (8, "Portier", "slow", 80),
-        (9, "Tunnel entry", "medium", 145),
-        (10, "Tunnel", "fast", 200),
-        (11, "Tunnel exit", "medium", 155),
-        (12, "Chicane", "slow", 70),
-        (13, "Chicane exit", "slow", 75),
-        (14, "Tabac", "medium", 140),
-        (15, "Piscine entry", "medium", 150),
-        (16, "Piscine", "medium", 135),
-        (17, "Rascasse entry", "slow", 80),
-        (18, "Rascasse", "slow", 70),
-        (19, "Anthony Noghes", "medium", 125),
+        (9, "Tunnel", "fast", 200),
+        (10, "Nouvelle Chicane (Left)", "slow", 70),
+        (11, "Nouvelle Chicane (Right)", "slow", 75),
+        (12, "Tabac", "medium", 140),
+        (13, "Swimming Pool 1 (Louis Chiron)", "medium", 150),
+        (14, "Swimming Pool 2", "medium", 145),
+        (15, "Swimming Pool 3", "medium", 135),
+        (16, "Swimming Pool 4", "medium", 130),
+        (17, "La Rascasse", "slow", 70),
+        (18, "Anthony Noghes 1", "medium", 125),
+        (19, "Anthony Noghes 2", "medium", 120),
     ])
 
 
 def _silverstone_corners() -> list[Corner]:
-    """Silverstone Circuit (5.891 km, 18 弯, mixed)。"""
+    """Silverstone Circuit (5.891 km, 18 弯, mixed)。
+
+    task-64：按 FIA 官方弯号重排（18 弯，全部有专名）——
+    T1 Abbey、T2 Farm、T3 Village、T4 The Loop、T5 Aintree、
+    **T6 Brooklands**、T7 Luffield、T8 Woodcote、**T9 Copse**、
+    T10-T14 Maggotts/Becketts/Chapel（五连弯）、T15 Stowe、T16 Vale、
+    T17/T18 Club。
+
+    旧数据把 "Wellington Straight"（直道，**并非弯道**）当作 T6 占位，
+    使 Brooklands 之后全部弯号后移一位（Copse 被误排为 T10 而非 T9）。
+    """
     return _build_corners([
         (1, "Abbey", "fast", 240),
         (2, "Farm", "medium", 175),
         (3, "Village", "medium", 140),
         (4, "The Loop", "slow", 90),
         (5, "Aintree", "medium", 165),
-        (6, "Wellington Straight", "fast", 280),
-        (7, "Brooklands", "slow", 95),
-        (8, "Luffield", "medium", 130),
-        (9, "Woodcote", "fast", 230),
-        (10, "Copse", "fast", 245),
-        (11, "Maggotts 1", "fast", 220),
-        (12, "Maggotts 2", "fast", 210),
-        (13, "Becketts 1", "medium", 175),
-        (14, "Becketts 2", "medium", 160),
-        (15, "Chapel", "fast", 215),
-        (16, "Stowe", "medium", 165),
-        (17, "Vale", "slow", 90),
-        (18, "Club", "medium", 155),
+        (6, "Brooklands", "slow", 95),
+        (7, "Luffield", "medium", 130),
+        (8, "Woodcote", "fast", 230),
+        (9, "Copse", "fast", 245),
+        (10, "Maggotts 1", "fast", 220),
+        (11, "Maggotts 2", "fast", 210),
+        (12, "Becketts 1", "medium", 175),
+        (13, "Becketts 2", "medium", 170),
+        (14, "Chapel", "fast", 215),
+        (15, "Stowe", "medium", 165),
+        (16, "Vale", "slow", 90),
+        (17, "Club 1", "medium", 150),
+        (18, "Club 2", "medium", 155),
     ])
 
 
 def _monza_corners() -> list[Corner]:
-    """Autodromo Nazionale Monza (5.793 km, 11 弯, high_speed_low_downforce)。"""
+    """Autodromo Nazionale Monza (5.793 km, 11 弯, high_speed_low_downforce)。
+
+    task-64：按 FIA 官方弯号重排 —— T1/T2 Variante del Rettifilo（右-左）、
+    **T3 Curva Grande**、T4/T5 Variante della Roggia（左-右）、
+    T6/T7 Curve di Lesmo、T8/T9/T10 Variante Ascari（左-右-左）、
+    T11 Curva Alboreto（Parabolica）。
+
+    旧数据把 Curva Grande 误排为 T2、Lesmo 整体前移到 T4/T5，并用人造拆分
+    "Variante Ascari entry/exit"、"Parabolica entry" 补足 11 弯，导致
+    Ascari 与 Parabolica 的真实弯号整体偏移。
+    """
     return _build_corners([
-        (1, "Prima Variante", "slow", 85),
-        (2, "Variante della Roggia", "slow", 90),
-        (3, "Curva Biassono", "medium", 165),
-        (4, "Curva del Serraglio", "fast", 230),
-        (5, "Variante Ascari entry", "slow", 95),
-        (6, "Variante Ascari", "slow", 80),
-        (7, "Variante Ascari exit", "medium", 140),
-        (8, "Curva Parabolica entry", "medium", 175),
-        (9, "Curva Parabolica", "fast", 215),
-        (10, "Curva Grande", "fast", 250),
-        (11, "Prima Variante approach", "slow", 85),
+        (1, "Variante del Rettifilo 1", "slow", 80),
+        (2, "Variante del Rettifilo 2", "slow", 87),
+        (3, "Curva Grande", "fast", 250),
+        (4, "Variante della Roggia 1", "slow", 85),
+        (5, "Variante della Roggia 2", "slow", 80),
+        (6, "Lesmo 1", "medium", 140),
+        (7, "Lesmo 2", "medium", 145),
+        (8, "Variante Ascari 1", "slow", 115),
+        (9, "Variante Ascari 2", "medium", 110),
+        (10, "Variante Ascari 3", "medium", 120),
+        (11, "Curva Alboreto (Parabolica)", "fast", 200),
     ])
 
 
 def _spa_corners() -> list[Corner]:
-    """Circuit de Spa-Francorchamps (7.004 km, 19 弯, mixed)。"""
+    """Circuit de Spa-Francorchamps (7.004 km, 19 弯, mixed)。
+
+    task-64：按 FIA 官方弯号重排（19 弯，10 左 9 右）。
+    Eau Rouge/Raidillon 计为 T2-T4（左-右-左），Kemmel 直道上的轻微折角
+    **不计**为弯道；旧数据误将 "Kemmel Straight" 当作 T4，并用
+    "La Source/Eau Rouge/Kemmel approach" 三个虚构弯位补足 19 弯，
+    导致真实弯号整体前移（Bus Stop 被压到 T14-T16）并破坏回绕。
+    """
     return _build_corners([
         (1, "La Source", "slow", 85),
         (2, "Eau Rouge", "fast", 260),
-        (3, "Raidillon", "fast", 270),
-        (4, "Kemmel Straight", "fast", 280),
-        (5, "Les Combes", "slow", 95),
-        (6, "Malmedy", "medium", 145),
-        (7, "Rivage", "slow", 90),
-        (8, "Pouhon", "fast", 225),
-        (9, "Fagnes", "medium", 155),
-        (10, "Campus", "slow", 88),
-        (11, "Stavelot", "fast", 235),
-        (12, "Blanchimont 1", "fast", 275),
-        (13, "Blanchimont 2", "fast", 280),
-        (14, "Bus Stop entry", "slow", 82),
-        (15, "Bus Stop", "slow", 78),
-        (16, "Bus Stop exit", "slow", 85),
-        (17, "La Source approach", "medium", 160),
-        (18, "Eau Rouge approach", "fast", 255),
-        (19, "Kemmel approach", "fast", 265),
+        (3, "Raidillon Right", "fast", 270),
+        (4, "Raidillon Left", "fast", 280),
+        (5, "Les Combes Right", "slow", 95),
+        (6, "Les Combes Left", "medium", 145),
+        (7, "Malmedy", "fast", 240),
+        (8, "Bruxelles (Rivage)", "slow", 90),
+        (9, "Speakers Corner", "fast", 225),
+        (10, "Pouhon 1", "fast", 270),
+        (11, "Pouhon 2", "fast", 280),
+        (12, "Fagnes Right", "medium", 155),
+        (13, "Fagnes Left", "medium", 160),
+        (14, "Stavelot (Campus)", "fast", 235),
+        (15, "Curve Paul Frere", "fast", 275),
+        (16, "Blanchimont 1", "fast", 305),
+        (17, "Blanchimont 2", "fast", 310),
+        (18, "Bus Stop Right", "slow", 78),
+        (19, "Bus Stop Left", "slow", 75),
     ])
 
 
@@ -404,12 +416,22 @@ _MANUAL_CORNER_BUILDERS: dict[str, Callable[[], list[Corner]]] = {
 
 
 def _make_corners(track_id: str, track_type: str, n_corners: int) -> list[Corner]:
-    """获取赛道弯道列表：手工录入优先，否则合成；再用真实坐标校准锚点。"""
+    """获取赛道弯道列表：手工录入优先，其次逐弯元数据表；再用真实坐标校准锚点。
+
+    task-63：全部 24 条赛道的逐弯元数据均已真实化（:mod:`_turn_data`），
+    ``_synthesize_corners`` 合成路径已删除（"Corner N" 占位数据是
+    连续弯标号错误之外的另一处假数据源）。
+    """
     builder = _MANUAL_CORNER_BUILDERS.get(track_id)
     if builder is not None:
         corners = builder()
-    else:
-        corners = _synthesize_corners(track_type, n_corners)
+    elif track_id in _AUTHORED_TURN_DATA:
+        corners = _build_corners([
+            (i + 1, name, ct, spd)
+            for i, (name, ct, spd) in enumerate(_AUTHORED_TURN_DATA[track_id])
+        ])
+    else:  # pragma: no cover - 防御分支（24 赛道已全覆盖）
+        raise KeyError(f"赛道 {track_id!r} 缺少弯道元数据（_turn_data.TURNS）")
     return _apply_real_anchors(track_id, corners)
 
 
@@ -417,8 +439,15 @@ def _make_corners(track_id: str, track_type: str, n_corners: int) -> list[Corner
 # 24 条 F1 2026 赛历赛道（按赛历轮次顺序）
 # --------------------------------------------------------------------------- #
 # 元数据核对自 legacy/f1opt/data/tracks.py ALL_TRACKS。
-# udp_track_id 按赛历轮次顺序分配（round_number - 1），需对照 F1 25
-# 官方 UDP 规范 m_trackId 枚举校准。
+# udp_track_id 取自 EA F1 25 UDP 规范 Session 包 ``m_trackId`` 官方枚举
+# （Appendices → Track IDs），**不是**赛历轮次顺序——
+# 早期曾按 ``round_number - 1`` 分配，导致 24 条里 20 条认错赛道。
+# 官方枚举值：0 Melbourne / 2 Shanghai / 3 Sakhir / 4 Catalunya / 5 Monaco /
+# 6 Montreal / 7 Silverstone / 9 Hungaroring / 10 Spa / 11 Monza /
+# 12 Singapore / 13 Suzuka / 14 Abu Dhabi / 15 Texas / 16 Brazil /
+# 17 Austria / 19 Mexico / 20 Baku / 26 Zandvoort / 29 Jeddah / 30 Miami /
+# 31 Las Vegas / 32 Losail；33 为 F1 26 新增的马德里（Madring）。
+# 未收录：27 Imola（F1 25 有、F1 26 赛历无）、39/40/41 为反向赛道变体。
 # svg_path 相对 setup_tuner/ui/ 目录。
 
 ALL_TRACKS: list[Track] = [
@@ -443,7 +472,7 @@ ALL_TRACKS: list[Track] = [
         track_type="medium",
         length_m=5451.0,
         corners=_make_corners("shanghai", "medium", 16),
-        udp_track_id=1,
+        udp_track_id=2,
         svg_path="tracks/shanghai.svg",
     ),
     Track(
@@ -455,7 +484,7 @@ ALL_TRACKS: list[Track] = [
         track_type="mixed",
         length_m=5807.0,
         corners=_make_corners("suzuka", "mixed", 18),
-        udp_track_id=2,
+        udp_track_id=13,
         svg_path="tracks/suzuka.svg",
     ),
     Track(
@@ -479,7 +508,7 @@ ALL_TRACKS: list[Track] = [
         track_type="high_speed_low_downforce",
         length_m=6174.0,
         corners=_make_corners("jeddah", "high_speed_low_downforce", 27),
-        udp_track_id=4,
+        udp_track_id=29,
         svg_path="tracks/jeddah.svg",
     ),
     Track(
@@ -491,7 +520,7 @@ ALL_TRACKS: list[Track] = [
         track_type="street",
         length_m=5412.0,
         corners=_make_corners("miami", "street", 19),
-        udp_track_id=5,
+        udp_track_id=30,
         svg_path="tracks/miami.svg",
     ),
     Track(
@@ -515,7 +544,7 @@ ALL_TRACKS: list[Track] = [
         track_type="street",
         length_m=3337.0,
         corners=_make_corners("monaco", "street", 19),
-        udp_track_id=7,
+        udp_track_id=5,
         svg_path="tracks/monaco.svg",
     ),
     Track(
@@ -527,7 +556,7 @@ ALL_TRACKS: list[Track] = [
         track_type="medium",
         length_m=4657.0,
         corners=_make_corners("barcelona", "medium", 14),
-        udp_track_id=8,
+        udp_track_id=4,
         svg_path="tracks/barcelona.svg",
     ),
     Track(
@@ -539,7 +568,7 @@ ALL_TRACKS: list[Track] = [
         track_type="medium",
         length_m=4318.0,
         corners=_make_corners("spielberg", "medium", 10),
-        udp_track_id=9,
+        udp_track_id=17,
         svg_path="tracks/spielberg.svg",
     ),
     Track(
@@ -551,7 +580,7 @@ ALL_TRACKS: list[Track] = [
         track_type="mixed",
         length_m=5891.0,
         corners=_make_corners("silverstone", "mixed", 18),
-        udp_track_id=10,
+        udp_track_id=7,
         svg_path="tracks/silverstone.svg",
     ),
     Track(
@@ -563,7 +592,7 @@ ALL_TRACKS: list[Track] = [
         track_type="mixed",
         length_m=7004.0,
         corners=_make_corners("spa", "mixed", 19),
-        udp_track_id=11,
+        udp_track_id=10,
         svg_path="tracks/spa.svg",
     ),
     Track(
@@ -575,7 +604,7 @@ ALL_TRACKS: list[Track] = [
         track_type="high_downforce",
         length_m=4381.0,
         corners=_make_corners("hungaroring", "high_downforce", 14),
-        udp_track_id=12,
+        udp_track_id=9,
         svg_path="tracks/hungaroring.svg",
     ),
     Track(
@@ -587,7 +616,7 @@ ALL_TRACKS: list[Track] = [
         track_type="high_downforce",
         length_m=4259.0,
         corners=_make_corners("zandvoort", "high_downforce", 14),
-        udp_track_id=13,
+        udp_track_id=26,
         svg_path="tracks/zandvoort.svg",
     ),
     Track(
@@ -599,7 +628,7 @@ ALL_TRACKS: list[Track] = [
         track_type="high_speed_low_downforce",
         length_m=5793.0,
         corners=_make_corners("monza", "high_speed_low_downforce", 11),
-        udp_track_id=14,
+        udp_track_id=11,
         svg_path="tracks/monza.svg",
     ),
     Track(
@@ -611,7 +640,7 @@ ALL_TRACKS: list[Track] = [
         track_type="street",
         length_m=5416.0,
         corners=_make_corners("madrid", "street", 22),
-        udp_track_id=15,
+        udp_track_id=33,
         svg_path="tracks/madrid.svg",
     ),
     Track(
@@ -623,7 +652,7 @@ ALL_TRACKS: list[Track] = [
         track_type="high_speed_low_downforce",
         length_m=6003.0,
         corners=_make_corners("baku", "high_speed_low_downforce", 20),
-        udp_track_id=16,
+        udp_track_id=20,
         svg_path="tracks/baku.svg",
     ),
     Track(
@@ -635,7 +664,7 @@ ALL_TRACKS: list[Track] = [
         track_type="street",
         length_m=4940.0,
         corners=_make_corners("singapore", "street", 19),
-        udp_track_id=17,
+        udp_track_id=12,
         svg_path="tracks/singapore.svg",
     ),
     Track(
@@ -647,7 +676,7 @@ ALL_TRACKS: list[Track] = [
         track_type="mixed",
         length_m=5513.0,
         corners=_make_corners("austin", "mixed", 20),
-        udp_track_id=18,
+        udp_track_id=15,
         svg_path="tracks/austin.svg",
     ),
     Track(
@@ -671,7 +700,7 @@ ALL_TRACKS: list[Track] = [
         track_type="mixed",
         length_m=4309.0,
         corners=_make_corners("sao_paulo", "mixed", 15),
-        udp_track_id=20,
+        udp_track_id=16,
         svg_path="tracks/sao_paulo.svg",
     ),
     Track(
@@ -683,7 +712,7 @@ ALL_TRACKS: list[Track] = [
         track_type="high_speed_low_downforce",
         length_m=6201.0,
         corners=_make_corners("las_vegas", "high_speed_low_downforce", 17),
-        udp_track_id=21,
+        udp_track_id=31,
         svg_path="tracks/las_vegas.svg",
     ),
     Track(
@@ -695,7 +724,7 @@ ALL_TRACKS: list[Track] = [
         track_type="medium",
         length_m=5419.0,
         corners=_make_corners("lusail", "medium", 16),
-        udp_track_id=22,
+        udp_track_id=32,
         svg_path="tracks/lusail.svg",
     ),
     Track(
@@ -707,7 +736,7 @@ ALL_TRACKS: list[Track] = [
         track_type="medium",
         length_m=5281.0,
         corners=_make_corners("yas_marina", "medium", 16),
-        udp_track_id=23,
+        udp_track_id=14,
         svg_path="tracks/yas_marina.svg",
     ),
 ]

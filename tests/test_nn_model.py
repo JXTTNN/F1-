@@ -13,7 +13,9 @@
 
 from __future__ import annotations
 
+import threading
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -54,31 +56,31 @@ class TestNormalizeSymptoms:
         """已知症状归一化到 [0, 1]。"""
         # 用前 12 个症状（索引 0-11，避免越界）
         symptom_keys = [s.value for s in Symptom][:12]
-        vec = _normalize_symptoms([(symptom_keys[0], 5)])
-        assert vec[0] == pytest.approx(1.0)  # 5/5
+        vec = _normalize_symptoms([(symptom_keys[0], 3)])
+        assert vec[0] == pytest.approx(1.0)  # 3/3
         # 其余为 0
         assert all(vec[i] == 0.0 for i in range(1, 12))
 
     def test_intensity_normalization(self) -> None:
-        """强度 0-5 归一化到 0-1。"""
+        """强度 1-3 归一化到 0-1（task-61）。"""
         symptom_keys = [s.value for s in Symptom][:12]
-        vec = _normalize_symptoms([(symptom_keys[0], 3)])
-        assert vec[0] == pytest.approx(0.6)  # 3/5
+        vec = _normalize_symptoms([(symptom_keys[0], 2)])
+        assert vec[0] == pytest.approx(2 / 3)  # 2/3
 
     def test_unknown_symptom_ignored(self) -> None:
         """未知症状 key 被忽略。"""
-        vec = _normalize_symptoms([("nonexistent", 5)])
+        vec = _normalize_symptoms([("nonexistent", 3)])
         assert all(v == 0.0 for v in vec)
 
     def test_multiple_symptoms(self) -> None:
         """多症状叠加到各自位置。"""
         symptom_keys = [s.value for s in Symptom][:12]
         vec = _normalize_symptoms([
-            (symptom_keys[0], 5), (symptom_keys[1], 2), (symptom_keys[5], 4),
+            (symptom_keys[0], 3), (symptom_keys[1], 1), (symptom_keys[5], 2),
         ])
         assert vec[0] == pytest.approx(1.0)
-        assert vec[1] == pytest.approx(0.4)
-        assert vec[5] == pytest.approx(0.8)
+        assert vec[1] == pytest.approx(1 / 3)
+        assert vec[5] == pytest.approx(2 / 3)
 
 
 # ===========================================================================
@@ -191,27 +193,27 @@ class TestBuildInputVector:
     def _sample_input() -> tuple:
         """构造样本输入。"""
         symptom_keys = [s.value for s in Symptom][:12]
-        symptoms = [(symptom_keys[0], 3), (symptom_keys[5], 4)]
+        symptoms = [(symptom_keys[0], 3), (symptom_keys[5], 2)]
         dx = {"front_grip_req": 5.0, "rear_grip_req": -3.0}
         setup = CarSetup.default().to_dict()
         track_id = "suzuka"
         return symptoms, dx, setup, track_id
 
     def test_input_vector_length(self) -> None:
-        """输入向量长度 = 12 + 9 + 20 + 24 = 65。"""
+        """输入向量长度 = 症状数 + 9 Dx + 参数数 + 24 赛道（全部动态推导）。"""
         symptoms, dx, setup, track_id = self._sample_input()
         vec = build_input_vector(symptoms, dx, setup, track_id)
-        # 实际长度：12 症状 + 9 Dx + 20 参数 + 24 赛道 = 65
-        assert len(vec) == 12 + 9 + len(ALL_SETUP_FIELDS) + 24
+        # 长度随症状/参数枚举动态变化，避免实现演进后静默失配
+        assert len(vec) == nn_model._NUM_SYMPTOMS + 9 + len(ALL_SETUP_FIELDS) + 24
 
     def test_input_vector_components(self) -> None:
         """输入向量含症状、Dx、调教、赛道四段。"""
         symptoms, dx, setup, track_id = self._sample_input()
         vec = build_input_vector(symptoms, dx, setup, track_id)
-        # 症状段（0-11）
-        assert vec[0] == pytest.approx(0.6)  # 3/5
-        # Dx 段（12-20）
-        assert vec[12] != 0.0  # front_grip_req
+        # 症状段（0 .. NUM_SYMPTOMS-1）
+        assert vec[0] == pytest.approx(1.0)  # 3/3
+        # Dx 段紧随症状段
+        assert vec[nn_model._NUM_SYMPTOMS] != 0.0  # front_grip_req
         # 赛道段（最后 24 维）含一个 1.0
         track_part = vec[-24:]
         assert sum(track_part) == 1.0
@@ -219,7 +221,7 @@ class TestBuildInputVector:
     def test_input_vector_empty_inputs(self) -> None:
         """空输入返回合法向量（全默认值）。"""
         vec = build_input_vector([], {}, {}, "suzuka")
-        assert len(vec) == 12 + 9 + len(ALL_SETUP_FIELDS) + 24
+        assert len(vec) == nn_model._NUM_SYMPTOMS + 9 + len(ALL_SETUP_FIELDS) + 24
 
 
 # ===========================================================================
@@ -373,7 +375,7 @@ class TestNNModelManagerInference:
 
     @pytest.mark.skipif(not _TORCH_AVAILABLE, reason="PyTorch 不可用")
     def test_f1setupnet_forward_shape(self) -> None:
-        """F1SetupNet 前向传播：输入 68 维 → 输出 23 维。"""
+        """F1SetupNet 前向传播：输入 _INPUT_SIZE 维 → 输出 _OUTPUT_SIZE 维。"""
         import torch  # type: ignore[import-not-found]
 
         net = F1SetupNet()
@@ -417,6 +419,33 @@ class TestSingletonManager:
         assert mgr1 is not mgr2
         reset_nn_manager()
 
+    def test_get_nn_manager_concurrent_single_instance(self, tmp_path: Path) -> None:
+        """并发首调只构造一个实例（锁 + 双重检查）。
+
+        FastAPI 默认线程池会并发处理请求；若无锁，
+        多个线程可能同时进入 ``_NN_MANAGER is None`` 分支各构造一次。
+        """
+        reset_nn_manager()
+        barrier = threading.Barrier(8)
+        results: list[Any] = []
+        lock = threading.Lock()
+
+        def worker() -> None:
+            barrier.wait()  # 尽量让 8 个线程同时冲进 get_nn_manager
+            mgr = get_nn_manager(weights_path=tmp_path / "w.pt")
+            with lock:
+                results.append(mgr)
+
+        threads = [threading.Thread(target=worker) for _ in range(8)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert len(results) == 8
+        assert all(r is results[0] for r in results), "并发首调返回了不同实例"
+        reset_nn_manager()
+
 
 # ===========================================================================
 # 10. 模块常量
@@ -425,20 +454,22 @@ class TestModuleConstants:
     """模块级常量正确性。"""
 
     def test_input_output_sizes(self) -> None:
-        """输入 68 维，输出 23 维。"""
-        assert nn_model._INPUT_SIZE == 68
-        assert nn_model._OUTPUT_SIZE == 23
+        """输入/输出维度由领域枚举动态推导（症状 15 / 参数 21 / 赛道 24）。"""
+        assert nn_model._INPUT_SIZE == (
+            len(Symptom) + len(nn_model.DIAG_DIMS) + len(ALL_SETUP_FIELDS) + len(ALL_TRACKS)
+        )
+        assert nn_model._OUTPUT_SIZE == len(ALL_SETUP_FIELDS)
 
     def test_component_sizes(self) -> None:
-        """分量维度：12 + 9 + 23 + 24 = 68。"""
-        assert nn_model._NUM_SYMPTOMS == 12
-        assert nn_model._NUM_DIAG_DIMS == 9
-        assert nn_model._NUM_SETUP_PARAMS == 23
-        assert nn_model._NUM_TRACKS == 24
+        """分量维度全部与领域枚举一致（防止硬编码漂移导致 NN 静默失效）。"""
+        assert nn_model._NUM_SYMPTOMS == len(Symptom)
+        assert nn_model._NUM_DIAG_DIMS == len(nn_model.DIAG_DIMS)
+        assert nn_model._NUM_SETUP_PARAMS == len(ALL_SETUP_FIELDS)
+        assert nn_model._NUM_TRACKS == len(ALL_TRACKS)
 
     def test_normalization_constants(self) -> None:
         """归一化常量。"""
-        assert nn_model._SYMPTOM_INTENSITY_MAX == 5.0
+        assert nn_model._SYMPTOM_INTENSITY_MAX == 3.0
         assert nn_model._DX_NORMALIZE_SCALE == 5.0
 
     def test_track_index_built(self) -> None:

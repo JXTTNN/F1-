@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import json
 import os
-import tempfile
 from pathlib import Path
 
 import pytest
@@ -433,6 +432,27 @@ class TestImportLapsFromDirectory:
         assert result[0].lap_number == 1
         assert result[1].lap_number == 3
 
+    def test_corrupted_json_skip_is_logged(self, tmp_path: Path, caplog) -> None:
+        """跳过的损坏 JSON 必须留痕，否则"圈史少几圈"会被误判为数据缺失。"""
+        _write_json_file(tmp_path, "lap_1.json", _make_lap_json(lap_number=1))
+        (tmp_path / "lap_2.json").write_text("{invalid", encoding="utf-8")
+
+        with caplog.at_level("WARNING", logger="setup_tuner.telemetry.importer"):
+            import_laps_from_directory(str(tmp_path))
+
+        logged = [r for r in caplog.records if r.levelno >= 30]
+        assert logged, "损坏 JSON 被静默跳过"
+        assert any("lap_2.json" in r.getMessage() for r in logged)
+
+    def test_clean_directory_has_no_warnings(self, tmp_path: Path, caplog) -> None:
+        """全部文件正常时不应产生 warning 噪声。"""
+        _write_json_file(tmp_path, "lap_1.json", _make_lap_json(lap_number=1))
+
+        with caplog.at_level("WARNING", logger="setup_tuner.telemetry.importer"):
+            import_laps_from_directory(str(tmp_path))
+
+        assert not [r for r in caplog.records if r.levelno >= 30]
+
     def test_only_lap_prefix_files(self, tmp_path: Path) -> None:
         """只加载 lap_*.json 文件，忽略其他文件。"""
         _write_json_file(tmp_path, "lap_1.json", _make_lap_json(lap_number=1))
@@ -452,13 +472,18 @@ class TestImportLapsFromDirectory:
 # 5. 冒烟测试 — 使用真实数据文件
 # ===========================================================================
 class TestSmokeRealData:
-    """使用 D:\\F1TelemetryCollector\\dist\\data 下的真实数据文件做冒烟测试。"""
+    """真实数据冒烟测试（H5 修复：路径改为环境变量驱动）。
 
-    _REAL_DATA_DIR = r"D:\F1TelemetryCollector\dist\data"
+    设置 ``F1OPT_REAL_DATA_DIR`` 指向含 ``lap_*.json`` 的目录即可启用；
+    未设置或目录不存在时干净跳过（CI 中必然跳过，不再指向任何人本机的
+    硬编码路径）。
+    """
+
+    _REAL_DATA_DIR = os.environ.get("F1OPT_REAL_DATA_DIR", "")
 
     @pytest.mark.skipif(
         not os.path.isdir(_REAL_DATA_DIR),
-        reason="真实数据目录不存在",
+        reason="未设置 F1OPT_REAL_DATA_DIR（或目录不存在）",
     )
     def test_import_real_lap_file(self) -> None:
         """冒烟测试：导入真实单圈JSON文件。"""
@@ -474,7 +499,7 @@ class TestSmokeRealData:
 
     @pytest.mark.skipif(
         not os.path.isdir(_REAL_DATA_DIR),
-        reason="真实数据目录不存在",
+        reason="未设置 F1OPT_REAL_DATA_DIR（或目录不存在）",
     )
     def test_import_real_directory(self) -> None:
         """冒烟测试：批量导入真实数据目录。"""
@@ -486,7 +511,7 @@ class TestSmokeRealData:
 
     @pytest.mark.skipif(
         not os.path.isdir(_REAL_DATA_DIR),
-        reason="真实数据目录不存在",
+        reason="未设置 F1OPT_REAL_DATA_DIR（或目录不存在）",
     )
     def test_real_data_to_telemetry_dict(self) -> None:
         """冒烟测试：真实数据转遥测字典。"""

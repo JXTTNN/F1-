@@ -237,8 +237,8 @@ class TestListenerProcess:
             received.append(parsed)
 
         listener.add_handler(handler)
-        # packet_id=0 (Motion) 不在支持的 6 类范围内
-        data = _build_header_only(packet_id=0) + b"\x00" * 64
+        # packet_id=14 (TimeTrial) 不在支持的 15 类范围内
+        data = _build_header_only(packet_id=14) + b"\x00" * 64
         listener._process(data)
         assert len(received) == 0
 

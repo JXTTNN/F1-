@@ -40,9 +40,20 @@ from setup_tuner.domain.symptoms import (
 class TestSetupSchema:
     """20 8调教参数 / 6 大类 schema 校验。"""
 
-    def test_field_count_is_21(self) -> None:
+    def test_field_count_is_20(self) -> None:
         """ALL_SETUP_FIELDS 必须恰好 21 项。"""
-        assert len(ALL_SETUP_FIELDS) == 21
+        assert len(ALL_SETUP_FIELDS) == 20
+
+    def test_no_engine_braking(self) -> None:
+        """F1 2026 车库调教界面**没有引擎制动**——参数全集不得出现。
+
+        engine_braking 在 Packet 5 字节布局中占位、CarStatus 里也有
+        ``m_engineBraking`` 遥测量，但游戏中不可调，故不建模。
+        防回潮：谁把它加回 ALL_SETUP_FIELDS，这条就红。
+        """
+        names = [f.name for f in ALL_SETUP_FIELDS]
+        assert "engine_braking" not in names
+        assert not any("engine" in n for n in names), names
 
     def test_group_count_is_6(self) -> None:
         """ALL_GROUPS 必须恰好 6 大类。"""
@@ -103,13 +114,13 @@ class TestSetupSchema:
             assert f.source, f"参数 {f.name!r} source 为空"
 
     def test_group_field_counts(self) -> None:
-        """6 大类参数数量分布：2/2/4/6/3/4 = 21。"""
+        """6 大类参数数量分布：2/2/4/6/2/4 = 20。"""
         expected = {
             "Aerodynamics": 2,
             "Transmission": 2,
             "Suspension Geometry": 4,
             "Suspension": 6,
-            "Brakes": 3,
+            "Brakes": 2,
             "Tyres": 4,
         }
         for group, count in expected.items():
@@ -175,11 +186,11 @@ class TestValidateValue:
 class TestCarSetup:
     """CarSetup 数据类。"""
 
-    def test_default_has_21_fields(self) -> None:
+    def test_default_has_20_fields(self) -> None:
         """default() 产出 21 字段。"""
         cs = CarSetup.default()
         d = cs.to_dict()
-        assert len(d) == 21
+        assert len(d) == 20
 
     def test_default_values_match_spec(self) -> None:
         """default() 各字段值与 SetupField.default 一致。"""
@@ -198,10 +209,10 @@ class TestCarSetup:
         cs2 = CarSetup.from_dict(d)
         assert cs2.to_dict() == d
 
-    def test_field_names_count_21(self) -> None:
+    def test_field_names_count_20(self) -> None:
         """field_names() 返回 21 个字段名。"""
         cs = CarSetup.default()
-        assert len(cs.field_names()) == 21
+        assert len(cs.field_names()) == 20
 
     def test_diff_detects_changes(self) -> None:
         """diff 应检测出变更字段。"""
@@ -219,11 +230,11 @@ class TestCarSetup:
 # 4. 症状枚举
 # ===========================================================================
 class TestSymptoms:
-    """12 项症状 / 4 类枚举校验。"""
+    """18 项症状 / 4 类枚举校验。"""
 
-    def test_symptom_count_is_15(self) -> None:
-        """Symptom 枚举必须恰好 15 项（task-60 扩展）。"""
-        assert len(list(Symptom)) == 15
+    def test_symptom_count_is_22(self) -> None:
+        """Symptom 枚举必须恰好 22 项（task-82 扩展：18 + 4）。"""
+        assert len(list(Symptom)) == 22
 
     def test_category_count_is_4(self) -> None:
         """SymptomCategory 必须恰好 4 类。"""
@@ -258,29 +269,29 @@ class TestSymptoms:
         assert get_symptom_category(Symptom.TYRE_WEAR) == "global"
 
     def test_get_symptoms_by_category_counts(self) -> None:
-        """4 类症状数量分布：entry=5, apex=3, exit=2, global=5（task-60 扩展）。"""
-        assert len(get_symptoms_by_category(SymptomCategory.ENTRY)) == 5
+        """4 类症状数量分布：entry=6, apex=3, exit=4, global=9（task-82 扩展）。"""
+        assert len(get_symptoms_by_category(SymptomCategory.ENTRY)) == 6
         assert len(get_symptoms_by_category(SymptomCategory.APEX)) == 3
-        assert len(get_symptoms_by_category(SymptomCategory.EXIT)) == 2
-        assert len(get_symptoms_by_category(SymptomCategory.GLOBAL)) == 5
+        assert len(get_symptoms_by_category(SymptomCategory.EXIT)) == 4
+        assert len(get_symptoms_by_category(SymptomCategory.GLOBAL)) == 9
 
     def test_get_symptoms_by_category_string_arg(self) -> None:
         """get_symptoms_by_category 接受字符串参数。"""
         entry = get_symptoms_by_category("entry")
         assert Symptom.UNDERSTEER in entry
-        assert len(entry) == 5
+        assert len(entry) == 6
 
     def test_intensity_constants(self) -> None:
-        """强度范围 0-5，默认 3。"""
-        assert INTENSITY_MIN == 0
-        assert INTENSITY_MAX == 5
-        assert DEFAULT_INTENSITY == 3
+        """强度范围 1-3，默认 2（task-61 三档制）。"""
+        assert INTENSITY_MIN == 1
+        assert INTENSITY_MAX == 3
+        assert DEFAULT_INTENSITY == 2
 
     def test_validate_intensity_valid(self) -> None:
-        """合法强度返回原值。"""
-        assert validate_intensity(0) == 0
+        """合法强度返回原值（1/2/3）。"""
+        assert validate_intensity(1) == 1
+        assert validate_intensity(2) == 2
         assert validate_intensity(3) == 3
-        assert validate_intensity(5) == 5
 
     def test_validate_intensity_invalid(self) -> None:
         """越界强度抛 ValueError。"""
