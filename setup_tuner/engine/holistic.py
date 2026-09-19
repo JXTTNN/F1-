@@ -32,6 +32,7 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from functools import cache
 from math import copysign
@@ -259,6 +260,8 @@ _CONFLICT_MIN = 0.05
 
 #: 参数 → 中文标签（取自 setup 字段定义，避免另造一套名字）。
 _PARAM_LABELS: dict[str, str] = {f.name: f.label_zh for f in ALL_SETUP_FIELDS}
+#: 参数 → 字段定义（预算回收时要回到合法档位）
+_FIELD_SPECS: dict[str, Any] = {f.name: f for f in ALL_SETUP_FIELDS}
 
 
 def _param_intent(class_dx: dict[str, float]) -> dict[str, float]:
@@ -451,9 +454,22 @@ _RAKE_CHANGE_WINDOW = 3.0
 #: （路肩不得不压 / 刮底——先保证车能吃路肩，再谈其它）。
 _RIDE_HEIGHT_GUARD_REQ = 0.15
 
+#: **机械抓地类参数**（悬挂几何 + 悬挂刚度 + 防倾杆）。
+#: 这些是"慢弯/牵引型赛道"的主要手段；只靠翼片解决慢弯在物理上低效。
+_MECHANICAL_PARAMS: tuple[str, ...] = (
+    "front_camber", "rear_camber", "front_toe", "rear_toe",
+    "front_suspension", "rear_suspension",
+    "front_anti_roll_bar", "rear_anti_roll_bar",
+)
+#: 触发「机械抓地参与度」检查的赛道牵引需求门槛（牵引指数）
+_TRACTION_PARTICIPATION_MIN = 0.35
+#: 触发检查的机械抓地类需求门槛（Dx 量级）
+_MECHANICAL_DEMAND_MIN = 0.30
+
 
 def holistic_coherence(
     delta: dict[str, float], dx: dict[str, float], demand: TrackDemand,
+    mechanical_fallback: dict[str, float] | None = None,
 ) -> tuple[dict[str, float], list[str]]:
     """对参数调整量做整体性收口，返回 (收口后的 delta, 权衡说明)。
 
@@ -469,6 +485,19 @@ def holistic_coherence(
     7. **离地 rake 窗口** —— 前后离地变化保持一致（task-82）；
     8. **压路肩/刮底冲突** —— 遥测检出需要更高离地时，撤回任何降低离地的
        建议（路肩不得不压，调教迁就路肩；task-82）。
+    9. **机械抓地参与度**（本轮新增）—— 牵引型赛道（慢弯主导）上，若存在
+       明确的机械抓地需求，却没有任何悬挂/几何/防倾杆改动，则从
+       ``mechanical_fallback``（规则引擎给出的原始建议）恢复这些改动。
+       动机：「慢弯靠机械抓地、快弯靠空气动力学」是 F1 调教的基本分工；
+       实测（``scripts/trace_setup_pipeline.py``）优化器会把这类参数全部拆掉，
+       变成"只用翼片/差速/胎压硬顶"，那不是整体调教。
+
+    Args:
+        delta: 待收口的参数调整量。
+        dx: 诊断向量（用于判定需求）。
+        demand: 赛道需求画像。
+        mechanical_fallback: 机械抓地类参数的**原始建议**（通常来自规则引擎）。
+            仅在第 9 条触发时用于恢复，缺省时该条只提示不补值。
     """
     out = dict(delta)
     notes: list[str] = []
@@ -521,6 +550,64 @@ def holistic_coherence(
             "单纯加大翼片只在高速弯有效，且会拖慢直道"
         )
 
+    # 9. 机械抓地参与度：牵引型赛道不能"只用空力/差速顶"
+    #    放在几何/防倾杆配对收口**之前**，让恢复出来的值仍受配对规则约束。
+    if demand.traction_index >= _TRACTION_PARTICIPATION_MIN:
+        signal = max(
+            dx.get("front_grip_req", 0.0),
+            dx.get("rear_grip_req", 0.0),
+            dx.get("exit_traction_req", 0.0),
+        )
+        if signal >= _MECHANICAL_DEMAND_MIN:
+            present = [p for p in _MECHANICAL_PARAMS if out.get(p)]
+            if not present:
+                budget_before = sum(abs(v) for v in out.values())
+                restored = [
+                    p for p in _MECHANICAL_PARAMS
+                    if (mechanical_fallback or {}).get(p)
+                ]
+                for p in restored:
+                    out[p] = mechanical_fallback[p]  # type: ignore[index]
+                if restored:
+                    # **预算中性**：机械手段占的幅度从非机械项等量回收，
+                    # 否则湿地会比干地改动更多，破坏"湿地总幅度不增加"这条
+                    # 既有不变量（实测 deep_integration 断言因此变红）。
+                    excess = sum(abs(v) for v in out.values()) - budget_before
+                    if excess > 0:
+                        pool = sorted(
+                            (p for p in out
+                             if p not in _MECHANICAL_PARAMS and out.get(p)),
+                            key=lambda p: -abs(out[p]),
+                        )
+                        for p in pool:
+                            if excess <= 1e-9:
+                                break
+                            spec = _FIELD_SPECS.get(p)
+                            step = (spec.step if spec else 0.01) or 0.01
+                            cur = abs(out[p])
+                            take = min(cur, excess)
+                            remain = cur - take
+                            # 回到合法档位（向下取整到 step），避免出现
+                            # 游戏里不存在的中间档位
+                            snapped = math.floor((remain + 1e-9) / step) * step
+                            out[p] = round(copysign(snapped, out[p]), 4) if snapped > 0 else 0.0
+                            excess -= take
+                    notes.append(
+                        f"机械抓地参与度收口：本赛道慢弯占比 "
+                        f"{demand.slow_share:.0%}（牵引指数 {demand.traction_index:.2f}）、"
+                        f"且存在明确机械抓地需求，但整圈最优解把它全交给了空力/差速/"
+                        f"胎压。已用机械抓地手段置换："
+                        f"{'、'.join(_PARAM_LABELS.get(p, p) for p in restored)}"
+                        f"（幅度从非机械项等量回收，总改动预算不变）—— "
+                        f"慢弯靠机械抓地、快弯靠空气动力学，这是调教的基本分工"
+                    )
+                else:
+                    notes.append(
+                        f"机械抓地参与度提示：本赛道牵引指数 "
+                        f"{demand.traction_index:.2f}（慢弯主导），但规则层与优化解"
+                        f"都没有给出悬挂/几何/防倾杆改动，建议人工确认底盘设定"
+                    )
+
     # 5. 悬挂几何前后配对（外倾/束角）—— 前后轴特性变化保持一致。
     #    只回收变化更大的一侧：**不制造另一侧的反向新值**（否则出处不可追溯，
     #    实测 understeer@3 时 rear_toe 被凭空造出非零变化）。
@@ -531,11 +618,13 @@ def holistic_coherence(
             continue
         if abs(a) >= abs(b):
             out[front] = round(b + copysign(window, imbalance), 4)
+            out.setdefault(rear, 0.0)
         else:
             out[rear] = round(a + copysign(window, -imbalance), 4)
+            out.setdefault(front, 0.0)
         notes.append(
             f"{label}前后配对收口（Δ{front}−Δ{rear} {imbalance:+.2f} → "
-            f"{out[front] - out[rear]:+.2f}）：前后轴几何特性变化保持一致，"
+            f"{out.get(front, 0.0) - out.get(rear, 0.0):+.2f}）：前后轴几何特性变化保持一致，"
             f"只回收变化更大的一侧（不引入新改动，保持出处可追溯）"
         )
 
@@ -546,13 +635,15 @@ def holistic_coherence(
             out["front_anti_roll_bar"] = round(
                 ra + copysign(_ARB_BALANCE_WINDOW, fa - ra), 4,
             )
+            out.setdefault("rear_anti_roll_bar", 0.0)
         else:
             out["rear_anti_roll_bar"] = round(
                 fa + copysign(_ARB_BALANCE_WINDOW, ra - fa), 4,
             )
+            out.setdefault("front_anti_roll_bar", 0.0)
         notes.append(
             f"防倾杆前后配对收口（Δ前−Δ后 {fa - ra:+.2f} → "
-            f"{out['front_anti_roll_bar'] - out['rear_anti_roll_bar']:+.2f}）："
+            f"{out.get('front_anti_roll_bar', 0.0) - out.get('rear_anti_roll_bar', 0.0):+.2f}）："
             f"横向刚度前后分配保持接近，避免整车平衡被单轴翻转"
         )
 
@@ -564,13 +655,15 @@ def holistic_coherence(
             out["rear_ride_height"] = round(
                 fr + copysign(_RAKE_CHANGE_WINDOW, rake_change), 4,
             )
+            out.setdefault("front_ride_height", 0.0)
         else:
             out["front_ride_height"] = round(
                 rr + copysign(_RAKE_CHANGE_WINDOW, -rake_change), 4,
             )
+            out.setdefault("rear_ride_height", 0.0)
         notes.append(
             f"离地 rake 收口（Δ后−Δ前 {rake_change:+.2f} → "
-            f"{out['rear_ride_height'] - out['front_ride_height']:+.2f}）："
+            f"{out.get('rear_ride_height', 0.0) - out.get('front_ride_height', 0.0):+.2f}）："
             f"前后离地变化保持一致，rake 大改等于改变整车姿态特性"
         )
 

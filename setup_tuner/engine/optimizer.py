@@ -34,14 +34,19 @@ from .lap_model import (
     corner_evaluations,
     needs_by_class_from_dx,
     objective,
+    satisfaction_by_class,
     track_context,
     units_to_delta,
 )
 
 #: 坐标上升的网格步长（归一化单位，1.0 = 走满该参数的 max_delta）
 _GRID = 0.125
+#: 二级精修网格（粗搜收敛后再用半格长重启，只接受更优解）
+_GRID_FINE = 0.0625
 #: 最大轮数（每轮遍历全部参数）
 _MAX_PASSES = 8
+#: 精修阶段的最大轮数（步长更小，需要更多轮才能走完同样的距离）
+_MAX_PASSES_FINE = 12
 #: 改善小于该值即视为收敛（避免在噪声级别反复微调）
 _MIN_GAIN = 1e-6
 
@@ -57,6 +62,19 @@ class OptimizeResult:
     trace: list[str] = field(default_factory=list)
     #: 各弯道类别的残差改善（正 = 该类弯变好）
     per_class_gain: dict[str, float] = field(default_factory=dict)
+    #: 优化前（规则引擎初始建议）的需求满足度（0..1，按弯道类别）
+    satisfaction_before: dict[str, float] = field(default_factory=dict)
+    #: 优化后的需求满足度（0..1，按弯道类别）
+    satisfaction_after: dict[str, float] = field(default_factory=dict)
+
+    @property
+    def satisfaction_gain(self) -> dict[str, float]:
+        """各组满足度提升（优化后 − 优化前）。"""
+        return {
+            k: round(self.satisfaction_after.get(k, 0.0)
+                     - self.satisfaction_before.get(k, 0.0), 4)
+            for k in self.satisfaction_after
+        }
 
     @property
     def improvement(self) -> float:
@@ -100,20 +118,27 @@ def _ascend(
     corners: list[CornerEval],
     track_id: str,
     current_setup: dict[str, float],
+    grid: float = _GRID,
+    max_passes: int = _MAX_PASSES,
 ) -> tuple[dict[str, float], list[str], ObjectiveBreakdown]:
-    """坐标上升主循环，返回 (最优 units, 轨迹, 最终分解)。"""
+    """坐标上升主循环，返回 (最优 units, 轨迹, 最终分解)。
+
+    Args:
+        grid: 本阶段的步长（归一化单位）。精修阶段传更小的值。
+        max_passes: 本阶段最大轮数。
+    """
     cur = dict(units)
     cur_val = objective(cur, needs, track_id, ctx, corners)
     trace: list[str] = []
 
-    for _ in range(_MAX_PASSES):
+    for _ in range(max_passes):
         moved = False
         for p in OPTIMIZABLE:                      # 固定顺序 → 确定性
             spec = _FIELDS[p]
             lo, hi = _feasible_range(p, float(current_setup.get(p, spec.default)))
             base = cur.get(p, 0.0)
             best_u, best_val = base, cur_val
-            for cand in (base + _GRID, base - _GRID):   # 固定顺序 → 确定性
+            for cand in (base + grid, base - grid):    # 固定顺序 → 确定性
                 if cand < lo - 1e-9 or cand > hi + 1e-9:
                     continue
                 trial = dict(cur)
@@ -184,13 +209,17 @@ def optimize_setup(
         identity = objective(
             _initial_units(initial_delta, current_setup), needs, track_id, ctx, [],
         )
+        base_units = _initial_units(initial_delta, current_setup)
+        flat = satisfaction_by_class(base_units, needs, track_id, ctx, [])
         return OptimizeResult(
             delta=dict(initial_delta or {f.name: 0.0 for f in ALL_SETUP_FIELDS}),
-            units=_initial_units(initial_delta, current_setup),
+            units=base_units,
             before=identity,
             after=identity,
             trace=[],
             per_class_gain={},
+            satisfaction_before=flat,
+            satisfaction_after=flat,
         )
 
     # 多起点：规则引擎的解 + 零改动，取更优者
@@ -209,6 +238,17 @@ def optimize_setup(
             best_units, best_trace, best_after = units, trace, after
 
     assert best_units is not None and best_after is not None
+
+    # 二级精修：粗搜用的是 0.125 的网格，最优点可能落在格点之间。
+    # 从粗搜最优点出发、用半格长（0.0625）再跑一轮，只接受更优解 ——
+    # 这一步**只会变好、不会变差**（严格比较 total 才替换）。
+    fine_units, fine_trace, fine_after = _ascend(
+        best_units, needs, ctx, corners, track_id, current_setup,
+        grid=_GRID_FINE, max_passes=_MAX_PASSES_FINE,
+    )
+    if fine_after.total < best_after.total - _MIN_GAIN:
+        best_units, best_after = fine_units, fine_after
+        best_trace = [*best_trace, *fine_trace]
     before = objective(
         _initial_units(initial_delta, current_setup), needs, track_id, ctx, corners,
     )
@@ -216,6 +256,7 @@ def optimize_setup(
         k: round(before.per_class.get(k, 0.0) - best_after.per_class.get(k, 0.0), 6)
         for k in ("slow", "medium", "fast")
     }
+    settle_before = _initial_units(initial_delta, current_setup)
     return OptimizeResult(
         delta=units_to_delta(best_units, current_setup),
         units=best_units,
@@ -223,6 +264,12 @@ def optimize_setup(
         after=best_after,
         trace=best_trace,
         per_class_gain=per_class_gain,
+        satisfaction_before=satisfaction_by_class(
+            settle_before, needs, track_id, ctx, corners,
+        ),
+        satisfaction_after=satisfaction_by_class(
+            best_units, needs, track_id, ctx, corners,
+        ),
     )
 
 

@@ -53,6 +53,13 @@ from .diagnostic import (
 )
 from .holistic import class_weighted_dx, holistic_coherence, track_demand
 from .optimizer import describe_tradeoff, optimize_setup
+from .surrogate import get_surrogate
+from .telemetry_diagnosis import (
+    diagnose_from_telemetry,
+    implicit_for_engine,
+    link_findings_to_changes,
+    merge_with_driver_feedbacks,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -444,6 +451,10 @@ def _apply_kerb_rules(telemetry: dict[str, Any], dx: dict[str, float]) -> None:
     """
     kerb = telemetry.get("kerb_corners")
     if not isinstance(kerb, list) or not kerb:
+        return
+    # 若本次已由**逐弯隐式诊断**接管路肩（engine.generate_suggestion 会打这个标记），
+    # 则不再做全圈聚合判定 —— 否则 ride_height_req 会被路肩问题**重复计入两次**。
+    if telemetry.get("_implicit_kerb"):
         return
     ratios = [
         float(k["ratio"]) for k in kerb
@@ -921,6 +932,7 @@ def generate_suggestion(
     model_type: str = "hybrid",
     style_vector: list[float] | None = None,
     feedbacks: list[dict[str, Any]] | None = None,
+    corner_times: dict[int, float] | None = None,
 ) -> dict[str, Any]:
     """完整建议生成（Dx → SetupDelta → 整体收口 → 报告组装）。详见模块级文档。
 
@@ -946,18 +958,39 @@ def generate_suggestion(
         "corner_notes": [],
         "conflicts": [],
         "coherence_notes": [],
+        "implicit_feedbacks": [],
+        "surrogate": get_surrogate().describe(),
     }
 
+    # 遥测自动诊断：车手没反馈到的问题（逐弯路肩冲击、代理模型残差等）
+    # 被翻译成与车手反馈同构的症状，走同一条 Dx 链路参与优化。
+    implicit_all = diagnose_from_telemetry(
+        telemetry, track_id, corner_times=corner_times,
+    )
+    holistic_block["implicit_feedbacks"] = [
+        {"corner": it.get("corner_number"), "symptom": it.get("symptom"),
+         "strength": it.get("strength"), "source": it.get("source"),
+         "evidence": it.get("evidence")}
+        for it in implicit_all
+    ]
+    implicit_engine = implicit_for_engine(implicit_all)
+    effective_feedbacks = merge_with_driver_feedbacks(feedbacks, implicit_engine)
+
     weighted = None
-    if feedbacks:
-        weighted = class_weighted_dx(feedbacks, track_id)
+    if effective_feedbacks:
+        weighted = class_weighted_dx(effective_feedbacks, track_id)
         feedback_dx = weighted.dx
         holistic_block["corner_notes"] = list(weighted.corner_notes)
         holistic_block["conflicts"] = [c.describe() for c in weighted.conflicts]
     else:
         feedback_dx = compute_dx(symptoms)
 
-    telemetry_dx = _derive_telemetry_dx(telemetry)
+    # 路肩已由逐弯隐式诊断接管 → 关掉聚合规则里的路肩判定，避免重复计入
+    telemetry_for_dx = telemetry
+    if any(it.get("source") == "telemetry:kerb" for it in implicit_engine):
+        telemetry_for_dx = dict(telemetry or {})
+        telemetry_for_dx["_implicit_kerb"] = True
+    telemetry_dx = _derive_telemetry_dx(telemetry_for_dx)
     dx = {dim: feedback_dx[dim] + telemetry_dx[dim] for dim in DIAG_DIMS}
     telemetry_gain = _derive_telemetry_gain(telemetry)
     track_gain = _derive_track_gain(track_id)
@@ -980,7 +1013,7 @@ def generate_suggestion(
     # 赛道弯型占比与车手反馈才真正决定取向，并产生可解释的取舍。
     optimized = optimize_setup(
         dx, current_setup, track_id,
-        telemetry=telemetry, feedbacks=feedbacks,
+        telemetry=telemetry, feedbacks=effective_feedbacks,
         initial_delta=blended_delta,
         needs_by_class=(weighted.by_class if weighted else None),
         wet=_is_wet_weather(telemetry),
@@ -998,10 +1031,19 @@ def generate_suggestion(
         },
         "trace": list(optimized.trace),
         "tradeoff": describe_tradeoff(optimized),
+        "satisfaction": {
+            "before": optimized.satisfaction_before,
+            "after": optimized.satisfaction_after,
+            "gain": optimized.satisfaction_gain,
+        },
     }
 
     # 整体性收口：胎压左右对称 / 前后翼平衡窗口 / 改动预算（保证可用性）
-    final_delta, coherence_notes = holistic_coherence(optimized.delta, dx, demand)
+    # mechanical_fallback = 规则引擎的原始建议：当优化器把机械抓地类参数
+    # 全拆光而赛道又是牵引型时，用它恢复悬挂/几何/防倾杆改动（整体性约束）。
+    final_delta, coherence_notes = holistic_coherence(
+        optimized.delta, dx, demand, mechanical_fallback=blended_delta,
+    )
     # 收口会做配对等比调整（悬挂几何/防倾杆/rake/翼片），可能把参数推出
     # [min, max]（实测：oversteer 强度 5 时 front_camber 越下限）——
     # 因此收口后必须**再次夹取**，作为最终边界兜底。
@@ -1011,6 +1053,10 @@ def generate_suggestion(
     parameters = _build_param_details(final_delta, current_setup, dx)
     confidence = assess_confidence(symptoms, telemetry)
     summary = _build_suggestion_summary(final_delta, dx, parameters)
+
+    # "问题 → 优化方案"映射：每条遥测发现对应到最终建议里的哪些参数改动，
+    # 未落地的显式标 unresolved（不假装已解决）。
+    holistic_block["implicit_plan"] = link_findings_to_changes(implicit_all, final_delta)
 
     return {
         "track_id": track_id,

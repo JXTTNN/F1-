@@ -301,19 +301,27 @@ def test_feedback_with_global_symptom():
 
 
 def test_multiple_suggestions_generate_iterations():
-    """多次生成建议产生多条迭代记录。"""
+    """多次生成建议产生多条迭代记录。
+
+    2026-09-19：/suggest 成功后反馈默认被"消费"清除（跨圈不串味），
+    故第二轮前重新录入（真实工作流：每圈录一次反馈生成一次）。
+    """
     with make_client() as client:
         client.post("/api/v1/tracks/current", json={"track_id": "monza"})
+
+        # 第一次建议
         client.post(
             "/api/v1/feedback",
             json={"track_id": "monza", "symptom": "oversteer", "strength": 3},
         )
-
-        # 第一次建议
         resp = client.post("/api/v1/suggest", json={"track_id": "monza"})
         assert resp.status_code == 200
 
-        # 第二次建议
+        # 第二次建议（重新录入反馈）
+        client.post(
+            "/api/v1/feedback",
+            json={"track_id": "monza", "symptom": "oversteer", "strength": 3},
+        )
         resp = client.post("/api/v1/suggest", json={"track_id": "monza"})
         assert resp.status_code == 200
 

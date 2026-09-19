@@ -100,17 +100,30 @@ def _lap_meta(laptimes: dict[str, Any], driver: str, lap: int) -> dict[str, Any]
     }
 
 
+def _to_floats(vals):
+    out = []
+    for v in vals or []:
+        if v is None:
+            continue
+        if isinstance(v, str) and v.strip().lower() == "none":
+            continue
+        try:
+            out.append(float(v))
+        except Exception:
+            continue
+    return out
+
 def _tel_features(tel: dict[str, Any]) -> dict[str, Any]:
     """逐点遥测 → 单圈特征（全部来自 2026 真实遥测点）。"""
     t = tel.get("tel") or {}
-    speed = [float(v) for v in t.get("speed", []) if v is not None]
-    throttle = [float(v) for v in t.get("throttle", []) if v is not None]
-    brake = [float(v) for v in t.get("brake", []) if v is not None]
-    drs = [float(v) for v in t.get("drs", []) if v is not None]
-    rpm = [float(v) for v in t.get("rpm", []) if v is not None]
-    gear = [float(v) for v in t.get("gear", []) if v is not None]
-    ax = [float(v) for v in t.get("acc_x", []) if v is not None]
-    ay = [float(v) for v in t.get("acc_y", []) if v is not None]
+    speed = _to_floats(t.get("speed", []))
+    throttle = _to_floats(t.get("throttle", []))
+    brake = _to_floats(t.get("brake", []))
+    drs = _to_floats(t.get("drs", []))
+    rpm = _to_floats(t.get("rpm", []))
+    gear = _to_floats(t.get("gear", []))
+    ax = _to_floats(t.get("acc_x", []))
+    ay = _to_floats(t.get("acc_y", []))
     n = len(speed) or 1
     return {
         "points": len(speed),

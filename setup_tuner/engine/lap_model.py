@@ -297,7 +297,16 @@ def corner_evaluations(
 ) -> list[CornerEval]:
     """把赛道展开为逐弯评价项（需求权重 + 重要度）。
 
-    重要度 ∝ 过弯耗时（∝ 1/速度）：慢弯耗时长、对圈速影响大。
+    重要度来源（优先级）：
+        1. **遥测训练出的逐弯重要度**（``surrogate.corner_importance``）——
+           来自 79k+ 个真实 2026 逐弯样本拟合的"该弯占整圈时间比例"；
+        2. 回退到启发式 ``120 / 该弯参考速度``（无模型数据时）。
+
+    为什么要把启发式换成模型输出：``120 / speed`` 只反映"弯越慢越耗时"，
+    完全不知道这条赛道上**这个具体弯**实际占多少圈速 —— 而优化器正是按
+    重要度分配"愿意为它付出多少代价"。换用实测占比后，权重才配得上
+    "用遥测数据训练出来的模型"这句话。
+
     车手报过反馈的弯再乘 :data:`_FEEDBACK_BOOST` —— 车手明确指出的问题
     必须优先被优化，这是"结合车手反馈"的落点。
     """
@@ -305,11 +314,15 @@ def corner_evaluations(
     if track is None or not track.corners:
         return []
     boosted = feedback_corners or set()
+    learned = _learned_importance(track_id)
     out: list[CornerEval] = []
     for c in track.corners:
         klass = corner_class(c.corner_type)
         speed = max(30.0, float(c.speed_kmh))
-        importance = _TIME_REF_SPEED / speed
+        if learned and c.number in learned:
+            importance = float(learned[c.number])
+        else:
+            importance = _TIME_REF_SPEED / speed
         if c.number in boosted:
             importance *= _FEEDBACK_BOOST
         out.append(CornerEval(
@@ -323,6 +336,16 @@ def corner_evaluations(
     ]
 
 
+def _learned_importance(track_id: str) -> dict[int, float] | None:
+    """取遥测训练出的逐弯重要度；模型不可用时返回 None（中性降级）。"""
+    try:
+        from .surrogate import get_surrogate
+
+        return get_surrogate().corner_importance(track_id)
+    except Exception:  # noqa: BLE001 — 模型层任何异常都不得打断优化主流程
+        return None
+
+
 # --------------------------------------------------------------------------- #
 # 5. 目标函数
 # --------------------------------------------------------------------------- #
@@ -330,7 +353,13 @@ def corner_evaluations(
 _K_DRAG = 0.06       # 净增翼片 → 阻力代价（乘 drag_weight）
 _K_BOTTOMING = 0.10  # 降低离地间隙 → 刮底代价（乘 bottoming_weight）
 _K_TYRE_HEAT = 0.05  # 加大负外倾 / 拉高胎压 → 胎温与胎耗代价
-_K_EFFORT = 0.02     # 改动幅度本身的小惩罚：同样收益下优先少改
+#: 改动幅度本身的小惩罚：同样收益下优先少改。
+#: **不要再调小**（实测回归）：降到 0.002 时，Monza 与 Monaco 会收敛到
+#: 逐位相同的解、湿/干地总幅度不变量也被打破 —— 这个系数正是"权衡"的
+#: 交换率，它撑起了"赛道弯型决定取向"。悬挂/几何参数被优化器清零的问题
+#: 改由 ``holistic.holistic_coherence`` 的「机械抓地参与度」规则定向修复，
+#: 不动这个全局系数。
+_K_EFFORT = 0.02
 #: 正外倾超过默认值即视为"超出窗口"的阈值（cam·Δ>0 表示更负 → 更热）
 _CAMBER_HEAT_GAIN = 1.0
 
@@ -381,6 +410,61 @@ def needs_by_class_from_dx(
 ) -> dict[str, dict[str, float]]:
     """无逐弯信息时：三个类别共用同一份全圈需求（退化为单一需求）。"""
     return {k: dict(dx) for k in (SLOW, MEDIUM, FAST)}
+
+
+def units_from_delta(
+    delta: dict[str, float] | None,
+    current_setup: dict[str, float] | None = None,
+) -> dict[str, float]:
+    """真实 delta → 归一化改动 ``u_p = Δp / max_delta``（与 :data:`OPTIMIZABLE` 同口径）。
+
+    优化器内部用归一化单位评价目标函数；要把"规则引擎给出的初始建议"
+    也放进同一套评价（例如算它的需求满足度），就需要这个反变换。
+    不做档位对齐（那是 :func:`units_to_delta` 的职责）。
+    """
+    out: dict[str, float] = {}
+    for p in OPTIMIZABLE:
+        value = float((delta or {}).get(p, 0.0))
+        spec = _FIELDS[p]
+        out[p] = value / (spec.max_delta or 1.0)
+    return out
+
+
+def satisfaction_by_class(
+    units: dict[str, float],
+    needs: dict[str, dict[str, float]],
+    track_id: str,
+    ctx: TrackContext,
+    corners: list[CornerEval] | None = None,
+) -> dict[str, float]:
+    """各弯道类别的**需求满足度**（0..1，按弯重要度与维度需求权重加权）。
+
+    与 :func:`objective` 的分工：
+        ``objective`` 是"越小越好"的圈级代价和，包含阻力/刮底/胎温/改动幅度等
+        **代价项**；本函数只回答一个问题 —— **诊断出来的需求，这套调教覆盖了多少**。
+    两者必须一起看：只优化目标函数可能靠"少改"把代价压下去却留下缺口；
+    只看满足度又可能把车改得又硬又费油。同时给出才能判断"既有效又便宜"。
+
+    满足度 = Σ_corners w(弯,维度) · min(实际供给, 需求) / Σ_corners w · 需求
+    其中 ``w = 弯重要度 × 该类弯对该维度的需求权重``。
+    """
+    supply = supply_from_units(units)
+    evals = corners if corners is not None else corner_evaluations(track_id)
+    acc: dict[str, list[float]] = {k: [0.0, 0.0] for k in (SLOW, MEDIUM, FAST)}
+    for e in evals:
+        class_need = needs.get(e.klass) or {}
+        for dim in DIAG_DIMS:
+            need = class_need.get(dim, 0.0)
+            if not need:
+                continue
+            weight = e.importance * e.demand.get(dim, 0.0)
+            progress = (1.0 if need > 0 else -1.0) * supply.get(dim, 0.0) * ctx.grip_modifier
+            acc[e.klass][0] += weight * min(max(progress, 0.0), abs(need))
+            acc[e.klass][1] += weight * abs(need)
+    return {
+        k: (round(v[0] / v[1], 4) if v[1] > 1e-12 else 1.0)
+        for k, v in acc.items()
+    }
 
 
 def objective(

@@ -12,7 +12,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO))
 
-from real_corner_analysis import analyze, load_coords, to_local_m, TRACK_GEOJSON
+from real_corner_analysis import TRACK_GEOJSON, analyze, load_coords, to_local_m
 
 OUT_DIR = Path(__file__).resolve().parent / "real_circuits" / "render"
 

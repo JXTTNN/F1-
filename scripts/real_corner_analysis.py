@@ -63,7 +63,7 @@ def to_local_m(coords: list[tuple[float, float]]) -> list[tuple[float, float]]:
 def densify_closed(pts: list[tuple[float, float]], step: float) -> list[tuple[float, float]]:
     ring = pts + [pts[0]]
     out: list[tuple[float, float]] = []
-    for (x1, y1), (x2, y2) in zip(ring, ring[1:]):
+    for (x1, y1), (x2, y2) in zip(ring, ring[1:], strict=False):
         d = math.hypot(x2 - x1, y2 - y1)
         if d < 1e-9:
             continue

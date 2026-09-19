@@ -50,6 +50,7 @@ from setup_tuner.domain.track import (
     get_track_by_udp_id,
 )
 from setup_tuner.engine.engine import generate_suggestion
+from setup_tuner.engine.telemetry_diagnosis import diagnose_from_telemetry
 from setup_tuner.report.builder import (
     aggregate_feedback_symptoms,
     build_report,
@@ -143,7 +144,7 @@ class FeedbackItem(BaseModel):
         default=DEFAULT_INTENSITY,
         ge=INTENSITY_MIN,
         le=INTENSITY_MAX,
-        description="强度 0-5，默认 3",
+        description="强度 1-3（1 轻微 / 2 明显 / 3 严重），默认 2",
     )
 
 
@@ -164,7 +165,7 @@ class FeedbackRequest(BaseModel):
         default=DEFAULT_INTENSITY,
         ge=INTENSITY_MIN,
         le=INTENSITY_MAX,
-        description="强度 0-5，默认 3",
+        description="强度 1-3（1 轻微 / 2 明显 / 3 严重），默认 2",
     )
     # 批量格式（新）
     feedbacks: list[FeedbackItem] | None = Field(
@@ -192,6 +193,15 @@ class SuggestRequest(BaseModel):
     model_type: str = Field(
         default="hybrid",
         description="模型类型：rule（纯规则）| nn（纯神经网络）| hybrid（混合）",
+    )
+    clear_feedback_after_suggest: bool = Field(
+        default=True,
+        description=(
+            "生成成功后是否清除本赛道反馈（默认 True）。"
+            "本次生成已把反馈'消费'掉：清除后，下一圈录入的新反馈不会与"
+            "上一圈混在一起。设为 False 保留累积行为（连续重新生成、"
+            "性能基准等场景）"
+        ),
     )
 
 
@@ -898,8 +908,15 @@ async def suggest(
 ) -> dict[str, Any]:
     """触发建议生成。
 
-    流程：校验有反馈 → Dx → SetupDelta → 报告 → 落库 → WS 推送。
-    无反馈时返回 400 引导消息。
+    流程：校验有反馈 → Dx → SetupDelta → 报告 → 落库 → WS 推送
+    → 清除反馈（默认，可关）。
+
+    反馈闸门（2026-09-18 修订）：无车手反馈但遥测自动诊断出问题时仍出建议
+    （标 telemetry_only）；两者都无 → 400 引导消息。
+
+    反馈生命周期（2026-09-19）：生成成功后默认**清除本赛道反馈**
+    （`clear_feedback_after_suggest`，默认 True）——本次生成已消费这些反馈，
+    避免下一圈录入的新反馈与上一圈混在一起。落库失败时不清除（保留供重试）。
     """
     svc = _get_services(request)
     store = svc["store"]
@@ -908,7 +925,6 @@ async def suggest(
         raise fail(message="服务未初始化", code=5001, http_status=500)
 
     _validate_suggest_request(body)
-    _validate_feedback_available(feedback_service, body.track_id)
 
     # 反馈按 (弯道, 症状) 聚合后再转三元组：同一条反馈重复提交不再线性放大 Dx；
     # 取最近 500 条，防止反馈无限增长拖慢查询（task-62）
@@ -920,6 +936,15 @@ async def suggest(
     telemetry_summary = _extract_telemetry_summary(
         svc["telemetry_stream"], svc.get("lap_aggregator"),
     )
+
+    # 反馈闸门（2026-09-18 修订）：原本"没有车手反馈就 400"，导致
+    # **遥测自动发现的问题永远到不了用户面前** —— 这正是"自动发现没生效"的根因。
+    # 现在放宽为：有车手反馈 → 照常；没有反馈但遥测自动诊断出了具体问题 →
+    # 仍然出建议，并在报告里标注 telemetry_only。
+    telemetry_findings = diagnose_from_telemetry(telemetry_summary, body.track_id)
+    if not raw_feedbacks and not telemetry_findings:
+        _validate_feedback_available(feedback_service, body.track_id)
+    telemetry_only = not raw_feedbacks and bool(telemetry_findings)
 
     # task-62 M3：车手风格调制（样本 ≥3 圈才启用，否则退化为 L0）
     style_entry = None
@@ -938,8 +963,30 @@ async def suggest(
         track_id=body.track_id,
         setup_id=setup_id,
     )
+    if telemetry_only:
+        # 明确告知前端/用户：本次没有车手反馈，问题是**遥测自动发现**的
+        report["telemetry_only"] = True
+        report["telemetry_discovered"] = len(telemetry_findings)
+        report["summary"] = (
+            f"本次没有车手反馈；遥测自动发现 {len(telemetry_findings)} 个问题，"
+            f"已据此给出调教方案。" + str(report.get("summary") or "")
+        )
     suggestion_id = _persist_suggestion(store, body, report, setup_id)
     _record_iteration(svc["iteration_service"], body.track_id, setup_id, suggestion_id)
+
+    # 反馈生命周期收口（2026-09-19）：本次生成已经把 raw_feedbacks "消费"掉了。
+    # 默认清除本赛道反馈，保证**下一圈录入的新反馈从干净状态开始**，不会与
+    # 上一圈混在一起（用户诉求："要不然杂着后一圈吗"）。
+    # 时序：落库成功之后、WS 推送之前 —— 若 WS 推送后前端立刻刷新反馈列表，
+    # 清除已完成才不会读回旧数据。生成/落库失败时异常提前抛出，反馈保留供重试。
+    # 清除失败非致命（建议已落库）：记日志 + 如实返回，不把已成功的生成打成 500。
+    cleared_feedback = 0
+    if body.clear_feedback_after_suggest and raw_feedbacks:
+        try:
+            cleared_feedback = store.clear_track_feedback(body.track_id)
+        except Exception:
+            logger.exception("clear_track_feedback failed (non-fatal)")
+
     await _push_suggestion_via_ws(request, suggestion_id, report)
 
     data = SuggestionView(
@@ -948,7 +995,15 @@ async def suggest(
         created_at=None,
         report=report,
     )
-    return ok(data=data.model_dump(), message="建议已生成")
+    if cleared_feedback:
+        # 如实告知：清了多少条、下一圈要重新录（用户不会困惑"反馈怎么没了"）
+        msg = (
+            f"建议已生成；已清除本赛道 {cleared_feedback} 条反馈"
+            f"（本次已消费，下一圈请重新录入）"
+        )
+    else:
+        msg = "建议已生成"
+    return ok(data=data.model_dump(), message=msg)
 
 
 @router.get("/driver/style")

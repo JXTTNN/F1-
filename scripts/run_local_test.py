@@ -185,7 +185,7 @@ def main() -> int:
     try:
         r = client.post(
             f"{api}/feedback",
-            json={"track_id": "suzuka", "corner_number": 1, "symptom": "oversteer", "strength": 4},
+            json={"track_id": "suzuka", "corner_number": 1, "symptom": "oversteer", "strength": 3},
             timeout=30.0,
         )
         check("E12 第二条feedback 200", r.status_code == 200)

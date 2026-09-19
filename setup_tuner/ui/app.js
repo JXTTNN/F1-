@@ -843,6 +843,12 @@
       const data = await fetchJSON(`/feedback?track_id=${encodeURIComponent(trackId)}`);
       const list = Array.isArray(data) ? data : (data && data.items) || [];
       state.feedbacks = list;
+      // 先重置旧标记再按最新列表重标：生成建议后后端会清除本圈反馈，
+      // 若只累加标记，赛道图上会残留"已反馈"圆点（与后端数据不一致）。
+      state.feedbackCorners.clear();
+      dom.mapWrap.querySelectorAll(".hotzone.feedback-done").forEach((hz) => {
+        hz.classList.remove("feedback-done");
+      });
       list.forEach((f) => {
         if (f.corner_number != null) markCornerFeedbackDone(f.corner_number);
       });
@@ -1479,6 +1485,12 @@
     const report = s.report_json || s.report;
     if (report) renderReport(report);
     showToast("新建议已生成", "success");
+    // 生成成功后后端默认已清除本圈反馈（消除跨圈串味）：同步刷新反馈摘要
+    // 与赛道图标记。仅当事件属于当前赛道时刷新（其他赛道不影响本页显示）；
+    // WS 事件与 HTTP 响应双路径都会刷新，幂等。
+    if (state.currentTrackId && report && report.track_id === state.currentTrackId) {
+      void loadExistingFeedback(state.currentTrackId);
+    }
   }
 
   /* ========================================================================
@@ -1500,6 +1512,9 @@
     const modelType = dom.modelTypeSelect ? dom.modelTypeSelect.value : "hybrid";
     // 更新顶栏模式显示
     if (dom.topbarMode) dom.topbarMode.textContent = modelType.toUpperCase();
+    // 2026-09-19：后端生成成功后默认"消费并清除"本圈反馈（跨圈不串味），
+    // 先生成前记下是否有反馈，用于生成后如实的提示语。
+    const hadFeedback = state.feedbacks.length > 0;
     try {
       const data = await fetchJSON("/suggest", {
         method: "POST",
@@ -1518,7 +1533,13 @@
       } else {
         loadLatestSuggestion(state.currentTrackId);
       }
-      showToast("建议已生成", "success");
+      // 反馈可能已被后端清除：重新拉取列表，让摘要面板与赛道图标记同步刷新
+      if (hadFeedback) {
+        await loadExistingFeedback(state.currentTrackId);
+        showToast("建议已生成；本圈反馈已清除，下一圈请重新录入", "success");
+      } else {
+        showToast("建议已生成", "success");
+      }
     } catch (e) {
       if (e.status === 400) {
         showToast("请先点击赛道图上的问题弯道并录入反馈", "error");

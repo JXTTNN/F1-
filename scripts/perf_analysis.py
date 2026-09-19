@@ -105,7 +105,10 @@ ENDPOINTS: list[tuple[str, str, dict | None, str]] = [
     ("POST", "/api/v1/feedback",
      {"track_id": "suzuka", "corner_number": 1,
       "symptom": "understeer", "strength": 3}, "submit_feedback"),
-    ("POST", "/api/v1/suggest", {"track_id": "suzuka"}, "suggest"),
+    # 显式关闭"生成后清除反馈"（2026-09-19 起的默认行为）：每个端点测 n=10 次，
+    # 默认清除会让第 2 次起 400，测得错误路径耗时而非成功路径。
+    ("POST", "/api/v1/suggest",
+     {"track_id": "suzuka", "clear_feedback_after_suggest": False}, "suggest"),
     ("GET", "/api/v1/iteration/history?track_id=suzuka", None, "iteration_history"),
 ]
 

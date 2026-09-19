@@ -397,9 +397,19 @@ class TestConcurrentApiRequests:
             )
 
             def _suggest_one(idx: int) -> bool:
-                """单线程任务：生成建议。"""
+                """单线程任务：生成建议。
+
+                注：显式关闭"生成后清除反馈"（2026-09-19 新增的默认行为）。
+                本用例验证**并发生成**的线程安全；默认清除会让先完成者消费掉
+                反馈、后到者无反馈可查（400），与用例意图无关地引入竞态。
+                反馈清除的生命周期由 test_feedback_lifecycle.py 专项覆盖。
+                """
                 try:
-                    resp = client.post("/api/v1/suggest", json={"track_id": track_id})
+                    resp = client.post(
+                        "/api/v1/suggest",
+                        json={"track_id": track_id,
+                              "clear_feedback_after_suggest": False},
+                    )
                     if resp.status_code != 200:
                         errors.append(
                             f"thread {idx}: status {resp.status_code} {resp.text}"
@@ -461,10 +471,17 @@ class TestConcurrentApiRequests:
                     errors.append(f"feedback task {idx}: {e}")
 
             def _suggest_task(idx: int) -> None:
+                """混压任务：连续生成建议。
+
+                显式关闭生成后清除（非本用例关注点；否则每线程只有第 1 次
+                生成有反馈可用，后续 400）。生命周期由专项用例覆盖。
+                """
                 try:
                     for _ in range(3):
                         resp = client.post(
-                            "/api/v1/suggest", json={"track_id": track_id},
+                            "/api/v1/suggest",
+                            json={"track_id": track_id,
+                                  "clear_feedback_after_suggest": False},
                         )
                         if resp.status_code != 200:
                             errors.append(f"suggest {idx}: {resp.status_code}")

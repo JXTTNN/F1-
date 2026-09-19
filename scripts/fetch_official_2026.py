@@ -100,7 +100,7 @@ REQUIRED_TEL_KEYS: tuple[str, ...] = (
 
 _TIMEOUT = 60
 _RETRIES = 3
-_POLITE_SLEEP = 0.05
+_POLITE_SLEEP = 0.01
 
 
 # --------------------------------------------------------------------------- #
@@ -201,7 +201,7 @@ def fetch_session(
     out_root: Path = CACHE,
     state: dict[str, Any] | None = None,
     budget: dict[str, Any] | None = None,
-    workers: int = 8,
+    workers: int = 24,
 ) -> dict[str, Any]:
     """抓取一场会话（已存在文件自动跳过；budget 可在中途停下）。
 
@@ -367,7 +367,7 @@ def crawl_full(
     drivers: list[str] | None,
     max_laps: int | None,
     force: bool = False,
-    workers: int = 8,
+    workers: int = 24,
 ) -> None:
     budget = {
         "max_files": max_files, "max_bytes": None,

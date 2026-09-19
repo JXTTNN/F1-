@@ -556,6 +556,21 @@ class Store:
             ).fetchone()
         return row is not None
 
+    def clear_track_feedback(self, track_id: str) -> int:
+        """清除某赛道的所有反馈记录，返回删除条数。
+
+        用途：`/suggest` 生成成功后"消费"本圈反馈（2026-09-19）——
+        本次生成已经用掉了这些反馈，若不清除，下一圈录入的新反馈会与
+        上一圈混在一起（用户诉求：跨圈不串味）。返回条数供接口层如实
+        告知用户清了多少条；清除空赛道返回 0，不报错。
+        """
+        with self._lock:
+            cur = self._conn.execute(
+                "DELETE FROM feedback WHERE track_id = ?", (track_id,),
+            )
+            self._conn.commit()
+        return int(cur.rowcount)
+
     # ------------------------------------------------------------------
     # suggestion（调教建议）
     # ------------------------------------------------------------------
