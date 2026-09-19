@@ -937,11 +937,48 @@ async def suggest(
         svc["telemetry_stream"], svc.get("lap_aggregator"),
     )
 
-    # 反馈闸门（2026-09-18 修订）：原本"没有车手反馈就 400"，导致
-    # **遥测自动发现的问题永远到不了用户面前** —— 这正是"自动发现没生效"的根因。
-    # 现在放宽为：有车手反馈 → 照常；没有反馈但遥测自动诊断出了具体问题 →
-    # 仍然出建议，并在报告里标注 telemetry_only。
-    telemetry_findings = diagnose_from_telemetry(telemetry_summary, body.track_id)
+    # --- 新增：从遥测提取逐弯实际用时，供 surrogate残差诊断使用 ---
+    # 1. 从所有已缓存帧里提取 m_lapDistance（圈内距离）与 m_currentLapTime
+    # 2. 用 corner_locator 将距离映射为弯号
+    # 3. 组成 {corner_number: lap_time_ms} 字典，传给 diagnose_from_telemetry
+    from setup_tuner.domain.corner_locator import locate_corner
+    from setup_tuner.domain._track_arcs import TRACK_CORNER_ARCS
+
+    all_latest = svc["telemetry_stream"].get_all_latest()
+    corner_times: dict[int, float] = {}
+    track_id_for_locator = body.track_id
+
+    # 获取赛道长度（若有弧长表则精确，无则退回均匀近似）
+    arc_info = TRACK_CORNER_ARCS.get(track_id_for_locator)
+    if arc_info:
+        fractions, corner_nums = zip(*sorted(arc_info.items()))
+        track_length = fractions[-1]  # 最后一个弧长占比即为总圈长比例（归一化）
+    else:
+        track_length = None
+
+    # 遍历已缓存的帧，提取圈内距离与圈速
+    for pid, frame in all_latest.items():
+        # Packet 3 (LapData) 通常带 m_lapDistance；也尝试 Packet 1 (Motion)
+        lap_distance = frame.get("m_lapDistance") if isinstance(frame, dict) else None
+        if lap_distance is None:
+            lap_distance = frame.get("m_lapDistance") if isinstance(frame, dict) else None
+        # 取最近一圈的 lap_time_ms（来自 LapData packet 3 或累计时间）
+        lap_time_ms = frame.get("m_currentLapTime") if isinstance(frame, dict) else None
+        if lap_distance is not None and lap_time_ms is not None and lap_time_ms > 0:
+            # 将 lap_distance 映射为弯号（1-based）
+            corners = arc_info and [
+                c.number for c in arc_info
+            ] or None
+            corner_num = locate_corner(
+                lap_distance, track_length or 0.0,
+                corners or [], track_id_for_locator,
+            )
+            if corner_num is not None:
+                corner_times[int(corner_num)] = lap_time_ms / 1000.0  # ms → s
+
+    # 将提取的 corner_times 传给 diagnose_from_telemetry，由其中的 _from_surrogate_residual
+    # 用 surrogate 模型算期望用时，实测偏慢则推断隐式症状
+    telemetry_findings = diagnose_from_telemetry(telemetry_summary, body.track_id, corner_times=corner_times)
     if not raw_feedbacks and not telemetry_findings:
         _validate_feedback_available(feedback_service, body.track_id)
     telemetry_only = not raw_feedbacks and bool(telemetry_findings)

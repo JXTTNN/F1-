@@ -397,6 +397,10 @@ def _from_surrogate_residual(
 ) -> list[dict[str, Any]]:
     """用遥测训练的弯速模型算出期望用时，实测偏慢 → 推断症状。
 
+    关键点：输出的症状将在 merge_with_driver_feedbacks 中与车手反馈合并，
+    并通过 class_weighted_dx 进入 engine 的 dx 计算链路，真正影响
+    setup_delta 与调教建议。
+
     Args:
         track_id: 赛道标识。
         corner_times: 逐弯**实际**通过时间（秒），来自逐点遥测切弯。
