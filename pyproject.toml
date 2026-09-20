@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "setup_tuner"
-version = "0.1.0"
+version = "1.6.0"
 description = "F1OPT 赛车调教优化助手 - EA F1 2026 Setup Tuner"
 requires-python = ">=3.11"
 readme = "README.md"

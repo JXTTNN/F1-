@@ -457,6 +457,25 @@ def test_e2e(host: str, port: int) -> TestResult:
         assert report is not None, "suggest report 为 None"
         items.append(f"POST /suggest → 建议已生成（id={suggestion_id}）✓")
 
+        # **模型必须随包内嵌并真的在跑**（2026-09-20）
+        # 此前 build_nuitka 只内嵌 ui/ 与 schema.sql，漏了 setup_tuner/resources/
+        # → 便携版能启动但没有模型，静默降级为纯规则。用户要求"下载安装的就是
+        # 训练好后完整无误的系统"，故这里升级为**硬断言**：不达标即构建失败。
+        model_type = report.get("model_type")
+        sim = (report.get("holistic") or {}).get("simulation") or {}
+        assert model_type == "nn", (
+            f"打包产物未启用神经网络模拟优化（model_type={model_type}，"
+            f"reason={sim.get('reason')}）—— 检查 setup_tuner/resources/models/ "
+            "是否随包内嵌（Nuitka --include-data-dir）"
+        )
+        assert report.get("nn_available") is True, "nn_available 应为 True"
+        assert sim.get("available") is True, f"模拟优化不可用：{sim.get('reason')}"
+        assert sim.get("model"), "模拟优化面板缺少模型描述"
+        items.append(
+            f"模型随包内嵌并生效：{model_type} / 迭代 {sim.get('iterations')} 轮 / "
+            f"采纳 {sim.get('accepted')} 次 / 模拟提升 {sim.get('gain_ms')} ms ✓"
+        )
+
         # f. 查看迭代历史
         resp = client.get(
             api_url(host, port, "/iteration/history"),
@@ -580,7 +599,7 @@ def test_portable(
     检查项:
         - 解压 zip 到临时目录
         - 从临时目录启动 exe
-        - 验证 data 目录在工作目录创建（data_dir 默认 ./data）
+        - 验证 data 目录创建在**解压出来的安装文件夹内**（<exe 所在目录>/data）
         - 验证 API 可正常响应
     """
     items: list[str] = []
@@ -621,32 +640,42 @@ def test_portable(
             return TestResult("portable", passed, info, items)
         items.append(info)
 
-        # ⑤ 验证 data 目录创建（data_dir 默认 ./data，在工作目录下）
-        data_dir = tmp_dir / "data"
-        if data_dir.exists():
-            db_file = data_dir / "f1opt.db"
-            if db_file.exists():
-                db_size = db_file.stat().st_size
-                items.append(f"data 目录已创建，f1opt.db 存在（{db_size} bytes）✓")
-            else:
-                items.append("data 目录已创建，但 f1opt.db 尚未生成（可能未触发 DB 操作）✓")
-        else:
-            # data 目录可能尚未创建（直到第一次 DB 操作才创建）
-            # 主动触发一次 API 调用让 DB 初始化
+        # ⑤ 数据目录必须创建在**解压出来的安装文件夹内**（<exe 所在目录>/data）
+        # 2026-09-20 起数据落点与 cwd 无关（Config.resolved_data_dir()）；
+        # 冻结打包形态下安装根 = 可执行文件所在目录。用户明确要求
+        # 「所有数据只能在安装文件夹中」，故这里由"软提示"升级为**硬断言**。
+        data_dir = exe_in_tmp.parent / "data"
+        if not data_dir.exists():
+            # 首次 DB 操作才创建，主动触发一次
             try:
                 client = httpx.Client(timeout=HTTP_TIMEOUT)
                 client.get(api_url(host, port, "/tracks"))
                 client.close()
-                time.sleep(1)  # 给 DB 写入一点时间
+                time.sleep(1)
             except httpx.HTTPError:
                 pass
 
-            if data_dir.exists():
-                items.append("data 目录在 API 调用后创建 ✓")
+        if data_dir.exists():
+            db_file = data_dir / "f1opt.db"
+            if db_file.exists():
+                db_size = db_file.stat().st_size
+                items.append(
+                    f"数据目录落在安装文件夹内，f1opt.db 存在（{db_size} bytes）✓"
+                )
             else:
-                # data 目录未在预期位置创建，可能是 Nuitka onefile 运行时 CWD 差异
-                # 这是非致命问题：API 功能已验证正常，data 可能创建在别处
-                items.append(f"⚠ data 目录未在 {data_dir} 创建（非致命：API 功能正常）")
+                items.append("数据目录已在安装文件夹内创建（f1opt.db 稍后生成）✓")
+        else:
+            passed = False
+            items.append(
+                f"❌ 数据目录未创建在安装文件夹内：{data_dir}"
+                "（要求：所有数据只能落在安装目录）"
+            )
+
+        # 反向断言：启动时的工作目录（若与安装目录不同）不得被写入数据
+        stray = tmp_dir / "data"
+        if stray != data_dir and stray.exists():
+            passed = False
+            items.append(f"❌ 工作目录被写入数据：{stray}（应只在安装文件夹内）")
 
         # ⑥ 验证 API 可正常响应（再请求一次 tracks）
         try:
