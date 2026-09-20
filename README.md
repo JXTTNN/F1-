@@ -104,8 +104,11 @@ python -m setup_tuner.cli
 ### 方式 B：免安装便携包（Windows）
 
 从 [Releases](https://github.com/JXTTNN/F1-/releases) 下载
-[`F1OPT-portable.zip`](https://github.com/JXTTNN/F1-/releases/download/v1.5.8/F1OPT-portable.zip)（约 21 MB），
-解压后双击启动，无需安装 Python。
+[`F1OPT-portable.zip`](https://github.com/JXTTNN/F1-/releases/download/v1.6.11/F1OPT-portable.zip)（约 22 MB），
+解压后双击「一键启动.bat」即可，无需安装 Python、无需任何配置。
+>
+> 便携包每次发布都会自动通过**打包产物测试**（6 阶段 / 100+ 检查）才会公开：
+> 包含「模型确实随包内嵌并在跑（`model_type=nn`）」与「数据落在解压目录内」两项硬断言。
 
 ### 游戏内设置（接遥测）
 
