@@ -146,3 +146,34 @@ def test_data_dir_env_both_spellings(key: str, tmp_path: Path, monkeypatch) -> N
         env_path=tmp_path / "none.env",
     ).resolved_data_dir()) == tmp_path / "x"
     os.environ.pop(key, None)
+
+
+class TestFrozenPackaging:
+    """便携/单文件打包形态：数据必须落在**可执行文件旁**，不是解包临时目录。"""
+
+    def test_frozen_uses_executable_dir(self, tmp_path: Path, monkeypatch) -> None:
+        import sys
+
+        exe = tmp_path / "F1OPT-portable" / "f1opt.exe"
+        exe.parent.mkdir(parents=True)
+        exe.write_text("", encoding="utf-8")
+        monkeypatch.setattr(sys, "frozen", True, raising=False)
+        monkeypatch.setattr(sys, "executable", str(exe))
+        try:
+            assert install_root() == exe.parent.resolve()
+            assert Path(default_data_dir()) == exe.parent.resolve() / "data"
+        finally:
+            monkeypatch.delattr(sys, "frozen", raising=False)
+
+    def test_nuitka_marker_detected(self, tmp_path: Path, monkeypatch) -> None:
+        import sys
+
+        exe = tmp_path / "app" / "f1opt"
+        exe.parent.mkdir(parents=True)
+        exe.write_text("", encoding="utf-8")
+        monkeypatch.setattr(sys, "nuitka_version", "2.0", raising=False)
+        monkeypatch.setattr(sys, "executable", str(exe))
+        try:
+            assert install_root() == exe.parent.resolve()
+        finally:
+            monkeypatch.delattr(sys, "nuitka_version", raising=False)

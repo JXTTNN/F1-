@@ -21,11 +21,29 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
-def install_root() -> Path:
-    """安装根目录（含 `setup_tuner/` 包的那一层）。
+def _is_frozen() -> bool:
+    """是否运行在**冻结打包**产物里（PyInstaller / Nuitka 单文件）。"""
+    import sys
 
-    本文件位于 `<安装根>/setup_tuner/config.py`，故上一级即可。
+    if getattr(sys, "frozen", False):          # PyInstaller
+        return True
+    if hasattr(sys, "nuitka_version"):         # Nuitka
+        return True
+    main = sys.modules.get("__main__")
+    return main is not None and hasattr(main, "__compiled__")
+
+
+def install_root() -> Path:
+    """安装根目录（含 `setup_tuner/` 包、或可执行文件所在的那一层）。
+
+    - 常规安装/源码运行：本文件位于 `<安装根>/setup_tuner/config.py` → 上一级
+    - **冻结打包**（便携版单文件）：`__file__` 指向运行时解包出来的临时目录
+      （退出即删），不能用来放数据 → 改用可执行文件所在目录（用户解压的地方）
     """
+    import sys
+
+    if _is_frozen():
+        return Path(sys.executable).resolve().parent
     return Path(__file__).resolve().parents[1]
 
 

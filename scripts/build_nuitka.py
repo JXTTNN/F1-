@@ -114,6 +114,25 @@ def check_ui_dir_exists() -> None:
 # =========================================================================== #
 # Nuitka 编译
 # =========================================================================== #
+def check_models_dir_exists() -> None:
+    """检查随包分发的模型产物（setup_tuner/resources/models/*.json）。
+
+    便携版必须内嵌训练好的模型，否则"下载即用"会退化为纯规则路径。
+    """
+    models_dir = REPO_ROOT / "setup_tuner" / "resources" / "models"
+    if not models_dir.is_dir():
+        print(f"[error] 模型资源目录不存在：{models_dir}", file=sys.stderr)
+        raise SystemExit(1)
+    found = sorted(models_dir.glob("*.json"))
+    if not found:
+        print(f"[error] 模型资源目录为空：{models_dir}", file=sys.stderr)
+        raise SystemExit(1)
+    print(
+        f"[check] 模型资源就绪：{models_dir.relative_to(REPO_ROOT)}"
+        f"（{len(found)} 个：{', '.join(f.name for f in found)}）"
+    )
+
+
 def build_nuitka_command() -> list[str]:
     """构造 Nuitka 编译命令行参数列表。
 
@@ -142,6 +161,12 @@ def build_nuitka_command() -> list[str]:
         # 内嵌 SQLite schema.sql（非 Python 文件，--follow-imports 不会自动包含）
         # dest 必须与 store.py 的 __file__ 同目录：setup_tuner/db/schema.sql
         "--include-data-files=setup_tuner/db/schema.sql=setup_tuner/db/schema.sql",
+        # 内嵌**训练好的模型**（调教性能 NN + 遥测代理）。
+        # dest 必须与 engine/model_io.py 的 PACKAGE_MODELS_DIR 同路径：
+        #   setup_tuner/resources/models/
+        # 漏掉这一项 → 便携版能启动但没有模型 → 静默降级为纯规则
+        # （"从 GitHub 下载安装的应该是完整无误的系统"）。
+        "--include-data-dir=setup_tuner/resources=setup_tuner/resources",
         # 输出文件名与目录
         f"--output-filename={OUTPUT_FILENAME}",
         f"--output-dir={OUTPUT_DIR}",
@@ -261,6 +286,7 @@ def main() -> int:
     check_nuitka_installed()
     check_entry_exists()
     check_ui_dir_exists()
+    check_models_dir_exists()
 
     # ② 清理旧产物
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
