@@ -10,7 +10,7 @@
         * GET  /api/v1/tracks          → 200, 24 赛道
         * GET  /api/v1/tracks/suzuka   → 200, 含弯道锚点
         * POST /api/v1/feedback        → 200（提交一条反馈）
-        * POST /api/v1/suggest         → 200（生成建议，含 21 参数）
+        * POST /api/v1/suggest         → 200（生成建议，参数数与 /setup/fields 对账）
         * GET  /api/v1/suggest/latest  → 200
     - 清理：停止服务，删除临时 DB；
     - 退出码 0=全通过，1=有失败。
@@ -45,8 +45,9 @@ READY_TIMEOUT = 10.0  # 秒
 READY_INTERVAL = 0.3  # 秒
 
 # 赛道与参数常量
+# EXPECTED_PARAM_COUNT 不再硬编码：运行时从 GET /api/v1/setup/fields 取
+# （参数数随领域演进会变 —— 硬编码 21 曾让 smoke 在参数修正后长期假红）。
 EXPECTED_TRACK_COUNT = 24
-EXPECTED_PARAM_COUNT = 21
 TEST_TRACK_ID = "suzuka"
 
 # 退出码
@@ -271,23 +272,41 @@ def test_feedback() -> None:
     print(f"  [PASS] feedback → id={data.get('id')}, symptom={data.get('symptom')}")
 
 
+def fetch_expected_param_count() -> int:
+    """从 GET /api/v1/setup/fields 现取可调参数数（真值与领域同源）。"""
+    status, body = http_get(f"{BASE_URL}/setup/fields")
+    data = assert_ok(status, body, "setup/fields")
+    # data 直接就是字段列表（每项含 name/min/max/step/...）
+    fields = data if isinstance(data, list) else (
+        data.get("fields") or list(data.values())
+    )
+    count = len(fields) if hasattr(fields, "__len__") else 0
+    if count <= 0:
+        raise SmokeFailure("[setup/fields] 未返回任何可调参数字段")
+    return count
+
+
 def test_suggest() -> None:
-    """⑤ POST /api/v1/suggest → 200（生成建议，含 21 参数）。"""
+    """⑤ POST /api/v1/suggest → 200（生成建议，参数数与 /setup/fields 对账）。"""
     payload = {"track_id": TEST_TRACK_ID}
     status, body = http_post(f"{BASE_URL}/suggest", payload)
     data = assert_ok(status, body, "suggest")
     assert "report" in data, f"[suggest] data 缺少 report 字段：{data}"
     report = data["report"]
-    # 报告中应包含 parameters 列表（design 2.7.7 格式）
+    # 报告中应包含 parameters 列表（design 2.7.7 格式）。
+    # 期望参数数从 /setup/fields 现取（与领域同源），不再硬编码 ——
+    # 参数集演进时 smoke 不会假红。
     params = report.get("parameters")
     if params is not None:
         assert isinstance(params, list), f"[suggest] parameters 不是列表：{type(params)}"
         param_count = len(params)
-        if param_count != EXPECTED_PARAM_COUNT:
+        expected = fetch_expected_param_count()
+        if param_count != expected:
             raise SmokeFailure(
-                f"[suggest] 期望 {EXPECTED_PARAM_COUNT} 参数，实际 {param_count}"
+                f"[suggest] 期望 {expected} 参数（与 /setup/fields 对账），"
+                f"实际 {param_count}"
             )
-        print(f"  [PASS] suggest → {param_count} 参数建议")
+        print(f"  [PASS] suggest → {param_count} 参数建议（与 /setup/fields 对账一致）")
     else:
         # 报告格式可能用 setupDelta dict
         delta = report.get("setup_delta") or report.get("setupDelta")

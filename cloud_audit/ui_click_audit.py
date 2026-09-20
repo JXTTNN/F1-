@@ -87,10 +87,12 @@ def run(page) -> None:
     item("③反馈面板弹出", panel)
     if panel:
         total = page.locator('#feedback-overlay input[name="symptom"]').count()
-        item("③症状条目=17", total == 17, f"实际 {total}（lap_slow 已降级）")
+        # 真值来源：setup_tuner/ui/index.html 的 4 组 symptom 输入
+        # （22 症状 − lap_slow 已降级 = 21；entry6/apex3/exit4/global8）
+        item("③症状条目=21", total == 21, f"实际 {total}（lap_slow 已降级）")
         expand_all_groups(page)
         counts = group_counts(page)
-        item("③分组 5/3/4/5", counts == {"entry": 5, "apex": 3, "exit": 4, "global": 0},
+        item("③分组 6/3/4/0", counts == {"entry": 6, "apex": 3, "exit": 4, "global": 0},
              f"{counts}")
         visible = page.locator('#feedback-overlay input[name="symptom"]:visible')
         n_visible = visible.count()
@@ -114,7 +116,7 @@ def run(page) -> None:
     page.wait_for_timeout(2500)
     rows = page.locator("#report-table-wrap table tr").count()
     item("④报告生成", rows > 0, f"表格行数={rows}")
-    item("④报告参数行=21", rows - 1 == 21, f"数据行={rows - 1}")
+    item("④报告参数行=20", rows - 1 == 20, f"数据行={rows - 1}")
     page.screenshot(path=str(SHOTS / "04_report.png"), full_page=True)
 
     # ── ⑤ 遥测面板 ──
@@ -126,7 +128,7 @@ def run(page) -> None:
     page.click("#track-feedback-btn")
     page.wait_for_timeout(600)
     counts = group_counts(page)
-    item("⑥赛道模式仅全局组", counts.get("global", 0) == 5
+    item("⑥赛道模式仅全局组", counts.get("global", 0) == 8
          and counts.get("entry") == 0, f"{counts}")
     gvals = [
         page.locator('.sym-group[data-category="global"] input[name="symptom"]').nth(i)

@@ -53,6 +53,9 @@ PORTABLE_ZIP = "F1OPT-portable.zip"
 BAT_SCRIPT = REPO_ROOT / "assets" / "一键启动-便携版.bat"
 # 便携 zip 内的启动器名（用户看到的入口）
 PORTABLE_BAT_NAME = "一键启动.bat"
+# 便携包内的使用说明（"换台电脑直接用"场景的开箱指引，免翻 README）
+GUIDE_FILE = REPO_ROOT / "assets" / "便携版使用说明.txt"
+GUIDE_NAME = "使用说明.txt"
 
 # Nuitka 编译超时（秒）—— onefile 模式编译较慢，给足 20 分钟
 COMPILE_TIMEOUT = 20 * 60
@@ -270,6 +273,11 @@ def package_portable_zip(exe_path: Path) -> Path:
                 f"[error] 便携版启动器不存在：{BAT_SCRIPT}\n"
                 "        便携包必须含启动器，否则用户无法启动（不再静默跳过）。"
             )
+
+        # ③ 使用说明（换电脑场景的开箱指引）
+        if GUIDE_FILE.exists():
+            zf.write(GUIDE_FILE, arcname=GUIDE_NAME)
+            print(f"[pack]   + {GUIDE_NAME}")
 
     zip_size_mb = zip_path.stat().st_size / (1024 * 1024)
     print(f"[pack] 便携包打包完成：{zip_path.relative_to(REPO_ROOT)}（{zip_size_mb:.2f} MB）")
