@@ -28,26 +28,26 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from .model_io import resolve_model_path
 from .pure_nn import MLP
 
 logger = logging.getLogger(__name__)
 
-#: 默认权重路径（相对工作目录；不存在时回退到仓库根目录，见 :func:`_resolve_path`）
-DEFAULT_PATH = Path("data") / "models" / "telemetry_surrogate.json"
+#: 模型文件名（解析顺序见 :func:`.model_io.resolve_model_path`）
+MODEL_NAME = "telemetry_surrogate.json"
+DEFAULT_PATH = Path("data") / "models" / MODEL_NAME
 
 
 def _resolve_path(path: Path) -> Path:
-    """解析权重路径：优先工作目录，回退到包所在仓库根。
+    """解析权重路径：显式 → 工作目录 data/models/ → 仓库根 → **包内资源**。
 
-    为什么需要回退：用户可能从任意工作目录启动服务（快捷方式/IDE/其它 cwd），
-    此时相对路径 ``data/models/...`` 会找不到模型 —— 表现为"模型明明训练好了
-    却没生效"。回退到 ``setup_tuner`` 的上一级目录（仓库根）即可命中。
+    为什么需要多级回退：用户可能从任意工作目录启动服务（快捷方式/IDE/其它
+    cwd），也可能 ``pip install`` 后没有仓库根的 data/ —— 两种情况都必须能
+    找到模型。集中实现见 :mod:`.model_io`。
     """
-    if path.is_absolute() or path.exists():
+    if path.is_absolute():
         return path
-    repo_root = Path(__file__).resolve().parents[2]
-    candidate = repo_root / path
-    return candidate if candidate.exists() else path
+    return resolve_model_path(path.name, path)
 
 
 @dataclass(frozen=True, slots=True)

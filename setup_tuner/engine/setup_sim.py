@@ -36,12 +36,14 @@ from typing import Any
 
 from setup_tuner.domain.setup import ALL_SETUP_FIELDS, get_field
 
+from .model_io import resolve_model_path
 from .pure_nn import MLP
 
 logger = logging.getLogger(__name__)
 
-#: 默认权重路径（相对工作目录；不存在时回退到仓库根，见 :func:`_resolve_path`）
-DEFAULT_PATH = Path("data") / "models" / "setup_sim_nn.json"
+#: 模型文件名（解析顺序见 :func:`.model_io.resolve_model_path`）
+MODEL_NAME = "setup_sim_nn.json"
+DEFAULT_PATH = Path("data") / "models" / MODEL_NAME
 
 #: 赛道聚合特征（顺序即特征向量顺序，训练/推理必须一致）
 TRACK_FEATURE_KEYS: tuple[str, ...] = (
@@ -54,16 +56,15 @@ CONDITION_KEYS: tuple[str, ...] = (
 
 
 def _resolve_path(path: Path) -> Path:
-    """解析权重路径：优先工作目录，回退到包所在仓库根。
+    """解析权重路径：显式 → 工作目录 data/models/ → 仓库根 → **包内资源**。
 
-    用户可能从任意工作目录启动服务（快捷方式/IDE/其它 cwd），相对路径
-    ``data/models/...`` 会找不到模型 —— 表现为"模型训练好了却没生效"。
+    用户可能从任意工作目录启动服务（快捷方式/IDE/其它 cwd），也可能
+    ``pip install`` 后根本没有仓库根的 data/ —— 两种情况都必须能找到模型，
+    否则表现为"模型训练好了却没生效"。集中实现见 :mod:`.model_io`。
     """
-    if path.is_absolute() or path.exists():
+    if path.is_absolute():
         return path
-    repo_root = Path(__file__).resolve().parents[2]
-    candidate = repo_root / path
-    return candidate if candidate.exists() else path
+    return resolve_model_path(path.name, path)
 
 
 # --------------------------------------------------------------------------- #

@@ -359,8 +359,30 @@ def _start_telemetry_listener(listener: TelemetryListener, config: Config) -> No
         )
 
 
-def _cleanup_app_services(listener: TelemetryListener, store: Store) -> None:
-    """停止 UDP 监听并关闭 Store（容错，失败仅记日志）。"""
+def _cleanup_leftover_telemetry(config: Config) -> None:
+    """启动时清理上次残留的遥测数据（与关闭清理同一规则；失败不致命）。
+
+    为什么需要：关闭钩子只覆盖优雅退出。若进程被强杀 / 崩溃，派生遥测数据
+    会留在磁盘上 —— 启动时补一刀，保证"关闭后删除（录制除外）"这条约定
+    在任何退出路径下都成立（录制在 cleanup 里受白名单 + 片段保护）。
+    """
+    if config.keep_telemetry:
+        logger.info("keep_telemetry=True：启动时保留既有遥测数据")
+        return
+    try:
+        from setup_tuner.telemetry.cleanup import cleanup_telemetry
+
+        report = cleanup_telemetry(config.data_dir)
+        if report.removed:
+            logger.info("启动清理上次残留：%s", report.describe())
+    except Exception:
+        logger.exception("startup telemetry cleanup failed (non-fatal)")
+
+
+def _cleanup_app_services(
+    listener: TelemetryListener, store: Store, config: Config | None = None,
+) -> None:
+    """停止 UDP 监听、关闭 Store、按约定清理遥测数据（全部容错，失败仅记日志）。"""
     try:
         listener.stop()
     except Exception:
@@ -369,6 +391,19 @@ def _cleanup_app_services(listener: TelemetryListener, store: Store) -> None:
         store.close()
     except Exception:
         logger.exception("store close failed")
+    # 遥测数据清理（2026-09-20 用户约定）：关闭后删除派生遥测数据，**录制永久保留**。
+    # - `keep_telemetry=True`（F1OPT_KEEP_TELEMETRY=1）时跳过，便于调试/复用训练集；
+    # - 清理是白名单操作且失败不致命（见 telemetry/cleanup.py 的安全约束）。
+    if config is not None and not config.keep_telemetry:
+        try:
+            from setup_tuner.telemetry.cleanup import cleanup_telemetry
+
+            report = cleanup_telemetry(config.data_dir)
+            logger.info("遥测数据清理：%s", report.describe())
+        except Exception:
+            logger.exception("telemetry cleanup failed (non-fatal)")
+    elif config is not None:
+        logger.info("keep_telemetry=True：保留遥测数据（含派生训练数据）")
     logger.info("F1OPT app stopped")
 
 
@@ -383,11 +418,17 @@ async def _lifespan(app: FastAPI):
         - TelemetryListener（UDP 监听，后台线程）
         - WSManager（WebSocket 连接管理器）
 
-    清理：
+    清理（顺序固定）：
         - 停止 TelemetryListener
         - 关闭 Store
+        - 清理遥测数据（**录制永久保留**；`F1OPT_KEEP_TELEMETRY=1` 可跳过）
+
+    **启动时也清理一次**：关闭钩子只在优雅退出时执行，进程被强杀（任务管理器 /
+    SIGKILL / 断电）或崩溃时不会触发 —— 那样"关闭后删除"就落空了。因此启动时
+    先清一次上次的残留（幂等、白名单、录制保护），保证约定无论如何都成立。
     """
     config: Config = app.state.config
+    _cleanup_leftover_telemetry(config)
     store, listener = _init_app_services(app, config)
     _start_telemetry_listener(listener, config)
     logger.info("F1OPT app started, data_dir=%s", config.data_dir)
@@ -395,7 +436,7 @@ async def _lifespan(app: FastAPI):
     try:
         yield
     finally:
-        _cleanup_app_services(listener, store)
+        _cleanup_app_services(listener, store, config)
 
 
 # =========================================================================== #

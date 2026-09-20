@@ -531,15 +531,49 @@ class TestSmoke:
         assert config.api_port == 11111
 
     def test_main_with_argv_parameter(self, tmp_path: Path) -> None:
-        """main(argv=[...]) 接受命令行参数（当前未使用，保留扩展）。"""
+        """main(argv=[...]) 真实解析命令行参数（2026-09-20 起）。
+
+        历史行为：`main(argv)` 忽略全部参数 —— `f1opt --help` 会直接启动服务
+        （挂住终端），README 里写的子命令也从未存在。现在提供真实参数集，
+        因此未知参数应当被 argparse 拒绝（SystemExit 2），已知参数正常生效。
+        """
         config = Config(api_host="127.0.0.1", api_port=0, data_dir=str(tmp_path))
+
+        # ① 未知参数 → SystemExit（而不是静默忽略）
+        with pytest.raises(SystemExit):
+            main(argv=["--some-flag", "value"])
+
+        # ② 已知参数 → 正常启动（exit 0），且 port 覆盖生效
         with patch("setup_tuner.cli.load_config", return_value=config), \
              patch("setup_tuner.cli.is_port_in_use", return_value=False), \
              patch("uvicorn.run"), \
              patch("setup_tuner.cli._open_browser_delayed"):
-            # 传入 argv 参数应不抛异常
-            exit_code = main(argv=["--some-flag", "value"])
+            exit_code = main(argv=["--no-browser", "--port", "8123"])
         assert exit_code == 0
+
+    def test_main_help_and_version_exit_zero(self) -> None:
+        """--help / --version 必须立刻返回 0（不得启动服务挂住终端）。"""
+        with pytest.raises(SystemExit) as help_exit:
+            main(argv=["--help"])
+        assert help_exit.value.code == 0
+        with pytest.raises(SystemExit) as ver_exit:
+            main(argv=["--version"])
+        assert ver_exit.value.code == 0
+
+    def test_main_keep_telemetry_flag(self, tmp_path: Path) -> None:
+        """--keep-telemetry 覆盖配置里的 keep_telemetry=False。"""
+        config = Config(api_host="127.0.0.1", api_port=0, data_dir=str(tmp_path))
+        assert config.keep_telemetry is False
+        with patch("setup_tuner.cli.load_config", return_value=config), \
+             patch("setup_tuner.cli.is_port_in_use", return_value=False), \
+             patch("uvicorn.run"), \
+             patch("setup_tuner.cli.create_app") as mock_create, \
+             patch("setup_tuner.cli._open_browser_delayed"):
+            mock_create.return_value = object()
+            main(argv=["--keep-telemetry"])
+        # create_app 收到的 Config 必须是开了 keep_telemetry 的那份
+        passed_config = mock_create.call_args[0][0]
+        assert passed_config.keep_telemetry is True
 
     def test_webbrowser_open_attempted(self, tmp_path: Path) -> None:
         """main() 启动时尝试打开浏览器（_open_browser_delayed 被调用）。"""

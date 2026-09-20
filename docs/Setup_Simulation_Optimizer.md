@@ -80,7 +80,9 @@ Dx (9 维需求)
 - 输入 42 维：赛道 one-hot(13) + 赛道聚合特征(5) + 调教 20 + 工况(4)
 - 结构 `[42, 48, 24, 1]`，ReLU + Adam 反传，全部标准库实现（`engine/pure_nn.py`）
 - 输出缩放：目标按训练集均值/标准差归一到 ~1 量级再训练，推理乘回（条件数改善）
-- 落盘：`data/models/setup_sim_nn.json`（权重 + 每赛道特征表 + 指标 + 缩放口径）
+- 落盘：`setup_tuner/resources/models/setup_sim_nn.json`（权重 + 每赛道特征表 + 指标
+  + 缩放口径）。**放在包内**是为了 pip 安装后仍能找到（安装形态下没有仓库根的
+  `data/`）；工作目录下的 `data/models/` 优先级更高，可用于覆盖/实验
 
 **验证集指标**：MAE **53.3 ms** / R² **0.9959**（零改动基线 MAE 2758 ms）。
 
@@ -156,5 +158,8 @@ python -m setup_tuner.cli        # 或 uvicorn setup_tuner.app:create_app --fact
 # POST /api/v1/suggest {"track_id":"suzuka","model_type":"hybrid"}
 ```
 
-> 注：`data/training/` 与 `data/recordings/` 属个人遥测数据，**.gitignore 排除**；
-> 仓库只保留模型产物 `data/models/*.json`（可复算）。
+> 注：`data/training/`、`data/sim_telemetry/`、`data/recordings/` 均**不入库**
+> （`data/recordings/` 是用户录制，另两者可随时重新生成）；
+> 模型产物随包分发：`setup_tuner/resources/models/*.json`（可复算）。
+> 应用关闭时会自动清理派生遥测数据、**永久保留录制**（见
+> `setup_tuner/telemetry/cleanup.py`；`F1OPT_KEEP_TELEMETRY=1` 可跳过清理）。

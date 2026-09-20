@@ -7,7 +7,7 @@
     data/training/setup_sim_meta.json       （每赛道聚合特征表）
         → 特征：[赛道 one-hot | 聚合特征 | 调教 20 | 工况]
         → 纯标准库 MLP（setup_tuner.engine.pure_nn）拟合 lap_delta_ms
-        → data/models/setup_sim_nn.json      （引擎 sim_optimizer 使用）
+        → setup_tuner/resources/models/setup_sim_nn.json（随包分发，引擎 sim_optimizer 使用）
 
 评估：80/20 留出集 MAE（ms）/ R²；同时给出「零改动基线」（恒预测 0ms）
 对照，让指标可解释 —— MAE 必须显著小于样本标准差才算学到东西。
@@ -35,7 +35,9 @@ sys.path.insert(0, str(ROOT))
 
 DATASET = ROOT / "data" / "training" / "setup_sim_dataset.jsonl"
 META = ROOT / "data" / "training" / "setup_sim_meta.json"
-OUT = ROOT / "data" / "models" / "setup_sim_nn.json"
+# 默认输出到**包内资源**（随包分发；pip 安装后引擎仍能找到）。
+# 也可用 --out 写到别处（例如工作目录 data/models/ 覆盖包内版本）。
+OUT = ROOT / "setup_tuner" / "resources" / "models" / "setup_sim_nn.json"
 
 
 def _mae(y: list[float], p: list[float]) -> float:

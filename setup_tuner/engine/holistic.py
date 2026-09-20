@@ -461,6 +461,20 @@ _MECHANICAL_PARAMS: tuple[str, ...] = (
     "front_suspension", "rear_suspension",
     "front_anti_roll_bar", "rear_anti_roll_bar",
 )
+
+#: **刚度类**机械参数（悬挂刚度 + 防倾杆）—— 底盘调校的"主手段"。
+#: 只有前束/外倾这类纯几何项参与时，底盘刚度其实没被调过（用户实测反馈
+#: "悬挂几何什么的都没有" 正是这种情形：整圈最优解只留了前束角）。
+_STIFFNESS_PARAMS: tuple[str, ...] = (
+    "front_suspension", "rear_suspension",
+    "front_anti_roll_bar", "rear_anti_roll_bar",
+)
+
+#: 机械需求维度（用于从耦合矩阵推导刚度类改动；与 `_MECHANICAL_PARAMS` 同源）
+_MECHANICAL_DEMAND_DIMS: tuple[str, ...] = (
+    "front_grip_req", "rear_grip_req", "exit_traction_req",
+    "turnin_req", "hi_speed_stab_req", "brake_stab_req",
+)
 #: 触发「机械抓地参与度」检查的赛道牵引需求门槛（牵引指数）。
 #: **2026-09-20 修订**：原为 0.35（只有慢弯主导的赛道才检查），导致
 #: 中/低牵引赛道（suzuka 0.22 / spa 0.26 / hungaroring 0.29 / silverstone 0.17）
@@ -472,6 +486,57 @@ _MECHANICAL_PARAMS: tuple[str, ...] = (
 _TRACTION_PARTICIPATION_MIN = 0.10
 #: 触发检查的机械抓地类需求门槛（Dx 量级）
 _MECHANICAL_DEMAND_MIN = 0.30
+
+
+def _snap_to_step(param: str, value: float) -> float:
+    """把参数值对齐到 step 档位并夹进 [min, max]（整数参数取整）。"""
+    spec = _FIELD_SPECS.get(param)
+    step = (getattr(spec, "step", 0.01) if spec else 0.01) or 0.01
+    snapped = round(value / step) * step
+    if step >= 1.0 and float(step).is_integer():
+        snapped = float(round(snapped))
+    lo = getattr(spec, "min_val", float("-inf"))
+    hi = getattr(spec, "max_val", float("inf"))
+    return max(lo, min(hi, snapped))
+
+
+def _derive_mechanical_from_matrix(dx: dict[str, float]) -> dict[str, float]:
+    """按**主导机械需求维度**从耦合矩阵推导刚度类（悬挂/防倾杆）改动。
+
+    为什么需要它：机械抓地参与度的恢复原本只**复制规则 delta 里恰好有的**
+    机械项 —— 实测 suzuka/understeer 的规则 delta 在机械项里只剩一个前束角，
+    恢复后底盘刚度仍然没被调（"悬挂几何什么的都没有"的另一种表现）。
+    这里改为与规则引擎**同源**推导：``raw[p] = Dx[d]·C[d][p]``（只取需求最强的
+    机械维度那一行），再按 ``max_delta`` 夹取、对齐档位 —— 少了"恰好"的偶然性。
+
+    Args:
+        dx: 诊断向量。
+
+    Returns:
+        ``{param: delta}``（只含非零的刚度类参数）；无机械需求时返回空字典。
+    """
+    if not dx:
+        return {}
+    dominant = max(
+        _MECHANICAL_DEMAND_DIMS, key=lambda d: abs(dx.get(d, 0.0)),
+    )
+    need = dx.get(dominant, 0.0)
+    if not need:
+        return {}
+    out: dict[str, float] = {}
+    for p in _STIFFNESS_PARAMS:
+        cell = get_coupling(dominant, p)
+        if cell is None or not cell.value:
+            continue
+        spec = _FIELD_SPECS.get(p)
+        if spec is None or not spec.max_delta:
+            continue
+        raw = need * cell.value
+        clamped = max(-spec.max_delta, min(spec.max_delta, raw))
+        value = _snap_to_step(p, clamped)
+        if abs(value) > 1e-9:
+            out[p] = value
+    return out
 
 
 def holistic_coherence(
@@ -572,15 +637,23 @@ def holistic_coherence(
             dx.get("brake_stab_req", 0.0),
         )
         if signal >= _MECHANICAL_DEMAND_MIN:
-            present = [p for p in _MECHANICAL_PARAMS if out.get(p)]
-            if not present:
+            # 判据是**刚度类**（悬挂/防倾杆）是否参与：只留前束/外倾这类纯几何项
+            # 等于底盘刚度没被调过（用户实测："悬挂几何什么的都没有"）。
+            if not any(out.get(p) for p in _STIFFNESS_PARAMS):
                 budget_before = sum(abs(v) for v in out.values())
-                restored = [
-                    p for p in _MECHANICAL_PARAMS
-                    if (mechanical_fallback or {}).get(p)
-                ]
-                for p in restored:
-                    out[p] = mechanical_fallback[p]  # type: ignore[index]
+                restored: list[str] = []
+                # (a) 优先复用规则引擎给出的机械项（出处可追溯）
+                for p in _MECHANICAL_PARAMS:
+                    if not out.get(p) and (mechanical_fallback or {}).get(p):
+                        out[p] = mechanical_fallback[p]  # type: ignore[index]
+                        restored.append(p)
+                # (b) 仍无刚度类 → 由耦合矩阵按**主导机械需求维度**推导
+                #     （与规则引擎同源：raw[p] = Dx[d]·C[d][p]，受 max_delta/档位约束）
+                if not any(out.get(p) for p in _STIFFNESS_PARAMS):
+                    for p, v in _derive_mechanical_from_matrix(dx).items():
+                        if not out.get(p):
+                            out[p] = v
+                            restored.append(p)
                 if restored:
                     # **预算中性**：机械手段占的幅度从非机械项等量回收，
                     # 否则湿地会比干地改动更多，破坏"湿地总幅度不增加"这条

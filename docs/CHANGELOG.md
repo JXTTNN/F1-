@@ -4,6 +4,51 @@
 
 ## 2026-09 优化迭代
 
+### 遥测数据关闭即删（录制除外）/ 仓库整理 / README 重写 / 可安装性（2026-09-20）
+- **用户诉求**：「遥测数据，除了录制的，其他的关闭后都要删除」「准确同步、整理
+  github 项目文件、重新写 github 页面」「确保能从 github 正确安装」。
+- **遥测数据清理**（`setup_tuner/telemetry/cleanup.py`）：
+  - **保留**：`data/recordings/`（用户录制）、`data/f1opt.db`（反馈/建议历史）、
+    模型产物；**删除**：`data/training/`、`data/sim_telemetry/`、`training_dataset.json`。
+  - 安全护栏：**白名单**（绝不递归删 data_dir 本身）、路径含 `recordings` 一律跳过、
+    拒绝在文件系统根 / 用户主目录 / 桌面执行、失败不致命、支持 `dry_run`。
+  - **启动时 + 关闭时各清一次**：关闭钩子只覆盖优雅退出，进程被强杀/崩溃时
+    不会触发 —— 实测确认过这一点，故在 lifespan 启动阶段补一刀（幂等）。
+  - 开关：`f1opt --keep-telemetry` / `F1OPT_KEEP_TELEMETRY=1` 可保留派生数据。
+  - 测试 `tests/test_cleanup.py`（19 条：该删的删 / **录制一个字节不动**（含嵌套）/
+    dry-run / 危险目录拒绝 / 幂等 / 启动清理 / keep 开关）。
+- **可安装性（从 GitHub 装完就能用）**：
+  - 模型产物从仓库根 `data/models/` 移到**包内** `setup_tuner/resources/models/`
+    并加入 `package-data` —— 此前 `pip install` 后仓库根不存在，模型找不到 →
+    静默降级为纯规则（"装好了却没用上模型"）。新增 `engine/model_io.py` 统一解析
+    顺序：显式 → 工作目录 `data/models/` → 仓库根 → **包内资源**。
+  - `pyproject.toml` 打包 `setup_tuner.resources`。
+  - **实测**：新建空 venv → `pip install <repo>` → 从任意 cwd 导入 → 模型
+    `available=True` 且路径在 site-packages 内；启动 `/suggest{hybrid}` →
+    `model_type=nn / nn_available=true / gain 449 ms`，且含刚度类改动。
+- **CLI 补全（此前文档与实现不符）**：`main(argv)` 原先忽略全部参数 ——
+  `f1opt --help` 会直接启动服务挂住终端，README 里的 `f1opt feedback/search`
+  子命令从未存在。现提供真实参数集：`--host / --port / --no-browser /
+  --keep-telemetry / --version / -h`（`--help`、`--version` 立刻返回 0）。
+- **配置双键查找**：README 一直文档化 `F1OPT_*` 前缀，代码却只读无前缀键
+  （按 README 设 `F1OPT_DATA_DIR` 会被静默忽略）→ 现两者都认，带前缀优先。
+- **仓库整理**：
+  - `data/sim_telemetry/`（24 赛道模拟包流，约 1.4MB）**移出 git**（可随时用
+    `scripts/generate_sim_telemetry.py` 重新生成，且与"关闭即删"矛盾）；
+  - 删除 3 个被误提交的探针产物（`*_probe_result.json`）并加 gitignore；
+  - 删除死脚本 `verify_calibrator.py`（引用已不存在的 `setup_tuner.physics`
+    与已删除的 `D:/F1TelemetryCollector`，根本跑不起来）；
+  - gitignore 补 `data/training/`、`data/training_dataset.json`、探针产物。
+- **README 重写**（GitHub 落地页）：修正全部与代码不符的内容 ——
+  删除虚构的 `feedback/search` 子命令、虚构的 `F1OPT_LLM_*` 与"内置小模型"、
+  过期的 v1.3.1/f1opt.exe 下载链接（实际最新为 **v1.5.8 / F1OPT-portable.zip**）、
+  错的目录树（`f1opt/` → `setup_tuner/`）；补真实的安装方式、参数、数据策略、
+  实测指标与文档索引。
+- **附带修复**：包文档串（"零 ML/零 LLM"、"F1 25"）更新为 2026 与神经网络模拟
+  优化的真实口径；`verify_new_features` / `api_endpoint_test` 同步。
+- **验证**：`pytest -q` **2117 passed / 3 skipped**；`ruff` 全绿；`node --check` OK；
+  真实进程 E2E：启动 → 残留清理 → `/suggest` → 强杀 → 数据目录仅剩录制与数据库。
+
 ### 关联面同步 + 悬挂几何全赛道参与（2026-09-20）
 - **用户诉求**："更改过的部分的关联部分也要改"、"调教整体性思维太差了，悬挂几何
   什么的都没有"。

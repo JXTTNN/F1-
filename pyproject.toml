@@ -40,10 +40,13 @@ where = ["."]
 include = ["setup_tuner*"]
 exclude = ["tests*", "legacy*", "data_store*"]
 
-# 打包静态 UI 资源（SVG 赛道图 + HTML/JS/CSS）+ SQLite schema
+# 打包静态 UI 资源（SVG 赛道图 + HTML/JS/CSS）+ SQLite schema + 模型产物
+# 模型必须随包分发：仓库根的 data/models/ 在 pip 安装后不存在，
+# 不打包会导致"装好了却找不到模型、静默降级为纯规则"。
 [tool.setuptools.package-data]
 "setup_tuner.ui" = ["tracks/*", "*"]
 "setup_tuner.db" = ["*.sql"]
+"setup_tuner.resources" = ["models/*.json"]
 
 [tool.ruff]
 line-length = 100

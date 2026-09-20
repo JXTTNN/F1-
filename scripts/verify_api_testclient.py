@@ -10,7 +10,27 @@ from fastapi.testclient import TestClient
 
 from setup_tuner.app import create_app
 
-app = create_app()
+
+def _isolated_config():
+    """构造**隔离**的数据目录配置（测试脚本必须遵守的项目约定）。
+
+    应用启动与关闭都会按约定清理派生遥测数据（`data/training/`、
+    `data/sim_telemetry/` 等）。若测试脚本用默认 `./data`，跑一次契约测试
+    就会把开发者的训练数据集删掉 —— 实际发生过。显式设置
+    `F1OPT_DATA_DIR` / `DATA_DIR` 时尊重用户指定（真实 E2E）。
+    """
+    import os
+    import tempfile
+
+    from setup_tuner.config import Config, load_config
+
+    if os.environ.get("F1OPT_DATA_DIR") or os.environ.get("DATA_DIR"):
+        return load_config()
+    return Config(data_dir=tempfile.mkdtemp(prefix="f1opt_test_"))
+
+
+
+app = create_app(_isolated_config())
 client = TestClient(app)
 
 all_ok = True
@@ -66,3 +86,4 @@ if all_ok:
     print("端到端API验证通过！")
 else:
     print("端到端API验证失败！")
+

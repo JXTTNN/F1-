@@ -9,9 +9,9 @@
 5. ``train_setup_sim_nn.py``         调教性能 NN（**纯标准库，无 PyTorch**）
 
 引擎侧对应两个模型：
-- ``data/models/telemetry_surrogate.json``：逐弯重要度 / 车手未反馈问题的自动发现
+- ``setup_tuner/resources/models/telemetry_surrogate.json``：逐弯重要度 / 车手未反馈问题的自动发现
   （``engine.surrogate`` → ``telemetry_diagnosis``）；
-- ``data/models/setup_sim_nn.json``：调教优化的模型驱动环节
+- ``setup_tuner/resources/models/setup_sim_nn.json``：调教优化的模型驱动环节
   （``engine.setup_sim`` + ``engine.sim_optimizer``，「矩阵给方向 + 神经网不断模拟优化」）。
 
 跑完即生效，无需改代码。快速路径：``--skip-sim-nn`` 只重训 1~3 步。
@@ -84,7 +84,7 @@ def main(argv: list[str] | None = None) -> int:
         ])
 
     for name in ("telemetry_surrogate.json", "setup_sim_nn.json"):
-        model = ROOT / "data" / "models" / name
+        model = ROOT / "setup_tuner" / "resources" / "models" / name
         state = (f"{model.stat().st_size / 1e6:.2f} MB"
                  if model.exists() else "缺失（该环节将自动降级）")
         print(f"模型：{model.name} → {state}")

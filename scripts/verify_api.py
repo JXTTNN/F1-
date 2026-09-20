@@ -13,10 +13,20 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 startup_script = """
 import sys
+import tempfile
+
 sys.path.insert(0, str(ROOT))
-from setup_tuner.app import create_app
 import uvicorn
-uvicorn.run(create_app(), host="127.0.0.1", port=8000, log_level="error")
+
+from setup_tuner.app import create_app
+from setup_tuner.config import Config
+
+# 测试脚本必须隔离数据目录：应用启动/关闭会按约定清理派生遥测数据
+# （data/training/、data/sim_telemetry/），用默认 ./data 会删掉开发数据集
+uvicorn.run(
+    create_app(Config(data_dir=tempfile.mkdtemp(prefix="f1opt_test_"))),
+    host="127.0.0.1", port=8000, log_level="error",
+)
 """
 
 tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False, encoding="utf-8")

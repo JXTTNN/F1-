@@ -4,12 +4,12 @@
 > 实测指标与验证方式。所有数字均来自本仓库实际运行输出，可复现。
 
 > **架构更新（2026-09-19/20）**：本文 §3~§4 描述的是**弯速代理模型**
-> （`data/models/telemetry_surrogate.json`，用于逐弯重要度与"车手未反馈问题的
+> （`setup_tuner/resources/models/telemetry_surrogate.json`，用于逐弯重要度与"车手未反馈问题的
 > 自动发现"）。**调教优化本身**的模型驱动环节已改为
 > 「遥测锚定仿真训练 + 纯标准库神经网络模拟优化」，见
 > [`Setup_Simulation_Optimizer.md`](Setup_Simulation_Optimizer.md)：
 > `engine/setup_sim.py`（模型）+ `engine/sim_optimizer.py`（不断模拟优化），
-> 模型产物 `data/models/setup_sim_nn.json`（验证 MAE 53ms / R² 0.996），
+> 模型产物 `setup_tuner/resources/models/setup_sim_nn.json`（验证 MAE 53ms / R² 0.996），
 > **零 PyTorch 依赖**；`engine/nn_model.py`（torch 分支）已删除。
 > §5「悬挂几何为什么之前没有」的修复也已于 2026-09-20 全赛道生效
 > （机械抓地参与度门槛 0.35 → 0.10，实测 40/40 场景均含悬挂几何改动）。
@@ -34,7 +34,7 @@
 逐弯样本由 `scripts/build_corner_dataset.py` 用官方弯道锚点的弧长占比把每一切成 N 段，
 目标量 = **该弯用时占整圈时间的比例**（无量纲，消除"慢圈全线变慢"的噪声）。
 
-## 3. 模型（`data/models/telemetry_surrogate.json`）
+## 3. 模型（`setup_tuner/resources/models/telemetry_surrogate.json`，随包分发）
 
 | 头 | 学习器 | 留出集指标 |
 |---|---|---|
@@ -181,7 +181,7 @@ ruff check setup_tuner tests scripts         # All checks passed
 6. 回归：零反馈 + 零遥测 → 仍然 HTTP 400。
 
 `smoke_boot_server.py`：真实 uvicorn 启动 + `/api/v1/health` 200，
-模型 `data/models/telemetry_surrogate.json` 已被引擎加载（R² 0.8909）。
+模型 `setup_tuner/resources/models/telemetry_surrogate.json` 已被引擎加载（R² 0.8909）。
 
 ## 7. 重训
 
@@ -190,7 +190,7 @@ python scripts/retrain_all.py                # 逐弯样本 → 特征融合 →
 ```
 
 引擎（`lap_model` / `generate_suggestion`）在启动时读取
-`data/models/telemetry_surrogate.json`，跑完即生效，无需改代码；
+`setup_tuner/resources/models/telemetry_surrogate.json`（随包分发），跑完即生效；
 模型文件缺失或损坏时**中性降级**（不抛错，回到启发式 + 纯物理规则）。
 
 ## 8. 官方口径核对

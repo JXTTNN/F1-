@@ -95,3 +95,12 @@ data/training/
 
 # 工具/会话状态（工作区记忆与技能，不入库）
 .workbuddy/
+# 模拟 UDP 包流：可随时用 scripts/generate_sim_telemetry.py 重新生成，
+# 且按用户约定「关闭后删除遥测数据（录制除外）」不入库
+data/sim_telemetry/
+# 派生遥测数据（关闭时清理；见 setup_tuner/telemetry/cleanup.py）
+data/training/
+data/training_dataset.json
+# CI/审计探针的输出产物（每次运行重新生成，不入库）
+*_probe_result.json
+audit_verify_result.json

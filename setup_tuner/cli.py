@@ -9,10 +9,16 @@
     5. 优雅退出处理（KeyboardInterrupt → 停止服务）。
 
 入口点：``python -m setup_tuner.cli`` 或 ``f1opt``（pyproject.scripts）。
+
+命令行参数（2026-09-20 补全）：此前 ``main(argv)`` 忽略全部参数 ——
+``f1opt --help`` 会**直接启动服务**（挂住终端），README 里写的
+``f1opt feedback/search`` 等子命令也从未存在。现在提供真实、最小、
+不撒谎的参数集：``--host/--port/--no-browser/--keep-telemetry/--version/-h``。
 """
 
 from __future__ import annotations
 
+import argparse
 import logging
 import socket
 import sys
@@ -121,23 +127,64 @@ def _run_uvicorn(app: Any, host: str, port: int, log_level: str) -> int:
     return 0
 
 
+def _build_parser() -> argparse.ArgumentParser:
+    """构造命令行解析器（真实存在的参数；不虚构子命令）。"""
+    from setup_tuner import __version__ as _version
+
+    parser = argparse.ArgumentParser(
+        prog="f1opt",
+        description=(
+            "F1OPT — F1 2026 赛车调校助手：接收游戏 UDP 遥测 → 车手反馈 → "
+            "参数矩阵给方向 + 神经网络模拟优化 → 给出整体性调教建议。"
+        ),
+        epilog=(
+            "启动后浏览器打开实时面板；Ctrl+C 退出。"
+            "退出时默认清理派生遥测数据（录制永久保留），"
+            "加 --keep-telemetry 可保留。"
+        ),
+    )
+    parser.add_argument("--host", default=None, help="API 监听地址（默认取配置 api_host）")
+    parser.add_argument("--port", type=int, default=None, help="API 端口（默认取配置 api_port）")
+    parser.add_argument("--no-browser", action="store_true", help="启动后不自动打开浏览器")
+    parser.add_argument(
+        "--keep-telemetry", action="store_true",
+        help="退出时保留派生遥测数据（等价 F1OPT_KEEP_TELEMETRY=1）",
+    )
+    parser.add_argument(
+        "--version", action="version", version=f"f1opt {_version}",
+    )
+    return parser
+
+
 def main(argv: list[str] | None = None) -> int:
     """一键启动主入口。
 
     流程：
-        1. 加载配置；
-        2. 端口占用检测；
-        3. 启动 uvicorn + 自动开浏览器；
-        4. 优雅退出（KeyboardInterrupt）。
+        1. 解析参数（--help/--version 直接返回，不启动服务）；
+        2. 加载配置（命令行参数优先于环境变量）；
+        3. 端口占用检测；
+        4. 启动 uvicorn + 自动开浏览器；
+        5. 优雅退出（KeyboardInterrupt）→ 清理遥测数据（录制保留）。
 
     Args:
-        argv: 命令行参数（未使用，保留以备扩展）。
+        argv: 命令行参数；None 时取 sys.argv[1:]。
 
     Returns:
-        退出码：0=正常退出，1=端口占用，2=其他错误。
+        退出码：0=正常退出（含 --help/--version），1=端口占用，2=其他错误。
     """
-    # ① 加载配置
+    from dataclasses import replace
+
+    args = _build_parser().parse_args(argv)
+
+    # ① 加载配置（命令行覆盖环境变量）
     config = load_config()
+    if args.host or args.port or args.keep_telemetry:
+        config = replace(
+            config,
+            api_host=args.host or config.api_host,
+            api_port=args.port or config.api_port,
+            keep_telemetry=config.keep_telemetry or args.keep_telemetry,
+        )
     logging.basicConfig(
         level=getattr(logging, config.log_level.upper(), logging.INFO),
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
@@ -155,7 +202,8 @@ def main(argv: list[str] | None = None) -> int:
 
     # ④ 延迟打开浏览器（后台线程）
     url = f"http://{host}:{port}"
-    _start_browser_thread(url)
+    if not args.no_browser:
+        _start_browser_thread(url)
 
     # ⑤ 启动 uvicorn
     _print_startup_banner(url, config)

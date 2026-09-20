@@ -429,6 +429,11 @@ class TestMechanicalParticipationAllTracks:
         "midcorner_traction", "high_speed_instability",
     )
 
+    _STIFFNESS = (
+        "front_suspension", "rear_suspension",
+        "front_anti_roll_bar", "rear_anti_roll_bar",
+    )
+
     def test_every_scenario_has_mechanical_change(self) -> None:
         from setup_tuner.domain.setup import CarSetup
         from setup_tuner.engine.engine import generate_suggestion
@@ -450,6 +455,61 @@ class TestMechanicalParticipationAllTracks:
             "检查 holistic_coherence 的机械抓地参与度规则与"
             "_TRACTION_PARTICIPATION_MIN 门槛"
         )
+
+    def test_stiffness_params_participate(self) -> None:
+        """**刚度类**（悬挂 + 防倾杆）必须参与 —— 只给前束/外倾不算调了底盘。
+
+        用户实测反馈："调教整体性思维太差了，悬挂几何什么的都没有"。
+        另一种表现形式：机械项里只剩前束角（纯几何），底盘刚度没动。
+        修复：恢复时若仍无刚度类，则由耦合矩阵按主导机械需求推导
+        （`_derive_mechanical_from_matrix`）。
+
+        **必须两条路径都测**（负向验证发现的坑）：纯症状路径的规则 delta 本来
+        就常带刚度项，矩阵推导用不上；真正需要它的是**反馈路径**
+        （`class_weighted_dx` 按弯道重加权后，机械项可能只剩一个前束角）——
+        而那正是 UI/API 的生产路径。只测纯症状路径的用例挡不住回退。
+        """
+        from setup_tuner.domain.setup import CarSetup
+        from setup_tuner.engine.engine import generate_suggestion
+
+        setup = CarSetup.default().to_dict()
+        missing: list[str] = []
+        for track in self._TRACKS:
+            for symptom in self._SYMPTOMS:
+                # ① 纯症状路径
+                plain = generate_suggestion(
+                    [(symptom, 3)], setup, track, None, model_type="rule",
+                )["setup_delta"]
+                if not any(abs(plain.get(p, 0.0)) > 1e-9 for p in self._STIFFNESS):
+                    missing.append(f"{track}/{symptom}[症状路径]")
+                # ② 反馈路径（生产路径：带弯道号的逐弯反馈）
+                fb = generate_suggestion(
+                    [(symptom, 3)], setup, track, None, model_type="rule",
+                    feedbacks=[{"corner_number": 3, "symptom": symptom, "strength": 3}],
+                )["setup_delta"]
+                if not any(abs(fb.get(p, 0.0)) > 1e-9 for p in self._STIFFNESS):
+                    missing.append(f"{track}/{symptom}[反馈路径]")
+        assert not missing, f"以下场景没有任何刚度类改动：{missing}"
+
+    def test_derive_mechanical_from_matrix_is_bounded(self) -> None:
+        """矩阵推导的刚度改动必须受 max_delta / 档位 / 上下限约束。"""
+        from setup_tuner.domain.setup import get_field
+        from setup_tuner.engine.holistic import _derive_mechanical_from_matrix
+
+        derived = _derive_mechanical_from_matrix(
+            {"exit_traction_req": 3.0, "front_grip_req": 0.5},
+        )
+        assert derived, "有明确机械需求时应推导出刚度改动"
+        for name, value in derived.items():
+            spec = get_field(name)
+            assert abs(value) <= spec.max_delta + 1e-9, f"{name} 超出 max_delta"
+            steps = round((value - spec.min_val) / spec.step)
+            assert abs(value - (spec.min_val + steps * spec.step)) < 1e-6, (
+                f"{name} 未对齐档位"
+            )
+        # 无机械需求 → 空
+        assert _derive_mechanical_from_matrix({}) == {}
+        assert _derive_mechanical_from_matrix({"front_grip_req": 0.0}) == {}
 
     def test_participation_is_budget_neutral(self, monkeypatch) -> None:
         """机械抓地参与度收口是**置换而非追加**：开关该规则，总改动幅度不变。

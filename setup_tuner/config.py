@@ -28,6 +28,10 @@ class Config:
     # 数据目录（SQLite 文件存放）
     data_dir: str = "./data"
 
+    # 关闭时是否保留遥测数据（默认 False = 按用户约定清理，录制永久保留）。
+    # 对应环境变量 F1OPT_KEEP_TELEMETRY=1（或 KEEP_TELEMETRY=1）。
+    keep_telemetry: bool = False
+
     # 日志级别
     log_level: str = "INFO"
 
@@ -77,8 +81,20 @@ def load_config(env_path: str | Path | None = None) -> Config:
     env_vars = _parse_env_file(env_path)
 
     def _get(key: str, default: str) -> str:
-        """环境变量 > .env 文件 > 缺省值。"""
-        return os.environ.get(key, env_vars.get(key, default))
+        """环境变量 > .env 文件 > 缺省值。
+
+        **双键查找**（2026-09-20 修正）：README 一直文档化的是 ``F1OPT_*`` 前缀，
+        而代码只读无前缀键（``UDP_PORT`` 等）—— 文档化的接口实际不生效，
+        用户按 README 设 ``F1OPT_DATA_DIR`` 会被静默忽略。现两者都认，
+        带前缀优先（避免与系统同名变量冲突）。
+        """
+        for name in (f"F1OPT_{key}", key):
+            if name in os.environ:
+                return os.environ[name]
+        for name in (f"F1OPT_{key}", key):
+            if name in env_vars:
+                return env_vars[name]
+        return default
 
     return Config(
         udp_host=_get("UDP_HOST", "0.0.0.0"),
@@ -86,5 +102,7 @@ def load_config(env_path: str | Path | None = None) -> Config:
         api_host=_get("API_HOST", "127.0.0.1"),
         api_port=int(_get("API_PORT", "8000")),
         data_dir=_get("DATA_DIR", "./data"),
+        keep_telemetry=_get("KEEP_TELEMETRY", "").strip().lower()
+        in ("1", "true", "yes", "on"),
         log_level=_get("LOG_LEVEL", "INFO"),
     )

@@ -49,7 +49,8 @@ sys.path.insert(0, str(ROOT))
 
 CORNER_JSONL = ROOT / "data" / "training" / "corner_dataset.jsonl"
 RECORDINGS = ROOT / "data" / "recordings"
-OUT = ROOT / "data" / "models" / "telemetry_surrogate.json"
+# 默认输出到**包内资源**（随包分发；pip 安装后引擎仍能找到）
+OUT = ROOT / "setup_tuner" / "resources" / "models" / "telemetry_surrogate.json"
 
 #: 头 A 特征列（顺序即模型输入顺序，必须与引擎侧一致）
 CORNER_FEATURE_KEYS: tuple[str, ...] = (
