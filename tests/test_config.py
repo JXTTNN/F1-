@@ -34,7 +34,12 @@ class TestConfigDataclass:
         assert c.udp_port == 20777
         assert c.api_host == "127.0.0.1"
         assert c.api_port == 8000
-        assert c.data_dir == "./data"
+        # 数据目录口径（2026-09-20）：默认固定在**安装文件夹内**，不跟随 cwd
+        from setup_tuner.config import default_data_dir, install_root
+
+        assert c.data_dir == ""                       # 未显式指定
+        assert c.resolved_data_dir() == default_data_dir()
+        assert Path(c.resolved_data_dir()) == install_root() / "data"
         assert c.log_level == "INFO"
 
     def test_custom_values(self) -> None:
@@ -143,7 +148,12 @@ class TestLoadConfig:
         assert c.udp_port == 20777
         assert c.api_host == "127.0.0.1"
         assert c.api_port == 8000
-        assert c.data_dir == "./data"
+        # 数据目录口径（2026-09-20）：默认固定在**安装文件夹内**，不跟随 cwd
+        from setup_tuner.config import default_data_dir, install_root
+
+        assert c.data_dir == ""                       # 未显式指定
+        assert c.resolved_data_dir() == default_data_dir()
+        assert Path(c.resolved_data_dir()) == install_root() / "data"
         assert c.log_level == "INFO"
 
     def test_load_from_env_file(self, tmp_path: Path) -> None:

@@ -81,9 +81,17 @@ _UI_DIR = _find_ui_dir()
 # =========================================================================== #
 def _init_app_services(app: FastAPI, config: Config) -> tuple[Store, TelemetryListener]:
     """初始化 Store、业务服务、遥测流与监听器，返回 (store, listener)。"""
-    # ① Store
-    data_dir = Path(config.data_dir)
-    data_dir.mkdir(parents=True, exist_ok=True)
+    # ① Store（数据目录默认固定在**安装文件夹内**，见 Config.resolved_data_dir）
+    data_dir = Path(config.resolved_data_dir())
+    try:
+        data_dir.mkdir(parents=True, exist_ok=True)
+    except OSError as e:
+        # 系统级 Python 的 site-packages 可能只读；给出可操作的提示
+        raise RuntimeError(
+            f"数据目录不可写：{data_dir}（{e}）。"
+            "请改用虚拟环境安装（python -m venv .venv），"
+            "或显式设置 F1OPT_DATA_DIR 指向可写目录（高级用法）。"
+        ) from e
     db_path = data_dir / "f1opt.db"
     store = Store(str(db_path))
     app.state.store = store
@@ -372,7 +380,7 @@ def _cleanup_leftover_telemetry(config: Config) -> None:
     try:
         from setup_tuner.telemetry.cleanup import cleanup_telemetry
 
-        report = cleanup_telemetry(config.data_dir)
+        report = cleanup_telemetry(config.resolved_data_dir())
         if report.removed:
             logger.info("启动清理上次残留：%s", report.describe())
     except Exception:
@@ -398,7 +406,7 @@ def _cleanup_app_services(
         try:
             from setup_tuner.telemetry.cleanup import cleanup_telemetry
 
-            report = cleanup_telemetry(config.data_dir)
+            report = cleanup_telemetry(config.resolved_data_dir())
             logger.info("遥测数据清理：%s", report.describe())
         except Exception:
             logger.exception("telemetry cleanup failed (non-fatal)")
@@ -431,7 +439,7 @@ async def _lifespan(app: FastAPI):
     _cleanup_leftover_telemetry(config)
     store, listener = _init_app_services(app, config)
     _start_telemetry_listener(listener, config)
-    logger.info("F1OPT app started, data_dir=%s", config.data_dir)
+    logger.info("F1OPT app started, data_dir=%s", config.resolved_data_dir())
 
     try:
         yield

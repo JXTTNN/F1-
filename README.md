@@ -92,6 +92,10 @@ pip install -e ".[dev]"
 python -m setup_tuner.cli
 ```
 
+> **装完即完整**：训练好的模型（调教性能 NN + 遥测代理）随包分发
+> （`setup_tuner/resources/models/`），UI 与 24 条赛道数据同样在包内 ——
+> `pip install` 之后不需要再训练、不需要额外下载，和本地开发环境能力一致。
+>
 > **为什么不需要 PyTorch**：神经网络是项目自带的**纯标准库** MLP
 > （`setup_tuner/engine/pure_nn.py`，手写前向 / 反传 + Adam）。安装体积小、无需编译、
 > Windows/Linux 行为一致；模型权重**随包分发**（`setup_tuner/resources/models/`），
@@ -152,14 +156,20 @@ F1 2026 → Settings → Telemetry：
 
 ## 数据与隐私
 
-| 数据 | 位置 | 关闭应用时 |
-|------|------|-----------|
+**所有数据都在安装文件夹内**（`<安装文件夹>/data/`）—— 不跟随启动目录，
+也不会散落到用户主目录或 `%APPDATA%`。安装文件夹指含 `setup_tuner/` 的那一层：
+便携包 / 仓库开发就是解压/克隆出来的那个目录，`pip install` 则是虚拟环境的
+`Lib/site-packages/`。
+
+| 数据 | 位置（安装文件夹内） | 关闭应用时 |
+|------|--------------------|-----------|
 | **录制**（`.f1rec` + 逐圈样本） | `data/recordings/` | **永久保留**（你的原始数据） |
 | 应用数据（反馈 / 建议 / 迭代历史） | `data/f1opt.db` | 保留 |
 | 派生遥测数据（训练集 / 模拟包流） | `data/training/`、`data/sim_telemetry/` | **自动删除**（可随时重新生成） |
-| 模型产物 | 随包分发（`setup_tuner/resources/models/`） | 保留 |
+| 训练好的模型 | 随包分发（`setup_tuner/resources/models/`） | 保留 |
 
 - 一切都在本机：不联网、不上传、无遥测回传。
+- 想换数据位置（高级用法）：设 `F1OPT_DATA_DIR`；默认无需配置。
 - 想保留派生数据（例如复用训练集）：`f1opt --keep-telemetry` 或 `F1OPT_KEEP_TELEMETRY=1`。
 - 清理是**白名单**操作：只删上面列出的派生目录，**绝不触碰录制**，
   且拒绝在家目录 / 文件系统根下执行（见 `setup_tuner/telemetry/cleanup.py`）。
@@ -176,7 +186,7 @@ F1 2026 → Settings → Telemetry：
 | `F1OPT_UDP_PORT` | `20777` | 遥测监听端口 |
 | `F1OPT_API_HOST` | `127.0.0.1` | 面板 / API 监听地址 |
 | `F1OPT_API_PORT` | `8000` | 面板 / API 端口 |
-| `F1OPT_DATA_DIR` | `./data` | 数据目录（录制 / 数据库 / 派生数据） |
+| `F1OPT_DATA_DIR` | `<安装文件夹>/data` | 数据目录（录制 / 数据库 / 派生数据）；默认固定在安装文件夹内，无需设置 |
 | `F1OPT_KEEP_TELEMETRY` | 未设置（关闭时清理） | 设为 `1` 保留派生遥测数据 |
 | `F1OPT_LOG_LEVEL` | `INFO` | 日志级别 |
 

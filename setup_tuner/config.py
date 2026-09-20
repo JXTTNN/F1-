@@ -2,12 +2,36 @@
 
 不引入 python-dotenv 依赖，手动解析 .env 文件。
 所有配置项均有缺省值，无 .env 文件时使用缺省。
+
+**数据目录口径（2026-09-20 起）**：默认数据目录固定在**安装文件夹内**
+（`<安装根>/data`），不再跟随当前工作目录 —— 用户要求"所有数据只能在安装
+文件夹中"，且"从 GitHub 下载安装的就是完整无误的系统，和本地一样"。
+安装根 = 含 `setup_tuner/` 包的目录：
+
+- 便携包 / 仓库开发：仓库根（`.bat`、`README.md` 所在处）
+- `pip install`：虚拟环境的 `Lib/site-packages/`
+
+这样无论从哪里启动（双击、IDE、任意 cwd），录制 / 数据库 / 派生数据都落在
+安装文件夹内，不会散落到用户主目录或其它位置。
 """
 from __future__ import annotations
 
 import os
 from dataclasses import dataclass
 from pathlib import Path
+
+
+def install_root() -> Path:
+    """安装根目录（含 `setup_tuner/` 包的那一层）。
+
+    本文件位于 `<安装根>/setup_tuner/config.py`，故上一级即可。
+    """
+    return Path(__file__).resolve().parents[1]
+
+
+def default_data_dir() -> str:
+    """默认数据目录：**安装文件夹内**的 `data/`（与 cwd 无关）。"""
+    return str(install_root() / "data")
 
 
 @dataclass(frozen=True)
@@ -25,8 +49,10 @@ class Config:
     api_host: str = "127.0.0.1"
     api_port: int = 8000
 
-    # 数据目录（SQLite 文件存放）
-    data_dir: str = "./data"
+    # 数据目录（录制 / SQLite / 派生数据）。
+    # **默认 = 安装文件夹内的 data/**（见 default_data_dir）；显式设置
+    # `F1OPT_DATA_DIR` 才会改到别处（高级用法，不推荐）。
+    data_dir: str = ""    # 空串 → 由 resolve_data_dir() 解析为安装文件夹内 data/
 
     # 关闭时是否保留遥测数据（默认 False = 按用户约定清理，录制永久保留）。
     # 对应环境变量 F1OPT_KEEP_TELEMETRY=1（或 KEEP_TELEMETRY=1）。
@@ -34,6 +60,10 @@ class Config:
 
     # 日志级别
     log_level: str = "INFO"
+
+    def resolved_data_dir(self) -> str:
+        """实际使用的数据目录（空 `data_dir` → 安装文件夹内的 `data/`）。"""
+        return self.data_dir or default_data_dir()
 
 
 def _parse_env_file(env_path: Path) -> dict[str, str]:
@@ -101,7 +131,8 @@ def load_config(env_path: str | Path | None = None) -> Config:
         udp_port=int(_get("UDP_PORT", "20777")),
         api_host=_get("API_HOST", "127.0.0.1"),
         api_port=int(_get("API_PORT", "8000")),
-        data_dir=_get("DATA_DIR", "./data"),
+        # 默认空串 = 安装文件夹内的 data/（见 Config.resolved_data_dir）
+        data_dir=_get("DATA_DIR", ""),
         keep_telemetry=_get("KEEP_TELEMETRY", "").strip().lower()
         in ("1", "true", "yes", "on"),
         log_level=_get("LOG_LEVEL", "INFO"),

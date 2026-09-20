@@ -36,6 +36,7 @@ from typing import Any
 from fastapi import APIRouter, Query, Request
 from pydantic import BaseModel, Field
 
+from setup_tuner.config import default_data_dir
 from setup_tuner.domain._track_arcs import TRACK_CORNER_ARCS
 from setup_tuner.domain.setup import ALL_SETUP_FIELDS, CarSetup
 from setup_tuner.domain.symptoms import (
@@ -1349,7 +1350,11 @@ def _get_or_create_recorder(request: Request) -> Any:
     # 原始字节，随时可用更新版解析器重放；SQLite 只保留索引/统计所需列。
     from setup_tuner.telemetry.recorder import TelemetryRecorder
     config = getattr(request.app.state, "config", None)
-    data_dir = getattr(config, "data_dir", "data") if config else "data"
+    # 数据目录固定在安装文件夹内（Config.resolved_data_dir），不跟随 cwd
+    data_dir = (
+        config.resolved_data_dir() if config is not None
+        else default_data_dir()
+    )
     recordings_dir = str(Path(data_dir) / "recordings")
     recorder = TelemetryRecorder(data_dir=recordings_dir, index_json=False)
     request.app.state.telemetry_recorder = recorder
@@ -1539,7 +1544,11 @@ def _resolve_f1rec_path(request: Request, session_id: str) -> Path:
             http_status=404,
         )
     config = getattr(request.app.state, "config", None)
-    data_dir = getattr(config, "data_dir", "data") if config else "data"
+    # 数据目录固定在安装文件夹内（Config.resolved_data_dir），不跟随 cwd
+    data_dir = (
+        config.resolved_data_dir() if config is not None
+        else default_data_dir()
+    )
     recordings_dir = Path(data_dir) / "recordings"
     f1rec_path = recordings_dir / f"{session_id}.f1rec"
     if not f1rec_path.exists():

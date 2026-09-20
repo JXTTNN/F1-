@@ -4,6 +4,33 @@
 
 ## 2026-09 优化迭代
 
+### 数据只在安装文件夹内 + 安装即完整（2026-09-20）
+- **用户诉求**：「所有数据只能在安装文件夹中，github 上下载安装的就是训练好后
+  完整无误的 F1OPT 系统，和本地一样」。
+- **数据落点改为安装文件夹（不再跟随 cwd）**：
+  - 新增 `config.install_root()` / `config.default_data_dir()`；
+    `Config.resolved_data_dir()` 在未显式配置时返回 **`<安装根>/data`**。
+    安装根 = 含 `setup_tuner/` 包的那一层：便携包/仓库开发 = 仓库根，
+    `pip install` = 虚拟环境的 `Lib/site-packages/`。
+  - 影响面全部改到 `resolved_data_dir()`：`app.py`（Store / 启动清理 / 关闭清理 /
+    启动日志）、`api/routes.py`（录制列表与导出）—— 从任意 cwd 启动，
+    录制 / 数据库 / 派生数据都落在安装文件夹内。
+  - `F1OPT_DATA_DIR` 仍可显式覆盖（高级用法）；默认无需任何配置。
+  - 安装目录不可写时（系统级 Python 的 site-packages）给出可操作报错
+    （建议用虚拟环境安装，或显式设 `F1OPT_DATA_DIR`），而不是抛裸 OSError。
+- **安装即完整（可验证）**：新增 `tests/test_install_layout.py`（12 条）锁定：
+  - 数据目录 = `<安装根>/data` 且**换 cwd 不变**（`tmp_path` / 深层目录 / 家目录）；
+  - 包内必须含：两个训练好的模型（并**实际加载**：`available=True`、覆盖 ≥13 赛道）、
+    UI（index.html / app.js / style.css）、**≥24 个赛道 SVG**、SQLite schema、
+    24 条赛道数据（含 madrid / suzuka / monaco / spa / monza）；
+  - **脱离仓库根**（cwd 换到空目录）仍能解析到包内模型，且
+    `model_type="nn"` —— 安装形态下不会静默降级。
+- **实测（空 venv，无关 cwd）**：`pip install <repo>` → 从 `D:/foreign_cwd` 启动 →
+  数据落在 `Lib/site-packages/data/`；`/suggest{hybrid}` =
+  `model_type=nn / nn_available=true / gain 449 ms / 含悬挂刚度改动`；
+  工作目录未被写入任何数据。
+- 更新 README（数据与隐私 / 安装章节 / 配置表）与验收脚本口径。
+
 ### 遥测数据关闭即删（录制除外）/ 仓库整理 / README 重写 / 可安装性（2026-09-20）
 - **用户诉求**：「遥测数据，除了录制的，其他的关闭后都要删除」「准确同步、整理
   github 项目文件、重新写 github 页面」「确保能从 github 正确安装」。
