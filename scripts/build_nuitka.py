@@ -22,6 +22,7 @@
 
 from __future__ import annotations
 
+import shutil
 import subprocess
 import sys
 import zipfile
@@ -47,7 +48,11 @@ OUTPUT_FILENAME = "F1OPT.exe"
 PORTABLE_ZIP = "F1OPT-portable.zip"
 
 # 一键启动脚本
-BAT_SCRIPT = REPO_ROOT / "assets" / "一键启动.bat"
+# 便携版启动器（启动 exe + 轮询 health；UTF-8、无 caret、含 start/health）
+# 与开发用 assets/一键启动.bat 区分：后者依赖仓库内的 .venv，便携用户跑不了。
+BAT_SCRIPT = REPO_ROOT / "assets" / "一键启动-便携版.bat"
+# 便携 zip 内的启动器名（用户看到的入口）
+PORTABLE_BAT_NAME = "一键启动.bat"
 
 # Nuitka 编译超时（秒）—— onefile 模式编译较慢，给足 20 分钟
 COMPILE_TIMEOUT = 20 * 60
@@ -245,17 +250,26 @@ def package_portable_zip(exe_path: Path) -> Path:
 
     print(f"\n[pack] 打包便携包：{zip_path.relative_to(REPO_ROOT)}")
 
+    # 启动器必须与 exe 同级（用户解压后双击；打包产物测试也按此路径检查）
+    bat_next_to_exe = exe_path.parent / PORTABLE_BAT_NAME
+    if BAT_SCRIPT.exists():
+        shutil.copyfile(BAT_SCRIPT, bat_next_to_exe)
+        print(f"[pack]   + {bat_next_to_exe.name}（与 exe 同级）")
+
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
         # ① F1OPT.exe
         zf.write(exe_path, arcname=OUTPUT_FILENAME)
         print(f"[pack]   + {OUTPUT_FILENAME}")
 
-        # ② 一键启动.bat（若存在）
+        # ② 便携版启动器（缺失即失败：没有入口用户无法启动）
         if BAT_SCRIPT.exists():
-            zf.write(BAT_SCRIPT, arcname=BAT_SCRIPT.name)
-            print(f"[pack]   + {BAT_SCRIPT.name}")
+            zf.write(BAT_SCRIPT, arcname=PORTABLE_BAT_NAME)
+            print(f"[pack]   + {PORTABLE_BAT_NAME}")
         else:
-            print(f"[pack]   ! 跳过 {BAT_SCRIPT.name}（assets/一键启动.bat 不存在）")
+            raise SystemExit(
+                f"[error] 便携版启动器不存在：{BAT_SCRIPT}\n"
+                "        便携包必须含启动器，否则用户无法启动（不再静默跳过）。"
+            )
 
     zip_size_mb = zip_path.stat().st_size / (1024 * 1024)
     print(f"[pack] 便携包打包完成：{zip_path.relative_to(REPO_ROOT)}（{zip_size_mb:.2f} MB）")
