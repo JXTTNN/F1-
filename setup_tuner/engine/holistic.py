@@ -461,8 +461,15 @@ _MECHANICAL_PARAMS: tuple[str, ...] = (
     "front_suspension", "rear_suspension",
     "front_anti_roll_bar", "rear_anti_roll_bar",
 )
-#: 触发「机械抓地参与度」检查的赛道牵引需求门槛（牵引指数）
-_TRACTION_PARTICIPATION_MIN = 0.35
+#: 触发「机械抓地参与度」检查的赛道牵引需求门槛（牵引指数）。
+#: **2026-09-20 修订**：原为 0.35（只有慢弯主导的赛道才检查），导致
+#: 中/低牵引赛道（suzuka 0.22 / spa 0.26 / hungaroring 0.29 / silverstone 0.17）
+#: 的整圈最优解把悬挂/几何/防倾杆全部清零 → 用户实测反馈
+#: "调教整体性思维太差，悬挂几何什么的都没有"（36 个场景里 10 个完全无机械项）。
+#: 悬挂几何/刚度/防倾杆是**任何赛道**整体性调教的基本面（底盘平台控制、
+#: 路肩处理、胎温与机械平衡），不应只在慢弯赛道参与 → 门槛降到几乎全赛道
+#: （13 条赛道最低 0.10，实测全部触发）。
+_TRACTION_PARTICIPATION_MIN = 0.10
 #: 触发检查的机械抓地类需求门槛（Dx 量级）
 _MECHANICAL_DEMAND_MIN = 0.30
 
@@ -553,10 +560,16 @@ def holistic_coherence(
     # 9. 机械抓地参与度：牵引型赛道不能"只用空力/差速顶"
     #    放在几何/防倾杆配对收口**之前**，让恢复出来的值仍受配对规则约束。
     if demand.traction_index >= _TRACTION_PARTICIPATION_MIN:
+        # 机械抓地类需求信号：抓地/牵引/入弯响应/高速稳定/重刹稳定 ——
+        # 这些维度在 C 矩阵里都由悬挂几何/刚度/防倾杆承担一部分，
+        # 优化器把它们交给纯空力/差速时，应恢复机械手段（整体性分工）。
         signal = max(
             dx.get("front_grip_req", 0.0),
             dx.get("rear_grip_req", 0.0),
             dx.get("exit_traction_req", 0.0),
+            dx.get("turnin_req", 0.0),
+            dx.get("hi_speed_stab_req", 0.0),
+            dx.get("brake_stab_req", 0.0),
         )
         if signal >= _MECHANICAL_DEMAND_MIN:
             present = [p for p in _MECHANICAL_PARAMS if out.get(p)]

@@ -109,17 +109,28 @@ def main() -> int:
         r = requests.post(f"{BASE}/api/v1/feedback", json=feedback_payload, timeout=10)
         check("feedback POST 200/201", r.status_code in (200, 201), f"status={r.status_code}")
 
-        # 9. POST /api/v1/suggest (支持model_type)
-        print("\n=== 9. POST /api/v1/suggest (支持model_type) ===")
+        # 9. POST /api/v1/suggest (支持model_type，并校验模拟优化是否真的生效)
+        print("\n=== 9. POST /api/v1/suggest (支持model_type + 模拟优化语义) ===")
         for model_type in ["rule", "nn", "hybrid"]:
             suggest_payload = {
                 "track_id": "suzuka",
                 "model_type": model_type,
+                # 本段连续请求三档，需同一份反馈持续可用（清除行为另由单元测试覆盖）
+                "clear_feedback_after_suggest": False,
             }
             r = requests.post(f"{BASE}/api/v1/suggest", json=suggest_payload, timeout=15)
-            check(f"suggest model_type={model_type}",
-                  r.status_code in (200, 201),
-                  f"status={r.status_code}")
+            ok = r.status_code in (200, 201)
+            detail = f"status={r.status_code}"
+            if ok:
+                report = (r.json().get("data") or {}).get("report") or {}
+                sim = (report.get("holistic") or {}).get("simulation") or {}
+                detail = (f"status={r.status_code}, 实际={report.get('model_type')}, "
+                          f"nn_available={report.get('nn_available')}, "
+                          f"迭代={sim.get('iterations')}, 提升={sim.get('gain_ms')} ms")
+                # 关键：请求 nn/hybrid 时若未生效，必须给出降级原因（不得静默）
+                if model_type != "rule" and report.get("model_type") == "rule":
+                    ok = bool(sim.get("reason"))
+            check(f"suggest model_type={model_type}", ok, detail)
 
         # 额外验证：遥测模拟端点
         print("\n=== 额外: POST /api/v1/telemetry/simulate (新端点) ===")

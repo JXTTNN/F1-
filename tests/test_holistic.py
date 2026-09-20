@@ -403,3 +403,86 @@ class TestReportCarriesHolistic:
         report = build_report(suggestion_result=res, track_id="jeddah")
         assert "holistic" in report
         assert report["holistic"]["demand"]
+
+
+# ===========================================================================
+# 2026-09-20 回归：悬挂几何必须参与（用户实测反馈"悬挂几何什么的都没有"）
+# ===========================================================================
+class TestMechanicalParticipationAllTracks:
+    """任何赛道、任何典型症状都必须给出悬挂/几何/防倾杆改动。
+
+    背景：机械抓地参与度门槛原为 `traction_index >= 0.35`，导致中/低牵引
+    赛道（suzuka 0.22 / spa 0.26 / hungaroring 0.29 / silverstone 0.17）
+    的整圈最优解把机械项全部清零 —— 36 个场景里 10 个完全无机械项。
+    门槛已降为 0.10（全赛道触发），需求信号扩到 抓地/牵引/入弯/高速稳定/重刹。
+    本类锁定该行为：**不得回退成"只改空力/差速/胎压"**。
+    """
+
+    _MECHANICAL = (
+        "front_suspension", "rear_suspension",
+        "front_anti_roll_bar", "rear_anti_roll_bar",
+        "front_ride_height", "rear_ride_height",
+    )
+    _TRACKS = ("suzuka", "spa", "hungaroring", "silverstone", "monza", "monaco")
+    _SYMPTOMS = (
+        "understeer", "oversteer", "exit_wheelspin",
+        "midcorner_traction", "high_speed_instability",
+    )
+
+    def test_every_scenario_has_mechanical_change(self) -> None:
+        from setup_tuner.domain.setup import CarSetup
+        from setup_tuner.engine.engine import generate_suggestion
+
+        setup = CarSetup.default().to_dict()
+        missing: list[str] = []
+        # 模型类型用 rule：本用例锁定的是**规则/收口路径**的整体性，
+        # 不带神经网络模拟（否则模型可用性会影响结论）。
+        for track in self._TRACKS:
+            for symptom in self._SYMPTOMS:
+                res = generate_suggestion(
+                    [(symptom, 3)], setup, track, None, model_type="rule",
+                )
+                delta = res["setup_delta"]
+                if not any(abs(delta.get(p, 0.0)) > 1e-9 for p in self._MECHANICAL):
+                    missing.append(f"{track}/{symptom}")
+        assert not missing, (
+            f"以下场景完全没有悬挂/几何/防倾杆改动（整体性回归）：{missing}；"
+            "检查 holistic_coherence 的机械抓地参与度规则与"
+            "_TRACTION_PARTICIPATION_MIN 门槛"
+        )
+
+    def test_participation_is_budget_neutral(self, monkeypatch) -> None:
+        """机械抓地参与度收口是**置换而非追加**：开关该规则，总改动幅度不变。
+
+        做法：分别在「参与度规则生效（门槛 0.10）」与「规则关闭（门槛设 99）」
+        两种配置下跑同一场景，断言两者总幅度一致 —— 若实现改成"追加机械项"，
+        开启规则那一侧的总幅度会变大，本用例即变红。
+        """
+        import setup_tuner.engine.holistic as holistic_mod
+        from setup_tuner.domain.setup import CarSetup
+        from setup_tuner.engine.engine import generate_suggestion
+
+        setup = CarSetup.default().to_dict()
+
+        def total(track: str, symptom: str) -> tuple[float, bool]:
+            res = generate_suggestion(
+                [(symptom, 3)], setup, track, None, model_type="rule",
+            )
+            delta = res["setup_delta"]
+            has_mech = any(abs(delta.get(p, 0.0)) > 1e-9 for p in self._MECHANICAL)
+            return sum(abs(v) for v in delta.values()), has_mech
+
+        for track in ("suzuka", "spa", "monaco"):
+            for symptom in ("understeer", "exit_wheelspin", "high_speed_instability"):
+                with_rules, mech_on = total(track, symptom)
+                monkeypatch.setattr(holistic_mod, "_TRACTION_PARTICIPATION_MIN", 99.0)
+                without_rules, _mech_off = total(track, symptom)
+                monkeypatch.undo()
+                assert mech_on, f"{track}/{symptom} 开启规则后仍无机械项"
+                # 置换而非追加：开启参与度规则**不得**让总改动幅度变大
+                # （实现会从非机械项回收等量幅度；档位向下取整可能略微少一点，
+                #   方向永远是"不增加"，与"湿地总幅度不增加"同一约定）
+                assert with_rules <= without_rules + 1e-6, (
+                    f"{track}/{symptom} 参与度规则放大了总改动幅度："
+                    f"{with_rules} > {without_rules}（应为置换而非追加）"
+                )

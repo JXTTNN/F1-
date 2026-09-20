@@ -192,7 +192,13 @@ class SuggestRequest(BaseModel):
     track_id: str = Field(..., description="赛道标识")
     model_type: str = Field(
         default="hybrid",
-        description="模型类型：rule（纯规则）| nn（纯神经网络）| hybrid（混合）",
+        description=(
+            "模型类型：rule（纯规则路径）| nn / hybrid（神经网络模拟优化，"
+            "在规则方向之上用遥测锚定训练的调教性能 NN 不断模拟精修）。"
+            "nn 与 hybrid 等价（保留 hybrid 兼容既有前端）；"
+            "模型不可用或赛道未覆盖时自动降级为 rule 并在"
+            "report.holistic.simulation.reason 说明原因"
+        ),
     )
     clear_feedback_after_suggest: bool = Field(
         default=True,

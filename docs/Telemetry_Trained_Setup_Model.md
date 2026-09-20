@@ -3,6 +3,17 @@
 > 本文记录"用真实 2026 遥测训练模型并接入本地 F1OPT 调教优化"的完整链路、
 > 实测指标与验证方式。所有数字均来自本仓库实际运行输出，可复现。
 
+> **架构更新（2026-09-19/20）**：本文 §3~§4 描述的是**弯速代理模型**
+> （`data/models/telemetry_surrogate.json`，用于逐弯重要度与"车手未反馈问题的
+> 自动发现"）。**调教优化本身**的模型驱动环节已改为
+> 「遥测锚定仿真训练 + 纯标准库神经网络模拟优化」，见
+> [`Setup_Simulation_Optimizer.md`](Setup_Simulation_Optimizer.md)：
+> `engine/setup_sim.py`（模型）+ `engine/sim_optimizer.py`（不断模拟优化），
+> 模型产物 `data/models/setup_sim_nn.json`（验证 MAE 53ms / R² 0.996），
+> **零 PyTorch 依赖**；`engine/nn_model.py`（torch 分支）已删除。
+> §5「悬挂几何为什么之前没有」的修复也已于 2026-09-20 全赛道生效
+> （机械抓地参与度门槛 0.35 → 0.10，实测 40/40 场景均含悬挂几何改动）。
+
 ## 1. 为什么之前是坏的
 
 | 问题 | 事实 |

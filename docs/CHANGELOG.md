@@ -4,6 +4,44 @@
 
 ## 2026-09 优化迭代
 
+### 关联面同步 + 悬挂几何全赛道参与（2026-09-20）
+- **用户诉求**："更改过的部分的关联部分也要改"、"调教整体性思维太差了，悬挂几何
+  什么的都没有"。
+- **悬挂几何缺失的真实根因（已修）**：C 矩阵**每个维度都覆盖**悬挂/几何/防倾杆，
+  规则引擎的 delta 也有这些项，但整圈优化器把它们清零后，`holistic_coherence`
+  的「机械抓地参与度」恢复规则只在 `traction_index >= 0.35` 的赛道触发 ——
+  suzuka 0.22 / spa 0.26 / hungaroring 0.29 / silverstone 0.17 全部漏掉
+  （实测 36 个赛道×症状组合里 **10 个完全没有机械项**）。
+  - 门槛 0.35 → **0.10**（13 条赛道最低 0.10，全部触发）；
+  - 需求信号从「抓地/牵引」扩到「抓地 / 牵引 / 入弯响应 / 高速稳定 / 重刹稳定」
+    （这些维度在 C 矩阵里同样由机械项承担）。
+  - 修复后 8 赛道 × 5 症状 = **40/40 场景均含悬挂几何改动**。
+  - 回归测试 `tests/test_holistic.py::TestMechanicalParticipationAllTracks`
+    （全赛道有机械项 + 置换而非追加）；**负向验证**：门槛还原 0.35 → 2 用例变红。
+- **关联面同步（同一轮改动涉及的其它位置全部跟上）**：
+  - **UI**：模型下拉去掉重复档（原"神经网络模拟 / 纯规则 / 神经网络模拟"三项里两项
+    同义），改为「神经网络模拟优化 / 纯规则（快速）」；顶栏不再直接打印
+    `HYBRID`/`NN` 这类内部值，改用可读标签（`modeLabel`）；**报告新增"神经网络模拟"
+    面板**（模型描述 / 迭代轮数 / 采纳次数 / 模拟圈速提升 / 逐步采纳轨迹）——
+    模型是否真的在跑，用户直接看得见；配套 `.holistic-sim` 样式。
+  - **报告透传**：`report/builder.py` 补 `nn_available` / `requested_model_type`
+    （此前 API 返回值里看不到模型是否生效）。
+  - **API 描述**：`SuggestRequest.model_type` 说明改为新语义（nn/hybrid 等价，
+    降级必给 reason）。
+  - **检查脚本**：`scripts/api_endpoint_test.py` 第 8 节从"三档都返回 200 即通过"
+    升级为**语义校验**（rule→`nn_available=false`；nn→真跑且迭代为正；
+    hybrid 与 nn 逐位一致；降级必须有 reason）—— 旧写法正是"请求 nn 却静默降级"
+    这一真实缺陷能长期存活的原因；`verify_new_features.py` 同步。
+  - **重训流水线**：`scripts/retrain_all.py` 从 3 步扩到 **5 步**（补
+    `build_setup_sim_dataset` + `train_setup_sim_nn`），并支持 `--skip-sim-nn`；
+    否则"重训"不会更新真正驱动调教优化的那个模型。
+  - **文档**：`docs/Telemetry_Trained_Setup_Model.md` 顶部加架构更新指引
+    （该文描述弯速代理；调教优化的模型驱动环节见新文档）。
+- **验证**：`pytest -q` **2094 passed / 3 skipped**；`ruff` 全绿；`node --check` OK；
+  `api_endpoint_test.py` **24 passed / 0 failed**；本地实测 `/suggest{hybrid}` →
+  `model_type=nn / nn_available=true / simulation{iterations:3, accepted:7,
+  gain_ms:226}`，且 delta 含 `front_anti_roll_bar -1 / rear_anti_roll_bar +1`。
+
 ### 大改：调教优化真正用上「遥测锚定训练 + 神经网络模拟优化」（零 PyTorch）(2026-09-19)
 - **用户诉求**（原话）："调教优化还是不能用模型，什么 pytorch 未安装什么的"、
   "只能是参数矩阵给神经网络模型方向，由神经网络不断模拟优化"、

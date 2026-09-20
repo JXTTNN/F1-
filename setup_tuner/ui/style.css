@@ -1693,3 +1693,11 @@ h1, h2, h3 {
 @media (max-width: 720px) {
   .collect-tip { margin-left: 0; }
 }
+
+/* 神经网络模拟优化面板（2026-09-19 架构）：把"模型真的跑了"摆给用户看 */
+.holistic-line.holistic-sim {
+  border-left: 3px solid var(--accent, #7aa2ff);
+  padding-left: 8px;
+  font-weight: 500;
+}
+.holistic-group.holistic-sim-trace { border-left-color: var(--accent, #7aa2ff); }

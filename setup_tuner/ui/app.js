@@ -1497,6 +1497,11 @@
      5. 建议报告
      ======================================================================== */
 
+  /** 模型类型 → 可读标签（避免顶栏直接显示 HYBRID / NN 这类内部值）。 */
+  function modeLabel(modelType) {
+    return modelType === "rule" ? "纯规则路径" : "神经网络模拟优化";
+  }
+
   /** 生成调教建议（POST /api/v1/suggest）。
    *  @returns {Promise<void>}
    */
@@ -1511,7 +1516,7 @@
     // 读取模型类型
     const modelType = dom.modelTypeSelect ? dom.modelTypeSelect.value : "hybrid";
     // 更新顶栏模式显示
-    if (dom.topbarMode) dom.topbarMode.textContent = modelType.toUpperCase();
+    if (dom.topbarMode) dom.topbarMode.textContent = modeLabel(modelType);
     // 2026-09-19：后端生成成功后默认"消费并清除"本圈反馈（跨圈不串味），
     // 先生成前记下是否有反馈，用于生成后如实的提示语。
     const hadFeedback = state.feedbacks.length > 0;
@@ -1646,6 +1651,30 @@
         `（改善 ${(o.improvement ?? 0).toFixed(4)}）${cls ? "　残差：" + cls : ""}</div>`;
     }
 
+    // 神经网络模拟优化（2026-09-19 架构）：把「模型是否真的跑了」直接摆给用户看
+    // —— 模型描述 / 迭代轮数 / 采纳次数 / 预计提升 / 逐次采纳轨迹。
+    let simLine = "";
+    const sim = h.simulation;
+    if (sim) {
+      if (sim.available) {
+        const gainTxt = sim.gain_ms != null
+          ? `${sim.gain_ms >= 0 ? "−" : "+"}${Math.abs(sim.gain_ms).toFixed(1)} ms`
+          : "—";
+        simLine = `<div class="holistic-line holistic-sim">` +
+          `<span class="holistic-tag">神经网络模拟</span>` +
+          `${esc(sim.model || "")}　迭代 ${sim.iterations} 轮 / 采纳 ${sim.accepted} 次` +
+          `　模拟圈速提升 ${gainTxt}` +
+          (sim.before_s != null && sim.after_s != null
+            ? `（${(sim.before_s * 1000).toFixed(0)} → ${(sim.after_s * 1000).toFixed(0)} ms）`
+            : "") +
+          `</div>` +
+          group("模拟优化采纳轨迹", sim.trace, "holistic-sim-trace");
+      } else {
+        simLine = `<div class="holistic-line"><span class="holistic-tag">神经网络模拟</span>` +
+          `未启用：${esc(sim.reason || "未知原因")}</div>`;
+      }
+    }
+
     const body = [
       group("逐弯加权依据", h.corner_notes, "holistic-corner"),
       group("跨弯道类别冲突（已折中）", h.conflicts, "holistic-conflict"),
@@ -1654,8 +1683,8 @@
             "holistic-trace"),
       group("整体收口与取舍", h.coherence_notes, "holistic-coherence"),
     ].join("");
-    if (!demandLine && !optLine && !body) return "";
-    return `<div class="holistic">${demandLine}${optLine}${body}</div>`;
+    if (!demandLine && !optLine && !simLine && !body) return "";
+    return `<div class="holistic">${demandLine}${optLine}${simLine}${body}</div>`;
   }
 
   function renderReportSummary(report) {
@@ -2188,7 +2217,7 @@
     // 模型类型切换
     if (dom.modelTypeSelect) {
       dom.modelTypeSelect.addEventListener("change", () => {
-        if (dom.topbarMode) dom.topbarMode.textContent = dom.modelTypeSelect.value.toUpperCase();
+        if (dom.topbarMode) dom.topbarMode.textContent = modeLabel(dom.modelTypeSelect.value);
       });
     }
 

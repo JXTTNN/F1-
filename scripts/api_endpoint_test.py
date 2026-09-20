@@ -210,9 +210,14 @@ with TestClient(app) as client:
         errors.append(f"GET /telemetry/recordings: {e}")
 
     # =========================================================================
-    # 8. POST /api/v1/suggest — 验证rule/nn/hybrid模式
+    # 8. POST /api/v1/suggest — 三种模型类型 + **模拟优化语义**校验
     # =========================================================================
-    print("\n--- 8. POST /api/v1/suggest (rule/nn/hybrid) ---")
+    # 2026-09-20：不再只验"能出报告"。旧检查在三档都返回 200 的情况下掩盖了
+    # "请求 nn/hybrid 却静默降级为纯规则、模型从未参与"这一真实缺陷 ——
+    # 现在必须校验报告如实反映模型是否生效（model_type / nn_available /
+    # holistic.simulation），并锁定 rule 与 nn 两条路径的差异。
+    print("\n--- 8. POST /api/v1/suggest (rule/nn/hybrid + 模拟优化语义) ---")
+    model_reports = {}
     for mode in ["rule", "nn", "hybrid"]:
         try:
             # 显式关闭"生成后清除反馈"（2026-09-19 起的默认行为）：
@@ -225,12 +230,47 @@ with TestClient(app) as client:
             assert resp.status_code == 200, f"[{mode}] 状态码: {resp.status_code}, body: {resp.text}"
             body = resp.json()
             assert body["code"] == 0, f"[{mode}] code: {body['code']}"
-            print(f"  ✅ suggest model_type={mode} 成功")
+            report = body["data"]["report"]
+            sim = (report.get("holistic") or {}).get("simulation") or {}
+            assert "model_type" in report, f"[{mode}] 报告缺少 model_type"
+            assert "nn_available" in report, f"[{mode}] 报告缺少 nn_available"
+            assert sim, f"[{mode}] 报告缺少 holistic.simulation（模型是否生效无从判断）"
+            if mode == "rule":
+                assert report["model_type"] == "rule", \
+                    f"[rule] 应为 rule，实为 {report['model_type']}"
+                assert report["nn_available"] is False, "[rule] nn_available 应为 False"
+            elif report["model_type"] == "nn":
+                # 模型可用 → 必须真的跑了（有迭代、有模型描述）
+                assert report["nn_available"] is True, f"[{mode}] nn_available 应为 True"
+                assert sim.get("iterations", 0) >= 1, f"[{mode}] 模拟迭代轮数应为正"
+                assert sim.get("model"), f"[{mode}] 模拟面板应带模型描述"
+            else:
+                # 诚实降级：必须给出原因（模型缺失 / 赛道未覆盖 / 无诊断输入）
+                assert sim.get("reason"), f"[{mode}] 降级必须给出 reason"
+                print(f"  [i] [{mode}] 降级为 rule（{sim.get('reason')}）")
+            model_reports[mode] = report
+            print(f"  ✅ suggest model_type={mode} → 实际 {report['model_type']}"
+                  f"（nn_available={report['nn_available']}，"
+                  f"迭代 {sim.get('iterations')} / 采纳 {sim.get('accepted')}，"
+                  f"提升 {sim.get('gain_ms')} ms）")
             passed += 1
         except Exception as e:
             print(f"  ❌ suggest model_type={mode} 失败: {e}")
             failed += 1
             errors.append(f"POST /suggest model_type={mode}: {e}")
+
+    # 8b. nn 与 hybrid 必须走同一条模拟优化路径（都是"模型驱动"，逐位一致）
+    try:
+        if model_reports.get("nn") and model_reports.get("hybrid"):
+            assert (model_reports["nn"]["setup_delta"]
+                    == model_reports["hybrid"]["setup_delta"]), \
+                "nn 与 hybrid 结果不一致（同路径应逐位一致）"
+            print("  ✅ nn 与 hybrid 走同一模拟优化路径（结果逐位一致）")
+            passed += 1
+    except Exception as e:
+        print(f"  ❌ nn/hybrid 路径一致性: {e}")
+        failed += 1
+        errors.append(f"nn/hybrid 一致性: {e}")
 
     # =========================================================================
     # 9. 其他端点验证

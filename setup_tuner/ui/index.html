@@ -22,7 +22,7 @@
       <span id="ws-dot" class="status-dot status-offline" aria-label="遥测连接状态" title="遥测连接状态"></span>
       <span id="ws-status-text" class="status-text">遥测未连接</span>
       <span class="topbar-sep" aria-hidden="true">|</span>
-      <span class="topbar-mode" id="topbar-mode">HYBRID</span>
+      <span class="topbar-mode" id="topbar-mode">神经网络模拟优化</span>
     </div>
   </header>
 
@@ -152,12 +152,11 @@
           <div class="report-actions">
             <label class="model-select-label" for="model-type-select">模型</label>
             <select id="model-type-select" class="model-select" aria-label="选择建议模型">
-              <option value="hybrid" title="规则矩阵给方向 + 神经网络不断模拟优化（纯标准库，无需额外依赖）">神经网络模拟 + 规则</option>
-              <option value="rule" title="纯规则引擎（确定性，无模型参与）">纯规则</option>
-              <option value="nn" title="规则矩阵给方向 + 神经网络模拟精修（与上一项同路径）">神经网络模拟</option>
+              <option value="hybrid" title="规则矩阵给方向 + 遥测锚定训练的神经网络不断模拟精修（纯标准库，无需 PyTorch）">神经网络模拟优化</option>
+              <option value="rule" title="纯规则路径：矩阵方向 + 圈级优化 + 整体收口，不跑神经网络模拟">纯规则（快速）</option>
             </select>
             <span class="model-hint" style="font-size:11px;color:var(--text-tertiary,#8b93a7);margin-left:6px;"
-                  title="神经网络由遥测锚定仿真训练，纯标准库推理，无需 PyTorch">神经网络开箱即用（无需 PyTorch）</span>
+                  title="神经网络由 80k+ 真实 2026 逐弯遥测锚定仿真训练，纯标准库推理，开箱即用">模型驱动优化 · 无需 PyTorch</span>
             <button id="btn-generate-suggest" class="btn btn-primary" type="button" aria-label="生成调教建议">生成建议</button>
           </div>
         </div>
