@@ -1,0 +1,217 @@
+[
+  {
+    "tag": "A.真实抓包解析(受支持6类包)",
+    "verdict": "FAIL",
+    "detail": "受支持包 401/403 解析成功, 短包(截断帧)=2, 解析异常=0, 未支持packetId(设计返回None)=0, 全部记录=403 | Motion=31, Session=30, LapData=30, Event=10, Participants=30, CarSetups=30, CarTelemetry=30, CarStatus=30, CarDamage=30, SessionHistory=30, TyreSets=30, MotionEx=30, LapPositions=30, CarTelemetry2=30"
+  },
+  {
+    "tag": "A2.真实Session字段",
+    "verdict": "INFO",
+    "detail": "m_trackId=[0] m_trackLength=[5276] m_weather=[0] 样例 trackTemperature=25"
+  },
+  {
+    "tag": "A3.真实trackId→赛道解析",
+    "verdict": "INFO",
+    "detail": "udp_trackId=0 → 程序判定=melbourne (表长=5278.0) ; 抓包 trackLength=5276"
+  },
+  {
+    "tag": "A4.真实trackLength反查",
+    "verdict": "INFO",
+    "detail": "抓包 trackLength=5276m 最接近 melbourne(5278.0m) → 该赛道应有 udp_trackId=0"
+  },
+  {
+    "tag": "A5.真实CarSetups原始字段",
+    "verdict": "INFO",
+    "detail": "{\"m_frontWing\": 34, \"m_rearWing\": 25, \"m_onThrottleDiff\": 70, \"m_offThrottleDiff\": 70, \"m_frontCamber\": -3.200000047683716, \"m_rearCamber\": -2.0, \"m_frontToe\": 0.04000000283122063, \"m_rearToe\": 0.15000000596046448, \"m_frontSuspension\": 37, \"m_brakePressure\": 97, \"m_brakeBias\": 57, \"m_engineBraking\": 50, \"m_rearLeftTyrePressure\": 21.299999237060547, \"m_frontLeftTyrePressure\": 24.200000762939453, \"m_ballast\": 6, \"m_fuelLoad\": 30.0}"
+  },
+  {
+    "tag": "A6.提取21参数是否在合法区间",
+    "verdict": "PASS",
+    "detail": "全部合法"
+  },
+  {
+    "tag": "A7.提取结果样例",
+    "verdict": "INFO",
+    "detail": "{\"front_wing\": 34.0, \"rear_wing\": 25.0, \"on_throttle_diff\": 70.0, \"off_throttle_diff\": 70.0, \"front_camber\": -3.2, \"rear_camber\": -2.0, \"front_toe\": 0.04, \"rear_toe\": 0.15, \"front_suspension\": 37.0, \"rear_suspension\": 16.0, \"front_anti_roll_bar\": 15.0, \"rear_anti_roll_bar\": 8.0, \"front_ride_height\": 25.0, \"rear_ride_height\": 52.0, \"brake_pressure\": 97.0, \"brake_bias\": 57.0, \"front_left_tyre_pressure\": 24.2, \"front_right_tyre_pressure\": 24.2, \"rear_left_tyre_pressure\": 21.3, \"rear_right_tyre_pressure\": 21.3}"
+  },
+  {
+    "tag": "A8.胎压字段",
+    "verdict": "INFO",
+    "detail": "UDP m_frontRightTyrePressure=24.200000762939453 → 转换后=24.200000762939453"
+  },
+  {
+    "tag": "B1.udp_track_id 唯一性",
+    "verdict": "PASS",
+    "detail": "24 条唯一"
+  },
+  {
+    "tag": "B2.udp_track_id 与官方枚举一致",
+    "verdict": "PASS",
+    "detail": "正确 23/24；错误 0 条 → "
+  },
+  {
+    "tag": "B3.新增赛道(官方枚举待补)",
+    "verdict": "WARN",
+    "detail": "madrid(程序=33)"
+  },
+  {
+    "tag": "C1.弯道锚点落在赛道线上(像素偏差)",
+    "verdict": "PASS",
+    "detail": "24 条赛道最大偏差=0.44px (sakhir)"
+  },
+  {
+    "tag": "C2.弯角编号沿赛道走向单调",
+    "verdict": "PASS",
+    "detail": "全部单调递增"
+  },
+  {
+    "tag": "D1._map_corner 均匀分布假设 vs 锚点真实顺序",
+    "verdict": "PASS",
+    "detail": "24 赛道共采样 4800 个圈内位置，弯角判定错误 116 个 (2.4%)；错误率>50% 的赛道 0 条"
+  },
+  {
+    "tag": "E1.单帧路径遥测摘要字段数",
+    "verdict": "INFO",
+    "detail": "字段数=24；触发维度=['brake_stab_req', 'front_grip_req', 'rear_grip_req', 'tyre_life_req'] （缺 max_speed/avg_steer/max_steer/on_straight，故 5 条规则不可用）"
+  },
+  {
+    "tag": "E2.整圈聚合路径触发维度",
+    "verdict": "INFO",
+    "detail": "触发=['brake_stab_req', 'front_grip_req', 'hi_speed_stab_req', 'rear_grip_req', 'turnin_req', 'tyre_life_req']（含 max_speed/avg_steer/max_steer/on_straight 后规则 6/7/10/15 可用）"
+  },
+  {
+    "tag": "E3.LapAggregator 是否接入生产路径",
+    "verdict": "PASS",
+    "detail": "app.py 已把 Packet2/6 喂给 LapAggregator，routes.suggest 会把 best_snapshot() 合进遥测摘要"
+  },
+  {
+    "tag": "E4.规则 6/7/10/15/5 是否可触发",
+    "verdict": "PASS",
+    "detail": "可触发"
+  },
+  {
+    "tag": "E5.仍未实现的遥测规则",
+    "verdict": "WARN",
+    "detail": "规则9(刮底, 占位未实现)"
+  },
+  {
+    "tag": "F1.WS telemetry 事件 payload",
+    "verdict": "INFO",
+    "detail": "brake, drs, engine_rpm, gear, lap_time_ms, sector, speed, steer, throttle"
+  },
+  {
+    "tag": "F2.前端读取但后端不推送的字段",
+    "verdict": "PASS",
+    "detail": "前端读取 ['brake', 'engine_rpm', 'gear', 'lap_time_ms', 'sector', 'speed', 'throttle'] —— 全部由后端推送"
+  },
+  {
+    "tag": "F3.扇区基数（0 基 → 1 基）",
+    "verdict": "PASS",
+    "detail": "to_sector_1based(0/1/2)=[1, 2, 3]；摘要 sector(m_sector=2)=3；前端重复 +1=无"
+  },
+  {
+    "tag": "G1.实际参数个数",
+    "verdict": "INFO",
+    "detail": "ALL_SETUP_FIELDS=20, default().to_dict()=20"
+  },
+  {
+    "tag": "G2.smoke.py 期望个数",
+    "verdict": "FAIL",
+    "detail": "EXPECTED_PARAM_COUNT=21 vs 实际 20 → Smoke Test 必然失败"
+  },
+  {
+    "tag": "G3.文档串不一致 engine/engine.py",
+    "verdict": "WARN",
+    "detail": "出现 '21 项' 1 次（实际 20 参数）"
+  },
+  {
+    "tag": "G3.文档串不一致 report/builder.py",
+    "verdict": "PASS",
+    "detail": "出现 '20 参数' 0 次（实际 20 参数）"
+  },
+  {
+    "tag": "G3.文档串不一致 api/routes.py",
+    "verdict": "PASS",
+    "detail": "出现 '20 参数' 0 次（实际 20 参数）"
+  },
+  {
+    "tag": "H1.cloud-audit 健康检查 URL",
+    "verdict": "PASS",
+    "detail": "workflow 探测 http://127.0.0.1:8000/api/v1/health，真实路径是 /api/v1/health → 探测永远 404"
+  },
+  {
+    "tag": "H2.UI 审计脚本选择器 vs 现役 UI",
+    "verdict": "FAIL",
+    "detail": "9/9 个选择器在新 UI 中不存在: ['predict-btn', 'feedback-input', 'search-btn', 'chat-input', 'iter-link', 'export-setup-btn', 'str-laps', 'driver-style-select', 'apply-recommended-btn']"
+  },
+  {
+    "tag": "H3.UI 审计目标页 /dashboard.html",
+    "verdict": "FAIL",
+    "detail": "新 UI 只有 index.html，/dashboard.html 恒为 404"
+  },
+  {
+    "tag": "H4.CI 中 UI 审计是否阻断",
+    "verdict": "FAIL",
+    "detail": "cloud-audit.yml 的 UI 审计步骤 continue-on-error: true → 失败不阻断"
+  },
+  {
+    "tag": "H5.真实遥测测试的数据路径",
+    "verdict": "FAIL",
+    "detail": "? (Windows 本地专属；CI 中必然 skip)"
+  },
+  {
+    "tag": "I1.已提交录制文件",
+    "verdict": "WARN",
+    "detail": "6 个 .f1rec，大小=[69, 281633241, 25678595, 430363065, 69, 69]（仅文件头 = 69B，0 个数据包记录）"
+  },
+  {
+    "tag": "I2.SQLite 临时文件未入库",
+    "verdict": "PASS",
+    "detail": "data/f1opt.db-shm（32768B）存在但未被 git 跟踪（已由 .gitignore 排除）"
+  },
+  {
+    "tag": "I2.SQLite 临时文件未入库",
+    "verdict": "PASS",
+    "detail": "data/f1opt.db-wal（90672B）存在但未被 git 跟踪（已由 .gitignore 排除）"
+  },
+  {
+    "tag": "J1.应用不可达模块",
+    "verdict": "FAIL",
+    "detail": "1 个模块 / 9 KB 仅测试可见: ['setup_tuner.domain._track_official']"
+  },
+  {
+    "tag": "K2.LapData 每车步长",
+    "verdict": "PASS",
+    "detail": "包长=1399 体长=1370；代码常量=57B × 24 车 = 1368B，包尾额外 2B（步长与常量一致，切片偏移正确）"
+  },
+  {
+    "tag": "K5.CarSetups 每车步长",
+    "verdict": "PASS",
+    "detail": "包长=1233 体长=1204；代码常量=50B × 24 车 = 1200B，包尾额外 4B（步长与常量一致，切片偏移正确）"
+  },
+  {
+    "tag": "K6.CarTelemetry 每车步长",
+    "verdict": "PASS",
+    "detail": "包长=1448 体长=1419；代码常量=59B × 24 车 = 1416B，包尾额外 3B（步长与常量一致，切片偏移正确）"
+  },
+  {
+    "tag": "K7.CarStatus 每车步长",
+    "verdict": "PASS",
+    "detail": "包长=1445 体长=1416；代码常量=59B × 24 车 = 1416B，包尾额外 0B（步长与常量一致，切片偏移正确）"
+  },
+  {
+    "tag": "K5b.CarSetups 结构起点实测间距",
+    "verdict": "INFO",
+    "detail": "候选起点 22 个, 间距集合=[50] → 实测步长=50，代码常量=50"
+  },
+  {
+    "tag": "K6.真实 m_sector 取值",
+    "verdict": "INFO",
+    "detail": "实测集合=[0, 1, 2] → 确认 UDP 为 0 基(0/1/2)。本探针写于修复前；现 sector 已由 to_sector_1based 统一转 1 基，规则 5 与前端显示均已正确（见 F3 断言）"
+  },
+  {
+    "tag": "L1.Packet5 原值是否已在车库合法域内",
+    "verdict": "PASS",
+    "detail": "20/20 个字段的 UDP 原值本身就落在车库域内 （EA 下发即车库值）。本探针写于修复前：convert_udp_to_game_value 现为恒等映射，原值与换算后一致即验证通过；若某字段需要重映射则此断言会转 FAIL 提醒补实测依据"
+  }
+]

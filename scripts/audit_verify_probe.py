@@ -588,15 +588,39 @@ def check_workflows():
 # =========================================================================== #
 # I. 录制文件 & 死代码
 # =========================================================================== #
+def _git_tracked(rel: str) -> bool:
+    """该路径是否被 git 跟踪（存在 ≠ 入库：可能是被 .gitignore 正确排除的运行时文件）。"""
+    import subprocess
+
+    try:
+        proc = subprocess.run(  # noqa: S603
+            ["git", "ls-files", "--error-unmatch", rel],  # noqa: S607
+            cwd=str(ROOT), capture_output=True, text=True, check=False,
+        )
+        return proc.returncode == 0
+    except OSError:
+        # 无 git 环境（如打包后的裸目录）：无法判定，按"未入库"处理不误报
+        return False
+
+
 def check_recordings():
     recs = sorted((ROOT / "data" / "recordings").glob("*.f1rec"))
     sizes = [r.stat().st_size for r in recs]
     item("I1.已提交录制文件", "FAIL" if recs and max(sizes) <= 73 else "WARN",
          f"{len(recs)} 个 .f1rec，大小={sizes}（仅文件头 = 69B，0 个数据包记录）")
     for f in ["data/f1opt.db-shm", "data/f1opt.db-wal"]:
-        if (ROOT / f).exists():
+        path = ROOT / f
+        if not path.exists():
+            continue
+        # **修正误报**：原实现只看"文件是否存在"就判 FAIL 并称"已入库"，
+        # 但这两个 SQLite 运行时文件由 .gitignore 的 `*.db-shm` / `*.db-wal`
+        # 正确排除（`git ls-files` 为空）—— 存在 ≠ 入库。改为按**跟踪状态**判定。
+        if _git_tracked(f):
             item("I2.误提交 SQLite 临时文件", "FAIL",
-                 f"{f} ({ (ROOT/f).stat().st_size }B) 已入库，且 .gitignore 含 *.db")
+                 f"{f}（{path.stat().st_size}B）已被 git 跟踪，应在 .gitignore 中排除")
+        else:
+            item("I2.SQLite 临时文件未入库", "PASS",
+                 f"{f}（{path.stat().st_size}B）存在但未被 git 跟踪（已由 .gitignore 排除）")
 
 
 def check_dead_modules():
