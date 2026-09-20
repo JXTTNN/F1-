@@ -159,6 +159,7 @@ class TestFrozenPackaging:
         exe.write_text("", encoding="utf-8")
         monkeypatch.setattr(sys, "frozen", True, raising=False)
         monkeypatch.setattr(sys, "executable", str(exe))
+        monkeypatch.setattr(sys, "argv", [str(exe)])
         try:
             assert install_root() == exe.parent.resolve()
             assert Path(default_data_dir()) == exe.parent.resolve() / "data"
@@ -173,7 +174,28 @@ class TestFrozenPackaging:
         exe.write_text("", encoding="utf-8")
         monkeypatch.setattr(sys, "nuitka_version", "2.0", raising=False)
         monkeypatch.setattr(sys, "executable", str(exe))
+        monkeypatch.setattr(sys, "argv", [str(exe)])
         try:
             assert install_root() == exe.parent.resolve()
         finally:
             monkeypatch.delattr(sys, "nuitka_version", raising=False)
+
+    def test_nuitka_compiled_marker_detected(self, tmp_path: Path, monkeypatch) -> None:
+        """Nuitka 在编译模块命名空间写入 `__compiled__`；据此判定冻结形态。
+
+        （Nuitka 不一定设置 sys.frozen / sys.nuitka_version，`__compiled__`
+        是官方推荐的可移植判据。）
+        """
+        import sys
+        import types
+
+        exe = tmp_path / "packed" / "F1OPT.exe"
+        exe.parent.mkdir(parents=True)
+        exe.write_text("", encoding="utf-8")
+
+        fake_main = types.ModuleType("__main__")
+        fake_main.__compiled__ = object()          # type: ignore[attr-defined]
+        monkeypatch.setitem(sys.modules, "__main__", fake_main)
+        monkeypatch.setattr(sys, "executable", str(exe))
+        monkeypatch.setattr(sys, "argv", [str(exe)])
+        assert install_root() == exe.parent.resolve()

@@ -22,15 +22,54 @@ from pathlib import Path
 
 
 def _is_frozen() -> bool:
-    """是否运行在**冻结打包**产物里（PyInstaller / Nuitka 单文件）。"""
+    """是否运行在**冻结打包**产物里（PyInstaller / Nuitka）。
+
+    官方口径（核实自 Nuitka 文档）：
+    - Nuitka **不设置** ``sys.frozen``，而是在每个编译模块注入 ``__compiled__``；
+    - PyInstaller 设置 ``sys.frozen``。
+    两者都认，避免"冻结形态没识别出来 → 数据写进解包临时目录"。
+    """
     import sys
 
-    if getattr(sys, "frozen", False):          # PyInstaller
+    if getattr(sys, "frozen", False):           # PyInstaller
         return True
-    if hasattr(sys, "nuitka_version"):         # Nuitka
+    if globals().get("__compiled__") is not None:  # Nuitka（本模块被编译时）
+        return True
+    if hasattr(sys, "nuitka_version"):
         return True
     main = sys.modules.get("__main__")
     return main is not None and hasattr(main, "__compiled__")
+
+
+def _frozen_install_root() -> Path | None:
+    """冻结打包时的安装根目录；非冻结返回 None。
+
+    解析顺序（按 Nuitka 官方建议）：
+    1. ``__compiled__.containing_dir`` —— 官方推荐，兼容 macOS .app 等嵌套形态；
+    2. ``sys.argv[0]`` 的所在目录 —— onefile 下它是**原始可执行文件**路径
+       （而 ``__file__`` 指向解包临时目录，退出即删，不能用）；
+    3. ``sys.executable`` 所在目录 —— 兜底。
+
+    注：Nuitka 下 ``sys.executable`` 可能仍指向解释器路径，故不作为首选；
+    同时跳过 ``.py`` 候选（避免误判成 pytest/python 自身的位置）。
+    """
+    import sys
+
+    if not _is_frozen():
+        return None
+    containing = getattr(globals().get("__compiled__"), "containing_dir", None)
+    if containing:
+        return Path(containing).resolve()
+
+    candidates: list[Path] = []
+    if sys.argv and sys.argv[0]:
+        candidates.append(Path(sys.argv[0]))
+    if sys.executable:
+        candidates.append(Path(sys.executable))
+    for path in candidates:
+        if path.suffix.lower() not in (".py", ".pyc", ".pyo"):
+            return path.resolve().parent
+    return candidates[-1].resolve().parent if candidates else None
 
 
 def install_root() -> Path:
@@ -40,10 +79,9 @@ def install_root() -> Path:
     - **冻结打包**（便携版单文件）：`__file__` 指向运行时解包出来的临时目录
       （退出即删），不能用来放数据 → 改用可执行文件所在目录（用户解压的地方）
     """
-    import sys
-
-    if _is_frozen():
-        return Path(sys.executable).resolve().parent
+    frozen = _frozen_install_root()
+    if frozen is not None:
+        return frozen
     return Path(__file__).resolve().parents[1]
 
 
