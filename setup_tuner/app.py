@@ -436,6 +436,10 @@ async def _lifespan(app: FastAPI):
     先清一次上次的残留（幂等、白名单、录制保护），保证约定无论如何都成立。
     """
     config: Config = app.state.config
+    # 冻结形态（便携/单机版）：留下安装根判定依据，便于排障（非冻结时不写）
+    from setup_tuner.config import _write_frozen_diag
+
+    _write_frozen_diag()
     _cleanup_leftover_telemetry(config)
     store, listener = _init_app_services(app, config)
     _start_telemetry_listener(listener, config)

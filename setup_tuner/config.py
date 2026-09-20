@@ -21,6 +21,39 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
+def _write_frozen_diag() -> None:
+    """冻结形态下把"安装根判定依据"写到系统临时目录（排障用，失败静默）。
+
+    背景：便携版的安装根判定依赖冻结框架的内部变量（argv[0] / __file__ /
+    __compiled__.containing_dir），不同 Nuitka 版本行为有差异 —— 一旦判错，
+    数据会落到解包临时目录（退出即丢）或构建期目录。留一份现场记录，
+    出问题时不靠猜。
+    """
+    if not _is_frozen():
+        return          # 源码/普通安装不写（避免污染临时目录）
+    try:
+        import json
+        import sys
+        import tempfile
+
+        compiled = globals().get("__compiled__")
+        payload = {
+            "frozen": _is_frozen(),
+            "argv0": sys.argv[0] if sys.argv else None,
+            "file": __file__,
+            "executable": sys.executable,
+            "containing_dir": getattr(compiled, "containing_dir", None),
+            "install_root": str(install_root()),
+            "resolved_data_dir": default_data_dir(),
+        }
+        target = Path(tempfile.gettempdir()) / "f1opt_frozen_diag.json"
+        target.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8",
+        )
+    except Exception:  # noqa: BLE001 - 诊断绝不能影响主流程
+        pass
+
+
 def _is_frozen() -> bool:
     """是否运行在**冻结打包**产物里（PyInstaller / Nuitka）。
 

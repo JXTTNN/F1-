@@ -152,8 +152,56 @@ def start_exe(exe_path: Path, cwd: Path | None = None) -> subprocess.Popen[bytes
     )
 
 
+def _is_port_listening(host: str, port: int) -> bool:
+    """端口是否仍在 LISTENING（用连接测试判断，跨平台）。"""
+    import socket as _socket
+
+    with _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM) as sock:
+        sock.settimeout(0.5)
+        return sock.connect_ex((host, port)) == 0
+
+
+def _kill_orphan_instances() -> None:
+    """强杀所有遗留的 F1OPT.exe 进程（Windows）。
+
+    为什么必须做：Nuitka ``--onefile`` 是"引导器 + 子进程"结构 —— 引导器解包后
+    会**再启动一个子进程**，真正跑服务的是子进程。只 terminate 引导器会留下
+    孤儿子进程继续占着 8000 端口，后续阶段的请求全被**旧实例**响应
+    （症状：数据目录落点不对、请求超时、e2e 结果串味）。实测踩过。
+    """
+    if sys.platform != "win32":
+        return
+    try:
+        subprocess.run(  # noqa: S603
+            ["taskkill", "/IM", "F1OPT.exe", "/F"],  # noqa: S607
+            capture_output=True, timeout=15, check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+
+
+def _wait_port_free(host: str, port: int, timeout: float = 20.0) -> bool:
+    """等待端口释放（直到没有进程 LISTENING）。"""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if not _is_port_listening(host, port):
+            return True
+        _kill_orphan_instances()
+        time.sleep(0.5)
+    return not _is_port_listening(host, port)
+
+
 def stop_exe(proc: subprocess.Popen[bytes]) -> None:
-    """停止 exe 子进程。"""
+    """停止 exe 子进程（**连同进程树**，避免 onefile 子进程残留占用端口）。"""
+    if sys.platform == "win32" and proc.poll() is None:
+        # taskkill /T 结束整棵进程树：引导器 + 真正跑服务的子进程
+        try:
+            subprocess.run(  # noqa: S603
+                ["taskkill", "/PID", str(proc.pid), "/T", "/F"],  # noqa: S607
+                capture_output=True, timeout=20, check=False,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            pass
     try:
         proc.terminate()
         proc.wait(timeout=5)
@@ -162,6 +210,8 @@ def stop_exe(proc: subprocess.Popen[bytes]) -> None:
         proc.wait(timeout=5)
     except Exception:
         pass
+    # 双保险：清掉任何残存的同名实例
+    _kill_orphan_instances()
 
 
 def wait_for_api(
@@ -310,6 +360,9 @@ def test_startup(
 
     # 启动 exe
     try:
+        # 启动前清掉残留实例并等端口空闲（onefile 子进程常被漏杀 → 端口被占）
+        _kill_orphan_instances()
+        _wait_port_free(host, port)
         proc = start_exe(exe_path)
     except Exception as e:
         return TestResult("startup", False, f"启动 exe 失败：{e}"), None
@@ -626,6 +679,16 @@ def test_portable(
         items.append(f"临时目录 exe 就绪：{exe_in_tmp}")
 
         # ③ 从临时目录启动 exe
+        # 启动前确保没有旧实例占着端口（Nuitka onefile 的子进程常被漏杀）——
+        # 否则新实例绑不上 8000，请求会被**旧实例**响应，数据落点也会判错。
+        _kill_orphan_instances()
+        if not _wait_port_free(host, port):
+            passed = False
+            items.append(
+                f"❌ 端口 {port} 仍被占用，便携实例无法启动"
+                "（旧实例未清理干净 —— onefile 子进程需整树结束）"
+            )
+            return TestResult("portable", passed, "便携性验证完成", items)
         try:
             proc = start_exe(exe_in_tmp, cwd=tmp_dir)
         except Exception as e:
@@ -680,6 +743,15 @@ def test_portable(
                     continue
             hint = ("；实际发现 f1opt.db 于：" + "、".join(sorted(set(found))[:5])
                     if found else "；临时目录、exe 目录、cwd、系统临时目录下均未发现 f1opt.db")
+            # 读应用写下的冻结形态诊断（%TEMP%/f1opt_frozen_diag.json）：
+            # 没有该文件通常意味着"没识别出冻结形态"（Nuitka 不设 sys.frozen）
+            try:
+                diag = (
+                    Path(tempfile.gettempdir()) / "f1opt_frozen_diag.json"
+                ).read_text(encoding="utf-8")
+                hint += f"；应用自述路径判定：{diag.replace(chr(10), ' ')}"
+            except OSError:
+                hint += "；未找到应用写下的冻结诊断（可能未识别为冻结形态）"
             items.append(
                 f"❌ 数据目录未创建在安装文件夹内：{data_dir}"
                 f"（要求：所有数据只能落在安装目录）{hint}"
