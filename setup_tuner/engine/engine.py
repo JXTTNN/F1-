@@ -1,4 +1,4 @@
-"""SetupDelta 计算引擎（核心，6 步确定性流水线 + 混合模型）。
+"""SetupDelta 计算引擎（核心，6 步确定性流水线 + 神经网络模拟优化）。
 
 实现 design 2.7.4 的 ``SetupDelta = clamp(Dx × C)`` 计算流水线：
 
@@ -13,20 +13,22 @@
 纯函数、零 IO、零随机、零时间依赖，满足 FR-ENG-05 / FR-NFR-R1（可复现）。
 任意单症状产出 SetupDelta 覆盖全部 20 参数；相同输入输出完全一致。
 
-混合模型扩展（task-43）：
-    ``generate_suggestion`` 支持 ``model_type`` 参数：
-        - ``"rule"``：纯规则引擎（默认确定性流水线）
-        - ``"nn"``：纯神经网络（PyTorch 不可用时自动降级为规则引擎）
-        - ``"hybrid"``：混合模型（规则 60% + 神经网络 40%，神经网络不可用时降级）
+神经网络模拟优化（2026-09-19 大改，取代旧的 torch 混合分支）：
+    ``generate_suggestion`` 的 ``model_type`` 参数：
+        - ``"rule"``：纯规则路径（矩阵方向 + 圈级优化 + 收口）
+        - ``"nn"`` / ``"hybrid"``：在规则路径的**结果之上**再跑一段
+          「神经网络不断模拟优化」——由遥测锚定仿真训练出的调教性能 NN
+          （:mod:`setup_tuner.engine.setup_sim`，**纯标准库推理，无 PyTorch**）
+          在 :mod:`setup_tuner.engine.sim_optimizer` 的坐标上升循环里，
+          对候选调教逐一模拟圈速，保留更快且不牺牲车手需求满足度的候选。
 
-    神经网络分支由 :mod:`setup_tuner.engine.nn_model` 提供，
-    PyTorch 为可选依赖，不可用时自动降级为纯规则引擎。
+    模型不可用或赛道不在覆盖范围时自动跳过模拟环节（行为与 rule 路径
+    逐位一致），报告 ``model_type`` 如实标为 ``"rule"`` 并给出原因。
 """
 
 from __future__ import annotations
 
 import logging
-import threading
 from typing import Any
 
 from setup_tuner.domain.setup import ALL_SETUP_FIELDS
@@ -53,6 +55,8 @@ from .diagnostic import (
 )
 from .holistic import class_weighted_dx, holistic_coherence, track_demand
 from .optimizer import describe_tradeoff, optimize_setup
+from .setup_sim import get_setup_sim
+from .sim_optimizer import SimRefineResult, sim_refine
 from .surrogate import get_surrogate
 from .telemetry_diagnosis import (
     diagnose_from_telemetry,
@@ -833,20 +837,6 @@ def _build_param_detail(
     }
 
 
-def _compute_nn_delta(
-    model_type: str, symptoms: list, dx: dict, current_setup: dict[str, float],
-    track_id: str,
-) -> tuple[dict[str, float] | None, bool]:
-    """计算神经网络 delta（若需要且可用），返回 (nn_delta, nn_available)。"""
-    if model_type not in ("nn", "hybrid"):
-        return None, False
-    nn_manager = _get_nn_manager()
-    if nn_manager is None or not nn_manager.available:
-        return None, False
-    nn_delta = nn_manager.predict(symptoms, dx, current_setup, track_id)
-    return nn_delta, True
-
-
 def _build_param_details(
     final_delta: dict[str, float], current_setup: dict[str, float], dx: dict,
 ) -> list[dict[str, Any]]:
@@ -877,14 +867,16 @@ _GENERATE_SUGGESTION_DOC = """完整建议生成（Dx → SetupDelta → 报告�
 确定性纯函数：相同输入必得相同输出，无 IO、无随机、无时间依赖。
 时间戳由报告落库层（T7）在持久化时补充，本函数不引入时间依赖。
 
-混合模型（task-43）：
-    ``model_type`` 控制使用哪种模型分支：
-        - ``"rule"``：纯规则引擎（6 步确定性流水线）
-        - ``"nn"``：纯神经网络（不可用时降级为规则引擎）
-        - ``"hybrid"``：混合（规则 60% + 神经网络 40%，不可用时降级）
+神经网络模拟优化（2026-09-19 大改）：
+    ``model_type`` 控制是否启用「参数矩阵给方向 → 神经网络不断模拟优化」：
+        - ``"rule"``：纯规则路径（矩阵方向 + 圈级优化 + 收口）；
+        - ``"nn"`` / ``"hybrid"``：在规则路径结果之上，用**遥测锚定仿真训练
+          的调教性能神经网络**（纯标准库推理，无 PyTorch）做坐标上升精修：
+          每次候选改动都被 NN「模拟」出预测圈速，保留更快且不牺牲
+          车手需求满足度的候选。
 
-    神经网络分支为可选依赖（PyTorch），不可用时自动降级为纯规则引擎，
-    保证向后兼容。
+    模型不可用 / 赛道不在覆盖范围时自动跳过（行为与 rule 路径逐位一致），
+    报告里 ``model_type`` 如实标记并给出 ``holistic.simulation.reason``。
 
 阶段敏感扩展（task-60）：
     ``symptoms`` 支持二元组和三元组混合：
@@ -999,13 +991,6 @@ def generate_suggestion(
         dx, current_setup, telemetry_gain, track_gain, style_gain,
     )
 
-    nn_delta, nn_available = _compute_nn_delta(
-        model_type, symptoms, dx, current_setup, track_id,
-    )
-    blended_delta, actual_model_type = _blend_delta(
-        rule_delta, nn_delta, model_type, nn_available,
-    )
-
     # 圈级整体优化：在"逐弯需求残差 + 显式代价（阻力/刮底/胎温/改动幅度）"
     # 这个目标函数上做确定性搜索，把一次线性步换成整圈净收益最大的解。
     # 关键：需求按弯道类别分列（来自 class_weighted_dx().by_class），
@@ -1014,7 +999,7 @@ def generate_suggestion(
     optimized = optimize_setup(
         dx, current_setup, track_id,
         telemetry=telemetry, feedbacks=effective_feedbacks,
-        initial_delta=blended_delta,
+        initial_delta=rule_delta,
         needs_by_class=(weighted.by_class if weighted else None),
         wet=_is_wet_weather(telemetry),
     )
@@ -1042,13 +1027,56 @@ def generate_suggestion(
     # mechanical_fallback = 规则引擎的原始建议：当优化器把机械抓地类参数
     # 全拆光而赛道又是牵引型时，用它恢复悬挂/几何/防倾杆改动（整体性约束）。
     final_delta, coherence_notes = holistic_coherence(
-        optimized.delta, dx, demand, mechanical_fallback=blended_delta,
+        optimized.delta, dx, demand, mechanical_fallback=rule_delta,
     )
     # 收口会做配对等比调整（悬挂几何/防倾杆/rake/翼片），可能把参数推出
     # [min, max]（实测：oversteer 强度 5 时 front_camber 越下限）——
     # 因此收口后必须**再次夹取**，作为最终边界兜底。
     final_delta = _reclamp_delta(final_delta, current_setup)
     holistic_block["coherence_notes"] = coherence_notes
+
+    # ------------------------------------------------------------------ #
+    # 神经网络不断模拟优化（用户明确的优化方式第二步）
+    #   参数矩阵给方向：上面的 rule_delta → optimize_setup → 收口 = delta0；
+    #   神经网络模拟优化：sim_refine 以 delta0 为起点，用训练好的调教性能
+    #   NN（遥测锚定仿真，纯标准库推理）对候选调教逐一模拟圈速，不断精修。
+    #   model_type="rule" 时不跑（纯规则路径）；模型不可用/赛道未覆盖时
+    #   自动跳过（available=False），行为与纯规则路径逐位一致。
+    # ------------------------------------------------------------------ #
+    sim_result = SimRefineResult(
+        delta=dict(final_delta), available=False,
+        reason="model_type=rule（未启用模拟优化）",
+    )
+    if model_type in ("nn", "hybrid"):
+        if is_zero_dx(dx):
+            # 无诊断输入（无症状 / 无遥测发现）→ 不做模拟优化：
+            # 没有要解决的问题就不该改车（保持"无症状不出建议"的既有契约）。
+            sim_result = SimRefineResult(
+                delta=dict(final_delta), available=False,
+                reason="无诊断输入（无症状/遥测发现），跳过模拟优化",
+            )
+        else:
+            sim_result = sim_refine(
+                final_delta, current_setup, track_id,
+                dx=dx, telemetry=telemetry, wet=_is_wet_weather(telemetry),
+            )
+            if sim_result.available:
+                final_delta = _reclamp_delta(sim_result.delta, current_setup)
+    sim_model = get_setup_sim()
+    holistic_block["simulation"] = {
+        "available": sim_result.available,
+        "reason": sim_result.reason,
+        "model": sim_model.describe(),
+        "iterations": sim_result.iterations,
+        "accepted": sim_result.accepted,
+        "before_s": (round(sim_result.before_s, 4)
+                     if sim_result.before_s is not None else None),
+        "after_s": (round(sim_result.after_s, 4)
+                    if sim_result.after_s is not None else None),
+        "gain_ms": (round(sim_result.gain_s * 1000.0, 2)
+                    if sim_result.gain_s is not None else None),
+        "trace": list(sim_result.trace),
+    }
 
     parameters = _build_param_details(final_delta, current_setup, dx)
     confidence = assess_confidence(symptoms, telemetry)
@@ -1065,102 +1093,15 @@ def generate_suggestion(
         "parameters": parameters,
         "confidence": confidence,
         "summary": summary,
-        "model_type": actual_model_type,
-        "nn_available": nn_available,
+        # 实际使用的模型类型：nn = 神经网络模拟优化已生效；rule = 未启用/降级
+        "model_type": "nn" if sim_result.available else "rule",
+        "requested_model_type": model_type,
+        "nn_available": sim_result.available,
         "holistic": holistic_block,
     }
 
 
 generate_suggestion.__doc__ = _GENERATE_SUGGESTION_DOC
-
-
-def _blend_delta(
-    rule_delta: dict[str, float],
-    nn_delta: dict[str, float] | None,
-    model_type: str,
-    nn_available: bool,
-) -> tuple[dict[str, float], str]:
-    """根据 model_type 混合规则引擎与神经网络结果。
-
-    Args:
-        rule_delta: 规则引擎的 SetupDelta。
-        nn_delta: 神经网络的 SetupDelta（None 表示不可用）。
-        model_type: 请求的模型类型。
-        nn_available: 神经网络是否可用。
-
-    Returns:
-        (final_delta, actual_model_type) 二元组。
-        actual_model_type 为实际使用的模型类型（可能因降级而与请求不同）。
-    """
-    # 权重：hybrid 模式下规则 60% + 神经网络 40%
-    RULE_WEIGHT = 0.6
-    NN_WEIGHT = 0.4
-
-    if model_type == "nn" and nn_delta is not None:
-        # 纯神经网络模式
-        return nn_delta, "nn"
-
-    if model_type == "hybrid" and nn_delta is not None:
-        # 混合模式：加权平均
-        blended = {
-            p: rule_delta[p] * RULE_WEIGHT + nn_delta[p] * NN_WEIGHT
-            for p in rule_delta
-        }
-        return blended, "hybrid"
-
-    # 降级为纯规则引擎
-    if model_type in ("nn", "hybrid") and not nn_available:
-        # 请求了 nn/hybrid 但神经网络不可用，降级
-        return rule_delta, "rule"
-    # model_type == "rule" 或未知值
-    return rule_delta, "rule"
-
-
-# ---------------------------------------------------------------------------
-# 神经网络管理器单例（延迟加载，PyTorch 不可用时返回 None）
-# ---------------------------------------------------------------------------
-# 哨兵：表示"已尝试加载且失败"，用于区分"尚未尝试"（None）。
-# 若失败后置回 None，则每个请求都会重新 import + 构造 NNModelManager
-# （PyTorch 可用但权重缺失时仍会构造完整 F1SetupNet），造成反复开销。
-_LOAD_FAILED: Any = object()
-_NN_MANAGER: Any = None
-# 初始化锁：FastAPI 默认线程池并发处理请求，串行化首次加载
-_NN_MANAGER_LOCK = threading.Lock()
-
-
-def _get_nn_manager() -> Any:
-    """获取神经网络模型管理器单例（延迟加载）。
-
-    PyTorch 不可用或首次加载失败时返回 None，引擎自动降级为纯规则引擎；
-    加载结果（成功或失败）均被缓存，不在每次请求时重试。
-
-    Returns:
-        NNModelManager 实例或 None。
-    """
-    global _NN_MANAGER
-    if _NN_MANAGER is None:
-        with _NN_MANAGER_LOCK:
-            # 双重检查：等待锁期间可能已有线程完成加载
-            if _NN_MANAGER is None:
-                try:
-                    from .nn_model import NNModelManager
-                    _NN_MANAGER = NNModelManager()
-                except Exception:
-                    logger.warning(
-                        "神经网络管理器加载失败，降级为纯规则引擎", exc_info=True,
-                    )
-                    _NN_MANAGER = _LOAD_FAILED
-    # 失败哨兵对外统一表现为 None
-    if _NN_MANAGER is _LOAD_FAILED:
-        return None
-    return _NN_MANAGER
-
-
-def reset_nn_manager() -> None:
-    """重置神经网络管理器单例（供测试使用）。"""
-    global _NN_MANAGER
-    with _NN_MANAGER_LOCK:
-        _NN_MANAGER = None
 
 
 # ---------------------------------------------------------------------------

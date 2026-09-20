@@ -1526,9 +1526,19 @@
       if (report) {
         renderReport(report);
         void loadStyleProfile();
-        // task-62：如实提示模型降级（请求了 nn/hybrid 但实际按规则引擎生成）
+        // 如实提示模拟优化未生效（请求了 nn/hybrid 但实际按纯规则路径生成）
+        // 2026-09-19：神经网络为零依赖纯标准库模型，不再有「缺 PyTorch」场景；
+        // 降级的实际原因是模型文件缺失或该赛道不在模型覆盖范围。
         if (modelType !== "rule" && report.model_type === "rule") {
-          showToast("当前环境未启用神经网络（缺 PyTorch/权重），已按规则引擎生成", "info");
+          const simBlock = report.holistic && report.holistic.simulation;
+          const why = simBlock && simBlock.reason ? simBlock.reason : "模型未覆盖本赛道";
+          showToast("神经网络模拟优化未启用（" + why + "），已按纯规则路径生成", "info");
+        } else if (report.model_type === "nn") {
+          const simBlock = report.holistic && report.holistic.simulation;
+          const gain = simBlock && simBlock.gain_ms != null ? simBlock.gain_ms : null;
+          if (gain != null && gain > 0) {
+            showToast("神经网络模拟优化：预计再提升 " + gain.toFixed(0) + " ms", "success");
+          }
         }
       } else {
         loadLatestSuggestion(state.currentTrackId);

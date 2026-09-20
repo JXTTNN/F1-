@@ -418,60 +418,94 @@ def q5_no_driver_profile():
 
 
 # =========================================================================== #
-# Q6 混合模型实际降级
+# Q6 神经网络模拟优化的实际行为（2026-09-19 大改后）
 # =========================================================================== #
 def q6_hybrid_degraded():
     from setup_tuner.domain.setup import CarSetup
     from setup_tuner.engine.engine import generate_suggestion
-    from setup_tuner.engine.nn_model import is_torch_available
+    from setup_tuner.engine.setup_sim import get_setup_sim
 
     setup = CarSetup.default().to_dict()
     res = generate_suggestion([("understeer", 3)], setup, "suzuka", None,
                               model_type="hybrid")
-    pyproj = (ROOT / "pyproject.toml").read_text("utf-8")
-    declared = "torch" in pyproj
-    weights = (ROOT / "data" / "nn_weights.pt").exists()
-    item("Q6.默认 hybrid 模型的实际行为", "INFO",
+    model = get_setup_sim()
+    sim = (res.get("holistic") or {}).get("simulation") or {}
+    item("Q6.默认 nn/hybrid 模式的实际行为", "INFO",
          f"实测 model_type={res['model_type']!r}, nn_available={res['nn_available']}；"
-         f"torch 可用={is_torch_available()}，pyproject 声明 torch={declared}，"
-         f"权重文件存在={weights} → "
-         + ("按设计降级：无 PyTorch / 无训练权重时回退纯规则引擎（行为正确，"
-            "但 UI 的 rule/nn/hybrid 三档在下发版里等价，应在 UI 上说明）"
-            if res["model_type"] == "rule" else "神经网络分支已生效"))
+         f"模型：{model.describe()} → "
+         + ("神经网络模拟优化已生效：NN 在坐标上升循环中对候选调教逐一模拟圈速"
+            f"（迭代 {sim.get('iterations')} 轮 / 采纳 {sim.get('accepted')} 次 / "
+            f"预计提升 {sim.get('gain_ms')} ms）"
+            if res["model_type"] == "nn" else
+            f"模拟优化未生效（原因：{sim.get('reason')}）；规则路径行为正常")
+         )
 
 
 # =========================================================================== #
-# Q7 nn_model 维度常量失配
+# Q7 调教性能模型的特征口径一致性（训练/推理同源）
 # =========================================================================== #
 def q7_nn_dims():
-    import setup_tuner.engine.nn_model as m
     from setup_tuner.domain.setup import ALL_SETUP_FIELDS, CarSetup
-    from setup_tuner.domain.symptoms import Symptom
+    from setup_tuner.engine.setup_sim import (
+        SetupSimModel,
+        build_feature_row,
+        feature_names,
+        get_setup_sim,
+        normalize_setup,
+    )
 
-    vec = m.build_input_vector([("understeer", 3)], m.empty_dx() if hasattr(m, "empty_dx")
-                               else {d: 0.0 for d in m.DIAG_DIMS},
-                               CarSetup.default().to_dict(), "suzuka")
-    ok_a = len(vec) == m._INPUT_SIZE
-    item("Q7a.输入向量长度 vs 网络输入层", "PASS" if ok_a else "FAIL",
-         f"build_input_vector 实际长度={len(vec)}，_INPUT_SIZE={m._INPUT_SIZE} → "
-         + ("一致（此前硬编码 68 vs 实际 66，前向传播维度不匹配被 except 吞掉）"
-            if ok_a else "不一致 → 前向传播报错被 except 吞掉 → predict 永远返回 None"))
-    guard = "in_features" in (ROOT / "setup_tuner" / "engine" / "nn_model.py").read_text("utf-8")
-    item("Q7e.维度失配是否会被显式报错", "PASS" if guard else "FAIL",
-         "predict 已加入 in_features 维度自检并记录 ERROR，维度再次漂移不会静默失效"
-         if guard else "仍无维度自检（会静默降级）")
-    item("Q7b.症状数常量", "FAIL" if m._NUM_SYMPTOMS != len(Symptom) else "PASS",
-         f"_NUM_SYMPTOMS(硬编码)={m._NUM_SYMPTOMS}，实际 Symptom={len(Symptom)}")
-    item("Q7c.参数数常量", "FAIL" if m._NUM_SETUP_PARAMS != len(ALL_SETUP_FIELDS) else "PASS",
-         f"_NUM_SETUP_PARAMS(硬编码)={m._NUM_SETUP_PARAMS}，实际 "
-         f"ALL_SETUP_FIELDS={len(ALL_SETUP_FIELDS)}")
+    model = get_setup_sim()
+    if not model.available:
+        item("Q7a.调教性能模型可用性", "INFO",
+             f"模型未加载（{model.reason}）：模拟优化自动跳过，行为与纯规则一致")
+        return
+    row = build_feature_row(
+        model.track_ids, model.track_features, model.track_ids[0],
+        normalize_setup(CarSetup.default().to_dict()),
+    )
+    expect = len(feature_names(model.track_ids))
+    ok_a = row is not None and len(row) == expect
+    item("Q7a.特征向量长度 vs 特征名表", "PASS" if ok_a else "FAIL",
+         f"build_feature_row 实际长度={len(row) if row else None}，feature_names={expect} → "
+         + ("一致（训练与推理共用同一实现，防止口径漂移）"
+            if ok_a else "不一致 → 推理输入与训练口径漂移，预测不可信"))
+    # 未知赛道必须中性降级（返回 None，不抛错）
     try:
-        m._normalize_symptoms([("high_speed_instability", 3)])
-        item("Q7d.新增症状归一化", "PASS", "未抛错")
-    except IndexError as e:
-        item("Q7d.新增症状归一化", "FAIL",
-             f"_normalize_symptoms([('high_speed_instability',3)]) → IndexError: {e} "
-             "（vec 只分配 12 位，而症状有 15 个）")
+        none_row = build_feature_row(
+            model.track_ids, model.track_features, "no_such_track", {},
+        )
+        item("Q7b.未知赛道中性降级", "PASS" if none_row is None else "FAIL",
+             "build_feature_row(未知赛道) → None（调用方跳过模拟，不抛错）"
+             if none_row is None else "未知赛道返回了特征行，存在误用风险")
+    except Exception as e:  # noqa: BLE001
+        item("Q7b.未知赛道中性降级", "FAIL", f"未知赛道抛错：{e!r}")
+    # 参数数常量与领域模型一致（20 项）
+    field_count = len(ALL_SETUP_FIELDS)
+    n_setup_in_features = sum(
+        1 for name in feature_names(model.track_ids)
+        if name in {f.name for f in ALL_SETUP_FIELDS}
+    )
+    item("Q7c.特征中的调教参数数", "PASS" if n_setup_in_features == field_count else "FAIL",
+         f"特征含调教参数 {n_setup_in_features} 项，领域模型 {field_count} 项")
+    # 输出缩放口径（训练端 mlp 输出须乘回 y_scale/y_mean）
+    asserts = 0
+    ok_scale = isinstance(model.y_scale, float) and model.y_scale > 0
+    item("Q7d.输出缩放口径存在", "PASS" if ok_scale else "FAIL",
+         f"y_mean={model.y_mean}, y_scale={model.y_scale}（推理乘回，缺失会整体偏移）")
+    # 确定性：同输入两次推理一致
+    s = normalize_setup(CarSetup.default().to_dict())
+    a = model.predict_delta_s(model.track_ids[0], s)
+    b = model.predict_delta_s(model.track_ids[0], s)
+    item("Q7e.推理确定性", "PASS" if a == b else "FAIL", f"两次推理 {a} vs {b}")
+    # 结构化自检：SetupSimModel 能独立复现（无全局状态依赖）
+    try:
+        fresh = SetupSimModel(model.path)
+        c = fresh.predict_delta_s(model.track_ids[0], s)
+        item("Q7f.模型文件可独立加载", "PASS" if c == a else "FAIL",
+             f"独立实例推理 {c} vs 单例 {a}")
+    except Exception as e:  # noqa: BLE001
+        item("Q7f.模型文件可独立加载", "FAIL", f"独立加载失败：{e!r}")
+    _ = asserts
 
 
 # =========================================================================== #

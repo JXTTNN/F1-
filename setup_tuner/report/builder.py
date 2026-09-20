@@ -216,10 +216,16 @@ def build_report(
     report = _assemble_report_dict(
         track_id, setup_id, parameters, summary, confidence, suggestion_result,
     )
-    # task-62：报告带实际生效的模型类型（nn/hybrid 未装 torch 时会降级为 rule，
-    # 前端据此如实提示，不让用户误以为神经网络在跑）
+    # 报告带**实际生效**的模型类型与神经网络可用性（2026-09-19 模拟优化架构）：
+    # model_type="nn" 表示神经网络模拟优化已生效；"rule" 表示未启用/降级，
+    # 前端据 holistic.simulation.reason 如实提示原因（不再有「缺 PyTorch」场景）。
     report["model_type"] = str(suggestion_result.get("model_type", "rule"))
-    # 整体思维层：赛道需求画像 / 逐弯加权说明 / 跨弯道类别冲突 / 收口说明。
+    report["requested_model_type"] = str(
+        suggestion_result.get("requested_model_type", report["model_type"]),
+    )
+    report["nn_available"] = bool(suggestion_result.get("nn_available", False))
+    # 整体思维层：赛道需求画像 / 逐弯加权说明 / 跨弯道类别冲突 / 收口说明 /
+    # 神经网络模拟优化轨迹（holistic.simulation）。
     # 这部分是"为什么这么调"的依据链，前端据此向车手解释取舍，而不是只给数字。
     holistic = suggestion_result.get("holistic")
     if holistic:

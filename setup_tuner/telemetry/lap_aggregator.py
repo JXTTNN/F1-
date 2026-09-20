@@ -137,6 +137,10 @@ class LapAggregator:
     # ------------------------------------------------------------------ #
     def _reset_acc(self) -> None:
         self._n = 0
+        # 逐弯通过时间：逐圈重置（赛道上下文保留）
+        self._corner_zone = None
+        self._corner_zone_start_ms = None
+        self._corner_time_s = {}
         self._speed_sum = 0.0
         self._speed_max = 0.0
         self._steer_abs_sum = 0.0
@@ -168,6 +172,13 @@ class LapAggregator:
         self._corner_rough_n: dict[int, int] = {}
         self._corner_rough_left: dict[int, float] = {}
         self._corner_rough_right: dict[int, float] = {}
+        # 逐弯通过时间（供遥测代理模型残差诊断使用）：
+        # 用 Packet 2 的 m_lapDistance 定位当前弯 + m_currentLapTimeInMS 做时钟，
+        # 弯区间切换时把停留时长记到离开的那个弯。口径与外部逐弯数据集
+        # 的 corner_time_s（弯区间含进出相位）一致。
+        self._corner_zone: int | None = None
+        self._corner_zone_start_ms: float | None = None
+        self._corner_time_s: dict[int, float] = {}
         # task-82 新增包累积量：损伤 / G 值 / 2026 主动空力与超车模式 / 官方圈有效位
         self._damage_frames = 0
         self._tyres_wear: list[float] | None = None
@@ -308,6 +319,11 @@ class LapAggregator:
             kerb = self._kerb_corners_locked()
             if kerb:
                 snapshot["kerb_corners"] = kerb
+        # 逐弯通过时间（秒）：供遥测代理模型残差诊断（车手未反馈的问题自动发现）
+        if self._corner_time_s:
+            snapshot["corner_times_s"] = {
+                str(c): round(t, 4) for c, t in sorted(self._corner_time_s.items())
+            }
         # task-82：新增包派生量（损伤 / G 值 / 2026 主被动空力与超车模式）
         if self._damage_frames:
             snapshot["car_damage_frames"] = self._damage_frames
@@ -417,6 +433,33 @@ class LapAggregator:
             dist = lap.get("m_lapDistance")
             if isinstance(dist, (int, float)) and not isinstance(dist, bool):
                 self._lap_distance = float(dist)
+            # 逐弯通过时间：距离定位弯区间 + 官方圈时钟做差分
+            cur_ms = lap.get("m_currentLapTimeInMS")
+            if (self._corner_locator is not None and self._lap_distance is not None
+                    and isinstance(cur_ms, (int, float))
+                    and not isinstance(cur_ms, bool) and cur_ms > 0):
+                try:
+                    zone = self._corner_locator(self._lap_distance)
+                except Exception:
+                    logger.warning("逐弯计时定位失败", exc_info=True)
+                    zone = None
+                if zone is not None:
+                    if (self._corner_zone is not None
+                            and self._corner_zone_start_ms is not None
+                            and zone != self._corner_zone):
+                        elapsed_s = (float(cur_ms) - self._corner_zone_start_ms) / 1000.0
+                        # 只累计合理停留（排除跨圈/瞬时跳变造成的异常区间）
+                        if 0.0 < elapsed_s < 120.0:
+                            c = self._corner_zone
+                            self._corner_time_s[c] = (
+                                self._corner_time_s.get(c, 0.0) + elapsed_s
+                            )
+                        self._corner_zone_start_ms = float(cur_ms)
+                    elif self._corner_zone_start_ms is None:
+                        self._corner_zone_start_ms = float(cur_ms)
+                    if self._corner_zone is None:
+                        self._corner_zone_start_ms = float(cur_ms)
+                    self._corner_zone = zone
             if sector is not None:
                 self._sector = sector
             # 记录最近一次"上圈完成圈时"（m_lastLapTimeInMS），圈号变化时归入上一圈

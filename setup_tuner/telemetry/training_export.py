@@ -8,7 +8,7 @@
       → LapAggregator / StyleExtractor 逐圈聚合
       → 每完成一圈落一行 JSONL 训练样本
 
-样本结构（对齐 F1SetupNet 的特征规划）::
+样本结构（对齐调教性能模型的特征规划：setup 21 字段 + style + lap_agg）::
 
     {
       "session_uid": "…",        # UDP 会话 UID（包头）

@@ -16,7 +16,7 @@
     python scripts/build_training_dataset.py            # 全部 *_laps.jsonl
     python scripts/build_training_dataset.py --out data/training/telemetry_dataset.json
 
-纯标准库（torch 训练另由 train_nn_model.py 承担），可在 CI 无依赖环境运行。
+纯标准库（调教性能 NN 训练见 scripts/train_setup_sim_nn.py），可在 CI 无依赖环境运行。
 """
 
 from __future__ import annotations

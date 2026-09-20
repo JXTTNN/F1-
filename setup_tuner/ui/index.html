@@ -152,12 +152,12 @@
           <div class="report-actions">
             <label class="model-select-label" for="model-type-select">模型</label>
             <select id="model-type-select" class="model-select" aria-label="选择建议模型">
-              <option value="hybrid" title="规则 + 神经网络；未安装 PyTorch 时自动降级为规则">混合</option>
-              <option value="rule" title="纯规则引擎（确定性，无额外依赖）">规则</option>
-              <option value="nn" title="需要 PyTorch 与训练权重；未安装时自动降级为规则">神经网络</option>
+              <option value="hybrid" title="规则矩阵给方向 + 神经网络不断模拟优化（纯标准库，无需额外依赖）">神经网络模拟 + 规则</option>
+              <option value="rule" title="纯规则引擎（确定性，无模型参与）">纯规则</option>
+              <option value="nn" title="规则矩阵给方向 + 神经网络模拟精修（与上一项同路径）">神经网络模拟</option>
             </select>
             <span class="model-hint" style="font-size:11px;color:var(--text-tertiary,#8b93a7);margin-left:6px;"
-                  title="nn/混合 需要 PyTorch 与训练权重">未装 PyTorch 时 nn/混合自动降级</span>
+                  title="神经网络由遥测锚定仿真训练，纯标准库推理，无需 PyTorch">神经网络开箱即用（无需 PyTorch）</span>
             <button id="btn-generate-suggest" class="btn btn-primary" type="button" aria-label="生成调教建议">生成建议</button>
           </div>
         </div>

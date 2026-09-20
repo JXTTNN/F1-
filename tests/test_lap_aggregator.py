@@ -193,3 +193,70 @@ class TestSectorConversionSingleSource:
         )
         source = inspect.getsource(ws)
         assert "int(raw) + 1" not in source, "ws.py 出现手工 +1 扇区转换"
+
+
+# ===========================================================================
+# 逐弯通过时间（遥测代理模型残差诊断的输入）
+# ===========================================================================
+class TestCornerTimes:
+    """LapAggregator 按弯累积停留时长（供车手未反馈问题的自动发现）。"""
+
+    @staticmethod
+    def _locator(dist: float) -> int:
+        """极简定位器：每 100m 一个弯（1-based），便于确定性断言。"""
+        return int(dist // 100) + 1
+
+    def test_accumulates_per_corner_seconds(self) -> None:
+        """弯区间切换时把停留时长记到离开的那个弯，单位为秒。"""
+        agg = LapAggregator()
+        agg.set_track_context(500.0, self._locator)
+        # 区间：dist<100→弯1，100..199→弯2，200..299→弯3，300..399→弯4
+        for dist, ms in [(10.0, 1000), (50.0, 2000), (150.0, 3000),
+                         (250.0, 5000), (350.0, 6000)]:
+            agg.on_lap_data({
+                "m_currentLapNum": 1, "m_lapDistance": dist,
+                "m_currentLapTimeInMS": ms,
+            })
+        snap = agg.snapshot()
+        ct = snap.get("corner_times_s")
+        assert ct is not None, "快照应包含 corner_times_s"
+        # 弯1: 1000→3000ms = 2.0s；弯2: 3000→5000ms = 2.0s；弯3: 5000→6000ms = 1.0s
+        assert ct["1"] == pytest.approx(2.0, abs=1e-6)
+        assert ct["2"] == pytest.approx(2.0, abs=1e-6)
+        assert ct["3"] == pytest.approx(1.0, abs=1e-6)
+        # 当前所在弯（4）尚未离开 → 不出现
+        assert "4" not in ct
+
+    def test_reset_on_new_lap(self) -> None:
+        """圈号变化 → 逐圈重置（不把上一圈的弯时混进新圈）。"""
+        agg = LapAggregator()
+        agg.set_track_context(500.0, self._locator)
+        agg.on_lap_data({"m_currentLapNum": 1, "m_lapDistance": 10.0,
+                         "m_currentLapTimeInMS": 1000})
+        agg.on_lap_data({"m_currentLapNum": 1, "m_lapDistance": 150.0,
+                         "m_currentLapTimeInMS": 2500})
+        assert "1" in (agg.snapshot().get("corner_times_s") or {})
+        agg.on_telemetry(_frame(200, 0.5))          # 保证有帧，快照才会固化
+        agg.on_lap_data({"m_currentLapNum": 2, "m_lapDistance": 10.0,
+                         "m_currentLapTimeInMS": 1000})
+        fresh = agg.snapshot().get("corner_times_s") or {}
+        assert fresh == {}, "新圈不得继承上一圈的逐弯计时"
+
+    def test_no_track_context_is_neutral(self) -> None:
+        """未注入赛道上下文（无定位器）→ 不产逐弯计时，且不抛错。"""
+        agg = LapAggregator()
+        agg.on_lap_data({"m_currentLapNum": 1, "m_lapDistance": 10.0,
+                         "m_currentLapTimeInMS": 1000})
+        agg.on_lap_data({"m_currentLapNum": 1, "m_lapDistance": 150.0,
+                         "m_currentLapTimeInMS": 2500})
+        assert "corner_times_s" not in agg.snapshot()
+
+    def test_implausible_dwell_is_ignored(self) -> None:
+        """跨圈/跳变造成的超长停留（>=120s）被丢弃，不污染诊断输入。"""
+        agg = LapAggregator()
+        agg.set_track_context(500.0, self._locator)
+        agg.on_lap_data({"m_currentLapNum": 1, "m_lapDistance": 10.0,
+                         "m_currentLapTimeInMS": 1000})
+        agg.on_lap_data({"m_currentLapNum": 1, "m_lapDistance": 150.0,
+                         "m_currentLapTimeInMS": 200_000})   # 199s 跳变
+        assert "1" not in (agg.snapshot().get("corner_times_s") or {})

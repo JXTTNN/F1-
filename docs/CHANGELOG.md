@@ -4,6 +4,59 @@
 
 ## 2026-09 优化迭代
 
+### 大改：调教优化真正用上「遥测锚定训练 + 神经网络模拟优化」（零 PyTorch）(2026-09-19)
+- **用户诉求**（原话）："调教优化还是不能用模型，什么 pytorch 未安装什么的"、
+  "只能是参数矩阵给神经网络模型方向，由神经网络不断模拟优化"、
+  "根本就没有利用遥测数据训练模型并应用于调教优化"。
+- **根因（三条全部为真）**：
+  1. 旧神经网络分支依赖 **PyTorch**（venv 里没装）+ 权重文件 `data/nn_weights.pt`
+     不存在 → `NNModelManager.available` 恒为 `False`，`nn`/`hybrid` **静默降级**
+     为纯规则引擎；UI 明确提示"缺 PyTorch/权重"。
+  2. 旧训练脚本用**规则引擎自己生成标签**（"因为暂时没有真实 F1 数据"）——
+     学到的只是规则引擎的复制品，没有遥测参与。
+  3. 旧实现是"规则 60% + 网络 40%"的一次性加权，**没有"不断模拟优化"** 这个环节。
+- **大改方案（三段式，全部落地）**：
+  1. **数据**：`scripts/build_setup_sim_dataset.py` —— 以 **80k+ 真实 2026 逐弯遥测**
+     （TracingInsights）为锚点（每赛道每弯的入弯/弯心/出弯速度、弯时、刹车占比、
+     赛道中位圈速、直道占比），叠加**文档化的准稳态车辆动力学**（v ∝ √抓地、
+     诱导阻力 ∝ 下压力² 产生内点最优、轮胎工作窗口/刹车平衡双侧罚、离地过低刮底罚），
+     生成 18200 条「调教 → 圈速增量」样本。
+     方向校验：逐赛道最优翼角排序 monaco +12 / hungaroring +11 … monza −1 / spa −6，
+     与 F1 调教共识（Monaco 最高下压力、Monza/Spa 低阻）一致。
+  2. **模型**：`scripts/train_setup_sim_nn.py` —— **纯标准库 MLP**（`pure_nn`，
+     零第三方依赖）拟合上述数据，输出缩放标定；验证集 **MAE 53.3 ms / R² 0.9959**
+     （零改动基线 2758 ms）。模型落盘 `data/models/setup_sim_nn.json`。
+     关键指标：**相邻候选差异的方向正确率 90%（>30ms 的显著移动 95%）**，
+     接受阈值据此定为 20ms。
+  3. **管线**：`setup_tuner/engine/setup_sim.py`（模型加载/特征/推理，纯标准库）
+     + `setup_tuner/engine/sim_optimizer.py`（**坐标上升的模拟精修**）+
+     `engine.generate_suggestion` 接线：
+        参数矩阵给方向（Dx×C → 圈级优化 → 收口 = delta0）
+          → 神经网络不断模拟优化（逐参数试步 → NN 预测圈速 → 保留更优）
+          → 报告 `holistic.simulation`（模型描述 / 迭代轮数 / 采纳次数 / 轨迹 / 提升）
+- **整体性守门（防止模拟优化把车手需求当空气）**：接受候选需**同时**满足
+  `模拟提升 ≥ max(20ms, 5.0 × 目标代价增量)` 且整轮代价预算 ≤ 0.08（"付得起"原则）。
+- **降级契约**：模型不可用 / 赛道不在覆盖范围 / 无诊断输入（无症状且无遥测发现）
+  → **逐位原样返回**，行为与纯规则路径一致（合成 id 的既有测试不受影响）。
+- **删除**：`engine/nn_model.py`（torch 分支）、`scripts/train_nn_model.py`（规则自模仿训练）；
+  UI 文案与提示同步更新（不再有"缺 PyTorch"）。
+- **修复的附带缺陷**：`LapAggregator` 新增**逐弯通过时间**（Packet 2 的
+  `m_lapDistance` 定位 + `m_currentLapTimeInMS` 做时钟 → `snapshot["corner_times_s"]`），
+  取代 `/suggest` 里此前那段**错误实现**（把"当前累计圈速"当成弯时，且对未覆盖赛道
+  会抛 AttributeError）；遥测代理模型的"车手未反馈问题自动发现"由此才真正可用。
+- **验证（用户要求的"利用现有遥测验证优化性能"）**：
+  `scripts/verify_optimization_telemetry.py` 对 6 赛道 × 3 场景跑端到端，输出
+  NN 判决 + **解析仿真器（训练标签真值源）独立复核** 双列结果 + 赛道签名：
+  NN 判定平均提升 **+367 ms**，真值复核平均 **+631 ms**（NN 保守、无自我套利），
+  18/18 场景均有提升；报告落盘 `docs/Optimization_Verification.md`。
+- **本地实测**：`uvicorn setup_tuner.app:create_app` + `POST /tracks/current` →
+  `/feedback` → `/suggest {model_type: hybrid}` 全链路 200；
+  报告返回 `model_type="nn" / nn_available=true / simulation{iterations:3, accepted:3,
+  gain_ms:295.02}`。**不再需要 PyTorch。**
+- **测试**：新增 `tests/test_setup_sim.py`（28 条：归一化/特征/加载降级/推理/缩放/
+  引擎契约/边界与胎压对称/确定性）+ 回填 `tests/test_lap_aggregator.py`
+  （逐弯计时 4 条）；`pytest -q` **2092 passed / 3 skipped**；`ruff` 全绿。
+
 ### 反馈生命周期：生成后"消费"（跨圈不串味）+ 假绿/失效检查修正 (2026-09-19)
 - **用户诉求**："前一圈的车手反馈在点击生成优化后调教要清除，要不然杂着后一圈吗"。
   根因：`/suggest` 读**累积**反馈，跨圈时第 2 次生成同时受第 1 圈 F1 + 第 2 圈 F2
