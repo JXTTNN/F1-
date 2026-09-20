@@ -44,32 +44,36 @@ def _is_frozen() -> bool:
 def _frozen_install_root() -> Path | None:
     """冻结打包时的安装根目录；非冻结返回 None。
 
-    解析顺序（按 Nuitka 官方建议）：
-    1. ``__compiled__.containing_dir`` —— 官方推荐，兼容 macOS .app 等嵌套形态；
-    2. ``sys.argv[0]`` 的所在目录 —— onefile 下它是**原始可执行文件**路径
-       （而 ``__file__`` 指向解包临时目录，退出即删，不能用）；
-    3. ``sys.executable`` 所在目录 —— 兜底。
-
-    注：Nuitka 下 ``sys.executable`` 可能仍指向解释器路径，故不作为首选；
-    同时跳过 ``.py`` 候选（避免误判成 pytest/python 自身的位置）。
+    解析顺序（**实测校正**，2026-09-20 CI）：
+    1. ``sys.argv[0]`` 所在目录 —— 官方明确：onefile 下 argv[0] 就是**原始可执行
+       文件**路径，最可靠（便携版解压到哪就以哪为安装根）；
+    2. ``__compiled__.containing_dir`` —— 官方推荐用于 standalone/App Bundle，
+       但 onefile 下它是**构建期**的 dist 目录（CI 机器上的路径），用户机上不存在
+       → 只作为回退，且需通过"该目录里确实有同名可执行文件"的校验；
+    3. ``sys.executable`` 所在目录 —— 兜底（Nuitka 下可能指向解释器，不可靠）。
     """
     import sys
 
     if not _is_frozen():
         return None
-    containing = getattr(globals().get("__compiled__"), "containing_dir", None)
-    if containing:
-        return Path(containing).resolve()
+
+    argv0 = Path(sys.argv[0]).resolve() if sys.argv and sys.argv[0] else None
+    if argv0 is not None and argv0.suffix.lower() not in (".py", ".pyc", ".pyo"):
+        # argv[0] 就是当前 exe 本身 → 其目录即安装根
+        return argv0.parent
 
     candidates: list[Path] = []
-    if sys.argv and sys.argv[0]:
-        candidates.append(Path(sys.argv[0]))
+    containing = getattr(globals().get("__compiled__"), "containing_dir", None)
+    if containing:
+        candidates.append(Path(containing).resolve())
     if sys.executable:
-        candidates.append(Path(sys.executable))
+        candidates.append(Path(sys.executable).resolve().parent)
+    # 回退候选必须"确实包含当前可执行文件"，否则很可能指向构建期目录
+    exe_name = argv0.name if argv0 is not None else Path(sys.executable).name
     for path in candidates:
-        if path.suffix.lower() not in (".py", ".pyc", ".pyo"):
-            return path.resolve().parent
-    return candidates[-1].resolve().parent if candidates else None
+        if exe_name and (path / exe_name).exists():
+            return path
+    return candidates[0] if candidates else None
 
 
 def install_root() -> Path:

@@ -438,7 +438,10 @@ def test_e2e(host: str, port: int) -> TestResult:
                 "track_id": TEST_TRACK_ID,
                 "corner_number": 1,
                 "symptom": "oversteer",
-                "strength": 4,
+                # 强度合法区间为 [1, 3]（INTENSITY_MIN/MAX）；写 4 会被 422/4000 拒
+                # —— 此前这里用 4，导致"第二条反馈"恒定失败、e2e 阶段整体判失败，
+                # 进而掩盖了后面的模型内嵌断言。测试载荷必须用合法值。
+                "strength": 3,
             },
         )
         body = assert_envelope(resp)
@@ -666,9 +669,20 @@ def test_portable(
                 items.append("数据目录已在安装文件夹内创建（f1opt.db 稍后生成）✓")
         else:
             passed = False
+            # 自诊断：把"数据实际落在哪"一并报出来，避免下次只看到"没在预期位置"
+            found: list[str] = []
+            for probe_root in {tmp_dir, exe_in_tmp.parent, Path.cwd(),
+                              Path(tempfile.gettempdir())}:
+                try:
+                    for db in probe_root.rglob("f1opt.db"):
+                        found.append(str(db.parent))
+                except OSError:
+                    continue
+            hint = ("；实际发现 f1opt.db 于：" + "、".join(sorted(set(found))[:5])
+                    if found else "；临时目录、exe 目录、cwd、系统临时目录下均未发现 f1opt.db")
             items.append(
                 f"❌ 数据目录未创建在安装文件夹内：{data_dir}"
-                "（要求：所有数据只能落在安装目录）"
+                f"（要求：所有数据只能落在安装目录）{hint}"
             )
 
         # 反向断言：启动时的工作目录（若与安装目录不同）不得被写入数据
