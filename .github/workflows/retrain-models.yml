@@ -1,0 +1,87 @@
+name: Retrain Models
+
+# 云端重训调教模型：补拉 2026 遥测（含历史"无数据"会话重新探测）
+# → 逐弯数据集 → 仿真数据集 → 训练两个 NN → 模型提交回仓库。
+# 触发：手动 dispatch；或 push 触及抓取/数据集脚本与本工作流时。
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/fetch_official_2026.py"
+      - "scripts/build_corner_dataset.py"
+      - ".github/workflows/retrain-models.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: retrain-models
+  cancel-in-progress: false
+
+jobs:
+  retrain:
+    name: "fetch → build → train → commit"
+    runs-on: ubuntu-latest
+    timeout-minutes: 110
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Restore telemetry cache
+        uses: actions/cache@v4
+        with:
+          path: .ref/tracing_2026
+          key: tracing-2026-${{ github.run_id }}
+          restore-keys: tracing-2026-
+
+      - name: Fetch 2026 telemetry (resume + refresh absent)
+        run: |
+          python scripts/fetch_official_2026.py --full --refresh-absent \
+            --max-minutes 70 --workers 16
+
+      - name: Build corner dataset
+        run: python scripts/build_corner_dataset.py
+
+      - name: Build setup-sim dataset
+        run: python scripts/build_setup_sim_dataset.py
+
+      - name: Train setup-sim NN
+        run: python scripts/train_setup_sim_nn.py
+
+      - name: Train telemetry surrogate
+        run: python scripts/train_telemetry_surrogate.py
+
+      - name: Coverage report
+        run: |
+          python - <<'PY'
+          import json
+          sim = json.load(open('setup_tuner/resources/models/setup_sim_nn.json'))
+          tsur = json.load(open('setup_tuner/resources/models/telemetry_surrogate.json'))
+          print('setup_sim_nn 覆盖赛道:', len(sim['track_ids']))
+          print(sorted(sim['track_ids']))
+          print('telemetry_surrogate 覆盖赛道:', len(tsur['corner_head']['tracks']))
+          print(sorted(tsur['corner_head']['tracks']))
+          PY
+
+      - name: Commit retrained models
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add setup_tuner/resources/models/
+          if git diff --cached --quiet; then
+            echo '模型无变化，跳过提交'
+          else
+            git commit -m "retrain: 补拉缺失赛道遥测并重训模型（云端）"
+            git push
+          fi
