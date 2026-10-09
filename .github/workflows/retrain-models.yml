@@ -2,7 +2,9 @@ name: Retrain Models
 
 # 云端重训调教模型：补拉 2026 遥测（含历史"无数据"会话重新探测）
 # → 逐弯数据集 → 仿真数据集 → 训练两个 NN → 模型提交回仓库。
-# 触发：手动 dispatch；或 push 触及抓取/数据集脚本与本工作流时。
+# 触发：手动 dispatch；或 push 触及抓取/数据集脚本时。
+# 注意：本工作流文件自身的改动不触发（避免"工作流+脚本"成对提交时双跑）；
+#       更新本文件后请手动 dispatch，或与脚本改动一并提交。
 
 on:
   workflow_dispatch:
@@ -11,7 +13,6 @@ on:
     paths:
       - "scripts/fetch_official_2026.py"
       - "scripts/build_corner_dataset.py"
-      - ".github/workflows/retrain-models.yml"
 
 permissions:
   contents: write
@@ -24,7 +25,7 @@ jobs:
   retrain:
     name: "fetch → build → train → commit"
     runs-on: ubuntu-latest
-    timeout-minutes: 110
+    timeout-minutes: 150
     steps:
       - uses: actions/checkout@v4
 
@@ -39,7 +40,7 @@ jobs:
           pip install -e ".[dev]"
 
       - name: Restore telemetry cache
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: .ref/tracing_2026
           key: tracing-2026-${{ github.run_id }}
@@ -48,7 +49,17 @@ jobs:
       - name: Fetch 2026 telemetry (resume + refresh absent)
         run: |
           python scripts/fetch_official_2026.py --full --refresh-absent \
-            --max-minutes 70 --workers 16
+            --max-minutes 90 --workers 12
+
+      # 关键：无论抓取步骤成败都保存缓存（if: always()）。
+      # 上一版用 actions/cache@v4 的隐式 post-save（默认仅 success 时执行），
+      # 抓取一崩 7.6 GB 的已下载数据全部丢失，重跑只能从零开始。
+      - name: Save telemetry cache (always)
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .ref/tracing_2026
+          key: tracing-2026-${{ github.run_id }}
 
       - name: Build corner dataset
         run: python scripts/build_corner_dataset.py
@@ -72,6 +83,20 @@ jobs:
           print(sorted(sim['track_ids']))
           print('telemetry_surrogate 覆盖赛道:', len(tsur['corner_head']['tracks']))
           print(sorted(tsur['corner_head']['tracks']))
+          PY
+
+      # 防回退守卫：新模型覆盖不得低于 13 条基线，否则拒绝提交（保留旧模型）。
+      - name: Coverage guard (>= 13 baseline)
+        run: |
+          python - <<'PY'
+          import json, sys
+          sim = json.load(open('setup_tuner/resources/models/setup_sim_nn.json'))
+          tsur = json.load(open('setup_tuner/resources/models/telemetry_surrogate.json'))
+          n1 = len(sim['track_ids'])
+          n2 = len(tsur['corner_head']['tracks'])
+          print(f'新模型覆盖: setup_sim_nn={n1}, telemetry_surrogate={n2} (基线 13)')
+          if n1 < 13 or n2 < 13:
+              sys.exit('覆盖回退：新模型低于 13 条基线，拒绝提交（保留旧模型）')
           PY
 
       - name: Commit retrained models
