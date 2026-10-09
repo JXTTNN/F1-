@@ -368,6 +368,7 @@ def crawl_full(
     max_laps: int | None,
     force: bool = False,
     workers: int = 24,
+    refresh_absent: bool = False,
 ) -> None:
     budget = {
         "max_files": max_files, "max_bytes": None,
@@ -382,7 +383,12 @@ def crawl_full(
             sub = f"{race}/{session}"
             prev = state["sessions"].get(sub)
             probe = CACHE / race / session / "session_laptimes.json"
-            if not force and prev and (prev.get("complete") or prev.get("absent")) \
+            # refresh_absent：历史上标记为"上游无数据"的会话也重新探测——
+            # 上游随后补传的数据（新站开跑、旧站补齐）必须能被捡回来，
+            # 否则 absent 标记会把覆盖缺口永久固化。
+            retry_absent = refresh_absent and bool(prev and prev.get("absent"))
+            if not force and not retry_absent and prev \
+                    and (prev.get("complete") or prev.get("absent")) \
                     and (probe.exists() or prev.get("absent")):
                 continue
             print(f"[{i}/{total}] {sub} ...", flush=True)
@@ -418,6 +424,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--max-files", type=int, default=None)
     ap.add_argument("--max-minutes", type=float, default=None)
     ap.add_argument("--force", action="store_true", help="忽略完成状态重抓")
+    ap.add_argument("--refresh-absent", action="store_true",
+                    help="重新探测历史上标记为'无数据'的会话（上游补传后捡回）")
     ap.add_argument("--metadata-only", action="store_true",
                     help="只抓会话级文件并做 2026 全量年检（不抓逐点遥测）")
     ap.add_argument("--workers", type=int, default=8,
@@ -444,7 +452,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.full or args.race is None:
         crawl_full(list(CALENDAR_2026), SESSIONS, state,
                    args.max_files, args.max_minutes, drivers, max_laps, args.force,
-                   workers=args.workers)
+                   workers=args.workers, refresh_absent=args.refresh_absent)
     else:
         res = fetch_session(args.race, args.session, drivers, args.max_laps,
                             Path(args.out), state=state, workers=args.workers)

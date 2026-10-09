@@ -57,11 +57,25 @@ OUT_META = ROOT / "data" / "training" / "corner_dataset_meta.json"
 #: 弯窗口解析所需的最少采样点数（低于此视为脏数据，丢弃该弯）
 MIN_POINTS_IN_WINDOW = 4
 
+#: 上游比赛目录名 → 本地 track_id 别名表。
+#: 官方名映射覆盖不了的情况在这里补：barcelona 的官方名是
+#: "Gran Premio de Barcelona-Catalunya"，而上游目录叫
+#: "Barcelona Grand Prix" —— 之前整站被 "无本地赛道映射" 跳过，
+#: 导致 barcelona 无模型覆盖。
+RACE_ALIASES: dict[str, str] = {
+    "Barcelona Grand Prix": "barcelona",
+}
+
 
 def _race_to_track() -> dict[str, Any]:
-    from setup_tuner.domain.track import ALL_TRACKS
+    from setup_tuner.domain.track import ALL_TRACKS, get_track_by_id
 
-    return {t.official_name: t for t in ALL_TRACKS}
+    mapping: dict[str, Any] = {t.official_name: t for t in ALL_TRACKS}
+    for race, tid in RACE_ALIASES.items():
+        t = get_track_by_id(tid)
+        if t is not None:
+            mapping.setdefault(race, t)
+    return mapping
 
 
 def _num_list(vals: Any) -> list[float]:
