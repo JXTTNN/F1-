@@ -43,6 +43,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import random
 import sys
 import time
 import urllib.error
@@ -125,9 +126,16 @@ def _save_state(state: dict[str, Any]) -> None:
 
 
 def _get(url: str) -> bytes | None:
-    """带重试的 HTTP GET；404 返回 None（该场/该圈不存在）。"""
+    """带重试的 HTTP GET；404 返回 None（该场/该圈不存在）。
+
+    429（限流）/ 5xx 等瞬时错误改用「更多次重试 + 递增退避 + 抖动」：
+    raw.githubusercontent 在 16 并发猛拉时会对 runner 限流（实测 429），
+    旧版 3 次短重试耗尽后直接抛错，把整轮抓取拖崩——这里必须扛住。
+    """
     last: Exception | None = None
-    for attempt in range(1, _RETRIES + 1):
+    delays = (1.5, 4.0, 10.0, 25.0, 45.0)  # 第 n 次失败后的等待秒数
+    attempts = max(_RETRIES, len(delays))   # 至少 5 次
+    for attempt in range(1, attempts + 1):
         try:
             req = urllib.request.Request(url, headers={"User-Agent": "f1opt-2026-fetch"})
             with urllib.request.urlopen(req, timeout=_TIMEOUT) as resp:
@@ -138,10 +146,18 @@ def _get(url: str) -> bytes | None:
             if exc.code == 404:
                 return None
             last = exc
+            if exc.code == 429:
+                ra = exc.headers.get("Retry-After") if exc.headers else None
+                try:
+                    wait = float(ra) if ra else delays[min(attempt - 1, len(delays) - 1)]
+                except (TypeError, ValueError):
+                    wait = delays[min(attempt - 1, len(delays) - 1)]
+                time.sleep(min(wait, 90.0) + random.uniform(0.0, 3.0))
+                continue
         except Exception as exc:  # noqa: BLE001 — 网络层杂类异常统一重试
             last = exc
-        time.sleep(1.5 * attempt)
-    raise RuntimeError(f"download failed after {_RETRIES} tries: {url} ({last})")
+        time.sleep(delays[min(attempt - 1, len(delays) - 1)] + random.uniform(0.0, 1.0))
+    raise RuntimeError(f"download failed after {attempts} tries: {url} ({last})")
 
 
 def _sha256(data: bytes) -> str:
@@ -274,6 +290,7 @@ def fetch_session(
     dirty: list[str] = []
     fetched = skipped = missing = 0
     stopped = False
+    deadline_hit = False
 
     pending: list[tuple[str, int, Path]] = []
     for drv in wanted:
@@ -303,6 +320,7 @@ def fetch_session(
                 if budget is not None and budget.get("deadline") \
                         and time.time() >= budget["deadline"]:
                     stopped = True
+                    deadline_hit = True
                 if raw is None:
                     missing += 1
                     manifest["laps"].append(
@@ -329,8 +347,9 @@ def fetch_session(
                     rec["missing_keys"] = bad
                     dirty.append(f"{drv}/{lap}")
                 manifest["laps"].append(rec)
-                if stopped and budget is not None and budget.get("max_files") \
-                        and budget["files"] >= budget["max_files"]:
+                if deadline_hit or (stopped and budget is not None
+                                    and budget.get("max_files")
+                                    and budget["files"] >= budget["max_files"]):
                     for rest in futures:
                         rest.cancel()
                     break
@@ -377,6 +396,7 @@ def crawl_full(
     }
     total = len(races) * len(sessions)
     i = 0
+    failed: list[str] = []
     for race in races:
         for session in sessions:
             i += 1
@@ -392,8 +412,15 @@ def crawl_full(
                     and (probe.exists() or prev.get("absent")):
                 continue
             print(f"[{i}/{total}] {sub} ...", flush=True)
-            res = fetch_session(race, session, drivers, max_laps, CACHE,
-                                state=state, budget=budget, workers=workers)
+            try:
+                res = fetch_session(race, session, drivers, max_laps, CACHE,
+                                    state=state, budget=budget, workers=workers)
+            except Exception as exc:  # noqa: BLE001 — 单场失败不拖垮整轮
+                failed.append(sub)
+                print(f"    [WARN] 本场抓取失败，跳过（下次运行自动重试）: "
+                      f"{type(exc).__name__}: {str(exc)[:180]}", flush=True)
+                _save_state(state)
+                continue
             if res.get("absent"):
                 state["year_checks"]["absent"].append(sub)
                 state["sessions"][sub] = {"absent": True}
@@ -411,6 +438,9 @@ def crawl_full(
             if max_files and budget["files"] >= max_files:
                 print("达到文件上限，停止（重跑本命令可继续）。", flush=True)
                 return
+    if failed:
+        print(f"[WARN] 本轮有 {len(failed)} 场失败（已跳过，可重跑补抓）: "
+              f"{failed[:12]}", flush=True)
     print("全量爬取完成。", flush=True)
 
 
