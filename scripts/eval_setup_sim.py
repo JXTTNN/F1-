@@ -122,6 +122,7 @@ def evaluate(model_path: Path, seed: int = 20261102) -> dict[str, Any]:
     dir_total = 0
     dir_ok = 0
     zero_bias: list[float] = []
+    raw_zero_bias: list[float] = []
     skipped: list[str] = []
 
     for tid in sorted(stats):
@@ -214,9 +215,15 @@ def evaluate(model_path: Path, seed: int = 20261102) -> dict[str, Any]:
                     dir_ok += 1
 
         # ---- 零偏差：默认调教的预测应接近 0 ------------------------------ #
-        z = model.predict_delta_s(tid, {s.name: 0.0 for s in specs})
+        # ``predict_delta_s`` 是**上线口径**（含每赛道差分校准），默认点必为 0；
+        # 同时记录未校准的原始偏置，用来观察模型本身的系统性误差（透明度）。
+        zero_setup = {s.name: 0.0 for s in specs}
+        z = model.predict_delta_s(tid, zero_setup)
         if z is not None:
             zero_bias.append(abs(z * 1000.0))
+        zr = model.predict_raw_delta_s(tid, zero_setup)
+        if zr is not None:
+            raw_zero_bias.append(abs(zr * 1000.0))
 
         per_track[tid] = {
             "optimum_delta_ms": round(opt_ms, 2),
@@ -250,6 +257,9 @@ def evaluate(model_path: Path, seed: int = 20261102) -> dict[str, Any]:
             "direction_agreement": _acc(dir_ok, dir_total),
             "n_direction_checks": dir_total,
             "zero_bias_ms": round(sum(zero_bias) / len(zero_bias), 2) if zero_bias else 0.0,
+            "raw_zero_bias_ms": (
+                round(sum(raw_zero_bias) / len(raw_zero_bias), 2) if raw_zero_bias else 0.0
+            ),
             "train_val_mae_ms": model.metrics.get("val_mae_ms"),
             "train_val_mae_ms_local": model.metrics.get("val_mae_ms_local"),
             "model_tracks": len(model.track_ids),

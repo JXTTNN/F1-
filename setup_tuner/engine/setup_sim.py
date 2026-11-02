@@ -53,6 +53,8 @@ TRACK_FEATURE_KEYS: tuple[str, ...] = (
 CONDITION_KEYS: tuple[str, ...] = (
     "tyre_softness", "wet", "track_temp", "air_temp",
 )
+#: 默认调教的归一化向量（全 0）—— 差分校准的锚点
+_ZERO_SETUP: dict[str, float] = {spec.name: 0.0 for spec in ALL_SETUP_FIELDS}
 
 
 def _resolve_path(path: Path) -> Path:
@@ -151,6 +153,8 @@ class SetupSimModel:
         self.n_samples = 0
         self.created = ""
         self._mlp: MLP | None = None
+        #: 每赛道「默认调教」的原始预测（差分校准基准），懒算并缓存
+        self._zero_pred: dict[str, float] = {}
         self._load()
 
     # ---------------- 加载 ---------------- #
@@ -200,13 +204,10 @@ class SetupSimModel:
         return build_feature_row(self.track_ids, self.track_features, track_id, setup_norm)
 
     # ---------------- 推理 ---------------- #
-    def predict_delta_s(
+    def predict_raw_delta_s(
         self, track_id: str, setup_norm: dict[str, float],
     ) -> float | None:
-        """预测该调教相对**默认调教**的圈速增量（秒；正 = 更慢）。
-
-        模型不可用或赛道未知 → ``None``。
-        """
+        """**未校准**的原始预测（秒）。仅供评测/排查，不要直接用于决策。"""
         if not self.available or self._mlp is None:
             return None
         row = self.build_features(track_id, setup_norm)
@@ -218,6 +219,33 @@ class SetupSimModel:
         except (IndexError, KeyError, ValueError):
             logger.warning("调教性能推理失败（track=%s）", track_id, exc_info=True)
             return None
+
+    def predict_delta_s(
+        self, track_id: str, setup_norm: dict[str, float],
+    ) -> float | None:
+        """预测该调教相对**默认调教**的圈速增量（秒；正 = 更慢）。
+
+        做了**差分校准**：``raw(setup) − raw(默认)``。
+
+        为什么必须校准：仿真的定义里「默认调教 = 0」，所以同赛道默认点的
+        原始预测就是纯误差，表现为一个每赛道的常数偏置（实测 36~67 ms）。
+        模拟优化只比较**同一赛道内两套调教**谁更快，常数偏置对决策没有信息，
+        却会污染报告里的绝对数字、也会让「默认调教应预测 0」这条契约失效。
+        减去同赛道默认点后：偏置被消掉、``predict(默认) ≡ 0`` 成为可断言性质，
+        而任意两套调教的差值保持不变。
+
+        模型不可用或赛道未知 → ``None``。
+        """
+        raw = self.predict_raw_delta_s(track_id, setup_norm)
+        if raw is None:
+            return None
+        base = self._zero_pred.get(track_id)
+        if base is None:
+            base = self.predict_raw_delta_s(track_id, _ZERO_SETUP)
+            if base is None:
+                return None
+            self._zero_pred[track_id] = base
+        return raw - base
 
     def predict_for_setup(
         self, track_id: str, real_setup: dict[str, float],
@@ -318,3 +346,4 @@ _FAILED_MODEL.created = ""
 _FAILED_MODEL.y_mean = 0.0
 _FAILED_MODEL.y_scale = 1.0
 _FAILED_MODEL._mlp = None
+_FAILED_MODEL._zero_pred = {}

@@ -72,7 +72,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--epochs", type=int, default=80)
     ap.add_argument("--lr", type=float, default=0.01)
     ap.add_argument("--batch-size", type=int, default=64)
-    ap.add_argument("--hidden", default="32,16", help="隐藏层（逗号分隔）")
+    # 容量：24 条赛道 × 400 样本（9600 行）需要比 19 站更多的参数。
+    # 32,16（约 1.0k 参数）在加入 5 条几何推定赛道后出现「互相干扰」——
+    # 实测 19 站的成对排序准确率从 0.785 掉到 0.748。48,32（约 3.8k）留出余量。
+    ap.add_argument("--hidden", default="48,32", help="隐藏层（逗号分隔）")
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--val-ratio", type=float, default=0.2)
     ap.add_argument(
