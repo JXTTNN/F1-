@@ -340,12 +340,14 @@ class TestSimRefineEndToEnd:
         delta0 = {f.name: 0.0 for f in ALL_SETUP_FIELDS}
 
         monkeypatch.setattr(opt_mod, "_MAX_TOTAL_GAIN_S", 10.0)
-        loose = opt_mod.sim_refine(delta0, setup, "alpha", dx=None)
+        # max_passes 放大到 6：线上默认只跑 3 轮，走不满 front_wing 的 max_delta，
+        # 「放开上限能走多远」就看不出来了。
+        loose = opt_mod.sim_refine(delta0, setup, "alpha", dx=None, max_passes=6)
         monkeypatch.setattr(opt_mod, "_MAX_TOTAL_GAIN_S", 1e-9)
-        tight = opt_mod.sim_refine(delta0, setup, "alpha", dx=None)
+        tight = opt_mod.sim_refine(delta0, setup, "alpha", dx=None, max_passes=6)
 
-        # 无上限：一直走到 front_wing 用尽 max_delta（5 级）
-        assert loose.accepted >= 4
+        # 无上限：一直走到 front_wing 用尽 max_delta（5 级，每级 60ms）
+        assert loose.accepted == 5
         # 上限一到：第一步（不设限）之后的所有步子都被拒
         assert tight.accepted == 1
         assert loose.gain_s is not None and tight.gain_s is not None
@@ -353,7 +355,7 @@ class TestSimRefineEndToEnd:
 
         # 默认预算下：累计收益不得超过预算（浮点余量 1e-6）
         monkeypatch.setattr(opt_mod, "_MAX_TOTAL_GAIN_S", cap)
-        default = opt_mod.sim_refine(delta0, setup, "alpha", dx=None)
+        default = opt_mod.sim_refine(delta0, setup, "alpha", dx=None, max_passes=6)
         assert default.accepted >= 1
         assert default.gain_s is not None
         assert default.gain_s <= cap + 1e-6
