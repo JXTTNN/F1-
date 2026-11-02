@@ -2,12 +2,23 @@ name: Retrain Models
 
 # 云端重训调教模型：补拉 2026 遥测（含历史"无数据"会话重新探测）
 # → 逐弯数据集 → 仿真数据集 → 训练两个 NN → 模型提交回仓库。
-# 触发：手动 dispatch；或 push 触及抓取/数据集脚本时。
+# 触发：手动 dispatch；push 触及抓取/数据集脚本；或每 6 小时定时续抓。
 # 注意：本工作流文件自身的改动不触发（避免"工作流+脚本"成对提交时双跑）；
 #       更新本文件后请手动 dispatch，或与脚本改动一并提交。
+#
+# 为什么必须有定时续抓：
+#   ① 遥测缓存（.ref/tracing_2026）不入库，数据集（data/training）也不入库，
+#      所以每次重训都得先把语料抓一遍；
+#   ② 单次 job 有超时上限，一轮抓不完 23 个分站；
+#   ③ GitHub Actions 缓存 7 天不访问即被清除。
+#   抓取是按文件续传的（已存在即跳过），因此多轮累积即可补齐；本轮没补齐时
+#   下面的「无回退守卫」会保留旧模型正常结束，下一轮接着抓。
 
 on:
   workflow_dispatch:
+  schedule:
+    # 每 6 小时一次（UTC，错开整点）。新分站产生数据后无需人工介入即可补抓。
+    - cron: "17 */6 * * *"
   push:
     branches: [main]
     paths:
@@ -25,7 +36,7 @@ jobs:
   retrain:
     name: "fetch → build → train → commit"
     runs-on: ubuntu-latest
-    timeout-minutes: 150
+    timeout-minutes: 175
     steps:
       - uses: actions/checkout@v4
 
@@ -33,6 +44,13 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
+
+      # 必须在训练覆盖模型文件之前记录当前覆盖，供后面的「无回退守卫」比对。
+      # 注意要放在 setup-python 之后：Ubuntu runner 上没有裸 `python`。
+      - name: Snapshot previous model coverage
+        id: prevcov
+        run: |
+          python -c "import json;print('n='+str(len(json.load(open('setup_tuner/resources/models/setup_sim_nn.json'))['track_ids'])))" >> "$GITHUB_OUTPUT"
 
       - name: Install deps
         run: |
@@ -49,7 +67,7 @@ jobs:
       - name: Fetch 2026 telemetry (resume + refresh absent)
         run: |
           python scripts/fetch_official_2026.py --full --refresh-absent \
-            --max-minutes 90 --workers 12
+            --max-minutes 110 --workers 12
 
       # 关键：无论抓取步骤成败都保存缓存（if: always()）。
       # 上一版用 actions/cache@v4 的隐式 post-save（默认仅 success 时执行），
@@ -60,6 +78,18 @@ jobs:
         with:
           path: .ref/tracing_2026
           key: tracing-2026-${{ github.run_id }}
+
+      # 抓取进度写进日志：哪几站已抓、哪几站还没轮到，一眼可见。
+      - name: Crawl progress
+        if: always()
+        run: |
+          python scripts/fetch_official_2026.py --status || true
+          echo "--- 有数据的分站目录数 ---"
+          if [ -d .ref/tracing_2026 ]; then
+            ls -1 .ref/tracing_2026 | grep -v '^_' | wc -l
+          else
+            echo 0
+          fi
 
       - name: Build corner dataset
         run: python scripts/build_corner_dataset.py
@@ -85,21 +115,27 @@ jobs:
           print(sorted(tsur['corner_head']['tracks']))
           PY
 
-      # 防回退守卫：新模型覆盖不得低于 13 条基线，否则拒绝提交（保留旧模型）。
-      - name: Coverage guard (>= 13 baseline)
+      # 无回退守卫（替代旧的「>= 13 基线」硬门槛）。
+      # 旧门槛两个致命缺陷：① 13 远低于实际覆盖（17 站），某轮只抓到 15 站时
+      # 模型会「合法地」退化成 15 站并被提交；② 语料没补齐时训练纯属浪费。
+      # 现改为与「本轮训练前」的覆盖比对：低于就回滚模型文件、跳过提交、正常结束。
+      # 遥测缓存已在前面 if: always() 保存，下一轮定时任务接着续抓。
+      - name: Coverage guard (no regression)
+        id: guard
         run: |
-          python - <<'PY'
-          import json, sys
-          sim = json.load(open('setup_tuner/resources/models/setup_sim_nn.json'))
-          tsur = json.load(open('setup_tuner/resources/models/telemetry_surrogate.json'))
-          n1 = len(sim['track_ids'])
-          n2 = len(tsur['corner_head']['tracks'])
-          print(f'新模型覆盖: setup_sim_nn={n1}, telemetry_surrogate={n2} (基线 13)')
-          if n1 < 13 or n2 < 13:
-              sys.exit('覆盖回退：新模型低于 13 条基线，拒绝提交（保留旧模型）')
-          PY
+          PREV="${{ steps.prevcov.outputs.n }}"
+          NEW=$(python -c "import json;print(len(json.load(open('setup_tuner/resources/models/setup_sim_nn.json'))['track_ids']))")
+          echo "训练前覆盖 ${PREV} 站 → 本轮覆盖 ${NEW} 站"
+          if [ "$NEW" -lt "$PREV" ]; then
+            git checkout -- setup_tuner/resources/models/
+            echo "ok=0" >> "$GITHUB_OUTPUT"
+            echo "::warning title=语料未补齐，已保留旧模型::本轮只覆盖 ${NEW} 站（现有 ${PREV} 站），未提交。遥测缓存已保存，下一轮定时任务继续续抓，累计覆盖达到 ${PREV} 站以上时自动训练并提交。"
+          else
+            echo "ok=1" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Commit retrained models
+        if: steps.guard.outputs.ok == '1'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"

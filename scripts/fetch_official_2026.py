@@ -87,6 +87,18 @@ CALENDAR_2026: tuple[str, ...] = (
     "Abu Dhabi Grand Prix",
 )
 
+#: 2026 赛季官方取消的分站。上游永远不会出现这些目录，若不排除，
+#: 每轮都要空探一轮 404，还会把 absent 计数污染成"缺数据"，掩盖真实缺口。
+CANCELLED_2026: tuple[str, ...] = (
+    "Saudi Arabian Grand Prix",  # 2026-04 官方取消（原第 5 站）
+)
+
+
+def active_races() -> tuple[str, ...]:
+    """实际可抓的分站（按赛历顺序，剔除官方已取消的）。"""
+    return tuple(r for r in CALENDAR_2026 if r not in CANCELLED_2026)
+
+
 #: 会话目录名，按数据价值排序（Race 优先）
 SESSIONS: tuple[str, ...] = (
     "Race", "Qualifying", "Sprint", "Sprint Qualifying",
@@ -469,7 +481,7 @@ def main(argv: list[str] | None = None) -> int:
         yc = state.get("year_checks", {})
         sess = state.get("sessions", {})
         done = sum(1 for s in sess.values() if s.get("complete") or s.get("absent"))
-        print(f"会话完成 {done}/{len(CALENDAR_2026) * len(SESSIONS)}；"
+        print(f"会话完成 {done}/{len(active_races()) * len(SESSIONS)}；"
               f"2026 年检通过 {yc.get('2026', 0)} 场；"
               f"拒绝 {len(yc.get('rejected', []))}；无数据 {len(yc.get('absent', []))}")
         print(f"已下载文件 {state.get('files_downloaded', 0)}；"
@@ -480,7 +492,7 @@ def main(argv: list[str] | None = None) -> int:
     max_laps = 0 if args.metadata_only else args.max_laps
 
     if args.full or args.race is None:
-        crawl_full(list(CALENDAR_2026), SESSIONS, state,
+        crawl_full(list(active_races()), SESSIONS, state,
                    args.max_files, args.max_minutes, drivers, max_laps, args.force,
                    workers=args.workers, refresh_absent=args.refresh_absent)
     else:
