@@ -9,6 +9,9 @@
   该场丢弃并在清单里记为 rejected（不静默跳过、不写训练数据）。
 - 必须"全面"：逐圈逐点遥测（speed/throttle/brake/gear/rpm/drs/acc/x,y,z）
   全抓，不做字段裁剪。
+- 赛季中被官方取消的分站（见 ``CANCELLED_2026``，2026 为沙特站）不进抓取队列：
+  上游永远没有这些目录，留着只会每轮空探一次 404，并把 absent 计数污染成
+  "缺数据"，掩盖真实覆盖缺口。
 
 **可续传全量爬取**：进度记录在 ``.ref/tracing_2026/_crawl_state.json``，
 重复运行自动跳过已完成项；支持 ``--max-files`` / ``--max-minutes`` 预算，

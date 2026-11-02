@@ -40,6 +40,9 @@ jobs:
     timeout-minutes: 175
     steps:
       - uses: actions/checkout@v4
+        with:
+          # 需要完整历史：下面的提交步骤要在运行期间 main 前进后 rebase 再推送。
+          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:
@@ -163,7 +166,25 @@ jobs:
           git add setup_tuner/resources/models/
           if git diff --cached --quiet; then
             echo '模型无变化，跳过提交'
-          else
-            git commit -m "retrain: 补拉缺失赛道遥测并重训模型（云端）"
-            git push
+            exit 0
           fi
+          git commit -m "retrain: 补拉缺失赛道遥测并重训模型（云端）"
+          # 本 job 要跑 30~40 分钟，期间 main 很容易被别的提交推进（人工修复、
+          # 其它 bot），直接在旧基线上 push 会被拒 —— 整轮因此判失败，模型白训。
+          # 先 rebase 到最新 main 再推，最多重试 3 次。
+          for attempt in 1 2 3; do
+            if ! git fetch origin main; then
+              echo "第 ${attempt} 次 fetch 失败，重试"; sleep 10; continue
+            fi
+            if ! git rebase origin/main; then
+              git rebase --abort || true
+              echo "第 ${attempt} 次 rebase 失败，重试"; sleep 10; continue
+            fi
+            if git push origin HEAD:main; then
+              echo "模型已推送（第 ${attempt} 次尝试）"
+              exit 0
+            fi
+            echo "第 ${attempt} 次 push 被拒，重试"; sleep 15
+          done
+          echo "::error::模型提交连续 3 次失败（fetch/rebase/push），请检查 main 分支保护或并发冲突"
+          exit 1
