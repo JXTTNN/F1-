@@ -1,0 +1,29 @@
+workflow : Retrain Models
+job      : retrain
+sha      : c94db54a34e561b822526ce3361527e70a0077c5
+ref      : main
+event    : push
+run      : https://github.com/JXTTNN/F1-/actions/runs/41427150650
+time     : 2026-11-02T10:43:42Z
+
+================ .ci/gate.log ================
+---- 失败 / 错误用例 ----
+---- 断言摘要 ----
+---- 最慢用例 ----
+---- 结果行 ----
+---- 超时 / 崩溃痕迹 ----
+---- 日志尾部 ----
+== setup_sim_eval  passed=True
+  fresh_local_mae_ms: 72.55 (门槛 <=120.0) -> PASS
+  pairwise_acc: 0.7544 (门槛 >=0.75) -> PASS
+  direction_agreement: 0.9976 (门槛 >=0.8) -> PASS
+  zero_bias_ms: 0.0 (门槛 <=40.0) -> PASS
+== usage_flow_eval  passed=False
+  nn_active_rate: 1.0 (门槛 >=1.0) -> PASS
+  accept_rate: 1.0 (门槛 >=0.9) -> PASS
+  median_gain_ms: 213.57 (门槛 >=10.0) -> PASS
+  mean_changed_params: 8.05 (门槛 <=4.0) -> FAIL
+  p90_gain_ms: 222.88 (门槛 <=400.0) -> PASS
+  violations: 0 (门槛 <=0) -> PASS
+  zero_input_moves: 0 (门槛 <=0) -> PASS
+
