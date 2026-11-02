@@ -29,6 +29,11 @@ jobs:
       - name: Lint (ruff)
         run: ruff check setup_tuner/ tests/
 
+      # 前端是单文件 app.js（2600+ 行），任何一处语法错误都会让整个面板白屏，
+      # 而 pytest 摸不到它。runner 自带 node，直接做一次真正的语法解析。
+      - name: JS syntax (node --check)
+        run: node --check setup_tuner/ui/app.js
+
       # --timeout 只用来兜「真的挂死」，不用来卡速度 —— 速度由
       # tests/test_perf_regressions.py 的显式预算负责。此前这里是 30s，
       # 而 cloud-audit 跑同一套用例是 300s，两处口径不一致会造出

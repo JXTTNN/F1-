@@ -100,6 +100,9 @@ class SimRefineResult:
     reason: str = ""
     iterations: int = 0
     accepted: int = 0
+    #: 是否因为 `_MAX_TOTAL_GAIN_S` 预算到顶而提前收手（报告要如实说明，
+    #: 否则用户会把「预算上限」误当成「模型只认为能改这么多」）。
+    capped: bool = False
     before_s: float | None = None
     after_s: float | None = None
     trace: list[str] = field(default_factory=list)
@@ -208,6 +211,7 @@ def sim_refine(
     iterations = 0
     used_budget = 0.0
     acc_gain = 0.0
+    capped = False
 
     for _ in range(max_passes):
         moved = False
@@ -243,6 +247,7 @@ def sim_refine(
                 # 可信区间：累计收益到顶就停（见 _MAX_TOTAL_GAIN_S 注释）。
                 # 第一步不设限，保证「方向明确的那一步」永远拿得到。
                 if accepted > 0 and acc_gain + sim_gain > _MAX_TOTAL_GAIN_S:
+                    capped = True
                     continue
                 # 目标代价必须「付得起」：模拟提升 ≥ 兑换率 × 代价增量，
                 # 且整轮预算未超支（整体性守门，见模块文档）
@@ -277,6 +282,6 @@ def sim_refine(
         after_s = before_s
     return SimRefineResult(
         delta=cur, available=True, reason="ok",
-        iterations=iterations, accepted=accepted,
+        iterations=iterations, accepted=accepted, capped=capped,
         before_s=before_s, after_s=after_s, trace=trace,
     )

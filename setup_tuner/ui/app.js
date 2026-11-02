@@ -1681,6 +1681,11 @@
           (sim.accepted === 0 && sim.available
             ? `<span class="holistic-sub">模型已逐参数试算，当前调教在该站已接近它判定的最优点，未采纳额外改动。</span>`
             : "") +
+          // 收益被预算截断时必须说明：否则用户会把「单次建议的收益上限」
+          // 误读成「模型认为只能改这么多」。
+          (sim.capped && sim.accepted > 0
+            ? `<span class="holistic-sub">已达到单次建议的收益预算上限，剩余候选暂不采纳 —— 按本次改动跑一圈、再生成一次即可继续精修。</span>`
+            : "") +
           `</div>` +
           group("模拟优化采纳轨迹", sim.trace, "holistic-sim-trace");
       } else {

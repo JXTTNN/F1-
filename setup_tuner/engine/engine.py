@@ -1072,6 +1072,8 @@ def generate_suggestion(
         "anchor": sim_model.anchor_of(track_id),
         "iterations": sim_result.iterations,
         "accepted": sim_result.accepted,
+        # 收益是否被单次建议预算（sim_optimizer._MAX_TOTAL_GAIN_S）截断。
+        "capped": sim_result.capped,
         "before_s": (round(sim_result.before_s, 4)
                      if sim_result.before_s is not None else None),
         "after_s": (round(sim_result.after_s, 4)

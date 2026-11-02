@@ -348,8 +348,10 @@ class TestSimRefineEndToEnd:
 
         # 无上限：一直走到 front_wing 用尽 max_delta（5 级，每级 60ms）
         assert loose.accepted == 5
+        assert loose.capped is False          # 没有任何候选项被预算拦下
         # 上限一到：第一步（不设限）之后的所有步子都被拒
         assert tight.accepted == 1
+        assert tight.capped is True           # 报告要如实说「是预算拦下的」
         assert loose.gain_s is not None and tight.gain_s is not None
         assert loose.gain_s > tight.gain_s
 
