@@ -2,9 +2,9 @@ workflow : Retrain Models
 job      : retrain
 sha      : c94db54a34e561b822526ce3361527e70a0077c5
 ref      : main
-event    : push
-run      : https://github.com/JXTTNN/F1-/actions/runs/41427150650
-time     : 2026-11-02T10:43:42Z
+event    : schedule
+run      : https://github.com/JXTTNN/F1-/actions/runs/41531002755
+time     : 2026-11-02T22:09:41Z
 
 ================ .ci/gate.log ================
 ---- 失败 / 错误用例 ----
