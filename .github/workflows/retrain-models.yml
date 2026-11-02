@@ -124,6 +124,28 @@ jobs:
       - name: Train setup-sim NN
         run: python scripts/train_setup_sim_nn.py
 
+      # 决策能力评测：训练集/验证集的 val_mae 量的是「任意随机调教有多慢」的
+      # 插值误差，而调优的真实决策是「两套都已经不错的调教，哪套快几十毫秒」。
+      # 这里用训练时未见过的新鲜样本量化后者，并把报告写进随包资源。
+      # 不在此步 fail：先让报告落盘，由提交步骤决定是否发布新模型。
+      - name: Evaluate setup-sim NN (decision metrics)
+        id: evalsim
+        run: |
+          python scripts/eval_setup_sim.py || true
+          passed=$(python -c "import json;print(1 if json.load(open('setup_tuner/resources/models/setup_sim_eval.json'))['gate']['passed'] else 0)" 2>/dev/null || echo 0)
+          echo "passed=$passed" >> "$GITHUB_OUTPUT"
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          d = json.load(open('setup_tuner/resources/models/setup_sim_eval.json'))
+          m = d['metrics']
+          print('## 调教性能模型评测\n')
+          print('| 指标 | 值 | 门槛 | 结论 |')
+          print('|---|---|---|---|')
+          for k, c in d['gate']['checks'].items():
+              print(f"| {k} | {c['value']} | {c['threshold']} | {'PASS' if c['ok'] else 'FAIL'} |")
+          print(f"\n真实跑圈样本：{d['labels']['real_setup_laps']}\n")
+          PY
+
       - name: Train telemetry surrogate
         run: python scripts/train_telemetry_surrogate.py
 
@@ -163,28 +185,62 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add setup_tuner/resources/models/
-          if git diff --cached --quiet; then
-            echo '模型无变化，跳过提交'
-            exit 0
+          EVAL_PASS="${{ steps.evalsim.outputs.passed }}"
+          # 评测不达标就不发布新模型（旧模型继续服务）。关键：把报告挪到
+          # eval_rejected/ 而不是留在正式路径 —— 正式路径的报告必须永远描述
+          # 「当前随包发布的那一版模型」，否则读报告的人会被误导。
+          if [ "$EVAL_PASS" = "1" ]; then
+            git add setup_tuner/resources/models/setup_sim_nn.json \
+                    setup_tuner/resources/models/telemetry_surrogate.json \
+                    setup_tuner/resources/models/setup_sim_eval.json \
+                    setup_tuner/resources/models/setup_sim_eval.md
+          else
+            REJ=setup_tuner/resources/models/eval_rejected
+            mkdir -p "$REJ"
+            cp setup_tuner/resources/models/setup_sim_eval.json "$REJ/" 2>/dev/null || true
+            cp setup_tuner/resources/models/setup_sim_eval.md "$REJ/" 2>/dev/null || true
+            rm -f setup_tuner/resources/models/setup_sim_eval.json \
+                  setup_tuner/resources/models/setup_sim_eval.md
+            git checkout -- setup_tuner/resources/models/setup_sim_nn.json \
+                            setup_tuner/resources/models/telemetry_surrogate.json || true
+            git add "$REJ"
           fi
-          git commit -m "retrain: 补拉缺失赛道遥测并重训模型（云端）"
-          # 本 job 要跑 30~40 分钟，期间 main 很容易被别的提交推进（人工修复、
-          # 其它 bot），直接在旧基线上 push 会被拒 —— 整轮因此判失败，模型白训。
-          # 先 rebase 到最新 main 再推，最多重试 3 次。
-          for attempt in 1 2 3; do
-            if ! git fetch origin main; then
-              echo "第 ${attempt} 次 fetch 失败，重试"; sleep 10; continue
+          pushed=0
+          if git diff --cached --quiet; then
+            echo '模型与评测均无变化，跳过提交'
+            pushed=1
+          else
+            git commit -m "retrain: 补拉缺失赛道遥测并重训模型（云端）"
+            # 本 job 要跑 30~40 分钟，期间 main 很容易被别的提交推进（人工修复、
+            # 其它 bot），直接在旧基线上 push 会被拒 —— 整轮因此判失败，模型白训。
+            # 先 rebase 到最新 main 再推，最多重试 3 次。
+            for attempt in 1 2 3; do
+              if ! git fetch origin main; then
+                echo "第 ${attempt} 次 fetch 失败，重试"; sleep 10; continue
+              fi
+              if ! git rebase origin/main; then
+                git rebase --abort || true
+                echo "第 ${attempt} 次 rebase 失败，重试"; sleep 10; continue
+              fi
+              if git push origin HEAD:main; then
+                echo "已推送（第 ${attempt} 次尝试）"
+                pushed=1
+                break
+              fi
+              echo "第 ${attempt} 次 push 被拒，重试"; sleep 15
+            done
+          fi
+          if [ "$pushed" != "1" ]; then
+            echo "::error::提交连续 3 次失败（fetch/rebase/push），请检查 main 分支保护或并发冲突"
+            exit 1
+          fi
+          if [ "$EVAL_PASS" != "1" ]; then
+            MSG="本轮未发布新模型（评测未达标），拒绝样本见 setup_tuner/resources/models/eval_rejected/"
+            # 手动触发时把失败暴露成红灯（有人正等着这个结果）；
+            # 定时续抓时不制造噪音，只留告警 —— 报告已落盘可查。
+            if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+              echo "::error title=模型评测未达标::$MSG"
+              exit 1
             fi
-            if ! git rebase origin/main; then
-              git rebase --abort || true
-              echo "第 ${attempt} 次 rebase 失败，重试"; sleep 10; continue
-            fi
-            if git push origin HEAD:main; then
-              echo "模型已推送（第 ${attempt} 次尝试）"
-              exit 0
-            fi
-            echo "第 ${attempt} 次 push 被拒，重试"; sleep 15
-          done
-          echo "::error::模型提交连续 3 次失败（fetch/rebase/push），请检查 main 分支保护或并发冲突"
-          exit 1
+            echo "::warning title=模型评测未达标::$MSG"
+          fi

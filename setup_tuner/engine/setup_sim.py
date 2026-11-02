@@ -229,9 +229,17 @@ class SetupSimModel:
         m = self.metrics
         mae = m.get("val_mae_ms")
         r2 = m.get("val_r2")
+        # 局部 MAE（距该赛道最优 <300 ms 的样本）才是调教优化的决策尺度：
+        # 全量程 MAE 被「换掉整套调教」的巨大差异主导，单看它会低估/高估。
+        local = m.get("val_mae_ms_local")
+        detail = f"验证 MAE {mae} ms"
+        if local is not None:
+            detail += f" / 局部 {local} ms"
+        if r2 is not None:
+            detail += f" / R² {r2}"
         return (
             f"调教性能 NN（纯标准库，{self.n_samples} 仿真样本 / "
-            f"{len(self.track_ids)} 赛道，验证 MAE {mae} ms / R² {r2}）"
+            f"{len(self.track_ids)} 赛道，{detail}）"
         )
 
 

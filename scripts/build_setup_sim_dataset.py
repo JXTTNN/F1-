@@ -15,6 +15,7 @@
     （入弯/弯心/出弯速度、弯时）        相位分解：入弯/弯心/出弯
     赛道中位圈速、弯时占比            直道：阻力项 Δt = f(ΔD, 直道占比)
     工况（胎温/气温/干湿）            灵敏度系数：F1 车辆动力学量级（见 EFFECTS）
+                                      （注：工况当前不进入标签，见下文）
 
     产出 = 每（赛道, 调教, 工况）→ 圈速增量（ms）
     → 训练纯标准库 MLP（scripts/train_setup_sim_nn.py）
@@ -29,6 +30,27 @@ EFFECTS 表里全部是**本项目标定的相对权重**，不是官方数值�
   由 build 脚本末尾的标定表打印出来复核；
 - 弯速对抓地的平方根响应（v ∝ √a）、气动力随速度平方增长（w_aero 按弯型）
   是结构性的，不是拟合参数。
+
+工况特征的真实状态（不要误解）
+----------------------------
+``simulate_lap_delta_ms()`` **不接受工况参数**：湿、胎温、气温、胎软度在数据集
+里只是随行记录，不影响 ``lap_delta_ms``。而 ``track_features`` 每赛道只有一组
+常量，因此在特征向量里这 4 维与赛道 one-hot 完全共线 —— 模型学不到任何
+「湿地让尾翼更重要」的知识。要给工况真实权重，必须先给仿真器加湿地方程，
+那是独立的一期。当前行为记为 "> 仅记录"，不在文档/界面里声称已建模。
+
+采样策略（决定模型“准在哪里”）
+-------------------------------
+模型的精度只能分布在它见过的区域。旧版每赛道 400 个样本在**全量程均匀**采样，
+标签均值约 2.8 s、标准差约 1.3 s —— 容量全花在区分「糟糕/极糟糕」上，而调教
+优化只在当前调教附近 ±``max_delta`` 内比较「哪套快几十毫秒」。现改为三档混合：
+
+    40%  沿「默认→最优」路径随机取位 t∈[0,1]，逐参数抖动 ±0.15（主力区）
+    30%  同上，t∈[0,1.1]，抖动 ±0.40（跨档位组合、略越过最优）
+    30%  全量程均匀（粗形状 + 极端区域，保证远离最优点时预测不发散）
+
+该策略由 ``scripts/eval_setup_sim.py`` 的决策指标（局部 MAE / 成对排序准确率 /
+方向一致率）验证 —— 训练集的 ``val_mae`` 不作为「能不能调车」的依据。
 
 用法::
 
@@ -409,6 +431,88 @@ def _sample_setup(rng: random.Random, specs: list[Any]) -> dict[str, float]:
     return setup
 
 
+#: 采样分档：``(抖动半宽 | None=全量程均匀, 占比, 路径位置上限)``。
+#:
+#: 为什么不是全量程均匀：优化器只在当前调教附近 ±``max_delta`` 内移动，
+#: 决策尺度是「10~50 ms 谁更快」。全量程均匀采样给出的标签均值约 2.8 s、
+#: 标准差约 1.3 s，模型容量全部花在区分「糟糕/极糟糕」上，恰恰在最需要
+#: 精度的邻域精度最差。
+#:
+#: 为什么是「路径管」而不是「最优解邻域」：坐标上升从当前调教（通常接近
+#: 默认）出发，一步步摸到最优，实际活动区是**默认→最优这条路径的管状
+#: 邻域**，而不是最优解一个点。先沿路径随机取位置 ``t``，再在 20 维上加
+#: ±half_width 抖动；t 上限允许略超过 1（越过最优一点点），避免把最优
+#: 解压成边界。
+_SAMPLE_TIERS: tuple[tuple[float | None, float, float], ...] = (
+    (0.15, 0.40, 1.00),   # 优化器实际走的路径 ±0.15（主力样本）
+    (0.40, 0.30, 1.10),   # 更宽邻域/略越最优（跨档位组合）
+    (None, 0.30, 0.00),   # 全量程均匀（粗形状 + 极端区域，保证不发散）
+)
+#: 近似最优点的坐标下降：步长（归一化单位）与轮数
+_OPT_GRID = 0.25
+_OPT_PASSES = 4
+
+
+def snap_to_step(value_norm: float, spec: Any) -> float:
+    """归一化值 → 先夹进合法区间、对齐到该参数 ``step`` 档位，再归一化。
+
+    采样的候选值必须落在**车手真的能设出来**的离散档位上，否则模型会在
+    不存在的中间值上学到虚假曲率，优化器又会给出设不出来的建议。
+    """
+    real = spec.default + float(value_norm) * _half_range(spec)
+    real = max(spec.min_val, min(spec.max_val, real))
+    n_steps = round((real - spec.min_val) / spec.step)
+    real = spec.min_val + n_steps * spec.step
+    if spec.step >= 1.0 and float(spec.step).is_integer():
+        real = float(round(real))
+    real = max(spec.min_val, min(spec.max_val, real))
+    return (real - spec.default) / _half_range(spec)
+
+
+def coarse_optimum(
+    track: dict[str, Any], specs: list[Any],
+    grid: float = _OPT_GRID, passes: int = _OPT_PASSES,
+) -> tuple[dict[str, float], float]:
+    """用仿真器做确定性坐标下降，求该赛道的近似最优调教（归一化）。
+
+    Returns:
+        ``(最优调教, 该调教相对默认的圈速增量 ms)``。完全确定性（无随机）。
+        这是「训练样本该落在哪里」的答案：调教优化需要精度的区域是最优点
+        邻域，而不是全量程。
+    """
+    cur: dict[str, float] = {spec.name: 0.0 for spec in specs}
+    best = simulate_lap_delta_ms(track, cur)
+    for _ in range(passes):
+        moved = False
+        for spec in specs:
+            base = cur[spec.name]
+            for direction in (+1, -1):
+                cand = snap_to_step(base + direction * grid, spec)
+                if abs(cand - base) < 1e-9:
+                    continue
+                trial = dict(cur)
+                trial[spec.name] = cand
+                value = simulate_lap_delta_ms(track, trial)
+                if value < best - 1e-6:
+                    cur, best, moved = trial, value, True
+        if not moved:
+            break
+    return cur, best
+
+
+def _tier_counts(total: int) -> list[int]:
+    """按分档占比把 ``total`` 拆成整数（余数补给最后一档，和恒等于 total）。"""
+    counts: list[int] = []
+    used = 0
+    for idx, tier in enumerate(_SAMPLE_TIERS):
+        if idx == len(_SAMPLE_TIERS) - 1:
+            counts.append(max(0, total - used))
+        else:
+            n = int(round(total * tier[1]))
+            counts.append(n)
+            used += n
+    return counts
+
 def build(
     n_setups: int, seed: int, tracks_filter: set[str] | None, out: Path,
 ) -> dict[str, Any]:
@@ -423,6 +527,7 @@ def build(
 
     rng = random.Random(seed)
     rows: list[dict[str, Any]] = []
+    optimal_delta_ms: dict[str, float] = {}
     default_norm = {spec.name: 0.0 for spec in specs}
 
     for tid in sorted(stats):
@@ -430,19 +535,41 @@ def build(
         # 锚点自检：默认调教增量应为 0
         anchor = simulate_lap_delta_ms(track, default_norm)
         assert abs(anchor) < 1e-6, f"{tid} 默认调教增量非零：{anchor}"
-        # 采样（包含默认与两端极值）
-        setups = [default_norm]
-        setups.append({spec.name: 1.0 for spec in specs})
-        setups.append({spec.name: -1.0 for spec in specs})
-        while len(setups) < n_setups:
-            raw = _sample_setup(rng, specs)
-            setups.append({spec.name: _norm(raw[spec.name], spec) for spec in specs})
-        for sn in setups:
+        # 采样（默认、两端极值、近似最优点，其余按分档密集/均匀混合）
+        # 每条样本带 tier 标记：训练侧据此对「路径管」样本加权，让容量落在
+        # 优化器真正做决策的区域（见 train_setup_sim_nn.py --tube-weight）。
+        tagged: list[tuple[dict[str, float], str]] = [(default_norm, "seed_default")]
+        tagged.append(({spec.name: 1.0 for spec in specs}, "seed_extreme"))
+        tagged.append(({spec.name: -1.0 for spec in specs}, "seed_extreme"))
+        optimum, opt_ms = coarse_optimum(track, specs)
+        optimal_delta_ms[tid] = round(opt_ms, 3)
+        tagged.append((dict(optimum), "seed_optimum"))
+        # 路径管采样：先在「默认→最优」路径上取位置 t，再逐参数加抖动。
+        for (half_width, _share, t_max), count in zip(
+            _SAMPLE_TIERS, _tier_counts(max(0, n_setups - len(tagged)))
+        ):
+            for _ in range(count):
+                if half_width is None:
+                    raw = _sample_setup(rng, specs)
+                    tagged.append((
+                        {s.name: _norm(raw[s.name], s) for s in specs}, "wide",
+                    ))
+                else:
+                    t = rng.uniform(0.0, t_max)
+                    tagged.append(({
+                        s.name: snap_to_step(
+                            t * optimum[s.name]
+                            + rng.uniform(-half_width, half_width), s,
+                        )
+                        for s in specs
+                    }, "tube"))
+        for sn, tier in tagged:
             delta_ms = simulate_lap_delta_ms(track, sn)
             row = {
                 "track_id": tid,
                 "setup_norm": {k: round(v, 5) for k, v in sn.items()},
                 "lap_delta_ms": delta_ms,
+                "tier": tier,
                 "conditions": {
                     "tyre_softness": track["tyre_softness"],
                     "wet": track["wet"],
@@ -451,9 +578,11 @@ def build(
                 },
             }
             rows.append(row)
+        n_tube = sum(1 for _, tier in tagged if tier == "tube")
         print(f"  {tid:12s} 弯数 {len(track['corners']):2d} | 圈速锚点 "
               f"{track['lap_time_s']:.2f}s | 直道占比 {track['straight_share']:.2f} "
-              f"| 采样 {len(setups)}")
+              f"| 采样 {len(tagged)}（路径管 {n_tube}）"
+              f" | 近似最优 Δ={opt_ms:+7.1f} ms")
 
     out.parent.mkdir(parents=True, exist_ok=True)
     with out.open("w", encoding="utf-8", newline="\n") as fh:
@@ -467,6 +596,16 @@ def build(
         "n_rows": len(rows),
         "n_setups_per_track": n_setups,
         "effects_version": "1.0",
+        # 采样策略（可追溯）：调教优化需要精度的区域是最优点邻域，
+        # 全量程均匀采样会把模型容量消耗在区分「糟糕/极糟糕」上。
+        "sampling": {
+            "tiers": [
+                {"jitter_half_width": hw, "share": share, "path_t_max": t_max}
+                for hw, share, t_max in _SAMPLE_TIERS
+            ],
+            "n_per_track": n_setups,
+            "optimal_delta_ms": optimal_delta_ms,
+        },
         # 每赛道聚合特征 + 工况（训练与推理共用；推理侧按此建特征向量）
         "track_features": {
             tid: {

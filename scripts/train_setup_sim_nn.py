@@ -75,6 +75,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--hidden", default="32,16", help="隐藏层（逗号分隔）")
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--val-ratio", type=float, default=0.2)
+    ap.add_argument(
+        "--tube-weight", type=int, default=3,
+        help="路径管样本重复次数（1=不加权）。调教优化的决策发生在该区域，"
+             "加权后容量集中在那里；全量程样本仍保留，保证远离最优时不发散。",
+    )
     ap.add_argument("--out", default=str(OUT))
     args = ap.parse_args(argv)
 
@@ -90,6 +95,8 @@ def main(argv: list[str] | None = None) -> int:
     # 特征矩阵（训练/推理共用 build_feature_row，口径一致）
     x: list[list[float]] = []
     y: list[float] = []
+    tids: list[str] = []
+    tiers: list[str] = []
     skipped = 0
     for r in rows:
         row = build_feature_row(
@@ -100,6 +107,8 @@ def main(argv: list[str] | None = None) -> int:
             continue
         x.append(row)
         y.append(float(r.get("lap_delta_ms") or 0.0) / 1000.0)  # ms → s
+        tids.append(str(r.get("track_id")))
+        tiers.append(str(r.get("tier") or "wide"))
     if skipped:
         print(f"跳过 {skipped} 行（赛道不在特征表）")
     n_in = len(x[0])
@@ -116,6 +125,19 @@ def main(argv: list[str] | None = None) -> int:
     y_tr = [y[i] for i in train_idx]
     x_va = [x[i] for i in val_idx]
     y_va = [y[i] for i in val_idx]
+
+    # 路径管加权：调教优化只在「默认→最优」路径附近比较几十毫秒的差异，
+    # 而 30% 全量程样本的平方误差量级是「秒」，会重新主导 MSE、把容量拉回
+    # 「糟糕/极糟糕」的区分上。把 tube 样本重复若干次，让损失质量偏向决策区；
+    # 注意标准化的 y_mean/y_scale 是在扩样后的集合上算的，因此也跟着偏向局部，
+    # 梯度条件数更好。验证集**不扩样**，指标保持无偏差。
+    n_tube_train = sum(1 for i in train_idx if tiers[i] == "tube")
+    if args.tube_weight > 1 and n_tube_train:
+        extra = [i for i in train_idx if tiers[i] == "tube"] * (args.tube_weight - 1)
+        x_tr = x_tr + [x[i] for i in extra]
+        y_tr = y_tr + [y[i] for i in extra]
+    print(f"路径管加权: tube 训练样本 {n_tube_train} → {len(x_tr)} 条训练样本"
+          f"（weight={args.tube_weight}）")
 
     hidden = [int(h) for h in args.hidden.split(",") if h.strip()]
     sizes = [n_in, *hidden, 1]
@@ -147,6 +169,35 @@ def main(argv: list[str] | None = None) -> int:
     print(f"验证集：MAE={mae_s * 1000:.2f} ms | R²={r2:.4f} | "
           f"零改动基线 MAE={base_mae * 1000:.2f} ms | 训练耗时 {elapsed:.1f}s")
 
+    # ---- 分层误差 ---------------------------------------------------------- #
+    # 全量程 MAE 被「换掉整个调教」这种巨大差异主导，而调教优化的真实决策
+    # 是「两套已经不错的调教，哪套快 20 ms」。因此额外报三个分层的误差：
+    #   fine  = 距该赛道最优 <100 ms（优化器最终收敛的区间）
+    #   local = 距该赛道最优 <300 ms（坐标上升主要活动区）
+    #   wide  = 其余（远离最优，只要求不发散）
+    best_by_track: dict[str, float] = {}
+    for tid, v in zip(tids, y):
+        if tid not in best_by_track or v < best_by_track[tid]:
+            best_by_track[tid] = v
+    val_tid = [tids[i] for i in val_idx]
+    gap = [y_va[i] - best_by_track.get(val_tid[i], y_va[i]) for i in range(len(y_va))]
+
+    def _mae_where(lo: float, hi: float) -> tuple[float, int]:
+        pair = [(y_va[i], pred[i]) for i in range(len(y_va)) if lo <= gap[i] < hi]
+        if not pair:
+            return 0.0, 0
+        return (
+            mean_abs_error([a for a, _ in pair], [b for _, b in pair]) * 1000.0,
+            len(pair),
+        )
+
+    fine_mae, n_fine = _mae_where(-1e9, 0.100)
+    local_mae, n_local = _mae_where(-1e9, 0.300)
+    wide_mae, n_wide = _mae_where(0.300, 1e9)
+    print(f"分层误差：fine(<100ms) {fine_mae:.2f} ms（n={n_fine}）| "
+          f"local(<300ms) {local_mae:.2f} ms（n={n_local}）| "
+          f"wide(≥300ms) {wide_mae:.2f} ms（n={n_wide}）")
+
     payload = {
         "schema": "f1opt-setup-sim-nn/1",
         "source": "telemetry-anchored QSS simulation (TracingInsights 2026 anchors)",
@@ -158,8 +209,16 @@ def main(argv: list[str] | None = None) -> int:
             "val_mae_ms": round(mae_s * 1000.0, 3),
             "val_r2": round(r2, 5),
             "baseline_mae_ms": round(base_mae * 1000.0, 3),
+            # 分层指标（调教优化的真实决策尺度）：
+            "val_mae_ms_fine": round(fine_mae, 3),
+            "val_mae_ms_local": round(local_mae, 3),
+            "val_mae_ms_wide": round(wide_mae, 3),
+            "n_val_fine": n_fine,
+            "n_val_local": n_local,
+            "n_val_wide": n_wide,
             "n_train": len(x_tr),
             "n_val": len(x_va),
+            "tube_weight": args.tube_weight,
             "epochs": args.epochs,
             "seed": args.seed,
             "hidden": hidden,
