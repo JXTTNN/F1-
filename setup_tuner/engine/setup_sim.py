@@ -148,6 +148,8 @@ class SetupSimModel:
         self.metrics: dict[str, Any] = {}
         self.n_samples = 0
         self.created = ""
+        #: {track_id: "telemetry" | "geometry_transfer"}（旧模型无此字段 → 空）
+        self.anchor_sources: dict[str, str] = {}
         self._mlp: MLP | None = None
         self._load()
 
@@ -179,6 +181,7 @@ class SetupSimModel:
         self.metrics = data.get("metrics") or {}
         self.n_samples = int(data.get("n_samples") or 0)
         self.created = str(data.get("created") or "")
+        self.anchor_sources = dict(data.get("anchor_sources") or {})
         # 输出缩放（训练端把目标缩到 ~1 量级；推理必须乘回）
         self.y_mean = float(data.get("y_mean") or 0.0)
         self.y_scale = float(data.get("y_scale") or 1.0)
@@ -229,9 +232,13 @@ class SetupSimModel:
         m = self.metrics
         mae = m.get("val_mae_ms")
         r2 = m.get("val_r2")
+        transferred = sum(
+            1 for v in self.anchor_sources.values() if v != "telemetry"
+        )
+        note = f"，其中 {transferred} 条为几何迁移" if transferred else ""
         return (
             f"调教性能 NN（纯标准库，{self.n_samples} 仿真样本 / "
-            f"{len(self.track_ids)} 赛道，验证 MAE {mae} ms / R² {r2}）"
+            f"{len(self.track_ids)} 赛道{note}，验证 MAE {mae} ms / R² {r2}）"
         )
 
 
@@ -282,6 +289,7 @@ _FAILED_MODEL.feature_keys = []
 _FAILED_MODEL.metrics = {}
 _FAILED_MODEL.n_samples = 0
 _FAILED_MODEL.created = ""
+_FAILED_MODEL.anchor_sources = {}
 _FAILED_MODEL.y_mean = 0.0
 _FAILED_MODEL.y_scale = 1.0
 _FAILED_MODEL._mlp = None

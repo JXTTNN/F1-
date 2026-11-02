@@ -152,6 +152,8 @@ def main(argv: list[str] | None = None) -> int:
         "source": "telemetry-anchored QSS simulation (TracingInsights 2026 anchors)",
         "track_ids": track_ids,
         "track_features": track_features,
+        # 每赛道锚点来源（telemetry / geometry_transfer），随模型落盘以便报告如实标注
+        "anchor_sources": meta.get("anchor_sources") or {},
         "feature_keys": feature_names(track_ids),
         "n_samples": len(x),
         "metrics": {

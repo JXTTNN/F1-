@@ -1,7 +1,14 @@
 name: Cloud Audit
 
 # 云端全量测试 + 真人式 UI 审计（仅点击 UI / 仅输入框输入）。
-# 全部在 GitHub Actions 云端执行，结果汇总为 Issue 与 artifact。
+# 全部在 GitHub Actions 云端执行。
+#
+# 2026-11 修订（Issue 噪音）：
+#   此前 "Publish issue" 步骤是 if: always() 且无条件 gh issue create，
+#   于是**每次全绿也开一条 issue** —— 仓库累计 74 条 open issue 里 73 条都是
+#   「云端全量审计：✅ 全绿」，真正的失败项（#77）被彻底淹没。
+#   现在：全绿只写 Job Summary（附 artifact），失败才开 issue；
+#   并顺带归档历史遗留的全绿 issue（幂等，可反复跑）。
 
 on:
   push:
@@ -155,12 +162,56 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
-      - name: Publish issue
+      # 全绿：只写 Job Summary，不开 issue（查看入口：Actions 运行页 + artifact）。
+      # 失败：开一条 issue，带上失败摘要（标题由 build_report.py 生成）。
+      - name: Publish (summary on green, issue on failure)
         if: always()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if [ ! -f reports/ISSUE_BODY.md ]; then echo 'no issue body'; exit 0; fi
+          set -u
+          if [ ! -f reports/ISSUE_TITLE.txt ]; then
+            echo 'no issue title, skip publish'
+            exit 0
+          fi
+          TITLE="$(head -n 1 reports/ISSUE_TITLE.txt)"
+          echo "## 审计标题：$TITLE" >> "$GITHUB_STEP_SUMMARY"
+
+          if [ -f reports/AUDIT_REPORT.md ]; then
+            head -n 200 reports/AUDIT_REPORT.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          if printf '%s' "$TITLE" | grep -q '全绿'; then
+            echo ""
+            echo "结果：✅ 全绿 —— 仅记录到 Job Summary，不创建 issue。"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "> 全绿结果只保留在本 Job Summary 与 artifact 中，不再刷 issue。" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          echo "结果：❌ 存在失败项 —— 创建 issue 以便跟进。"
           gh issue create --repo JXTTNN/F1- \
-            --title "$(head -n 1 reports/ISSUE_TITLE.txt)" \
+            --title "$TITLE" \
             --body-file reports/ISSUE_BODY.md || echo 'issue create failed'
+
+      # 归档历史遗留的全绿 issue（幂等；只关标题含「全绿」的，绝不碰真实失败项）。
+      - name: Archive green audit issues
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -u
+          nums=$(gh issue list --repo JXTTNN/F1- --state open --limit 300 \
+                   --json number,title \
+                   --jq '.[] | select(.title | contains("全绿")) | .number' || true)
+          if [ -z "$nums" ]; then
+            echo '没有需要归档的全绿 issue'
+            exit 0
+          fi
+          count=0
+          for n in $nums; do
+            gh issue close "$n" --repo JXTTNN/F1- --reason "not planned" \
+              --comment "自动归档：全绿审计结果改为写入 Actions Job Summary，不再占用 issue 追踪。" \
+              && count=$((count + 1)) || echo "close #$n failed"
+          done
+          echo "已归档 $count 条全绿 issue"

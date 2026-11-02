@@ -1,18 +1,39 @@
 name: Retrain Models
 
-# 云端重训调教模型：补拉 2026 遥测（含历史"无数据"会话重新探测）
-# → 逐弯数据集 → 仿真数据集 → 训练两个 NN → 模型提交回仓库。
+# 云端重训调教模型：补拉 2026 遥测 → 逐弯数据集 → 仿真数据集 → 训练两个 NN
+# → 覆盖/精度守卫 → 提交回仓库。
+#
+# 2026-11 修订（针对「训练后的模型没有真正有效」）：
+#   1. 训练命令此前**不传任何超参**，全走脚本默认值（80 epochs / hidden 32,16 /
+#      每赛道 400 组调教），实测模型落到 val_mae 98.15ms，而文档宣称 53.3ms
+#      —— 精度差近一倍。现显式传高质量超参。
+#   2. 覆盖守卫原先只要求 >= 13 条赛道（历史低点），17 -> 13 的回退也放行；
+#      现要求 setup_sim 必须覆盖 **全部 24 条**，并打印缺失清单。
+#   3. 缺遥测的赛道改用几何迁移锚点补齐（scripts/synthesize_track_anchors.py），
+#      来源在数据集 meta 与模型内如实标记，不再整条跳过。
+#   4. 新增精度回退守卫：新模型 MAE 劣于阈值则拒绝提交，保留旧模型。
+#
 # 触发：手动 dispatch；或 push 触及抓取/数据集脚本时。
 # 注意：本工作流文件自身的改动不触发（避免"工作流+脚本"成对提交时双跑）；
 #       更新本文件后请手动 dispatch，或与脚本改动一并提交。
 
 on:
   workflow_dispatch:
+    inputs:
+      setups:
+        description: "每赛道采样调教数"
+        required: false
+        default: "800"
+      epochs:
+        description: "训练轮数"
+        required: false
+        default: "180"
   push:
     branches: [main]
     paths:
       - "scripts/fetch_official_2026.py"
       - "scripts/build_corner_dataset.py"
+      - "scripts/synthesize_track_anchors.py"
 
 permissions:
   contents: write
@@ -23,9 +44,9 @@ concurrency:
 
 jobs:
   retrain:
-    name: "fetch → build → train → commit"
+    name: "fetch → build → train → guard → commit"
     runs-on: ubuntu-latest
-    timeout-minutes: 150
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@v4
 
@@ -64,11 +85,19 @@ jobs:
       - name: Build corner dataset
         run: python scripts/build_corner_dataset.py
 
+      # --synthesize-missing：缺遥测的赛道用几何迁移锚点补齐（24/24 覆盖）。
+      # 真实遥测始终优先；迁移来源在 meta.anchor_sources 里逐条标记。
       - name: Build setup-sim dataset
-        run: python scripts/build_setup_sim_dataset.py
+        run: |
+          python scripts/build_setup_sim_dataset.py \
+            --setups "${{ github.event.inputs.setups || '800' }}" \
+            --synthesize-missing
 
       - name: Train setup-sim NN
-        run: python scripts/train_setup_sim_nn.py
+        run: |
+          python scripts/train_setup_sim_nn.py \
+            --epochs "${{ github.event.inputs.epochs || '180' }}" \
+            --hidden 48,24 --lr 0.008
 
       - name: Train telemetry surrogate
         run: python scripts/train_telemetry_surrogate.py
@@ -79,24 +108,55 @@ jobs:
           import json
           sim = json.load(open('setup_tuner/resources/models/setup_sim_nn.json'))
           tsur = json.load(open('setup_tuner/resources/models/telemetry_surrogate.json'))
-          print('setup_sim_nn 覆盖赛道:', len(sim['track_ids']))
-          print(sorted(sim['track_ids']))
-          print('telemetry_surrogate 覆盖赛道:', len(tsur['corner_head']['tracks']))
-          print(sorted(tsur['corner_head']['tracks']))
+          from setup_tuner.domain.track import ALL_TRACKS
+          expected = sorted(t.track_id for t in ALL_TRACKS)
+          got = sorted(sim['track_ids'])
+          print(f'setup_sim_nn 覆盖 {len(got)}/{len(expected)}')
+          print(f'  已覆盖: {got}')
+          print(f'  缺失  : {sorted(set(expected) - set(got))}')
+          print(f'  val_mae_ms = {sim["metrics"]["val_mae_ms"]} | '
+                f'val_r2 = {sim["metrics"]["val_r2"]} | n_samples = {sim["n_samples"]}')
+          src = sim.get('anchor_sources') or {}
+          transferred = sorted(k for k, v in src.items() if v != 'telemetry')
+          print(f'  几何迁移赛道 {len(transferred)}: {transferred}')
+          print(f'telemetry_surrogate 覆盖 {len(tsur["corner_head"]["tracks"])} 赛道')
           PY
 
-      # 防回退守卫：新模型覆盖不得低于 13 条基线，否则拒绝提交（保留旧模型）。
-      - name: Coverage guard (>= 13 baseline)
+      # 守卫一：覆盖必须 24/24（缺任何一条都意味着该赛道模型静默失效）。
+      - name: Coverage guard (24/24)
         run: |
           python - <<'PY'
           import json, sys
           sim = json.load(open('setup_tuner/resources/models/setup_sim_nn.json'))
-          tsur = json.load(open('setup_tuner/resources/models/telemetry_surrogate.json'))
-          n1 = len(sim['track_ids'])
-          n2 = len(tsur['corner_head']['tracks'])
-          print(f'新模型覆盖: setup_sim_nn={n1}, telemetry_surrogate={n2} (基线 13)')
-          if n1 < 13 or n2 < 13:
-              sys.exit('覆盖回退：新模型低于 13 条基线，拒绝提交（保留旧模型）')
+          from setup_tuner.domain.track import ALL_TRACKS
+          expected = {t.track_id for t in ALL_TRACKS}
+          got = set(sim['track_ids'])
+          missing = sorted(expected - got)
+          if missing:
+              sys.exit(
+                  f'覆盖不足：缺 {len(missing)} 条赛道 {missing}。'
+                  f'这些赛道上模型会静默降级为纯规则，拒绝提交。'
+              )
+          print(f'覆盖守卫通过：{len(got)}/{len(expected)} 赛道')
+          PY
+
+      # 守卫二：精度不得回退（当前线上模型 val_mae = 98.15ms，目标 <=70ms）。
+      - name: Precision guard (val_mae <= 85ms)
+        run: |
+          python - <<'PY'
+          import json, sys
+          sim = json.load(open('setup_tuner/resources/models/setup_sim_nn.json'))
+          mae = float(sim['metrics']['val_mae_ms'])
+          baseline = float(sim['metrics'].get('baseline_mae_ms') or 0.0)
+          print(f'新模型 val_mae = {mae:.2f} ms（零改动基线 {baseline:.1f} ms）')
+          if mae > 85.0:
+              sys.exit(
+                  f'精度回退：val_mae {mae:.2f}ms > 85ms 上限，'
+                  f'拒绝提交（保留旧模型）。检查 --epochs/--hidden/--setups。'
+              )
+          if mae > 70.0:
+              print(f'::warning::val_mae {mae:.2f}ms 高于目标 70ms，建议加大 epochs 或 setups')
+          print('精度守卫通过')
           PY
 
       - name: Commit retrained models
@@ -107,6 +167,6 @@ jobs:
           if git diff --cached --quiet; then
             echo '模型无变化，跳过提交'
           else
-            git commit -m "retrain: 补拉缺失赛道遥测并重训模型（云端）"
+            git commit -m "retrain: 补拉缺失赛道遥测 + 几何迁移补齐 24/24 覆盖并重训（云端）"
             git push
           fi

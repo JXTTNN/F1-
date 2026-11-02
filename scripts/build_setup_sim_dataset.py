@@ -50,6 +50,11 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+try:  # 脚本直接运行时 sys.path[0] 是 scripts/
+    from synthesize_track_anchors import fill_missing_tracks
+except ImportError:  # 从仓库根 import 时
+    from scripts.synthesize_track_anchors import fill_missing_tracks
+
 CORNER_JSONL = ROOT / "data" / "training" / "corner_dataset.jsonl"
 OUT_JSONL = ROOT / "data" / "training" / "setup_sim_dataset.jsonl"
 OUT_META = ROOT / "data" / "training" / "setup_sim_meta.json"
@@ -411,6 +416,7 @@ def _sample_setup(rng: random.Random, specs: list[Any]) -> dict[str, float]:
 
 def build(
     n_setups: int, seed: int, tracks_filter: set[str] | None, out: Path,
+    synthesize_missing: bool = True,
 ) -> dict[str, Any]:
     from setup_tuner.domain.setup import ALL_SETUP_FIELDS
 
@@ -420,6 +426,15 @@ def build(
         raise SystemExit("没有可用的赛道锚点数据")
     print(f"遥测锚点：{len(stats)} 赛道 | 总逐弯样本 "
           f"{sum(t['n_samples'] for t in stats.values())}")
+    # 缺失赛道：几何迁移兜底（消除"整条赛道没有模型"的断崖式降级）。
+    # 真实遥测始终优先；迁移来源逐条记录，不伪装成遥测。
+    if synthesize_missing:
+        stats, anchor_sources = fill_missing_tracks(stats, tracks_filter)
+        transferred = sorted(k for k, v in anchor_sources.items() if v != "telemetry")
+        print(f"覆盖补齐：{len(stats)} 赛道"
+              f"（几何迁移 {len(transferred)}：{transferred}）")
+    else:
+        anchor_sources = {tid: "telemetry" for tid in stats}
 
     rng = random.Random(seed)
     rows: list[dict[str, Any]] = []
@@ -467,6 +482,8 @@ def build(
         "n_rows": len(rows),
         "n_setups_per_track": n_setups,
         "effects_version": "1.0",
+        # 每赛道锚点来源：telemetry（真实遥测）/ geometry_transfer（几何迁移）
+        "anchor_sources": anchor_sources,
         # 每赛道聚合特征 + 工况（训练与推理共用；推理侧按此建特征向量）
         "track_features": {
             tid: {
@@ -568,6 +585,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--tracks", default="", help="逗号分隔的赛道过滤（空=全部）")
     ap.add_argument("--out", default=str(OUT_JSONL))
     ap.add_argument("--calibrate-only", action="store_true", help="只打印标定表")
+    ap.add_argument("--no-synthesize", action="store_true",
+                    help="不补齐缺失赛道（只训练有真实遥测的赛道）")
     args = ap.parse_args(argv)
 
     if args.calibrate_only:
@@ -575,7 +594,8 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     tracks = {t.strip() for t in args.tracks.split(",") if t.strip()} or None
-    build(args.setups, args.seed, tracks, Path(args.out))
+    build(args.setups, args.seed, tracks, Path(args.out),
+          synthesize_missing=not args.no_synthesize)
     print_calibration()
     return 0
 
