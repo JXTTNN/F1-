@@ -195,7 +195,11 @@ class TestObjective:
             br.residual + br.drag_cost + br.bottoming_cost
             + br.tyre_heat_cost + br.effort_cost
         )
-        assert sum(br.per_class.values()) == pytest.approx(br.residual, abs=1e-6)
+        # residual 与 per_class 项来自同一批 `e.importance * term` 累加，
+        # 数学上恒等；差异只可能来自各自 round(…, 6)（3 个类各 5e-7，
+        # 最坏 1.5e-6）。所以容差用 1e-5 —— 仍能抓出任何结构性错误
+        # （丢项/换权重会差 1e-2 量级）。
+        assert sum(br.per_class.values()) == pytest.approx(br.residual, abs=1e-5)
 
     def test_drag_cost_penalizes_adding_wings(self) -> None:
         ctx = track_context("monza", None)

@@ -199,14 +199,39 @@ class TestPredict:
         assert isinstance(value, float)
 
     def test_predict_applies_output_scaling(self, tmp_path: Path) -> None:
-        """输出 = mlp_raw × y_scale + y_mean（缩放口径必须一致）。"""
+        """输出 = mlp_raw × y_scale + y_mean（缩放口径必须一致）。
+
+        注意口径：上线用的 ``predict_delta_s`` 是**差分**（raw(候选) − raw(默认调教)），
+        默认点恒为 0，所以缩放只能在没有校准的 ``predict_raw_delta_s`` 上验证。
+        """
         p = _make_model_payload(tmp_path)
         model = SetupSimModel(p)
         raw = float(model._mlp.predict_one(
             model.build_features(_TRACK_A, normalize_setup({})),
         )[0])
         expected = raw * 2.0 + 0.5
-        assert model.predict_delta_s(_TRACK_A, normalize_setup({})) == pytest.approx(expected)
+        assert model.predict_raw_delta_s(
+            _TRACK_A, normalize_setup({}),
+        ) == pytest.approx(expected)
+
+    def test_predict_delta_is_zero_at_default_setup(self, tmp_path: Path) -> None:
+        """差分校准的核心契约：默认调教恒预测 0，任意两套调教的差值不变。"""
+        p = _make_model_payload(tmp_path)
+        model = SetupSimModel(p)
+        zero = normalize_setup({})
+        assert model.predict_delta_s(_TRACK_A, zero) == pytest.approx(0.0)
+
+        # 非默认调教：差分 = raw(候选) − raw(默认)
+        from setup_tuner.domain.setup import CarSetup
+
+        candidate = CarSetup.default().to_dict()
+        candidate["front_wing"] = float(candidate["front_wing"]) + 2.0
+        cand_norm = normalize_setup(candidate)
+        expected = (
+            model.predict_raw_delta_s(_TRACK_A, cand_norm)
+            - model.predict_raw_delta_s(_TRACK_A, zero)
+        )
+        assert model.predict_delta_s(_TRACK_A, cand_norm) == pytest.approx(expected)
 
     def test_predict_unknown_track_none(self, tmp_path: Path) -> None:
         model = SetupSimModel(_make_model_payload(tmp_path))
