@@ -102,10 +102,23 @@ jobs:
               Out-File -FilePath $out -Append -Encoding utf8
           }
 
-          git checkout -B ci-status
-          git add -f ci-status
-          git commit -m "ci-status: build @ $($env:GITHUB_SHA.Substring(0,7))"
-          git push -f origin ci-status
+          # 以远端 ci-status 的树为基线叠加本 job 的文件（不整分支覆盖）：
+          # CI / Full CI / Retrain 也在写这个分支，各自强推会互相覆盖。
+          $base = ""
+          git fetch -q origin ci-status:refs/remotes/origin/ci-status 2>$null
+          if ($LASTEXITCODE -eq 0) {
+            $base = (git rev-parse --verify -q refs/remotes/origin/ci-status)
+          }
+          if ($base) { git read-tree $base | Out-Null } else { git read-tree --empty | Out-Null }
+          git add -f ci-status | Out-Null
+          $tree = (git write-tree)
+          $msg = "ci-status: build @ $($env:GITHUB_SHA.Substring(0,7))"
+          if ($base) {
+            $commit = (git commit-tree $tree -p $base -m $msg)
+          } else {
+            $commit = (git commit-tree $tree -m $msg)
+          }
+          git push -f origin "$commit`:refs/heads/ci-status"
           if ($LASTEXITCODE -ne 0) {
             Write-Host "::warning::诊断写入 ci-status 分支失败（不影响发布结论）"
           }

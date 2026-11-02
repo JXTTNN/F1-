@@ -4,9 +4,15 @@
 # 动机：本机到 GitHub API 常常不通/被限流，判断「云端到底哪个用例红了」
 # 只能靠 git。与其等人在网页上翻日志，不如让云端自己把结论提交回仓库：
 #
-#     git fetch origin ci-status && git show origin/ci-status:ci-status/CI__test.txt
+#     git fetch origin ci-status:refs/remotes/origin/ci-status
+#     git show origin/ci-status:ci-status/CI__test.txt
 #
-# 写入内容只取判定所需的最小集合：失败用例名、断言摘要、最慢用例、日志尾部。
+# 关键点：多个工作流会同时往这个分支写（CI / Full CI / Retrain / Build），
+# 所以**不能**各自从自己的 HEAD 拉一条新分支再强推 —— 那样后写的会把先写的
+# 整个冲掉（本脚本第一版就踩了这个坑：Full CI 的上报把 CI 的上报覆盖没了）。
+# 这里改用底层命令：以远端 ci-status 的树为基线，只覆盖本 job 那个文件，
+# 再 commit-tree 成新提交后强推。谁最后写都不影响别人的结论。
+#
 # 写入失败绝不影响主流程（诊断是附加能力，不能反过来把构建搞红）。
 #
 # 用法：bash scripts/ci_diag.sh <workflow 名> <job 名>
@@ -14,8 +20,8 @@ set -u
 
 WF="${1:-ci}"
 JOB="${2:-job}"
-SAFE_WF=$(printf '%s' "$WF" | tr ' ' '_')
-SAFE_JOB=$(printf '%s' "$JOB" | tr ' ' '_')
+SAFE_WF=$(printf '%s' "$WF" | tr ' /&' '___')
+SAFE_JOB=$(printf '%s' "$JOB" | tr ' /&' '___')
 DIR="ci-status"
 OUT="$DIR/${SAFE_WF}__${SAFE_JOB}.txt"
 
@@ -35,7 +41,7 @@ mkdir -p "$DIR"
   logs=(.ci/*.log)
   if [ ${#logs[@]} -eq 0 ]; then
     echo "(本 job 没有产出 .ci/*.log —— 失败发生在 pytest 之前的步骤，"
-    echo " 请看上面 time 对应的 run 链接)"
+    echo " 请看上面 run 链接)"
   fi
 
   for f in "${logs[@]}"; do
@@ -59,13 +65,29 @@ mkdir -p "$DIR"
 git config user.name "ci-status-bot"
 git config user.email "ci-status-bot@users.noreply.github.com"
 
-# 从当前的 detached HEAD 拉出 ci-status 分支：只放诊断文件，不掺进任何源码。
-git checkout -B ci-status >/dev/null 2>&1 || exit 0
+# 取远端 ci-status 的当前顶端做基线（不存在就是首次写入）。
+BASE=""
+if git fetch -q origin ci-status:refs/remotes/origin/ci-status 2>/dev/null; then
+  BASE=$(git rev-parse --verify -q refs/remotes/origin/ci-status || true)
+fi
+
+if [ -n "$BASE" ]; then
+  git read-tree "$BASE" >/dev/null 2>&1 || exit 0
+else
+  git read-tree --empty >/dev/null 2>&1 || exit 0
+fi
 git add -f "$DIR" >/dev/null 2>&1 || exit 0
-git commit -m "ci-status: ${WF}/${JOB} @ ${GITHUB_SHA:0:7}" >/dev/null 2>&1 || exit 0
+TREE=$(git write-tree 2>/dev/null) || exit 0
+
+MSG="ci-status: ${WF}/${JOB} @ ${GITHUB_SHA:0:7}"
+if [ -n "$BASE" ]; then
+  COMMIT=$(git commit-tree "$TREE" -p "$BASE" -m "$MSG" 2>/dev/null) || exit 0
+else
+  COMMIT=$(git commit-tree "$TREE" -m "$MSG" 2>/dev/null) || exit 0
+fi
 
 for _ in 1 2 3; do
-  if git push -f origin ci-status >/dev/null 2>&1; then
+  if git push -f origin "$COMMIT:refs/heads/ci-status" >/dev/null 2>&1; then
     echo "诊断已写入 ci-status 分支：${OUT}"
     exit 0
   fi
