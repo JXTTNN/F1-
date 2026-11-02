@@ -184,13 +184,27 @@ def main() -> int:
         finally:
             browser.close()
 
-    (REPORTS / "ui_click_audit_result.json").write_text(
-        json.dumps([{"tag": t, "verdict": v, "detail": d} for t, v, d in RESULTS],
-                   ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    # 落盘格式必须与 cloud_audit/build_report.py 的读取口径一致
+    # （``ui_audit.json`` + total/passed/failed/results/…）。历史上这里写的是
+    # ``ui_click_audit_result.json`` 的另一种形状，而汇总脚本 rglob 的是
+    # ``ui_audit.json`` —— 于是 UI 审计的每一条结论都被静默丢弃，
+    # 报告里永远看不到「哪一项 UI 检查失败了」。
     from collections import Counter
     c = Counter(v for _, v, _ in RESULTS)
+    (REPORTS / "ui_audit.json").write_text(
+        json.dumps({
+            "total": len(RESULTS),
+            "passed": c.get("PASS", 0),
+            "failed": c.get("FAIL", 0),
+            "results": [
+                {"name": t, "ok": v == "PASS", "detail": d} for t, v, d in RESULTS
+            ],
+            "page_errors": PAGE_ERRORS,
+            "console_errors": CONSOLE_ERRORS,
+            "bad_responses": BAD_RESPONSES,
+        }, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
     print("汇总：" + " ".join(f"{k}={c.get(k, 0)}" for k in ("PASS", "FAIL")))
     for t, v, d in RESULTS:
         if v == "FAIL":
