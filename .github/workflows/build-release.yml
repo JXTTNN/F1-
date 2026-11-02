@@ -69,20 +69,31 @@ jobs:
           draft: false
           prerelease: false
 
-      # 打包失败时把 test-report.json 写进 ci-status 分支：这是「准确打包」唯一
-      # 的判定依据（model_type 必须是 nn、sim 必须可用），失败原因不能只躺在
-      # Windows runner 的日志里。（runner 是 pwsh，故用 PowerShell 实现同一件事。）
+      # 无论成败都把打包结论写进 ci-status 分支。dist/test-report.json 是「准确
+      # 打包」唯一可断言的东西（model_type 必须是 nn、sim.available 必须为真、
+      # 数据必须落在解压目录内）；只在失败时才写，等于发布出去的东西没有凭证。
+      # 本步只做记录，绝不反过来把已成功的发布判成失败（结尾固定 exit 0）。
       - name: Publish build diagnostics
-        if: failure()
+        if: always()
         shell: pwsh
         run: |
+          $ErrorActionPreference = "Continue"
           git config user.name "ci-status-bot"
           git config user.email "ci-status-bot@users.noreply.github.com"
           New-Item -ItemType Directory -Force -Path ci-status | Out-Null
           $out = "ci-status/Build_Release__build.txt"
-          "workflow : Build & Release" | Out-File -FilePath $out -Encoding utf8
-          "sha      : $env:GITHUB_SHA"  | Out-File -FilePath $out -Append -Encoding utf8
-          "ref      : $env:GITHUB_REF_NAME" | Out-File -FilePath $out -Append -Encoding utf8
+
+          $zip = "缺失"
+          if (Test-Path dist/F1OPT-portable.zip) {
+            $zip = "{0:N2} MB" -f ((Get-Item dist/F1OPT-portable.zip).Length / 1MB)
+          }
+
+          "workflow   : Build & Release"            | Out-File -FilePath $out -Encoding utf8
+          "sha        : $env:GITHUB_SHA"            | Out-File -FilePath $out -Append -Encoding utf8
+          "ref        : $env:GITHUB_REF_NAME"       | Out-File -FilePath $out -Append -Encoding utf8
+          "test step  : ${{ steps.test.outcome }}"  | Out-File -FilePath $out -Append -Encoding utf8
+          "zip size   : $zip"                       | Out-File -FilePath $out -Append -Encoding utf8
+
           if (Test-Path dist/test-report.json) {
             "---- dist/test-report.json ----" | Out-File -FilePath $out -Append -Encoding utf8
             Get-Content dist/test-report.json -Raw | Out-File -FilePath $out -Append -Encoding utf8
@@ -90,7 +101,12 @@ jobs:
             "(没有 dist/test-report.json —— 失败发生在打包或测试启动之前)" |
               Out-File -FilePath $out -Append -Encoding utf8
           }
+
           git checkout -B ci-status
           git add -f ci-status
           git commit -m "ci-status: build @ $($env:GITHUB_SHA.Substring(0,7))"
           git push -f origin ci-status
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "::warning::诊断写入 ci-status 分支失败（不影响发布结论）"
+          }
+          exit 0
