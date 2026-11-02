@@ -1,0 +1,75 @@
+workflow : CI
+job      : test
+sha      : 9358933c3339ecc878c49cbad38690d05276a29d
+ref      : main
+event    : push
+run      : https://github.com/JXTTNN/F1-/actions/runs/41424528250
+time     : 2026-11-02T10:00:21Z
+
+================ .ci/pytest.log ================
+---- 失败 / 错误用例 ----
+---- 断言摘要 ----
+---- 最慢用例 ----
+---- 结果行 ----
+---- 超时 / 崩溃痕迹 ----
+---- 日志尾部 ----
+tests/deep_slice/test_slice_09_app.py::TestSmoke::test_cli_help_via_subprocess PASSED [ 32%]
+tests/deep_slice/test_slice_09_app.py::TestSmoke::test_config_from_env_file PASSED [ 32%]
+tests/deep_slice/test_slice_09_app.py::TestSmoke::test_config_env_var_overrides_file PASSED [ 32%]
+tests/deep_slice/test_slice_09_app.py::TestSmoke::test_main_with_argv_parameter PASSED [ 32%]
+tests/deep_slice/test_slice_09_app.py::TestSmoke::test_main_help_and_version_exit_zero PASSED [ 33%]
+tests/deep_slice/test_slice_09_app.py::TestSmoke::test_main_keep_telemetry_flag PASSED [ 33%]
+tests/deep_slice/test_slice_09_app.py::TestSmoke::test_webbrowser_open_attempted PASSED [ 33%]
+tests/deep_slice/test_slice_09_app.py::TestSmoke::test_create_app_with_custom_config PASSED [ 33%]
+tests/deep_slice/test_slice_09_app.py::TestSmoke::test_app_exception_handlers_registered PASSED [ 33%]
+tests/test_api_contract.py::TestFrontendBackendContract::test_frontend_calls_exist_in_backend PASSED [ 33%]
+tests/test_api_contract.py::TestFrontendBackendContract::test_no_silently_unwired_endpoints PASSED [ 33%]
+tests/test_api_contract.py::TestFrontendBackendContract::test_known_unwired_entries_still_exist PASSED [ 33%]
+tests/test_api_contract.py::TestPostBodyContracts::test_frontend_posts_satisfy_required_body_fields PASSED [ 33%]
+tests/test_api_contract.py::TestPostBodyContracts::test_all_backend_post_bodies_are_covered PASSED [ 33%]
+tests/test_api_contract.py::TestRouteHandlersAreRealEndpoints::test_no_private_function_is_registered_as_route PASSED [ 33%]
+tests/test_api_contract.py::TestRouteHandlersAreRealEndpoints::test_no_inline_body_schema_leak PASSED [ 33%]
+tests/test_api_contract.py::TestRouteHandlersAreRealEndpoints::test_key_endpoints_use_their_declared_models PASSED [ 33%]
+tests/test_api_contract.py::TestUnwiredEndpointsAreReachable::test_health_ok PASSED [ 33%]
+tests/test_api_contract.py::TestUnwiredEndpointsAreReachable::test_recordings_list_empty_ok PASSED [ 33%]
+tests/test_api_contract.py::TestUnwiredEndpointsAreReachable::test_replay_status_ok PASSED [ 33%]
+tests/test_api_contract.py::TestUnwiredEndpointsAreReachable::test_track_detail_ok PASSED [ 33%]
+tests/test_api_contract.py::TestUnwiredEndpointsAreReachable::test_track_detail_unknown_returns_error PASSED [ 33%]
+tests/test_api_contract.py::TestExperimentEndpointWorks::test_documented_contract_is_accepted PASSED [ 33%]
+tests/test_api_contract.py::TestExperimentEndpointWorks::test_telemetry_is_optional PASSED [ 33%]
+tests/test_api_contract.py::TestExperimentEndpointWorks::test_dx_diff_equals_a_minus_b PASSED [ 33%]
+tests/test_api_contract.py::TestExperimentEndpointWorks::test_split_telemetry_makes_dx_diff_informative PASSED [ 34%]
+tests/test_api_contract.py::TestExperimentEndpointWorks::test_identical_setups_give_zero_delta_diff PASSED [ 34%]
+tests/test_api_contract.py::TestExperimentEndpointWorks::test_unknown_track_returns_404 PASSED [ 34%]
+tests/test_api_contract.py::TestExperimentEndpointWorks::test_missing_setup_b_returns_422 PASSED [ 34%]
+tests/test_api_contract.py::TestExperimentEndpointWorks::test_incomplete_setup_returns_400 PASSED [ 34%]
+tests/test_api_contract.py::TestExperimentEndpointWorks::test_out_of_range_param_returns_400 PASSED [ 34%]
+tests/test_api_contract.py::TestIndexHtmlReferencesExistingAssets::test_script_and_style_assets_exist PASSED [ 34%]
+tests/test_api_contract.py::TestDomIdConsistency::test_all_referenced_ids_exist PASSED [ 34%]
+tests/test_api_contract.py::TestRecordingTrainingExport::test_export_produces_samples PASSED [ 34%]
+tests/test_api_contract.py::TestRecordingTrainingExport::test_export_unknown_session_404 PASSED [ 34%]
+tests/test_api_contract.py::TestRecordingTrainingExport::test_export_rejects_path_traversal PASSED [ 34%]
+tests/test_api_edge_cases.py::test_root_path PASSED                      [ 34%]
+tests/test_api_edge_cases.py::test_track_detail_not_found PASSED         [ 34%]
+tests/test_api_edge_cases.py::test_select_track_not_found PASSED         [ 34%]
+tests/test_api_edge_cases.py::test_feedback_invalid_track PASSED         [ 34%]
+tests/test_api_edge_cases.py::test_suggest_invalid_track PASSED          [ 34%]
+tests/test_api_edge_cases.py::test_feedback_invalid_symptom PASSED       [ 34%]
+tests/test_api_edge_cases.py::test_feedback_strength_too_high PASSED     [ 34%]
+tests/test_api_edge_cases.py::test_feedback_strength_too_low PASSED      [ 34%]
+tests/test_api_edge_cases.py::test_feedback_corner_number_out_of_range PASSED [ 34%]
+tests/test_api_edge_cases.py::test_feedback_corner_number_pydantic_reject PASSED [ 34%]
+tests/test_api_edge_cases.py::test_suggest_no_feedback PASSED            [ 34%]
+tests/test_api_edge_cases.py::test_import_setup_no_telemetry PASSED      [ 35%]
+tests/test_api_edge_cases.py::test_get_current_setup_no_data PASSED      [ 35%]
+tests/test_api_edge_cases.py::test_get_latest_suggestion_no_data PASSED  [ 35%]
+tests/test_api_edge_cases.py::test_list_feedbacks_no_track PASSED        [ 35%]
+tests/test_api_edge_cases.py::test_suggest_latest_no_track PASSED        [ 35%]
+tests/test_api_edge_cases.py::test_iteration_history_no_track PASSED     [ 35%]
+tests/test_api_edge_cases.py::test_full_workflow_with_setup_import PASSED [ 35%]
+tests/test_api_edge_cases.py::test_feedback_with_global_symptom PASSED   [ 35%]
+tests/test_api_edge_cases.py::test_multiple_suggestions_generate_iterations PASSED [ 35%]
+tests/test_api_edge_cases.py::test_concurrent_feedback_submission PASSED [ 35%]
+tests/test_api_edge_cases.py::test_envelope_format_all_responses PASSED  [ 35%]
+tests/test_api_edge_cases.py::test_health_status_degraded_without_telemetry PASSED [ 35%]
+tests/test_api_edge_cases.py::test_tracks_count_24 
