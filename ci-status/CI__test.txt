@@ -1,27 +1,27 @@
-workflow : Full CI
-job      : full-test
-sha      : 24219c7ac3ff2c2c426641c7eb57ecf896711f00
+workflow : CI
+job      : test
+sha      : 047f43ade3ec433dbc74e0a8cb7f8bff37e56618
 ref      : main
 event    : push
-run      : https://github.com/JXTTNN/F1-/actions/runs/41422457883
-time     : 2026-11-02T09:46:43Z
+run      : https://github.com/JXTTNN/F1-/actions/runs/41423232157
+time     : 2026-11-02T09:52:18Z
 
 ================ .ci/pytest.log ================
 ---- 失败 / 错误用例 ----
 ---- 断言摘要 ----
 ---- 最慢用例 ----
 ============================= slowest 15 durations =============================
-4.20s call     tests/test_feedback_lifecycle.py::TestSuggestConsumesFeedback::test_next_round_only_sees_its_own_feedback
+4.19s call     tests/test_feedback_lifecycle.py::TestSuggestConsumesFeedback::test_next_round_only_sees_its_own_feedback
 2.60s call     tests/deep_integration/test_concurrent.py::TestConcurrentApiRequests::test_concurrent_mixed_api_operations
 2.35s call     tests/deep_slice/test_slice_02_telemetry_listener.py::TestSmoke::test_smoke_real_udp_short_packet_skipped
-2.28s call     tests/deep_integration/test_concurrent.py::TestConcurrentApiRequests::test_concurrent_suggest_no_deadlock
-2.26s call     tests/test_api_edge_cases.py::test_full_workflow_with_setup_import
+2.29s call     tests/deep_integration/test_concurrent.py::TestConcurrentApiRequests::test_concurrent_suggest_no_deadlock
+2.28s call     tests/test_api_edge_cases.py::test_full_workflow_with_setup_import
 2.19s call     tests/deep_integration/test_e2e_business.py::TestMultiRoundConvergence::test_multi_round_iteration_history_grows
-2.19s call     tests/test_car_status.py::TestEndToEnd::test_simulated_lap_reaches_suggestion
+2.18s call     tests/test_car_status.py::TestEndToEnd::test_simulated_lap_reaches_suggestion
 2.17s call     tests/deep_integration/test_e2e_business.py::TestMultiRoundConvergence::test_repeated_suggest_is_deterministic
-2.17s call     tests/deep_integration/test_e2e_business.py::TestFullClosedLoop::test_full_6_step_loop
-2.14s call     tests/test_api_edge_cases.py::test_multiple_suggestions_generate_iterations
+2.16s call     tests/deep_integration/test_e2e_business.py::TestFullClosedLoop::test_full_6_step_loop
 2.14s call     tests/test_api_contract.py::TestRecordingTrainingExport::test_export_produces_samples
+2.13s call     tests/test_api_edge_cases.py::test_multiple_suggestions_generate_iterations
 2.13s call     tests/test_car_status.py::TestSimulatorCoverage::test_simulator_emits_car_status
 2.13s call     tests/deep_integration/test_e2e_business.py::TestMultiRoundConvergence::test_increasing_strength_increases_delta_magnitude
 2.12s call     tests/test_feedback_lifecycle.py::TestSuggestConsumesFeedback::test_disabled_keeps_accumulation_semantics
@@ -30,9 +30,9 @@ time     : 2026-11-02T09:46:43Z
 SKIPPED [1] tests/test_telemetry_importer.py:484: 未设置 F1OPT_REAL_DATA_DIR（或目录不存在）
 SKIPPED [1] tests/test_telemetry_importer.py:500: 未设置 F1OPT_REAL_DATA_DIR（或目录不存在）
 SKIPPED [1] tests/test_telemetry_importer.py:512: 未设置 F1OPT_REAL_DATA_DIR（或目录不存在）
-============ 2152 passed, 3 skipped, 1 warning in 393.79s (0:06:33) ============
+============ 2152 passed, 3 skipped, 1 warning in 394.16s (0:06:34) ============
 ---- 结果行 ----
-============ 2152 passed, 3 skipped, 1 warning in 393.79s (0:06:33) ============
+============ 2152 passed, 3 skipped, 1 warning in 394.16s (0:06:34) ============
 ---- 超时 / 崩溃痕迹 ----
 ---- 日志尾部 ----
 tests/test_track_arcs.py::TestAnchorsSitOnCorners::test_anchors_not_on_straights[shanghai] PASSED [ 98%]
@@ -75,17 +75,17 @@ tests/test_training_dataset.py::TestBuildDataset::test_collect_lap_files_ignores
 
 -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
 ============================= slowest 15 durations =============================
-4.20s call     tests/test_feedback_lifecycle.py::TestSuggestConsumesFeedback::test_next_round_only_sees_its_own_feedback
+4.19s call     tests/test_feedback_lifecycle.py::TestSuggestConsumesFeedback::test_next_round_only_sees_its_own_feedback
 2.60s call     tests/deep_integration/test_concurrent.py::TestConcurrentApiRequests::test_concurrent_mixed_api_operations
 2.35s call     tests/deep_slice/test_slice_02_telemetry_listener.py::TestSmoke::test_smoke_real_udp_short_packet_skipped
-2.28s call     tests/deep_integration/test_concurrent.py::TestConcurrentApiRequests::test_concurrent_suggest_no_deadlock
-2.26s call     tests/test_api_edge_cases.py::test_full_workflow_with_setup_import
+2.29s call     tests/deep_integration/test_concurrent.py::TestConcurrentApiRequests::test_concurrent_suggest_no_deadlock
+2.28s call     tests/test_api_edge_cases.py::test_full_workflow_with_setup_import
 2.19s call     tests/deep_integration/test_e2e_business.py::TestMultiRoundConvergence::test_multi_round_iteration_history_grows
-2.19s call     tests/test_car_status.py::TestEndToEnd::test_simulated_lap_reaches_suggestion
+2.18s call     tests/test_car_status.py::TestEndToEnd::test_simulated_lap_reaches_suggestion
 2.17s call     tests/deep_integration/test_e2e_business.py::TestMultiRoundConvergence::test_repeated_suggest_is_deterministic
-2.17s call     tests/deep_integration/test_e2e_business.py::TestFullClosedLoop::test_full_6_step_loop
-2.14s call     tests/test_api_edge_cases.py::test_multiple_suggestions_generate_iterations
+2.16s call     tests/deep_integration/test_e2e_business.py::TestFullClosedLoop::test_full_6_step_loop
 2.14s call     tests/test_api_contract.py::TestRecordingTrainingExport::test_export_produces_samples
+2.13s call     tests/test_api_edge_cases.py::test_multiple_suggestions_generate_iterations
 2.13s call     tests/test_car_status.py::TestSimulatorCoverage::test_simulator_emits_car_status
 2.13s call     tests/deep_integration/test_e2e_business.py::TestMultiRoundConvergence::test_increasing_strength_increases_delta_magnitude
 2.12s call     tests/test_feedback_lifecycle.py::TestSuggestConsumesFeedback::test_disabled_keeps_accumulation_semantics
@@ -94,5 +94,22 @@ tests/test_training_dataset.py::TestBuildDataset::test_collect_lap_files_ignores
 SKIPPED [1] tests/test_telemetry_importer.py:484: 未设置 F1OPT_REAL_DATA_DIR（或目录不存在）
 SKIPPED [1] tests/test_telemetry_importer.py:500: 未设置 F1OPT_REAL_DATA_DIR（或目录不存在）
 SKIPPED [1] tests/test_telemetry_importer.py:512: 未设置 F1OPT_REAL_DATA_DIR（或目录不存在）
-============ 2152 passed, 3 skipped, 1 warning in 393.79s (0:06:33) ============
+============ 2152 passed, 3 skipped, 1 warning in 394.16s (0:06:34) ============
+
+================ .ci/usage.log ================
+---- 失败 / 错误用例 ----
+---- 断言摘要 ----
+---- 最慢用例 ----
+---- 结果行 ----
+---- 超时 / 崩溃痕迹 ----
+---- 日志尾部 ----
+使用流程评测完成（0.9s，3 赛道 × 5 场景）
+  模型生效率   : 100.0%（未覆盖 0 条：[]）
+  采纳率       : 100.0%（至少采纳 1 步）
+  模拟收益     : 中位 212.4 ms | p10 206.8 | p90 218.0
+  平均改动参数 : 8.5
+  可用性违规   : 0 条 | 无输入改车：0 处
+  门禁         : FAIL
+    - p90_gain_ms = 217.98 未达 <=200.0
+写出: /home/runner/work/F1-/F1-/setup_tuner/resources/models/usage_flow_eval.json / /home/runner/work/F1-/F1-/setup_tuner/resources/models/usage_flow_eval.md
 
