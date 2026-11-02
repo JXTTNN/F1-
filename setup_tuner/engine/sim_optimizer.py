@@ -171,17 +171,18 @@ def sim_refine(
         }
         return model.predict_delta_s(track_id, normalize_setup(trial_setup))
 
+    # 目标上下文 / 逐弯评估 / 需求分类在整个循环内不变 → 提前算一次。
+    # 此前每个参数 × 每方向 × 每轮都重算一次（20×2×3=120 次/请求），
+    # corner_evaluations 会查代理模型，实测明显拖慢「生成建议」。
+    _ctx = track_context(track_id, telemetry, dx, wet=wet) if dx is not None else None
+    _corners = corner_evaluations(track_id) if dx is not None else None
+    _needs = needs_by_class_from_dx(dx) if dx is not None else None
+
     def _obj_total(delta: dict[str, float]) -> float | None:
-        if dx is None:
-            return None
-        ctx = track_context(track_id, telemetry, dx, wet=wet)
-        corners = corner_evaluations(track_id)
-        if not corners:
+        if _ctx is None or not _corners or _needs is None:
             return None
         units = units_from_delta(delta, current_setup)
-        return objective(
-            units, needs_by_class_from_dx(dx), track_id, ctx, corners,
-        ).total
+        return objective(units, _needs, track_id, _ctx, _corners).total
 
     before_s = _sim_time_s(cur)
     if before_s is None:

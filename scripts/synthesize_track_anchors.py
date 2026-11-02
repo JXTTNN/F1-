@@ -44,7 +44,6 @@ Las Vegas / Lusail / Yas Marina）以及 Jeddah 在上游尚无可用逐点数�
 
 from __future__ import annotations
 
-import statistics
 from typing import Any
 
 #: 锚点来源：真实遥测
@@ -53,9 +52,31 @@ ANCHOR_TELEMETRY = "telemetry"
 ANCHOR_TRANSFER = "geometry_transfer"
 
 #: 目标/参照速度比的合理区间（防止 domain 标称速度异常放大）
-_RATIO_CLAMP = (0.55, 1.80)
+_RATIO_CLAMP = (0.55, 2.2)
 #: 单弯时间占比的合理区间（防止映射到极弯时出现离谱值）
 _SHARE_CLAMP = (0.002, 0.25)
+#: 赛道类型 → 经验均速（km/h）。用于估算**圈速量级**，只依赖目标赛道自身属性，
+#: 不受参照池影响。
+#:
+#: 为什么不直接用「参照赛道圈速 × 长度比」：参照池里可能只有 Monza（全赛季
+#: 最快之一，均速 254 km/h），按比例缩放会把 Jeddah 算成 72s、Monaco 51s
+#: （实际 ~88s / ~72s），偏差 20-30%，进而污染 lap_time_s 与 drag_scale。
+#: 这些值按 2026 赛历各赛道公开中位圈速反推的均速量级设定，允许 ±10% 误差。
+_V_TYPE_KMH: dict[str, float] = {
+    "street": 158.0,
+    "high_downforce": 180.0,
+    "mixed": 208.0,
+    "medium": 205.0,
+    "high_speed_low_downforce": 238.0,
+}
+#: 校准因子合理区间（参照赛道真实圈速 / 经验估算）
+_CALIB_CLAMP = (0.85, 1.15)
+
+
+def _baseline_lap(length_m: float, track_type: str) -> float:
+    """按赛道类型的经验均速估算圈时（秒）。"""
+    v = _V_TYPE_KMH.get(str(track_type), 205.0)
+    return float(length_m) * 3.6 / v
 
 
 def _corner_class_share(corners: list[Any]) -> dict[str, float]:
@@ -146,10 +167,14 @@ def synthesize_track(
         v_t = float(target.corners[i - 1].speed_kmh) or 1.0
         v_r = float(ref_track.corners[j - 1].speed_kmh) or 1.0
         ratios.append(_clamp(v_t / v_r, *_RATIO_CLAMP))
-    mean_ratio = statistics.fmean(ratios) if ratios else 1.0
-
-    # ② 目标圈速：按长度比例缩放，再用整体弯速比修正
-    lap_t = ref_lap * (float(target.length_m) / ref_len) / max(0.2, mean_ratio)
+    # ② 目标圈速：类型经验均速估算 + 参照赛道的偏差校准。
+    # 不直接用「参照圈速 × 长度比」：参照池可能只有 Monza（均速 254 km/h），
+    # 比例缩放会把所有赛道拉快 20-30%。这里改为
+    #   圈速 = 目标赛道经验圈时 × (参照真实圈速 / 参照经验圈时)
+    # 前半段只依赖目标赛道自身长度与类型，后半段只用来校准经验表的系统偏差。
+    ref_base = _baseline_lap(ref_len, getattr(ref_track, "track_type", "medium"))
+    calib = _clamp(ref_lap / ref_base, *_CALIB_CLAMP) if ref_base > 0 else 1.0
+    lap_t = _baseline_lap(float(target.length_m), target.track_type) * calib
 
     # ③ 逐弯迁移：时间结构按"参照弯时占圈比例"，速度按弯速比
     corners: list[dict[str, Any]] = []
@@ -233,7 +258,9 @@ def fill_missing_tracks(
             continue
         if tid in out:
             continue
-        synth = synthesize_track(tid, out)
+        # 参照池固定为**真实遥测**赛道：若用 out，后续合成赛道会参照前面的
+        # 合成结果，误差逐级放大（链式漂移）。
+        synth = synthesize_track(tid, stats)
         if synth is None:
             continue
         out[tid] = synth
