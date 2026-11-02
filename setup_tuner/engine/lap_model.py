@@ -330,18 +330,14 @@ def corner_evaluations(
             importance=importance, demand=dict(CORNER_CAP_DEMAND[klass]),
         ))
     total = sum(e.importance for e in out) or 1.0
-    # 归一化是**契约**（目标函数按占比分配「愿意为某个弯付出多少代价」，
-    # 测试也按 sum == 1 断言）。逐个 round 会留下 ±n·5e-7 的残差
-    # （实测 Monaco 24 个弯 → 0.999998，把断言打成红线），
-    # 因此把残差补到最大项上，保证求和精确为 1。
-    rounded = [round(e.importance / total, 6) for e in out]
-    if rounded:
-        residual = round(1.0 - sum(rounded), 6)
-        k = max(range(len(rounded)), key=lambda i: rounded[i])
-        rounded[k] = round(rounded[k] + residual, 6)
+    # 不在这一层 round：归一化的契约是「按占比分配权重，且求和为 1」。
+    # 逐个 round(…, 6) 会破坏 sum==1（实测 Monaco 19 个弯 → 0.999998），
+    # 而把残差补到最大项又会改动该项占比、打破「各项 = 原值 / 总和」的比值契约
+    # （tests/test_telemetry_surrogate 正是按比值断言的）。
+    # 精度留在数据里，展示层需要时再格式化。
     return [
-        CornerEval(e.number, e.klass, e.speed_kmh, rounded[i], e.demand)
-        for i, e in enumerate(out)
+        CornerEval(e.number, e.klass, e.speed_kmh, e.importance / total, e.demand)
+        for e in out
     ]
 
 

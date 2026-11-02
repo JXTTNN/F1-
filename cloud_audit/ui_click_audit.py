@@ -62,6 +62,34 @@ def _expected_param_count() -> int:
 EXPECTED_PARAM_COUNT = _expected_param_count()
 
 
+def _expected_symptom_groups() -> dict[str, int]:
+    """UI 反馈面板应渲染的「分组 → 条目数」，按领域症状表推导。
+
+    不再写死 ``5/3/4/5``：症状表随产品演进（新增症状、把 ``lap_slow`` 从可勾
+    列表降级为综合结论），写死的数字只会让审计长期误报 —— 而误报多了，真正的
+    回归就没人看了。
+    """
+    try:
+        if str(ROOT) not in sys.path:
+            sys.path.insert(0, str(ROOT))
+        from setup_tuner.domain.symptoms import SYMPTOM_INFO
+
+        out: dict[str, int] = {}
+        for name, info in SYMPTOM_INFO.items():
+            # app.js 注释明确：lap_slow 已降级为综合结论，不出现在反馈面板
+            if str(name) == "lap_slow":
+                continue
+            cat = str(info.get("category") or "global")
+            out[cat] = out.get(cat, 0) + 1
+        return out
+    except Exception:  # noqa: BLE001 — 审计脚本必须能独立运行
+        return {"entry": 6, "apex": 3, "exit": 4, "global": 8}
+
+
+EXPECTED_SYMPTOM_GROUPS = _expected_symptom_groups()
+EXPECTED_SYMPTOM_TOTAL = sum(EXPECTED_SYMPTOM_GROUPS.values())
+
+
 def item(tag: str, ok: bool, detail: str = "") -> None:
     RESULTS.append((tag, "PASS" if ok else "FAIL", detail))
     print(f"[{'PASS' if ok else 'FAIL'}] {tag}" + (f" :: {detail}" if detail else ""),
@@ -106,11 +134,16 @@ def run(page) -> None:
     item("③反馈面板弹出", panel)
     if panel:
         total = page.locator('#feedback-overlay input[name="symptom"]').count()
-        item("③症状条目=17", total == 17, f"实际 {total}（lap_slow 已降级）")
+        item(f"③症状条目={EXPECTED_SYMPTOM_TOTAL}",
+             total == EXPECTED_SYMPTOM_TOTAL, f"实际 {total}（lap_slow 已降级）")
         expand_all_groups(page)
         counts = group_counts(page)
-        item("③分组 5/3/4/5", counts == {"entry": 5, "apex": 3, "exit": 4, "global": 0},
-             f"{counts}")
+        # 弯道模式：入弯/弯中/出弯三组有内容，全局组存在但不显示
+        expected_corner = dict(EXPECTED_SYMPTOM_GROUPS)
+        expected_corner["global"] = 0
+        item("③分组 " + "/".join(str(expected_corner[k])
+                                 for k in ("entry", "apex", "exit", "global")),
+             counts == expected_corner, f"{counts}")
         visible = page.locator('#feedback-overlay input[name="symptom"]:visible')
         n_visible = visible.count()
         item("③可见症状>0", n_visible > 0, f"可见 {n_visible}")
@@ -146,8 +179,10 @@ def run(page) -> None:
     page.click("#track-feedback-btn")
     page.wait_for_timeout(600)
     counts = group_counts(page)
-    item("⑥赛道模式仅全局组", counts.get("global", 0) == 5
-         and counts.get("entry") == 0, f"{counts}")
+    expected_track = {k: 0 for k in EXPECTED_SYMPTOM_GROUPS}
+    expected_track["global"] = EXPECTED_SYMPTOM_GROUPS["global"]
+    # 赛道模式：只有全局组有内容，入弯/弯中/出弯必须为空
+    item("⑥赛道模式仅全局组", counts == expected_track, f"{counts}")
     gvals = [
         page.locator('.sym-group[data-category="global"] input[name="symptom"]').nth(i)
         .get_attribute("value")
