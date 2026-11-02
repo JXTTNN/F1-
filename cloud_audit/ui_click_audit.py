@@ -43,6 +43,25 @@ PAGE_ERRORS: list[str] = []
 BAD_RESPONSES: list[str] = []
 
 
+def _expected_param_count() -> int:
+    """报告参数行数 = 领域模型的可调参数量（不写死，避免长期误报）。
+
+    历史教训：这里曾写死 ``21``，而 ``ALL_SETUP_FIELDS`` 是 20 个 —— 审计
+    因此长期判红，"④报告参数行"这一条从发现问题的哨兵退化成噪声。
+    """
+    try:
+        if str(ROOT) not in sys.path:
+            sys.path.insert(0, str(ROOT))
+        from setup_tuner.domain.setup import ALL_SETUP_FIELDS
+
+        return len(ALL_SETUP_FIELDS)
+    except Exception:  # noqa: BLE001 — 审计脚本必须能独立运行
+        return 20
+
+
+EXPECTED_PARAM_COUNT = _expected_param_count()
+
+
 def item(tag: str, ok: bool, detail: str = "") -> None:
     RESULTS.append((tag, "PASS" if ok else "FAIL", detail))
     print(f"[{'PASS' if ok else 'FAIL'}] {tag}" + (f" :: {detail}" if detail else ""),
@@ -109,12 +128,13 @@ def run(page) -> None:
         page.wait_for_timeout(1200)
         item("③提交后面板关闭", not page.locator("#feedback-overlay").is_visible())
 
-    # ── ④ 生成建议（21 参数报告）──
+    # ── ④ 生成建议（全部调教参数报告）──
     page.click("#btn-generate-suggest")
     page.wait_for_timeout(2500)
     rows = page.locator("#report-table-wrap table tr").count()
     item("④报告生成", rows > 0, f"表格行数={rows}")
-    item("④报告参数行=21", rows - 1 == 21, f"数据行={rows - 1}")
+    item(f"④报告参数行={EXPECTED_PARAM_COUNT}",
+         rows - 1 == EXPECTED_PARAM_COUNT, f"数据行={rows - 1}")
     page.screenshot(path=str(SHOTS / "04_report.png"), full_page=True)
 
     # ── ⑤ 遥测面板 ──

@@ -10,7 +10,7 @@
         * GET  /api/v1/tracks          → 200, 24 赛道
         * GET  /api/v1/tracks/suzuka   → 200, 含弯道锚点
         * POST /api/v1/feedback        → 200（提交一条反馈）
-        * POST /api/v1/suggest         → 200（生成建议，含 21 参数）
+        * POST /api/v1/suggest         → 200（生成建议，含全部调教参数）
         * GET  /api/v1/suggest/latest  → 200
     - 清理：停止服务，删除临时 DB；
     - 退出码 0=全通过，1=有失败。
@@ -46,7 +46,26 @@ READY_INTERVAL = 0.3  # 秒
 
 # 赛道与参数常量
 EXPECTED_TRACK_COUNT = 24
-EXPECTED_PARAM_COUNT = 21
+
+
+def _expected_param_count() -> int:
+    """参数个数以领域模型为准，避免脚本写死后端演进时误报。
+
+    历史教训：这里曾写死 ``21``，而 ``ALL_SETUP_FIELDS`` 实际是 20 个，
+    于是冒烟测试长期红着却没人当真 —— 红线一多，真正的回归就淹没了。
+    """
+    try:
+        root = str(Path(__file__).resolve().parents[1])
+        if root not in sys.path:
+            sys.path.insert(0, root)
+        from setup_tuner.domain.setup import ALL_SETUP_FIELDS
+
+        return len(ALL_SETUP_FIELDS)
+    except Exception:  # noqa: BLE001 — 冒烟脚本必须在任意环境下可运行
+        return 20
+
+
+EXPECTED_PARAM_COUNT = _expected_param_count()
 TEST_TRACK_ID = "suzuka"
 
 # 退出码
@@ -272,7 +291,7 @@ def test_feedback() -> None:
 
 
 def test_suggest() -> None:
-    """⑤ POST /api/v1/suggest → 200（生成建议，含 21 参数）。"""
+    """⑤ POST /api/v1/suggest → 200（生成建议，参数个数对齐 ALL_SETUP_FIELDS）。"""
     payload = {"track_id": TEST_TRACK_ID}
     status, body = http_post(f"{BASE_URL}/suggest", payload)
     data = assert_ok(status, body, "suggest")
