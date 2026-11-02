@@ -27,6 +27,7 @@ on:
 
 permissions:
   contents: write
+  actions: write   # 供下面清理旧遥测缓存使用
 
 concurrency:
   group: retrain-models
@@ -63,6 +64,26 @@ jobs:
           path: .ref/tracing_2026
           key: tracing-2026-${{ github.run_id }}
           restore-keys: tracing-2026-
+
+      # 遥测缓存约 7.6 GB，仓库缓存上限只有 10 GB；本工作流每轮都写一个
+      # tracing-2026-<run_id> 新键，两轮叠加就超限，可能把需要续抓的那份挤掉，
+      # 造成「永远从零重抓」。恢复完（数据已在磁盘）先清旧键，保证任何时刻只有一份。
+      # continue-on-error：清理只是优化，权限/接口异常绝不能让抓取停摆。
+      - name: Prune stale telemetry caches
+        if: always()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ids=$(gh api "repos/${{ github.repository }}/actions/caches?per_page=100" \
+                  --jq '.actions_caches[] | select(.key|startswith("tracing-2026-")) | .id' || true)
+          for id in $ids; do
+            echo "删除旧遥测缓存 id=$id"
+            gh api -X DELETE "repos/${{ github.repository }}/actions/caches/$id" >/dev/null || true
+          done
+          echo "--- 剩余遥测缓存 ---"
+          gh api "repos/${{ github.repository }}/actions/caches?per_page=100" \
+                  --jq '.actions_caches[] | "\(.key) \(.size_in_bytes)"' || true
 
       - name: Fetch 2026 telemetry (resume + refresh absent)
         run: |
