@@ -57,6 +57,7 @@ EFFECTS 表里全部是**本项目标定的相对权重**，不是官方数值�
     python scripts/build_setup_sim_dataset.py                 # 默认 400 调教/赛道
     python scripts/build_setup_sim_dataset.py --setups 800
     python scripts/build_setup_sim_dataset.py --tracks monza,suzuka
+    python scripts/build_setup_sim_dataset.py --sampling legacy  # 复现旧行为/消融
 """
 
 from __future__ import annotations
@@ -515,6 +516,7 @@ def _tier_counts(total: int) -> list[int]:
 
 def build(
     n_setups: int, seed: int, tracks_filter: set[str] | None, out: Path,
+    sampling: str = "tube",
 ) -> dict[str, Any]:
     from setup_tuner.domain.setup import ALL_SETUP_FIELDS
 
@@ -543,26 +545,33 @@ def build(
         tagged.append(({spec.name: -1.0 for spec in specs}, "seed_extreme"))
         optimum, opt_ms = coarse_optimum(track, specs)
         optimal_delta_ms[tid] = round(opt_ms, 3)
-        tagged.append((dict(optimum), "seed_optimum"))
-        # 路径管采样：先在「默认→最优」路径上取位置 t，再逐参数加抖动。
-        for (half_width, _share, t_max), count in zip(
-            _SAMPLE_TIERS, _tier_counts(max(0, n_setups - len(tagged)))
-        ):
-            for _ in range(count):
-                if half_width is None:
-                    raw = _sample_setup(rng, specs)
-                    tagged.append((
-                        {s.name: _norm(raw[s.name], s) for s in specs}, "wide",
-                    ))
-                else:
-                    t = rng.uniform(0.0, t_max)
-                    tagged.append(({
-                        s.name: snap_to_step(
-                            t * optimum[s.name]
-                            + rng.uniform(-half_width, half_width), s,
-                        )
-                        for s in specs
-                    }, "tube"))
+        if sampling == "legacy":
+            # 旧行为：全量程均匀（复现历史结果 / 消融对照）。
+            # 注意不追加最优点，以保持与旧版逐行一致。
+            while len(tagged) < n_setups:
+                raw = _sample_setup(rng, specs)
+                tagged.append(({s.name: _norm(raw[s.name], s) for s in specs}, "wide"))
+        else:
+            tagged.append((dict(optimum), "seed_optimum"))
+            # 路径管采样：先在「默认→最优」路径上取位置 t，再逐参数加抖动。
+            for (half_width, _share, t_max), count in zip(
+                _SAMPLE_TIERS, _tier_counts(max(0, n_setups - len(tagged)))
+            ):
+                for _ in range(count):
+                    if half_width is None:
+                        raw = _sample_setup(rng, specs)
+                        tagged.append((
+                            {s.name: _norm(raw[s.name], s) for s in specs}, "wide",
+                        ))
+                    else:
+                        t = rng.uniform(0.0, t_max)
+                        tagged.append(({
+                            s.name: snap_to_step(
+                                t * optimum[s.name]
+                                + rng.uniform(-half_width, half_width), s,
+                            )
+                            for s in specs
+                        }, "tube"))
         for sn, tier in tagged:
             delta_ms = simulate_lap_delta_ms(track, sn)
             row = {
@@ -599,6 +608,7 @@ def build(
         # 采样策略（可追溯）：调教优化需要精度的区域是最优点邻域，
         # 全量程均匀采样会把模型容量消耗在区分「糟糕/极糟糕」上。
         "sampling": {
+            "strategy": sampling,
             "tiers": [
                 {"jitter_half_width": hw, "share": share, "path_t_max": t_max}
                 for hw, share, t_max in _SAMPLE_TIERS
@@ -706,6 +716,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--tracks", default="", help="逗号分隔的赛道过滤（空=全部）")
     ap.add_argument("--out", default=str(OUT_JSONL))
+    ap.add_argument(
+        "--sampling", choices=("tube", "legacy"), default="tube",
+        help="采样策略：tube=路径管密采样（默认，面向调优决策）；"
+             "legacy=旧的全量程均匀（复现历史结果/消融对照）",
+    )
     ap.add_argument("--calibrate-only", action="store_true", help="只打印标定表")
     args = ap.parse_args(argv)
 
@@ -714,7 +729,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     tracks = {t.strip() for t in args.tracks.split(",") if t.strip()} or None
-    build(args.setups, args.seed, tracks, Path(args.out))
+    build(args.setups, args.seed, tracks, Path(args.out), args.sampling)
     print_calibration()
     return 0
 

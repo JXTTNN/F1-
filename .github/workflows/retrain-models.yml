@@ -24,6 +24,11 @@ on:
     paths:
       - "scripts/fetch_official_2026.py"
       - "scripts/build_corner_dataset.py"
+      # 训练管线本身的改动也必须重训：否则改了采样/模型却要等 6 小时定时任务，
+      # 很容易误以为“改了但没生效”。
+      - "scripts/build_setup_sim_dataset.py"
+      - "scripts/train_setup_sim_nn.py"
+      - "scripts/eval_setup_sim.py"
 
 permissions:
   contents: write
