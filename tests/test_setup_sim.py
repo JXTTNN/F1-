@@ -331,6 +331,13 @@ class _FakeSim:
     def describe(self) -> str:
         return "fake-sim"
 
+    def anchor_of(self, track_id: str) -> str:
+        """锚点来源（真实模型有；报告里用来标注「实测 / 几何推定」）。"""
+        return "authored" if track_id in self.track_ids else ""
+
+    def coverage_counts(self) -> tuple[int, int]:
+        return len(self.track_ids), 0
+
 
 @pytest.fixture()
 def _fake_engine_model(monkeypatch):

@@ -60,20 +60,24 @@ def _fake_track(
 
 
 def _stats(n: int) -> dict:
-    """造 n 条「遥测」赛道。
+    """造 n 条「遥测」赛道（**用真实赛道 id**，因为圈速拟合要查赛道长度）。
 
     弯速随序号变化 → ``Σ1/v`` 不是常数（否则与截距列共线，正规方程奇异）；
     圈速按 ``lap = c0 + c1·length + c2·Σ1/v`` 生成 → 最小二乘应精确还原。
     """
+    from setup_tuner.domain.track import ALL_TRACKS, get_track_by_id
+
     out = {}
-    for i in range(n):
-        length = 4000.0 + 200.0 * i
+    for i, tid in enumerate(sorted(t.track_id for t in ALL_TRACKS)[:n]):
+        track = get_track_by_id(tid)
+        assert track is not None and track.length_m > 0
+        length = float(track.length_m)
         speeds = (90.0 + i, 150.0 + 2 * i, 230.0 + 3 * i)
-        corners = [("slow", speeds[0], 6.0, 55.0), ("medium", speeds[1], 5.0, 30.0),
-                   ("fast", speeds[2], 4.0, 12.0)]
+        corners = [("slow", speeds[0], 8.0, 55.0), ("medium", speeds[1], 7.0, 30.0),
+                   ("fast", speeds[2], 6.0, 12.0)]
         inv_v = sum(3.6 / v for v in speeds)
         lap = 30.0 + 0.008 * length + 3.0 * inv_v
-        out[f"t{i}"] = _fake_track(f"t{i}", lap, length, corners)
+        out[tid] = _fake_track(tid, lap, length, corners)
     return out
 
 
@@ -107,8 +111,8 @@ def test_fit_produces_constants(mod):
         assert 20.0 <= calib["corner"][klass]["eff_len_m"] <= 600.0
         assert 0.0 <= calib["corner"][klass]["brake_pct"] <= 100.0
     assert 0.2 <= calib["share"] <= 0.9
-    # 弯时占比来自实测：每个假赛道 15s 弯时 / ~62s 圈速 ≈ 0.24
-    assert calib["share"] == pytest.approx(0.24, abs=0.05)
+    # 弯时占比来自实测：假赛道 21s 弯时 / 62~86s 圈速 → 0.24~0.34
+    assert 0.15 <= calib["share"] <= 0.50
     assert len(calib["lap"]["coeffs"]) == 3
     # 造的数据严格线性 → 拟合误差应趋近 0
     assert calib["lap"]["median_rel_err"] < 1e-6
