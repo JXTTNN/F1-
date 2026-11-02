@@ -1067,6 +1067,9 @@ def generate_suggestion(
         "available": sim_result.available,
         "reason": sim_result.reason,
         "model": sim_model.describe(),
+        # 该站锚点来源：telemetry=真实遥测；authored=赛道几何+全局常数推定。
+        # 报告如实标注，避免把「推定」当成「实测」。
+        "anchor": sim_model.anchor_of(track_id),
         "iterations": sim_result.iterations,
         "accepted": sim_result.accepted,
         "before_s": (round(sim_result.before_s, 4)

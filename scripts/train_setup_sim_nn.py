@@ -112,7 +112,9 @@ def main(argv: list[str] | None = None) -> int:
     if skipped:
         print(f"跳过 {skipped} 行（赛道不在特征表）")
     n_in = len(x[0])
-    print(f"样本 {len(x)} | 输入 {n_in} 维 | 赛道 {len(track_ids)} | "
+    n_auth = sum(1 for v in (meta.get("anchor_sources") or {}).values() if v != "telemetry")
+    print(f"样本 {len(x)} | 输入 {n_in} 维 | 赛道 {len(track_ids)}"
+          f"（遥测锚定 {len(track_ids) - n_auth} / 几何推定 {n_auth}） | "
           f"样本标准差 {math.sqrt(sum((v - sum(y)/len(y))**2 for v in y)/len(y)):.4f} s")
 
     # 留出集（固定种子确定性划分）
@@ -203,6 +205,9 @@ def main(argv: list[str] | None = None) -> int:
         "source": "telemetry-anchored QSS simulation (TracingInsights 2026 anchors)",
         "track_ids": track_ids,
         "track_features": track_features,
+        # 逐站锚点来源：telemetry=真实遥测；authored=赛道几何+全局常数推定。
+        # 推理端据此在报告里如实说明「这条赛道是实测锚定还是几何推定」。
+        "anchor_sources": meta.get("anchor_sources") or {},
         "feature_keys": feature_names(track_ids),
         "n_samples": len(x),
         "metrics": {

@@ -146,6 +146,8 @@ class SetupSimModel:
         self.track_features: dict[str, dict[str, float]] = {}
         self.feature_keys: list[str] = []
         self.metrics: dict[str, Any] = {}
+        #: 逐站锚点来源：telemetry=真实遥测；authored=赛道几何+全局常数推定
+        self.anchor_sources: dict[str, str] = {}
         self.n_samples = 0
         self.created = ""
         self._mlp: MLP | None = None
@@ -177,6 +179,11 @@ class SetupSimModel:
         self.track_features = data.get("track_features") or {}
         self.feature_keys = list(data.get("feature_keys") or [])
         self.metrics = data.get("metrics") or {}
+        raw_anchors = data.get("anchor_sources") or {}
+        self.anchor_sources = (
+            {str(k): str(v) for k, v in raw_anchors.items()}
+            if isinstance(raw_anchors, dict) else {}
+        )
         self.n_samples = int(data.get("n_samples") or 0)
         self.created = str(data.get("created") or "")
         # 输出缩放（训练端把目标缩到 ~1 量级；推理必须乘回）
@@ -222,6 +229,18 @@ class SetupSimModel:
         """该赛道是否在模型覆盖范围（决定是否参与模拟优化）。"""
         return self.available and track_id in self.track_features
 
+    def anchor_of(self, track_id: str) -> str:
+        """该赛道的锚点来源：``telemetry`` / ``authored``（未知赛道返回空串）。
+
+        报告据此如实标注「这条赛道是实测锚定还是几何推定」，避免把推定当实测。
+        """
+        return self.anchor_sources.get(track_id, "")
+
+    def coverage_counts(self) -> tuple[int, int]:
+        """(遥测锚定赛道数, 几何推定赛道数)。"""
+        n_auth = sum(1 for v in self.anchor_sources.values() if v != "telemetry")
+        return len(self.track_ids) - n_auth, n_auth
+
     def describe(self) -> str:
         """可读摘要（报告/调试用）。"""
         if not self.available:
@@ -237,9 +256,14 @@ class SetupSimModel:
             detail += f" / 局部 {local} ms"
         if r2 is not None:
             detail += f" / R² {r2}"
+        tele, auth = self.coverage_counts()
+        composition = (
+            f"{len(self.track_ids)} 赛道" if auth == 0
+            else f"{len(self.track_ids)} 赛道（遥测 {tele} + 几何推定 {auth}）"
+        )
         return (
             f"调教性能 NN（纯标准库，{self.n_samples} 仿真样本 / "
-            f"{len(self.track_ids)} 赛道，{detail}）"
+            f"{composition}，{detail}）"
         )
 
 
@@ -288,6 +312,7 @@ _FAILED_MODEL.track_ids = []
 _FAILED_MODEL.track_features = {}
 _FAILED_MODEL.feature_keys = []
 _FAILED_MODEL.metrics = {}
+_FAILED_MODEL.anchor_sources = {}
 _FAILED_MODEL.n_samples = 0
 _FAILED_MODEL.created = ""
 _FAILED_MODEL.y_mean = 0.0

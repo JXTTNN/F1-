@@ -1701,3 +1701,11 @@ h1, h2, h3 {
   font-weight: 500;
 }
 .holistic-group.holistic-sim-trace { border-left-color: var(--accent, #7aa2ff); }
+
+/* 采纳 0 次时的一句解释：块级独占一行，弱化颜色，避免喧宾夺主 */
+.holistic-sub {
+  flex: 1 0 100%;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-dim, #9aa0aa);
+}

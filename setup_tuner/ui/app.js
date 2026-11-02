@@ -1657,15 +1657,29 @@
     const sim = h.simulation;
     if (sim) {
       if (sim.available) {
+        // gain_ms = 模拟前 − 模拟后（正 = 更快）。上一版把它渲染成
+        // 「模拟圈速提升 −42.0 ms」，负号与「提升」连读会被理解成"更慢了"，
+        // 用户据此判断模型有没有用，措辞必须与语义一致。
         const gainTxt = sim.gain_ms != null
-          ? `${sim.gain_ms >= 0 ? "−" : "+"}${Math.abs(sim.gain_ms).toFixed(1)} ms`
+          ? (sim.gain_ms >= 0
+              ? `圈速 −${Math.abs(sim.gain_ms).toFixed(1)} ms`
+              : `圈速 +${Math.abs(sim.gain_ms).toFixed(1)} ms（本轮未净获益）`)
           : "—";
+        // 该站没有遥测、由赛道几何推定锚点时必须标明，不能让人当成实测
+        const anchorTag = sim.anchor === "authored"
+          ? `　<span class="holistic-tag" title="该站暂无 2026 遥测语料，模型由赛道几何 + 19 站实测常数推定">几何推定</span>`
+          : "";
         simLine = `<div class="holistic-line holistic-sim">` +
           `<span class="holistic-tag">神经网络模拟</span>` +
-          `${esc(sim.model || "")}　迭代 ${sim.iterations} 轮 / 采纳 ${sim.accepted} 次` +
-          `　模拟圈速提升 ${gainTxt}` +
+          `${esc(sim.model || "")}${anchorTag}　迭代 ${sim.iterations} 轮 / 采纳 ${sim.accepted} 次` +
+          `　模拟${gainTxt}` +
           (sim.before_s != null && sim.after_s != null
             ? `（${(sim.before_s * 1000).toFixed(0)} → ${(sim.after_s * 1000).toFixed(0)} ms）`
+            : "") +
+          // 采纳 0 次不是故障：模型在 ±max_delta 内逐参数试过，没有候选能净赚
+          // 20 ms 以上。不写清楚，用户会以为模型没跑或坏了。
+          (sim.accepted === 0 && sim.available
+            ? `<span class="holistic-sub">模型已逐参数试算，当前调教在该站已接近它判定的最优点，未采纳额外改动。</span>`
             : "") +
           `</div>` +
           group("模拟优化采纳轨迹", sim.trace, "holistic-sim-trace");

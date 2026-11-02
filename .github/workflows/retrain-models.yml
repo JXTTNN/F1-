@@ -16,6 +16,11 @@ name: Retrain Models
 
 on:
   workflow_dispatch:
+    inputs:
+      skip_surrogate:
+        description: "跳过遥测代理模型训练（只重训调教性能模型，快速验证训练侧改动）"
+        type: boolean
+        default: false
   schedule:
     # 每 6 小时一次（UTC，错开整点）。新分站产生数据后无需人工介入即可补抓。
     - cron: "17 */6 * * *"
@@ -29,6 +34,7 @@ on:
       - "scripts/build_setup_sim_dataset.py"
       - "scripts/train_setup_sim_nn.py"
       - "scripts/eval_setup_sim.py"
+      - "scripts/eval_usage_flow.py"
 
 permissions:
   contents: write
@@ -151,7 +157,31 @@ jobs:
           print(f"\n真实跑圈样本：{d['labels']['real_setup_laps']}\n")
           PY
 
+      # 使用流程评测：eval_setup_sim 量的是「对仿真器的保真度」，这里量的是
+      # 「用户点了生成之后到底拿到了什么」—— 24 赛道 × 5 场景直接走
+      # engine.generate_suggestion（与 POST /api/v1/suggest 同路径），
+      # 统计模型生效率 / 采纳率 / 收益 / 越界与胎压对称。
+      # 覆盖不到、采纳不了、夹越界 —— 任何一条不达标都不该发布新模型。
+      - name: Evaluate usage flow (per-track end-to-end)
+        id: evalusage
+        run: |
+          python scripts/eval_usage_flow.py || true
+          passed=$(python -c "import json;print(1 if json.load(open('setup_tuner/resources/models/usage_flow_eval.json'))['gate']['passed'] else 0)" 2>/dev/null || echo 0)
+          echo "passed=$passed" >> "$GITHUB_OUTPUT"
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          d = json.load(open('setup_tuner/resources/models/usage_flow_eval.json'))
+          m = d['metrics']
+          print('## 使用流程评测（用户实际拿到什么）\n')
+          print('| 指标 | 值 | 门槛 | 结论 |')
+          print('|---|---|---|---|')
+          for k, c in d['gate']['checks'].items():
+              print(f"| {k} | {c['value']} | {c['threshold']} | {'PASS' if c['ok'] else 'FAIL'} |")
+          print(f"\n覆盖不到的赛道：{m['tracks_without_model']}\n")
+          PY
+
       - name: Train telemetry surrogate
+        if: github.event.inputs.skip_surrogate != 'true'
         run: python scripts/train_telemetry_surrogate.py
 
       - name: Coverage report
@@ -191,6 +221,11 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           EVAL_PASS="${{ steps.evalsim.outputs.passed }}"
+          USAGE_PASS="${{ steps.evalusage.outputs.passed }}"
+          if [ "$EVAL_PASS" = "1" ] && [ "$USAGE_PASS" != "1" ]; then
+            echo "::warning title=使用流程评测未通过::模型在真实使用路径上未达标（覆盖/采纳/越界），已保留旧模型，报告写入 eval_rejected/"
+            EVAL_PASS=0
+          fi
           # 评测不达标就不发布新模型（旧模型继续服务）。关键：把报告挪到
           # eval_rejected/ 而不是留在正式路径 —— 正式路径的报告必须永远描述
           # 「当前随包发布的那一版模型」，否则读报告的人会被误导。
@@ -198,14 +233,20 @@ jobs:
             git add setup_tuner/resources/models/setup_sim_nn.json \
                     setup_tuner/resources/models/telemetry_surrogate.json \
                     setup_tuner/resources/models/setup_sim_eval.json \
-                    setup_tuner/resources/models/setup_sim_eval.md
+                    setup_tuner/resources/models/setup_sim_eval.md \
+                    setup_tuner/resources/models/usage_flow_eval.json \
+                    setup_tuner/resources/models/usage_flow_eval.md
           else
             REJ=setup_tuner/resources/models/eval_rejected
             mkdir -p "$REJ"
             cp setup_tuner/resources/models/setup_sim_eval.json "$REJ/" 2>/dev/null || true
             cp setup_tuner/resources/models/setup_sim_eval.md "$REJ/" 2>/dev/null || true
+            cp setup_tuner/resources/models/usage_flow_eval.json "$REJ/" 2>/dev/null || true
+            cp setup_tuner/resources/models/usage_flow_eval.md "$REJ/" 2>/dev/null || true
             rm -f setup_tuner/resources/models/setup_sim_eval.json \
-                  setup_tuner/resources/models/setup_sim_eval.md
+                  setup_tuner/resources/models/setup_sim_eval.md \
+                  setup_tuner/resources/models/usage_flow_eval.json \
+                  setup_tuner/resources/models/usage_flow_eval.md
             git checkout -- setup_tuner/resources/models/setup_sim_nn.json \
                             setup_tuner/resources/models/telemetry_surrogate.json || true
             git add "$REJ"

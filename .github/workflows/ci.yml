@@ -27,3 +27,9 @@ jobs:
 
       - name: Test (pytest)
         run: pytest tests/ -v --timeout=30
+
+      # 使用流程冒烟：调教模型必须在真实调用路径上「跑起来」（覆盖 / 采纳 /
+      # 不越界）。这里只跑 3 条赛道且不设门禁（红线只留一条），
+      # 加严的门禁在 Retrain Models 的发布前评测里。
+      - name: Usage flow smoke
+        run: python scripts/eval_usage_flow.py --quick
