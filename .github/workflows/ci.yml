@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main]
 
+# 失败时要把诊断写进 ci-status 分支（见 scripts/ci_diag.sh），因此需要写权限。
+permissions:
+  contents: write
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -25,11 +29,30 @@ jobs:
       - name: Lint (ruff)
         run: ruff check setup_tuner/ tests/
 
+      # --timeout 只用来兜「真的挂死」，不用来卡速度 —— 速度由
+      # tests/test_perf_regressions.py 的显式预算负责。此前这里是 30s，
+      # 而 cloud-audit 跑同一套用例是 300s，两处口径不一致会造出
+      # 「换个工作流就红/绿」的假信号，所以统一到 300s；
+      # --durations 把最慢用例写进日志，速度信息不会因此丢失。
       - name: Test (pytest)
-        run: pytest tests/ -v --timeout=30
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p .ci
+          pytest tests/ -v --timeout=300 --durations=15 2>&1 | tee .ci/pytest.log
 
       # 使用流程冒烟：调教模型必须在真实调用路径上「跑起来」（覆盖 / 采纳 /
       # 不越界）。这里只跑 3 条赛道且不设门禁（红线只留一条），
       # 加严的门禁在 Retrain Models 的发布前评测里。
       - name: Usage flow smoke
-        run: python scripts/eval_usage_flow.py --quick
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p .ci
+          python scripts/eval_usage_flow.py --quick 2>&1 | tee .ci/usage.log
+
+      # 无论成败都把结论提交到 ci-status 分支：本机到 GitHub API 常被限流，
+      # 靠 `git fetch origin ci-status` 才能稳定读到云端判定。
+      - name: Publish CI diagnostics
+        if: always()
+        run: bash scripts/ci_diag.sh "CI" "test"

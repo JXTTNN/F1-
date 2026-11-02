@@ -180,6 +180,31 @@ jobs:
           print(f"\n覆盖不到的赛道：{m['tracks_without_model']}\n")
           PY
 
+      # 把两道门禁的判定拍成快照留在 .ci/ 里：这样即使后面「无回退守卫」
+      # 回滚了模型、或者提交步骤挂了，失败诊断（ci_diag.sh）里也能看到
+      # 「到底哪一项没过」，不用再翻 Step Summary。
+      - name: Gate summary snapshot
+        if: always()
+        run: |
+          mkdir -p .ci
+          python - <<'PY' 2>&1 | tee .ci/gate.log
+          import json
+          import pathlib
+
+          for name in ("setup_sim_eval", "usage_flow_eval"):
+              p = pathlib.Path("setup_tuner/resources/models") / f"{name}.json"
+              if not p.exists():
+                  print(f"{name}: <缺失>")
+                  continue
+              d = json.loads(p.read_text(encoding="utf-8"))
+              g = d.get("gate", {})
+              print(f"== {name}  passed={g.get('passed')}")
+              for k, c in g.get("checks", {}).items():
+                  print(f"  {k}: {c.get('value')} (门槛 {c.get('threshold')}) "
+                        f"-> {'PASS' if c.get('ok') else 'FAIL'}")
+          PY
+          true
+
       - name: Train telemetry surrogate
         if: github.event.inputs.skip_surrogate != 'true'
         run: python scripts/train_telemetry_surrogate.py
@@ -256,7 +281,13 @@ jobs:
             echo '模型与评测均无变化，跳过提交'
             pushed=1
           else
-            git commit -m "retrain: 补拉缺失赛道遥测并重训模型（云端）"
+            if [ "$EVAL_PASS" = "1" ]; then
+              git commit -m "retrain: 补拉缺失赛道遥测并重训模型（云端）"
+            else
+              # 提交内容只有 eval_rejected/ 的拒绝样本，说明这轮模型没上岗。
+              # 消息必须写清，否则历史看起来像「模型更新了」。
+              git commit -m "retrain(rejected): 本轮模型未过门禁，样本存入 eval_rejected/"
+            fi
             # 本 job 要跑 30~40 分钟，期间 main 很容易被别的提交推进（人工修复、
             # 其它 bot），直接在旧基线上 push 会被拒 —— 整轮因此判失败，模型白训。
             # 先 rebase 到最新 main 再推，最多重试 3 次。
@@ -290,3 +321,9 @@ jobs:
             fi
             echo "::warning title=模型评测未达标::$MSG"
           fi
+
+      # 任何一步挂掉都把诊断写进 ci-status 分支（含 .ci/gate.log 的门禁快照）。
+      # 本 job 要跑半小时以上，失败后没有结论等于白等一轮。
+      - name: Publish failure diagnostics
+        if: failure()
+        run: bash scripts/ci_diag.sh "Retrain Models" "retrain"

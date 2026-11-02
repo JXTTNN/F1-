@@ -1,16 +1,22 @@
 name: Full CI
 
-# 全量测试套件云端验证。ci.yml 跑快速测试；本工作流跑完整 tests/ 树。
+# 全量测试套件云端验证。ci.yml 做 lint + 快速回归；本工作流跑完整 tests/ 树。
 
 on:
   push:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: write   # 诊断要写进 ci-status 分支
+
 jobs:
   full-test:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # 整套用例（含 deep_integration / deep_slice）在 2 核 runner 上要跑半小时量级，
+    # 旧的 30 分钟上限会把「跑得慢」误判成「测试挂了」—— cloud-audit 的同名 job
+    # 一直给的是 40 分钟，这里对齐并留余量。
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
 
@@ -25,4 +31,12 @@ jobs:
           pip install -e ".[dev]"
 
       - name: Run all tests
-        run: pytest tests/ -v --timeout=60
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p .ci
+          pytest tests/ -v --timeout=300 --durations=15 2>&1 | tee .ci/pytest.log
+
+      - name: Publish CI diagnostics
+        if: always()
+        run: bash scripts/ci_diag.sh "Full CI" "full-test"
