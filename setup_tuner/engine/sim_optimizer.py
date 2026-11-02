@@ -26,7 +26,9 @@
   与纯规则引擎行为逐位一致（未知赛道/合成 id 的既有测试不受影响）；
 - 完全确定性：无随机、无时间依赖；参数固定顺序、候选固定顺序；
 - 改动受 ``max_delta`` 与参数上下限约束，并按 ``step`` 档位对齐；
-- 左右胎压保持一致（跟随左胎压）。
+- 左右胎压保持一致（跟随左胎压）；
+- 单次建议的累计模拟收益受 ``_MAX_TOTAL_GAIN_S`` 约束 —— 代理模型的差值
+  方向可信、量级不可信，不设上限会被"沿着模型误差下坡"（见该常量注释）。
 
 报告
 ----
@@ -69,6 +71,19 @@ _MIN_GAIN_S = 0.020
 _OBJ_EXCHANGE_S = 5.0
 #: 整轮允许支付的目标代价总预算（所有被采纳改动累计）。
 _OBJ_BUDGET = 0.08
+#: 单次建议允许的**累计**模拟收益上限（秒）。
+#:
+#: 为什么要设上限：代理模型对「相邻候选的差值方向」是可信的（>30ms 的方向
+#: 正确率 95%），但**量级不可信**。坐标上升只要还能找到 +20ms 的步子就会一路
+#: 走下去，密集时等于沿模型误差下坡 —— 实测 24 站模型给出中位 766ms 的
+#: 「模拟提升」，而 90s 圈速的 0.85% 已远超任何真实调教改动的量级，用户照此
+#: 全改必然过度调整。因此累计收益到顶即停：第一步不设限（保证总能拿到方向
+#: 明确的那一步），之后只在本预算内继续累加。
+#:
+#: 取值 120ms ≈ 一次完整调教周末在既有规则建议之上能再榨出的余量上限。
+#: 注意这不是「总提升天花板」：用户照建议改完可以再跑一次，迭代本身就能
+#: 突破单次预算 —— 这里防的只是**一次性**过度调整。
+_MAX_TOTAL_GAIN_S = 0.120
 #: 左右胎压跟随（右跟随左，保持 F1 调教的左右一致约定）
 _PRESSURE_FOLLOW: tuple[tuple[str, str], ...] = (
     ("front_left_tyre_pressure", "front_right_tyre_pressure"),
@@ -192,6 +207,7 @@ def sim_refine(
     accepted = 0
     iterations = 0
     used_budget = 0.0
+    acc_gain = 0.0
 
     for _ in range(max_passes):
         moved = False
@@ -224,6 +240,10 @@ def sim_refine(
                 sim_gain = base_s - trial_s
                 if sim_gain < _MIN_GAIN_S:
                     continue
+                # 可信区间：累计收益到顶就停（见 _MAX_TOTAL_GAIN_S 注释）。
+                # 第一步不设限，保证「方向明确的那一步」永远拿得到。
+                if accepted > 0 and acc_gain + sim_gain > _MAX_TOTAL_GAIN_S:
+                    continue
                 # 目标代价必须「付得起」：模拟提升 ≥ 兑换率 × 代价增量，
                 # 且整轮预算未超支（整体性守门，见模块文档）
                 if cur_obj is not None:
@@ -240,6 +260,7 @@ def sim_refine(
                 # 接受
                 gain_ms = sim_gain * 1000.0
                 cur = trial
+                acc_gain += sim_gain
                 accepted += 1
                 moved = True
                 trace.append(

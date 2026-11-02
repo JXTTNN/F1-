@@ -300,6 +300,64 @@ class TestSimRefineEndToEnd:
         assert r1.delta == r2.delta
         assert r1.trace == r2.trace
 
+    def test_total_gain_budget_stops_runaway_refinement(self, monkeypatch) -> None:
+        """累计模拟收益到顶必须停（``_MAX_TOTAL_GAIN_S``）。
+
+        翻车样式（2026-11-02 实测）：一版 24 站模型的响应面里，「每一步都能
+        再快 76ms」的情况连走 10 步，报出中位 766ms 的模拟提升 —— 90s 圈速的
+        0.85%，远超任何真实调教改动的量级。代理模型对差值方向可信、量级不可信，
+        不设上限等于让坐标上升沿模型误差下坡，用户照单全改必然过度调整。
+
+        这里用一个「前翼每级都快 60ms」的线性假模型验证闸门真的会关：
+        放开上限时它能一路走到 max_delta，收紧后只剩第一步。
+        """
+        from dataclasses import dataclass
+
+        import setup_tuner.engine.sim_optimizer as opt_mod
+
+        @dataclass
+        class _Model:
+            available = True
+            reason = "ok"
+            track_ids = ("alpha",)
+
+            def covers(self, track_id: str) -> bool:
+                return track_id in self.track_ids
+
+            def predict_delta_s(self, track_id: str, setup_norm: dict) -> float:
+                # 前翼 1 级 = 归一化 0.04（half_range=25）→ 每步 60ms
+                return -1.5 * setup_norm.get("front_wing", 0.0)
+
+            def describe(self) -> str:
+                return "test"
+
+        monkeypatch.setattr(opt_mod, "get_setup_sim", lambda *a, **k: _Model())
+
+        from setup_tuner.domain.setup import CarSetup
+
+        cap = opt_mod._MAX_TOTAL_GAIN_S          # 线上默认预算（先记下来）
+        setup = CarSetup.default().to_dict()
+        delta0 = {f.name: 0.0 for f in ALL_SETUP_FIELDS}
+
+        monkeypatch.setattr(opt_mod, "_MAX_TOTAL_GAIN_S", 10.0)
+        loose = opt_mod.sim_refine(delta0, setup, "alpha", dx=None)
+        monkeypatch.setattr(opt_mod, "_MAX_TOTAL_GAIN_S", 1e-9)
+        tight = opt_mod.sim_refine(delta0, setup, "alpha", dx=None)
+
+        # 无上限：一直走到 front_wing 用尽 max_delta（5 级）
+        assert loose.accepted >= 4
+        # 上限一到：第一步（不设限）之后的所有步子都被拒
+        assert tight.accepted == 1
+        assert loose.gain_s is not None and tight.gain_s is not None
+        assert loose.gain_s > tight.gain_s
+
+        # 默认预算下：累计收益不得超过预算（浮点余量 1e-6）
+        monkeypatch.setattr(opt_mod, "_MAX_TOTAL_GAIN_S", cap)
+        default = opt_mod.sim_refine(delta0, setup, "alpha", dx=None)
+        assert default.accepted >= 1
+        assert default.gain_s is not None
+        assert default.gain_s <= cap + 1e-6
+
 
 # ===========================================================================
 # 6. 引擎级契约：nn 模式真的跑模拟优化，rule 模式不跑
