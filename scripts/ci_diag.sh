@@ -76,7 +76,12 @@ if [ -n "$BASE" ]; then
 else
   git read-tree --empty >/dev/null 2>&1 || exit 0
 fi
-git add -f "$DIR" >/dev/null 2>&1 || exit 0
+
+# 只更新本 job 这一个路径，**不要**用 `git add ci-status`：base 树里别人的
+# 报告文件在工作区并不存在，`git add <dir>` 会把这些「缺失」当成删除写进
+# 索引，等于又把别人的结论抹掉了（这是本脚本第二次踩的坑）。
+BLOB=$(git hash-object -w "$OUT" 2>/dev/null) || exit 0
+git update-index --add --cacheinfo "100644,${BLOB},${OUT}" >/dev/null 2>&1 || exit 0
 TREE=$(git write-tree 2>/dev/null) || exit 0
 
 MSG="ci-status: ${WF}/${JOB} @ ${GITHUB_SHA:0:7}"
