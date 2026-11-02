@@ -68,3 +68,29 @@ jobs:
           files: dist/F1OPT-portable.zip
           draft: false
           prerelease: false
+
+      # 打包失败时把 test-report.json 写进 ci-status 分支：这是「准确打包」唯一
+      # 的判定依据（model_type 必须是 nn、sim 必须可用），失败原因不能只躺在
+      # Windows runner 的日志里。（runner 是 pwsh，故用 PowerShell 实现同一件事。）
+      - name: Publish build diagnostics
+        if: failure()
+        shell: pwsh
+        run: |
+          git config user.name "ci-status-bot"
+          git config user.email "ci-status-bot@users.noreply.github.com"
+          New-Item -ItemType Directory -Force -Path ci-status | Out-Null
+          $out = "ci-status/Build_Release__build.txt"
+          "workflow : Build & Release" | Out-File -FilePath $out -Encoding utf8
+          "sha      : $env:GITHUB_SHA"  | Out-File -FilePath $out -Append -Encoding utf8
+          "ref      : $env:GITHUB_REF_NAME" | Out-File -FilePath $out -Append -Encoding utf8
+          if (Test-Path dist/test-report.json) {
+            "---- dist/test-report.json ----" | Out-File -FilePath $out -Append -Encoding utf8
+            Get-Content dist/test-report.json -Raw | Out-File -FilePath $out -Append -Encoding utf8
+          } else {
+            "(没有 dist/test-report.json —— 失败发生在打包或测试启动之前)" |
+              Out-File -FilePath $out -Append -Encoding utf8
+          }
+          git checkout -B ci-status
+          git add -f ci-status
+          git commit -m "ci-status: build @ $($env:GITHUB_SHA.Substring(0,7))"
+          git push -f origin ci-status
