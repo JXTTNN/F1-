@@ -1,0 +1,169 @@
+{
+ "schema": "f1opt-setup-sim-eval/1",
+ "model": "setup_sim_nn.json",
+ "evaluated_at": "2026-11-02T08:48:53",
+ "seed": 20261102,
+ "n_tracks": 19,
+ "skipped_tracks": [],
+ "labels": {
+  "source": "simulate_lap_delta_ms（遥测锚定准静态物理仿真）",
+  "real_setup_laps": 0,
+  "note": "以下指标衡量对物理仿真器的保真度，不构成真实跑圈验证"
+ },
+ "metrics": {
+  "fresh_local_mae_ms": 64.39,
+  "fresh_wide_mae_ms": 174.37,
+  "pairwise_acc": 0.7477,
+  "pairwise_acc_30_100ms": 0.7948,
+  "n_pairs": 1181,
+  "n_pairs_30_100ms": 916,
+  "direction_agreement": 1.0,
+  "n_direction_checks": 425,
+  "zero_bias_ms": 67.2,
+  "train_val_mae_ms": 99.515,
+  "train_val_mae_ms_local": 66.591,
+  "model_tracks": 24,
+  "model_samples": 9600
+ },
+ "per_track": {
+  "austin": {
+   "optimum_delta_ms": -3653.21,
+   "n_local": 50,
+   "fresh_local_mae_ms": 59.86,
+   "fresh_wide_mae_ms": 166.35
+  },
+  "baku": {
+   "optimum_delta_ms": -3950.97,
+   "n_local": 50,
+   "fresh_local_mae_ms": 81.94,
+   "fresh_wide_mae_ms": 237.34
+  },
+  "barcelona": {
+   "optimum_delta_ms": -2850.38,
+   "n_local": 50,
+   "fresh_local_mae_ms": 47.77,
+   "fresh_wide_mae_ms": 165.91
+  },
+  "hungaroring": {
+   "optimum_delta_ms": -2829.01,
+   "n_local": 50,
+   "fresh_local_mae_ms": 65.07,
+   "fresh_wide_mae_ms": 140.68
+  },
+  "madrid": {
+   "optimum_delta_ms": -3770.95,
+   "n_local": 50,
+   "fresh_local_mae_ms": 64.56,
+   "fresh_wide_mae_ms": 167.83
+  },
+  "melbourne": {
+   "optimum_delta_ms": -3319.58,
+   "n_local": 50,
+   "fresh_local_mae_ms": 50.66,
+   "fresh_wide_mae_ms": 179.84
+  },
+  "mexico_city": {
+   "optimum_delta_ms": -2964.26,
+   "n_local": 50,
+   "fresh_local_mae_ms": 47.22,
+   "fresh_wide_mae_ms": 120.62
+  },
+  "miami": {
+   "optimum_delta_ms": -3382.86,
+   "n_local": 50,
+   "fresh_local_mae_ms": 53.91,
+   "fresh_wide_mae_ms": 160.64
+  },
+  "monaco": {
+   "optimum_delta_ms": -2512.39,
+   "n_local": 50,
+   "fresh_local_mae_ms": 76.69,
+   "fresh_wide_mae_ms": 163.27
+  },
+  "montreal": {
+   "optimum_delta_ms": -2755.53,
+   "n_local": 50,
+   "fresh_local_mae_ms": 51.84,
+   "fresh_wide_mae_ms": 182.05
+  },
+  "monza": {
+   "optimum_delta_ms": -2977.67,
+   "n_local": 50,
+   "fresh_local_mae_ms": 46.21,
+   "fresh_wide_mae_ms": 142.46
+  },
+  "sakhir": {
+   "optimum_delta_ms": -3560.14,
+   "n_local": 50,
+   "fresh_local_mae_ms": 57.3,
+   "fresh_wide_mae_ms": 184.11
+  },
+  "shanghai": {
+   "optimum_delta_ms": -3439.3,
+   "n_local": 50,
+   "fresh_local_mae_ms": 49.29,
+   "fresh_wide_mae_ms": 237.71
+  },
+  "silverstone": {
+   "optimum_delta_ms": -3404.35,
+   "n_local": 50,
+   "fresh_local_mae_ms": 61.53,
+   "fresh_wide_mae_ms": 138.58
+  },
+  "singapore": {
+   "optimum_delta_ms": -3210.45,
+   "n_local": 50,
+   "fresh_local_mae_ms": 66.79,
+   "fresh_wide_mae_ms": 193.22
+  },
+  "spa": {
+   "optimum_delta_ms": -4396.57,
+   "n_local": 50,
+   "fresh_local_mae_ms": 157.64,
+   "fresh_wide_mae_ms": 215.48
+  },
+  "spielberg": {
+   "optimum_delta_ms": -3034.33,
+   "n_local": 50,
+   "fresh_local_mae_ms": 51.4,
+   "fresh_wide_mae_ms": 240.88
+  },
+  "suzuka": {
+   "optimum_delta_ms": -3628.28,
+   "n_local": 50,
+   "fresh_local_mae_ms": 57.19,
+   "fresh_wide_mae_ms": 109.83
+  },
+  "zandvoort": {
+   "optimum_delta_ms": -2913.16,
+   "n_local": 50,
+   "fresh_local_mae_ms": 76.48,
+   "fresh_wide_mae_ms": 166.13
+  }
+ },
+ "gate": {
+  "passed": false,
+  "checks": {
+   "fresh_local_mae_ms": {
+    "value": 64.39,
+    "threshold": "<=120.0",
+    "ok": true
+   },
+   "pairwise_acc": {
+    "value": 0.7477,
+    "threshold": ">=0.75",
+    "ok": false
+   },
+   "direction_agreement": {
+    "value": 1.0,
+    "threshold": ">=0.8",
+    "ok": true
+   },
+   "zero_bias_ms": {
+    "value": 67.2,
+    "threshold": "<=40.0",
+    "ok": false
+   }
+  }
+ }
+}
