@@ -10,6 +10,13 @@ on:
 permissions:
   contents: write
 
+# 同一分支只保留最新一次：连续的中间提交没有验证价值，而每次推送都会占一个
+# runner。实测一轮密集推送（9 次提交 × 2 个工作流）会把队列塞满，最新的那次
+# 反而要等十几分钟才轮到。
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ubuntu-latest

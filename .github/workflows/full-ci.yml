@@ -10,6 +10,11 @@ on:
 permissions:
   contents: write   # 诊断要写进 ci-status 分支
 
+# 同一分支只保留最新一次（理由见 ci.yml）。
+concurrency:
+  group: full-ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   full-test:
     runs-on: ubuntu-latest
