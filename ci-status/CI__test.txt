@@ -1,10 +1,10 @@
 workflow : CI
 job      : test
-sha      : 93c75ac1af463b1d4dcdce8f169b47584f1e7864
+sha      : e89ebe0b2000422e9bad499a4861f6dddb833ac1
 ref      : main
 event    : push
-run      : https://github.com/JXTTNN/F1-/actions/runs/41592565941
-time     : 2026-11-03T06:58:54Z
+run      : https://github.com/JXTTNN/F1-/actions/runs/41593645143
+time     : 2026-11-03T07:09:07Z
 steps    : install=success lint=success js=success pytest=success usage=success
 
 ================ .ci/pytest.log ================
@@ -13,7 +13,7 @@ steps    : install=success lint=success js=success pytest=success usage=success
 ---- 最慢用例 ----
 ============================= slowest 15 durations =============================
 4.19s call     tests/test_feedback_lifecycle.py::TestSuggestConsumesFeedback::test_next_round_only_sees_its_own_feedback
-2.60s call     tests/deep_integration/test_concurrent.py::TestConcurrentApiRequests::test_concurrent_mixed_api_operations
+2.59s call     tests/deep_integration/test_concurrent.py::TestConcurrentApiRequests::test_concurrent_mixed_api_operations
 2.35s call     tests/deep_slice/test_slice_02_telemetry_listener.py::TestSmoke::test_smoke_real_udp_short_packet_skipped
 2.28s call     tests/deep_integration/test_concurrent.py::TestConcurrentApiRequests::test_concurrent_suggest_no_deadlock
 2.18s call     tests/test_car_status.py::TestEndToEnd::test_simulated_lap_reaches_suggestion
@@ -21,9 +21,9 @@ steps    : install=success lint=success js=success pytest=success usage=success
 2.17s call     tests/deep_integration/test_e2e_business.py::TestMultiRoundConvergence::test_repeated_suggest_is_deterministic
 2.16s call     tests/deep_integration/test_e2e_business.py::TestFullClosedLoop::test_full_6_step_loop
 2.16s call     tests/test_api_edge_cases.py::test_list_feedbacks_no_track
+2.14s call     tests/deep_slice/test_slice_09_app.py::TestSmoke::test_app_exception_handlers_registered
 2.14s call     tests/test_api_contract.py::TestRecordingTrainingExport::test_export_produces_samples
 2.13s call     tests/test_car_status.py::TestSimulatorCoverage::test_simulator_emits_car_status
-2.13s call     tests/deep_slice/test_slice_09_app.py::TestSmoke::test_app_exception_handlers_registered
 2.13s call     tests/test_api_edge_cases.py::test_multiple_suggestions_generate_iterations
 2.12s call     tests/deep_integration/test_e2e_business.py::TestMultiRoundConvergence::test_increasing_strength_increases_delta_magnitude
 2.12s call     tests/test_feedback_lifecycle.py::TestSuggestConsumesFeedback::test_disabled_keeps_accumulation_semantics
@@ -31,9 +31,9 @@ steps    : install=success lint=success js=success pytest=success usage=success
 SKIPPED [1] tests/test_telemetry_importer.py:484: 未设置 F1OPT_REAL_DATA_DIR（或目录不存在）
 SKIPPED [1] tests/test_telemetry_importer.py:500: 未设置 F1OPT_REAL_DATA_DIR（或目录不存在）
 SKIPPED [1] tests/test_telemetry_importer.py:512: 未设置 F1OPT_REAL_DATA_DIR（或目录不存在）
-============ 2159 passed, 3 skipped, 1 warning in 394.35s (0:06:34) ============
+============ 2159 passed, 3 skipped, 1 warning in 394.24s (0:06:34) ============
 ---- 结果行 ----
-============ 2159 passed, 3 skipped, 1 warning in 394.35s (0:06:34) ============
+============ 2159 passed, 3 skipped, 1 warning in 394.24s (0:06:34) ============
 ---- 超时 / 崩溃痕迹 ----
 ---- 日志尾部 ----
 tests/test_track_arcs.py::TestAnchorsSitOnCorners::test_anchors_not_on_straights[shanghai] PASSED [ 98%]
@@ -77,7 +77,7 @@ tests/test_training_dataset.py::TestBuildDataset::test_collect_lap_files_ignores
 -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
 ============================= slowest 15 durations =============================
 4.19s call     tests/test_feedback_lifecycle.py::TestSuggestConsumesFeedback::test_next_round_only_sees_its_own_feedback
-2.60s call     tests/deep_integration/test_concurrent.py::TestConcurrentApiRequests::test_concurrent_mixed_api_operations
+2.59s call     tests/deep_integration/test_concurrent.py::TestConcurrentApiRequests::test_concurrent_mixed_api_operations
 2.35s call     tests/deep_slice/test_slice_02_telemetry_listener.py::TestSmoke::test_smoke_real_udp_short_packet_skipped
 2.28s call     tests/deep_integration/test_concurrent.py::TestConcurrentApiRequests::test_concurrent_suggest_no_deadlock
 2.18s call     tests/test_car_status.py::TestEndToEnd::test_simulated_lap_reaches_suggestion
@@ -85,9 +85,9 @@ tests/test_training_dataset.py::TestBuildDataset::test_collect_lap_files_ignores
 2.17s call     tests/deep_integration/test_e2e_business.py::TestMultiRoundConvergence::test_repeated_suggest_is_deterministic
 2.16s call     tests/deep_integration/test_e2e_business.py::TestFullClosedLoop::test_full_6_step_loop
 2.16s call     tests/test_api_edge_cases.py::test_list_feedbacks_no_track
+2.14s call     tests/deep_slice/test_slice_09_app.py::TestSmoke::test_app_exception_handlers_registered
 2.14s call     tests/test_api_contract.py::TestRecordingTrainingExport::test_export_produces_samples
 2.13s call     tests/test_car_status.py::TestSimulatorCoverage::test_simulator_emits_car_status
-2.13s call     tests/deep_slice/test_slice_09_app.py::TestSmoke::test_app_exception_handlers_registered
 2.13s call     tests/test_api_edge_cases.py::test_multiple_suggestions_generate_iterations
 2.12s call     tests/deep_integration/test_e2e_business.py::TestMultiRoundConvergence::test_increasing_strength_increases_delta_magnitude
 2.12s call     tests/test_feedback_lifecycle.py::TestSuggestConsumesFeedback::test_disabled_keeps_accumulation_semantics
@@ -95,7 +95,7 @@ tests/test_training_dataset.py::TestBuildDataset::test_collect_lap_files_ignores
 SKIPPED [1] tests/test_telemetry_importer.py:484: 未设置 F1OPT_REAL_DATA_DIR（或目录不存在）
 SKIPPED [1] tests/test_telemetry_importer.py:500: 未设置 F1OPT_REAL_DATA_DIR（或目录不存在）
 SKIPPED [1] tests/test_telemetry_importer.py:512: 未设置 F1OPT_REAL_DATA_DIR（或目录不存在）
-============ 2159 passed, 3 skipped, 1 warning in 394.35s (0:06:34) ============
+============ 2159 passed, 3 skipped, 1 warning in 394.24s (0:06:34) ============
 
 ================ .ci/usage.log ================
 ---- 失败 / 错误用例 ----
