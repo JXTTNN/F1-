@@ -27,8 +27,9 @@
 - 完全确定性：无随机、无时间依赖；参数固定顺序、候选固定顺序；
 - 改动受 ``max_delta`` 与参数上下限约束，并按 ``step`` 档位对齐；
 - 左右胎压保持一致（跟随左胎压）；
-- 单次建议的累计模拟收益受 ``_MAX_TOTAL_GAIN_S`` 约束 —— 代理模型的差值
-  方向可信、量级不可信，不设上限会被"沿着模型误差下坡"（见该常量注释）。
+- 收益按「可信上限」记账：单步 ≤ `_MAX_STEP_GAIN_S`、单轮 ≤ `_MAX_TOTAL_GAIN_S`、
+  最多 `_MAX_MOVES` 步 —— 代理模型的差值方向可信、量级不可信，不设上限会被
+  "沿着模型误差下坡"（见各常量注释）。
 
 报告
 ----
@@ -71,24 +72,43 @@ _MIN_GAIN_S = 0.020
 _OBJ_EXCHANGE_S = 5.0
 #: 整轮允许支付的目标代价总预算（所有被采纳改动累计）。
 _OBJ_BUDGET = 0.08
-#: 单次建议允许的**累计**模拟收益上限（秒）。
+#: 单步可信收益上限（秒）：一个参数动一档，最多按 80ms 记账。
 #:
-#: 为什么要设上限：代理模型对「相邻候选的差值方向」是可信的（>30ms 的方向
-#: 正确率 95%），但**量级不可信**。坐标上升只要还能找到 +20ms 的步子就会一路
-#: 走下去，密集时等于沿模型误差下坡 —— 实测 24 站模型给出中位 766ms 的
-#: 「模拟提升」，而 90s 圈速的 0.85% 已远超任何真实调教改动的量级，用户照此
-#: 全改必然过度调整。因此累计收益到顶即停：第一步不设限（保证总能拿到方向
-#: 明确的那一步），之后只在本预算内继续累加。
+#: 代理模型对「相邻候选的差值方向」是可信的（>30ms 的方向正确率 95%），
+#: 但**量级不可信**。实测单步就能报出 216ms（monza 后外倾角 −0.1°）、
+#: 25.9ms×3 连加（monaco 前束角 0.01°×3）—— 前者把 0.24% 的圈速归给
+#: 一档外倾角，后者把 0.08° 束角算成 78ms，都不是真实量级。
+#: 因此按「一档最大可信收益」截断记账，方向保留、量级封顶。
+_MAX_STEP_GAIN_S = 0.080
+#: 单次建议允许的**累计**模拟收益上限（秒），**含第一步**。
 #:
-#: 取值 120ms ≈ 一次完整调教周末在既有规则建议之上能再榨出的余量上限。
+#: 为什么要设上限：坐标上升只要还能找到 +20ms 的步子就会一路走下去，密集时
+#: 等于沿模型误差下坡 —— 一版 24 站模型实测给出中位 766ms 的「模拟提升」，
+#: 90s 圈速的 0.85% 已远超任何真实调教改动的量级，用户照此全改必然过度调整。
+#:
+#: 120ms ≈ 一次真实调教迭代在既有规则建议之上能再榨出的余量上限。
 #: 注意这不是「总提升天花板」：用户照建议改完可以再跑一次，迭代本身就能
 #: 突破单次预算 —— 这里防的只是**一次性**过度调整。
 _MAX_TOTAL_GAIN_S = 0.120
+#: 单次建议里模型最多再**采纳几步**（一处改动 = 用户要多拧一颗螺丝）。
+#:
+#: 不为收益、只为可归因：一次改 8~9 处，车手无法判断是哪一处起了作用。
+#: 三步之内，配合规则层已有的 ≤12 项改动预算，用户拿到的是一次可验证的迭代。
+_MAX_MOVES = 3
 #: 左右胎压跟随（右跟随左，保持 F1 调教的左右一致约定）
 _PRESSURE_FOLLOW: tuple[tuple[str, str], ...] = (
     ("front_left_tyre_pressure", "front_right_tyre_pressure"),
     ("rear_left_tyre_pressure", "rear_right_tyre_pressure"),
 )
+
+
+def limits() -> dict[str, float]:
+    """单次建议的三道上限（报告与 UI 共用，避免文案里写死数字）。"""
+    return {
+        "max_moves": _MAX_MOVES,
+        "step_gain_ms": round(_MAX_STEP_GAIN_S * 1000.0, 1),
+        "total_gain_ms": round(_MAX_TOTAL_GAIN_S * 1000.0, 1),
+    }
 
 
 @dataclass(slots=True)
@@ -100,16 +120,29 @@ class SimRefineResult:
     reason: str = ""
     iterations: int = 0
     accepted: int = 0
-    #: 是否因为 `_MAX_TOTAL_GAIN_S` 预算到顶而提前收手（报告要如实说明，
-    #: 否则用户会把「预算上限」误当成「模型只认为能改这么多」）。
+    #: 是否因为 `_MAX_MOVES` / `_MAX_TOTAL_GAIN_S` 到顶而提前收手（报告要如实
+    #: 说明，否则用户会把「预算上限」误当成「模型只认为能改这么多」）。
     capped: bool = False
     before_s: float | None = None
     after_s: float | None = None
+    #: 记账收益（按 `_MAX_STEP_GAIN_S` 逐步截断后累加）。None = 尚未计算。
+    credited_gain_s: float | None = None
     trace: list[str] = field(default_factory=list)
 
     @property
     def gain_s(self) -> float | None:
-        """模拟圈速提升（秒；正 = 更快）。"""
+        """用户看到的模拟提升（秒；正 = 更快）。
+
+        已按单步 `_MAX_STEP_GAIN_S` 与单轮 `_MAX_TOTAL_GAIN_S` 截断 ——
+        代理模型的绝对量级不可信，这个数字是「可信上限」而不是原始预测。
+        """
+        if self.credited_gain_s is not None:
+            return self.credited_gain_s
+        return self.raw_gain_s
+
+    @property
+    def raw_gain_s(self) -> float | None:
+        """模型原始预测提升（未截断；仅供诊断对照，不进用户报告）。"""
         if self.before_s is None or self.after_s is None:
             return None
         return self.before_s - self.after_s
@@ -212,6 +245,7 @@ def sim_refine(
     used_budget = 0.0
     acc_gain = 0.0
     capped = False
+    exhausted = False
 
     for _ in range(max_passes):
         moved = False
@@ -244,37 +278,50 @@ def sim_refine(
                 sim_gain = base_s - trial_s
                 if sim_gain < _MIN_GAIN_S:
                     continue
-                # 可信区间：累计收益到顶就停（见 _MAX_TOTAL_GAIN_S 注释）。
-                # 第一步不设限，保证「方向明确的那一步」永远拿得到。
-                if accepted > 0 and acc_gain + sim_gain > _MAX_TOTAL_GAIN_S:
+                # 可信记账：单步按 _MAX_STEP_GAIN_S 截断（方向保留、量级封顶）。
+                credit = min(sim_gain, _MAX_STEP_GAIN_S)
+                # 步数上限：一次建议最多再动 _MAX_MOVES 处（可归因）。
+                if accepted >= _MAX_MOVES:
+                    capped = True
+                    exhausted = True
+                    break
+                # 可信区间：累计收益（含第一步）到顶就停，见 _MAX_TOTAL_GAIN_S。
+                if acc_gain + credit > _MAX_TOTAL_GAIN_S + 1e-12:
                     capped = True
                     continue
-                # 目标代价必须「付得起」：模拟提升 ≥ 兑换率 × 代价增量，
+                # 目标代价必须「付得起」：可信提升 ≥ 兑换率 × 代价增量，
                 # 且整轮预算未超支（整体性守门，见模块文档）
                 if cur_obj is not None:
                     trial_obj = _obj_total(trial)
                     if trial_obj is not None:
                         penalty = trial_obj - cur_obj
                         if penalty > 0.0:
-                            if sim_gain < _OBJ_EXCHANGE_S * penalty:
+                            if credit < _OBJ_EXCHANGE_S * penalty:
                                 continue
                             if used_budget + penalty > _OBJ_BUDGET:
                                 continue
                         used_budget += max(0.0, penalty)
                         cur_obj = trial_obj
                 # 接受
-                gain_ms = sim_gain * 1000.0
                 cur = trial
-                acc_gain += sim_gain
+                acc_gain += credit
                 accepted += 1
                 moved = True
-                trace.append(
-                    f"{spec.label_zh if hasattr(spec, 'label_zh') else p}："
-                    f"{base:+.3f} → {new_delta:+.3f}（模拟 −{gain_ms:.1f} ms）"
-                )
+                label = spec.label_zh if hasattr(spec, "label_zh") else p
+                if credit < sim_gain - 1e-9:
+                    trace.append(
+                        f"{label}：{base:+.3f} → {new_delta:+.3f}"
+                        f"（模拟 −{credit * 1000:.1f} ms；模型原始 "
+                        f"−{sim_gain * 1000:.1f} ms，按单步上限截断）"
+                    )
+                else:
+                    trace.append(
+                        f"{label}：{base:+.3f} → {new_delta:+.3f}"
+                        f"（模拟 −{credit * 1000:.1f} ms）"
+                    )
                 break
         iterations += 1
-        if not moved:
+        if exhausted or not moved:
             break
 
     after_s = _sim_time_s(cur)
@@ -283,5 +330,6 @@ def sim_refine(
     return SimRefineResult(
         delta=cur, available=True, reason="ok",
         iterations=iterations, accepted=accepted, capped=capped,
-        before_s=before_s, after_s=after_s, trace=trace,
+        before_s=before_s, after_s=after_s, credited_gain_s=acc_gain,
+        trace=trace,
     )

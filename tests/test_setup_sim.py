@@ -364,9 +364,10 @@ class TestSimRefineEndToEnd:
         setup = CarSetup.default().to_dict()
         delta0 = {f.name: 0.0 for f in ALL_SETUP_FIELDS}
 
-        monkeypatch.setattr(opt_mod, "_MAX_TOTAL_GAIN_S", 10.0)
         # max_passes 放大到 6：线上默认只跑 3 轮，走不满 front_wing 的 max_delta，
-        # 「放开上限能走多远」就看不出来了。
+        # 「放开上限能走多远」就看不出来了。步数上限同时放开，单独验证预算。
+        monkeypatch.setattr(opt_mod, "_MAX_MOVES", 99)
+        monkeypatch.setattr(opt_mod, "_MAX_TOTAL_GAIN_S", 10.0)
         loose = opt_mod.sim_refine(delta0, setup, "alpha", dx=None, max_passes=6)
         monkeypatch.setattr(opt_mod, "_MAX_TOTAL_GAIN_S", 1e-9)
         tight = opt_mod.sim_refine(delta0, setup, "alpha", dx=None, max_passes=6)
@@ -374,11 +375,12 @@ class TestSimRefineEndToEnd:
         # 无上限：一直走到 front_wing 用尽 max_delta（5 级，每级 60ms）
         assert loose.accepted == 5
         assert loose.capped is False          # 没有任何候选项被预算拦下
-        # 上限一到：第一步（不设限）之后的所有步子都被拒
-        assert tight.accepted == 1
-        assert tight.capped is True           # 报告要如实说「是预算拦下的」
-        assert loose.gain_s is not None and tight.gain_s is not None
-        assert loose.gain_s > tight.gain_s
+        # 预算连一步都放不下（1e-9s）：一步都不采纳，且如实标 capped。
+        # 注意现在**首步也计入预算** —— 有了单步 80ms 的上限，首步不再需要
+        # 豁免（下面 test_single_step_gain_is_capped 覆盖这条）。
+        assert tight.accepted == 0
+        assert tight.capped is True
+        assert loose.gain_s is not None and tight.gain_s == pytest.approx(0.0)
 
         # 默认预算下：累计收益不得超过预算（浮点余量 1e-6）
         monkeypatch.setattr(opt_mod, "_MAX_TOTAL_GAIN_S", cap)
@@ -386,6 +388,54 @@ class TestSimRefineEndToEnd:
         assert default.accepted >= 1
         assert default.gain_s is not None
         assert default.gain_s <= cap + 1e-6
+
+        # 步数上限：一次建议最多再动 _MAX_MOVES 处（可归因）
+        monkeypatch.setattr(opt_mod, "_MAX_TOTAL_GAIN_S", 10.0)
+        monkeypatch.setattr(opt_mod, "_MAX_MOVES", 3)
+        moves = opt_mod.sim_refine(delta0, setup, "alpha", dx=None, max_passes=6)
+        assert moves.accepted == 3
+        assert moves.capped is True
+
+    def test_single_step_gain_is_capped(self, monkeypatch) -> None:
+        """单步收益按 ``_MAX_STEP_GAIN_S`` 记账，方向保留、量级封顶。
+
+        实测（v1.6.12 线上模型）：monza 后外倾角 −0.1° 一步报 −216.4 ms，
+        monaco 前束角 0.01°×3 连着报 −25.9 ms×3 —— 前者把 0.24% 的圈速
+        归给一档外倾角，都不是真实量级。用户看到的数字必须是可信上限，
+        模型原始预测只留在 ``raw_gain_s`` 里供核对。
+        """
+        from dataclasses import dataclass
+
+        import setup_tuner.engine.sim_optimizer as opt_mod
+
+        @dataclass
+        class _Model:
+            available = True
+            reason = "ok"
+            track_ids = ("alpha",)
+
+            def covers(self, track_id: str) -> bool:
+                return track_id in self.track_ids
+
+            def predict_delta_s(self, track_id: str, setup_norm: dict) -> float:
+                # 每动一档，模型都声称快 300ms（远超可信量级）
+                return -7.5 * setup_norm.get("front_wing", 0.0)
+
+            def describe(self) -> str:
+                return "test"
+
+        monkeypatch.setattr(opt_mod, "get_setup_sim", lambda *a, **k: _Model())
+
+        from setup_tuner.domain.setup import CarSetup
+
+        setup = CarSetup.default().to_dict()
+        delta0 = {f.name: 0.0 for f in ALL_SETUP_FIELDS}
+        r = opt_mod.sim_refine(delta0, setup, "alpha", dx=None, max_passes=6)
+
+        assert r.accepted == 1
+        assert r.gain_s == pytest.approx(opt_mod._MAX_STEP_GAIN_S)
+        assert r.raw_gain_s is not None and r.raw_gain_s > 0.25
+        assert any("单步上限截断" in t for t in r.trace)
 
 
 # ===========================================================================

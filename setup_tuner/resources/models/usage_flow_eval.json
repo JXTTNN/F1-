@@ -1,6 +1,6 @@
 {
  "schema": "f1opt-usage-flow-eval/1",
- "evaluated_at": "2026-11-02T09:19:44",
+ "evaluated_at": "2026-11-03T09:05:45",
  "entry": "engine.generate_suggestion（与 POST /api/v1/suggest 同路径）",
  "metrics": {
   "n_tracks": 24,
@@ -8,11 +8,12 @@
   "n_runs": 120,
   "nn_active_rate": 1.0,
   "accept_rate": 1.0,
-  "median_gain_ms": 733.76,
-  "p10_gain_ms": 505.96,
-  "p90_gain_ms": 890.89,
-  "mean_gain_ms": 714.52,
-  "mean_changed_params": 9.37,
+  "median_gain_ms": 112.26,
+  "p10_gain_ms": 105.87,
+  "p90_gain_ms": 116.25,
+  "mean_gain_ms": 111.57,
+  "mean_changed_params": 8.55,
+  "mean_sim_moves": 1.98,
   "violations": 0,
   "zero_input_moves": 0,
   "model_tracks": 24,
@@ -33,8 +34,18 @@
     "ok": true
    },
    "median_gain_ms": {
-    "value": 733.76,
+    "value": 112.26,
     "threshold": ">=10.0",
+    "ok": true
+   },
+   "mean_sim_moves": {
+    "value": 1.98,
+    "threshold": "<=3.0",
+    "ok": true
+   },
+   "p90_gain_ms": {
+    "value": 116.25,
+    "threshold": "<=200.0",
     "ok": true
    },
    "violations": {
@@ -58,53 +69,53 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 8,
-   "gain_ms": 784.21,
-   "changed_params": 12
-  },
-  {
-   "track_id": "melbourne",
-   "scenario": "exit_traction",
-   "model_type": "nn",
-   "nn_available": true,
-   "reason": "ok",
-   "iterations": 3,
-   "accepted": 6,
-   "gain_ms": 692.09,
-   "changed_params": 7
-  },
-  {
-   "track_id": "melbourne",
-   "scenario": "high_speed",
-   "model_type": "nn",
-   "nn_available": true,
-   "reason": "ok",
-   "iterations": 3,
-   "accepted": 8,
-   "gain_ms": 580.21,
-   "changed_params": 9
-  },
-  {
-   "track_id": "melbourne",
-   "scenario": "global_mixed",
-   "model_type": "nn",
-   "nn_available": true,
-   "reason": "ok",
-   "iterations": 3,
-   "accepted": 8,
-   "gain_ms": 793.51,
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 116.02,
    "changed_params": 10
   },
   {
    "track_id": "melbourne",
+   "scenario": "exit_traction",
+   "model_type": "nn",
+   "nn_available": true,
+   "reason": "ok",
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 116.02,
+   "changed_params": 7
+  },
+  {
+   "track_id": "melbourne",
+   "scenario": "high_speed",
+   "model_type": "nn",
+   "nn_available": true,
+   "reason": "ok",
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 111.17,
+   "changed_params": 9
+  },
+  {
+   "track_id": "melbourne",
+   "scenario": "global_mixed",
+   "model_type": "nn",
+   "nn_available": true,
+   "reason": "ok",
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 113.19,
+   "changed_params": 8
+  },
+  {
+   "track_id": "melbourne",
    "scenario": "single_symptom",
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 9,
-   "gain_ms": 821.69,
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 111.17,
    "changed_params": 6
   },
   {
@@ -113,54 +124,54 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 8,
-   "gain_ms": 787.53,
-   "changed_params": 12
-  },
-  {
-   "track_id": "shanghai",
-   "scenario": "exit_traction",
-   "model_type": "nn",
-   "nn_available": true,
-   "reason": "ok",
-   "iterations": 3,
-   "accepted": 6,
-   "gain_ms": 734.46,
-   "changed_params": 7
-  },
-  {
-   "track_id": "shanghai",
-   "scenario": "high_speed",
-   "model_type": "nn",
-   "nn_available": true,
-   "reason": "ok",
-   "iterations": 3,
-   "accepted": 8,
-   "gain_ms": 631.29,
-   "changed_params": 9
-  },
-  {
-   "track_id": "shanghai",
-   "scenario": "global_mixed",
-   "model_type": "nn",
-   "nn_available": true,
-   "reason": "ok",
-   "iterations": 3,
-   "accepted": 8,
-   "gain_ms": 822.47,
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 107.69,
    "changed_params": 10
   },
   {
    "track_id": "shanghai",
+   "scenario": "exit_traction",
+   "model_type": "nn",
+   "nn_available": true,
+   "reason": "ok",
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 107.69,
+   "changed_params": 7
+  },
+  {
+   "track_id": "shanghai",
+   "scenario": "high_speed",
+   "model_type": "nn",
+   "nn_available": true,
+   "reason": "ok",
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 110.94,
+   "changed_params": 9
+  },
+  {
+   "track_id": "shanghai",
+   "scenario": "global_mixed",
+   "model_type": "nn",
+   "nn_available": true,
+   "reason": "ok",
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 106.0,
+   "changed_params": 8
+  },
+  {
+   "track_id": "shanghai",
    "scenario": "single_symptom",
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 10,
-   "gain_ms": 883.87,
-   "changed_params": 7
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 110.94,
+   "changed_params": 6
   },
   {
    "track_id": "suzuka",
@@ -168,10 +179,10 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 8,
-   "gain_ms": 814.81,
-   "changed_params": 12
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 115.11,
+   "changed_params": 10
   },
   {
    "track_id": "suzuka",
@@ -179,9 +190,9 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 6,
-   "gain_ms": 756.09,
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 116.02,
    "changed_params": 7
   },
   {
@@ -190,9 +201,9 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 8,
-   "gain_ms": 682.39,
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 116.02,
    "changed_params": 9
   },
   {
@@ -201,10 +212,10 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 8,
-   "gain_ms": 846.96,
-   "changed_params": 10
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 114.33,
+   "changed_params": 8
   },
   {
    "track_id": "suzuka",
@@ -212,9 +223,9 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 9,
-   "gain_ms": 897.27,
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 116.02,
    "changed_params": 6
   },
   {
@@ -223,54 +234,54 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 8,
-   "gain_ms": 802.41,
-   "changed_params": 12
-  },
-  {
-   "track_id": "sakhir",
-   "scenario": "exit_traction",
-   "model_type": "nn",
-   "nn_available": true,
-   "reason": "ok",
-   "iterations": 3,
-   "accepted": 8,
-   "gain_ms": 642.39,
-   "changed_params": 7
-  },
-  {
-   "track_id": "sakhir",
-   "scenario": "high_speed",
-   "model_type": "nn",
-   "nn_available": true,
-   "reason": "ok",
-   "iterations": 3,
-   "accepted": 8,
-   "gain_ms": 642.45,
-   "changed_params": 9
-  },
-  {
-   "track_id": "sakhir",
-   "scenario": "global_mixed",
-   "model_type": "nn",
-   "nn_available": true,
-   "reason": "ok",
-   "iterations": 3,
-   "accepted": 8,
-   "gain_ms": 803.71,
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 106.0,
    "changed_params": 10
   },
   {
    "track_id": "sakhir",
+   "scenario": "exit_traction",
+   "model_type": "nn",
+   "nn_available": true,
+   "reason": "ok",
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 109.6,
+   "changed_params": 7
+  },
+  {
+   "track_id": "sakhir",
+   "scenario": "high_speed",
+   "model_type": "nn",
+   "nn_available": true,
+   "reason": "ok",
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 109.16,
+   "changed_params": 9
+  },
+  {
+   "track_id": "sakhir",
+   "scenario": "global_mixed",
+   "model_type": "nn",
+   "nn_available": true,
+   "reason": "ok",
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 106.22,
+   "changed_params": 8
+  },
+  {
+   "track_id": "sakhir",
    "scenario": "single_symptom",
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 10,
-   "gain_ms": 894.34,
-   "changed_params": 7
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 119.3,
+   "changed_params": 6
   },
   {
    "track_id": "jeddah",
@@ -278,10 +289,10 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 9,
-   "gain_ms": 930.96,
-   "changed_params": 12
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 117.71,
+   "changed_params": 13
   },
   {
    "track_id": "jeddah",
@@ -289,9 +300,9 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 8,
-   "gain_ms": 713.32,
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 117.94,
    "changed_params": 8
   },
   {
@@ -300,9 +311,9 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 8,
-   "gain_ms": 695.39,
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 117.94,
    "changed_params": 12
   },
   {
@@ -311,10 +322,10 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 8,
-   "gain_ms": 812.61,
-   "changed_params": 10
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 116.25,
+   "changed_params": 8
   },
   {
    "track_id": "jeddah",
@@ -322,9 +333,9 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 9,
-   "gain_ms": 892.86,
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 116.25,
    "changed_params": 6
   },
   {
@@ -333,53 +344,53 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 8,
-   "gain_ms": 815.24,
-   "changed_params": 12
-  },
-  {
-   "track_id": "miami",
-   "scenario": "exit_traction",
-   "model_type": "nn",
-   "nn_available": true,
-   "reason": "ok",
-   "iterations": 3,
-   "accepted": 7,
-   "gain_ms": 784.09,
-   "changed_params": 11
-  },
-  {
-   "track_id": "miami",
-   "scenario": "high_speed",
-   "model_type": "nn",
-   "nn_available": true,
-   "reason": "ok",
-   "iterations": 3,
-   "accepted": 8,
-   "gain_ms": 664.02,
-   "changed_params": 9
-  },
-  {
-   "track_id": "miami",
-   "scenario": "global_mixed",
-   "model_type": "nn",
-   "nn_available": true,
-   "reason": "ok",
-   "iterations": 3,
-   "accepted": 8,
-   "gain_ms": 833.73,
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 112.72,
    "changed_params": 10
   },
   {
    "track_id": "miami",
+   "scenario": "exit_traction",
+   "model_type": "nn",
+   "nn_available": true,
+   "reason": "ok",
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 111.3,
+   "changed_params": 10
+  },
+  {
+   "track_id": "miami",
+   "scenario": "high_speed",
+   "model_type": "nn",
+   "nn_available": true,
+   "reason": "ok",
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 112.99,
+   "changed_params": 9
+  },
+  {
+   "track_id": "miami",
+   "scenario": "global_mixed",
+   "model_type": "nn",
+   "nn_available": true,
+   "reason": "ok",
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 111.3,
+   "changed_params": 8
+  },
+  {
+   "track_id": "miami",
    "scenario": "single_symptom",
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 9,
-   "gain_ms": 890.89,
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 111.3,
    "changed_params": 6
   },
   {
@@ -388,9 +399,9 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 9,
-   "gain_ms": 602.47,
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 112.17,
    "changed_params": 13
   },
   {
@@ -399,9 +410,9 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 6,
-   "gain_ms": 505.96,
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 104.36,
    "changed_params": 8
   },
   {
@@ -410,9 +421,9 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 8,
-   "gain_ms": 458.18,
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 112.17,
    "changed_params": 12
   },
   {
@@ -421,10 +432,10 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 8,
-   "gain_ms": 623.46,
-   "changed_params": 10
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 100.71,
+   "changed_params": 8
   },
   {
    "track_id": "montreal",
@@ -432,10 +443,10 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 10,
-   "gain_ms": 658.91,
-   "changed_params": 7
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 112.17,
+   "changed_params": 6
   },
   {
    "track_id": "monaco",
@@ -443,10 +454,10 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 7,
-   "gain_ms": 605.16,
-   "changed_params": 9
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 105.2,
+   "changed_params": 10
   },
   {
    "track_id": "monaco",
@@ -454,9 +465,9 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 4,
-   "gain_ms": 518.13,
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 102.79,
    "changed_params": 10
   },
   {
@@ -465,9 +476,9 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 5,
-   "gain_ms": 389.81,
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 107.23,
    "changed_params": 8
   },
   {
@@ -476,10 +487,10 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 5,
-   "gain_ms": 546.66,
-   "changed_params": 9
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 107.39,
+   "changed_params": 8
   },
   {
    "track_id": "monaco",
@@ -487,65 +498,65 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 7,
-   "gain_ms": 584.16,
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 107.32,
+   "changed_params": 7
+  },
+  {
+   "track_id": "barcelona",
+   "scenario": "entry_understeer",
+   "model_type": "nn",
+   "nn_available": true,
+   "reason": "ok",
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 107.69,
+   "changed_params": 10
+  },
+  {
+   "track_id": "barcelona",
+   "scenario": "exit_traction",
+   "model_type": "nn",
+   "nn_available": true,
+   "reason": "ok",
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 112.17,
+   "changed_params": 7
+  },
+  {
+   "track_id": "barcelona",
+   "scenario": "high_speed",
+   "model_type": "nn",
+   "nn_available": true,
+   "reason": "ok",
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 112.17,
+   "changed_params": 9
+  },
+  {
+   "track_id": "barcelona",
+   "scenario": "global_mixed",
+   "model_type": "nn",
+   "nn_available": true,
+   "reason": "ok",
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 106.22,
    "changed_params": 8
   },
   {
    "track_id": "barcelona",
-   "scenario": "entry_understeer",
-   "model_type": "nn",
-   "nn_available": true,
-   "reason": "ok",
-   "iterations": 3,
-   "accepted": 8,
-   "gain_ms": 668.17,
-   "changed_params": 12
-  },
-  {
-   "track_id": "barcelona",
-   "scenario": "exit_traction",
-   "model_type": "nn",
-   "nn_available": true,
-   "reason": "ok",
-   "iterations": 3,
-   "accepted": 8,
-   "gain_ms": 458.18,
-   "changed_params": 7
-  },
-  {
-   "track_id": "barcelona",
-   "scenario": "high_speed",
-   "model_type": "nn",
-   "nn_available": true,
-   "reason": "ok",
-   "iterations": 3,
-   "accepted": 8,
-   "gain_ms": 464.73,
-   "changed_params": 9
-  },
-  {
-   "track_id": "barcelona",
-   "scenario": "global_mixed",
-   "model_type": "nn",
-   "nn_available": true,
-   "reason": "ok",
-   "iterations": 3,
-   "accepted": 7,
-   "gain_ms": 694.63,
-   "changed_params": 10
-  },
-  {
-   "track_id": "barcelona",
    "scenario": "single_symptom",
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 10,
-   "gain_ms": 733.76,
-   "changed_params": 7
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 111.17,
+   "changed_params": 6
   },
   {
    "track_id": "spielberg",
@@ -553,10 +564,10 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 9,
-   "gain_ms": 672.67,
-   "changed_params": 14
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 115.6,
+   "changed_params": 11
   },
   {
    "track_id": "spielberg",
@@ -564,9 +575,9 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 6,
-   "gain_ms": 580.87,
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 113.68,
    "changed_params": 7
   },
   {
@@ -575,9 +586,9 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 8,
-   "gain_ms": 513.52,
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 116.54,
    "changed_params": 11
   },
   {
@@ -586,10 +597,10 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 8,
-   "gain_ms": 702.03,
-   "changed_params": 10
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 115.6,
+   "changed_params": 8
   },
   {
    "track_id": "spielberg",
@@ -597,9 +608,9 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 9,
-   "gain_ms": 751.45,
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 115.6,
    "changed_params": 6
   },
   {
@@ -608,10 +619,10 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 8,
-   "gain_ms": 810.33,
-   "changed_params": 12
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 116.02,
+   "changed_params": 10
   },
   {
    "track_id": "silverstone",
@@ -619,9 +630,9 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 6,
-   "gain_ms": 752.73,
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 116.02,
    "changed_params": 7
   },
   {
@@ -630,9 +641,9 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 8,
-   "gain_ms": 659.43,
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 116.25,
    "changed_params": 9
   },
   {
@@ -641,10 +652,10 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 8,
-   "gain_ms": 812.61,
-   "changed_params": 10
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 116.02,
+   "changed_params": 8
   },
   {
    "track_id": "silverstone",
@@ -652,9 +663,9 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 9,
-   "gain_ms": 888.98,
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 116.02,
    "changed_params": 6
   },
   {
@@ -663,10 +674,10 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 9,
-   "gain_ms": 949.21,
-   "changed_params": 13
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 105.87,
+   "changed_params": 10
   },
   {
    "track_id": "spa",
@@ -674,9 +685,9 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 8,
-   "gain_ms": 792.27,
+   "iterations": 2,
+   "accepted": 1,
+   "gain_ms": 80.0,
    "changed_params": 13
   },
   {
@@ -685,10 +696,10 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 6,
-   "gain_ms": 856.42,
-   "changed_params": 7
+   "iterations": 2,
+   "accepted": 1,
+   "gain_ms": 80.0,
+   "changed_params": 6
   },
   {
    "track_id": "spa",
@@ -696,10 +707,10 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 10,
-   "gain_ms": 950.01,
-   "changed_params": 10
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 110.08,
+   "changed_params": 7
   },
   {
    "track_id": "spa",
@@ -707,9 +718,9 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 9,
-   "gain_ms": 963.31,
+   "iterations": 2,
+   "accepted": 1,
+   "gain_ms": 80.0,
    "changed_params": 6
   },
   {
@@ -718,10 +729,10 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 6,
-   "gain_ms": 578.78,
-   "changed_params": 7
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 105.87,
+   "changed_params": 8
   },
   {
    "track_id": "hungaroring",
@@ -729,9 +740,9 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 5,
-   "gain_ms": 390.38,
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 109.1,
    "changed_params": 12
   },
   {
@@ -740,9 +751,9 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 5,
-   "gain_ms": 386.67,
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 107.23,
    "changed_params": 12
   },
   {
@@ -751,10 +762,10 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 5,
-   "gain_ms": 637.8,
-   "changed_params": 9
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 116.06,
+   "changed_params": 8
   },
   {
    "track_id": "hungaroring",
@@ -762,10 +773,10 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 8,
-   "gain_ms": 671.52,
-   "changed_params": 7
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 118.87,
+   "changed_params": 6
   },
   {
    "track_id": "zandvoort",
@@ -773,9 +784,9 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 9,
-   "gain_ms": 688.79,
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 113.87,
    "changed_params": 13
   },
   {
@@ -784,10 +795,10 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 7,
-   "gain_ms": 588.87,
-   "changed_params": 9
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 109.22,
+   "changed_params": 8
   },
   {
    "track_id": "zandvoort",
@@ -795,9 +806,9 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 8,
-   "gain_ms": 478.88,
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 112.17,
    "changed_params": 12
   },
   {
@@ -806,10 +817,10 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 8,
-   "gain_ms": 728.64,
-   "changed_params": 10
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 106.02,
+   "changed_params": 8
   },
   {
    "track_id": "zandvoort",
@@ -817,9 +828,9 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 9,
-   "gain_ms": 721.65,
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 110.94,
    "changed_params": 6
   },
   {
@@ -828,9 +839,9 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 8,
-   "gain_ms": 743.67,
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 101.51,
    "changed_params": 13
   },
   {
@@ -839,9 +850,9 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 8,
-   "gain_ms": 518.67,
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 112.26,
    "changed_params": 8
   },
   {
@@ -850,9 +861,9 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 8,
-   "gain_ms": 571.78,
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 110.94,
    "changed_params": 8
   },
   {
@@ -861,10 +872,10 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 8,
-   "gain_ms": 793.47,
-   "changed_params": 10
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 101.51,
+   "changed_params": 8
   },
   {
    "track_id": "monza",
@@ -872,10 +883,10 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 11,
-   "gain_ms": 881.79,
-   "changed_params": 9
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 110.94,
+   "changed_params": 6
   },
   {
    "track_id": "madrid",
@@ -883,10 +894,10 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 8,
-   "gain_ms": 804.22,
-   "changed_params": 12
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 116.02,
+   "changed_params": 10
   },
   {
    "track_id": "madrid",
@@ -894,10 +905,10 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 8,
-   "gain_ms": 788.08,
-   "changed_params": 11
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 116.25,
+   "changed_params": 10
   },
   {
    "track_id": "madrid",
@@ -905,9 +916,9 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 8,
-   "gain_ms": 669.96,
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 116.25,
    "changed_params": 9
   },
   {
@@ -916,10 +927,10 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 8,
-   "gain_ms": 820.9,
-   "changed_params": 10
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 114.56,
+   "changed_params": 8
   },
   {
    "track_id": "madrid",
@@ -927,9 +938,9 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 9,
-   "gain_ms": 873.25,
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 116.25,
    "changed_params": 6
   },
   {
@@ -938,10 +949,10 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 9,
-   "gain_ms": 897.27,
-   "changed_params": 12
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 116.02,
+   "changed_params": 13
   },
   {
    "track_id": "baku",
@@ -949,10 +960,10 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 8,
-   "gain_ms": 814.38,
-   "changed_params": 10
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 116.02,
+   "changed_params": 8
   },
   {
    "track_id": "baku",
@@ -960,9 +971,9 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 8,
-   "gain_ms": 681.28,
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 116.02,
    "changed_params": 12
   },
   {
@@ -971,10 +982,10 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 8,
-   "gain_ms": 834.23,
-   "changed_params": 10
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 112.77,
+   "changed_params": 8
   },
   {
    "track_id": "baku",
@@ -982,9 +993,9 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 9,
-   "gain_ms": 897.27,
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 116.02,
    "changed_params": 6
   },
   {
@@ -993,9 +1004,9 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 7,
-   "gain_ms": 813.9,
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 117.42,
    "changed_params": 12
   },
   {
@@ -1004,9 +1015,9 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 4,
-   "gain_ms": 700.09,
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 110.49,
    "changed_params": 10
   },
   {
@@ -1015,9 +1026,9 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 6,
-   "gain_ms": 567.62,
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 119.3,
    "changed_params": 8
   },
   {
@@ -1026,10 +1037,10 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 5,
-   "gain_ms": 752.35,
-   "changed_params": 9
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 116.06,
+   "changed_params": 8
   },
   {
    "track_id": "singapore",
@@ -1037,10 +1048,10 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 10,
-   "gain_ms": 899.8,
-   "changed_params": 7
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 119.3,
+   "changed_params": 6
   },
   {
    "track_id": "austin",
@@ -1048,10 +1059,10 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 8,
-   "gain_ms": 818.75,
-   "changed_params": 12
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 112.77,
+   "changed_params": 10
   },
   {
    "track_id": "austin",
@@ -1059,9 +1070,9 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 8,
-   "gain_ms": 690.77,
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 117.94,
    "changed_params": 11
   },
   {
@@ -1070,9 +1081,9 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 8,
-   "gain_ms": 672.61,
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 116.25,
    "changed_params": 9
   },
   {
@@ -1081,10 +1092,10 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 8,
-   "gain_ms": 812.93,
-   "changed_params": 10
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 115.09,
+   "changed_params": 8
   },
   {
    "track_id": "austin",
@@ -1092,10 +1103,10 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 10,
-   "gain_ms": 917.44,
-   "changed_params": 7
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 116.02,
+   "changed_params": 6
   },
   {
    "track_id": "mexico_city",
@@ -1103,10 +1114,10 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 7,
-   "gain_ms": 625.95,
-   "changed_params": 11
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 113.1,
+   "changed_params": 10
   },
   {
    "track_id": "mexico_city",
@@ -1114,9 +1125,9 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 6,
-   "gain_ms": 561.78,
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 109.45,
    "changed_params": 7
   },
   {
@@ -1125,9 +1136,9 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 8,
-   "gain_ms": 473.86,
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 112.17,
    "changed_params": 9
   },
   {
@@ -1136,10 +1147,10 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 8,
-   "gain_ms": 696.25,
-   "changed_params": 10
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 109.48,
+   "changed_params": 8
   },
   {
    "track_id": "mexico_city",
@@ -1147,9 +1158,9 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 9,
-   "gain_ms": 697.31,
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 111.17,
    "changed_params": 6
   },
   {
@@ -1158,10 +1169,10 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 7,
-   "gain_ms": 633.02,
-   "changed_params": 11
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 103.22,
+   "changed_params": 10
   },
   {
    "track_id": "sao_paulo",
@@ -1169,9 +1180,9 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 8,
-   "gain_ms": 468.94,
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 112.17,
    "changed_params": 7
   },
   {
@@ -1180,9 +1191,9 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 8,
-   "gain_ms": 455.23,
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 112.17,
    "changed_params": 9
   },
   {
@@ -1191,10 +1202,10 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 8,
-   "gain_ms": 651.05,
-   "changed_params": 12
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 103.06,
+   "changed_params": 8
   },
   {
    "track_id": "sao_paulo",
@@ -1202,10 +1213,10 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 10,
-   "gain_ms": 700.24,
-   "changed_params": 7
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 111.17,
+   "changed_params": 6
   },
   {
    "track_id": "las_vegas",
@@ -1213,9 +1224,9 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 10,
-   "gain_ms": 913.25,
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 116.25,
    "changed_params": 13
   },
   {
@@ -1224,10 +1235,10 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 8,
-   "gain_ms": 815.59,
-   "changed_params": 10
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 116.02,
+   "changed_params": 8
   },
   {
    "track_id": "las_vegas",
@@ -1235,9 +1246,9 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 8,
-   "gain_ms": 668.94,
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 116.25,
    "changed_params": 12
   },
   {
@@ -1246,10 +1257,10 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 9,
-   "gain_ms": 821.91,
-   "changed_params": 12
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 116.25,
+   "changed_params": 8
   },
   {
    "track_id": "las_vegas",
@@ -1257,9 +1268,9 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 9,
-   "gain_ms": 873.25,
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 116.25,
    "changed_params": 6
   },
   {
@@ -1268,10 +1279,10 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 9,
-   "gain_ms": 837.96,
-   "changed_params": 13
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 116.02,
+   "changed_params": 10
   },
   {
    "track_id": "lusail",
@@ -1279,9 +1290,9 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 6,
-   "gain_ms": 739.09,
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 116.02,
    "changed_params": 7
   },
   {
@@ -1290,9 +1301,9 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 6,
-   "gain_ms": 739.94,
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 116.02,
    "changed_params": 10
   },
   {
@@ -1301,10 +1312,10 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 8,
-   "gain_ms": 806.46,
-   "changed_params": 10
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 116.25,
+   "changed_params": 8
   },
   {
    "track_id": "lusail",
@@ -1312,9 +1323,9 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 6,
-   "gain_ms": 750.13,
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 116.02,
    "changed_params": 5
   },
   {
@@ -1323,10 +1334,10 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 8,
-   "gain_ms": 689.53,
-   "changed_params": 12
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 107.69,
+   "changed_params": 10
   },
   {
    "track_id": "yas_marina",
@@ -1334,9 +1345,9 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 8,
-   "gain_ms": 474.06,
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 112.26,
    "changed_params": 7
   },
   {
@@ -1345,9 +1356,9 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 8,
-   "gain_ms": 499.84,
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 112.26,
    "changed_params": 9
   },
   {
@@ -1356,10 +1367,10 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 8,
-   "gain_ms": 739.35,
-   "changed_params": 10
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 107.69,
+   "changed_params": 8
   },
   {
    "track_id": "yas_marina",
@@ -1367,10 +1378,10 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 3,
-   "accepted": 10,
-   "gain_ms": 785.13,
-   "changed_params": 7
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 107.69,
+   "changed_params": 6
   }
  ]
 }

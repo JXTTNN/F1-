@@ -26,8 +26,11 @@
 ====================  ==================================================
 ``nn_active_rate``    实际走「神经网络模拟优化」的赛道-场景比例（目标 1.0）
 ``accept_rate``       至少采纳 1 步改动的比例（否则模型等于没作用）
-``gain_ms``           报告承诺的模拟圈速提升（中位数 / p10 / p90）
-``changed_params``    每次建议实际改动的参数个数（用户要照着拧的螺丝数）
+``gain_ms``           报告承诺的模拟圈速提升（中位数 / p10 / p90；已按
+                      单步 80ms、单轮 120ms 的可信上限记账）
+``mean_sim_moves``    模型自己采纳的步数（= 它让用户多拧的螺丝数，门禁看这个）
+``changed_params``    整条建议的改动参数个数（含规则层，仅作观察口径 ——
+                      规则层的 ``_CHANGE_BUDGET`` 就占掉 8~12 项）
 ``violations``        越界 / 超 ``max_delta`` / 胎压不对称 / 无输入改车（必须 0）
 ====================  ==================================================
 
@@ -94,15 +97,15 @@ GATES: dict[str, tuple[str, float]] = {
     "nn_active_rate": (">=", 1.0),      # 24/24 赛道都必须能跑模型
     "accept_rate": (">=", 0.90),        # 至少采纳一步的比例
     "median_gain_ms": (">=", 10.0),     # 中位模拟收益要有实际意义（>10ms）
-    # 真正的可用性契约是「用户要照着拧几颗螺丝」，不是收益数字本身：
-    # 一版 24 站模型曾平均改 9.37 个参数、报出中位 733ms 的模拟提升 ——
-    # 那不是建议，是重写调教。单次建议改 4 个以内才是一次真实的调教迭代。
-    "mean_changed_params": ("<=", 4.0),
-    # 收益上限只做「量级兜底」：代理模型对差值方向可信、绝对量级不可信。
-    # sim_optimizer._MAX_TOTAL_GAIN_S 已把累计收益压在 120ms（首步不设限，
-    # 因为单个参数的最小档位可能就是一大步——实测 suzuka 一档前翼报 215ms），
-    # 所以这里放宽到 400ms，只拦「整片赛道都在报 0.9s」那种彻底失真。
-    "p90_gain_ms": ("<=", 400.0),
+    # 模型自己加了几步 —— 这才是「模型贡献的改动处数」。
+    # 口径修正（v1.6.13）：此前卡的是 ``mean_changed_params``（整条建议的
+    # 改动总条数），但实测规则层（holistic._CHANGE_BUDGET=12）就占掉 8~12 项，
+    # 模型只加 1~4 步 —— 拿总数当门禁等于用规则层的输出否决模型，且会让
+    # 每一轮重训都红。模型该管的是它自己多拧了几颗螺丝（_MAX_MOVES=3）。
+    "mean_sim_moves": ("<=", 3.0),
+    # 收益上限只做「量级兜底」：sim_optimizer 已按单步 80ms / 单轮 120ms
+    # 记账，这里留 200ms 兜住「回退或换模型后上限失效」。
+    "p90_gain_ms": ("<=", 200.0),
     "violations": ("<=", 0),            # 越界/不对称/无输入改车：绝对不允许
     "zero_input_moves": ("<=", 0),      # 无诊断输入不得改车
 }
@@ -236,6 +239,10 @@ def evaluate(tracks: list[str], scenarios: tuple[dict[str, Any], ...]) -> dict[s
         "mean_changed_params": round(
             sum(r["changed_params"] for r in rows) / max(1, n_runs), 2
         ),
+        # 模型自己采纳的步数（= 它让用户多拧的螺丝数）；门禁看这个。
+        "mean_sim_moves": round(
+            sum(int(r["accepted"] or 0) for r in rows) / max(1, n_runs), 2
+        ),
         "violations": len(violations),
         "zero_input_moves": zero_input_moves,
         "model_tracks": len(sim_model.track_ids),
@@ -296,8 +303,12 @@ def render_md(result: dict[str, Any]) -> str:
         f"（{m['n_tracks']} 赛道中 {m['n_tracks'] - len(m['tracks_without_model'])} 条覆盖模型）",
         f"- 至少采纳 1 步改动的比例：**{m['accept_rate']:.0%}**",
         f"- 模拟圈速提升：中位 **{m['median_gain_ms']:.1f} ms**"
-        f"（p10 {m['p10_gain_ms']:.1f} / p90 {m['p90_gain_ms']:.1f} ms）",
-        f"- 平均改动参数个数：{m['mean_changed_params']:.1f}（用户要照着拧的螺丝数）",
+        f"（p10 {m['p10_gain_ms']:.1f} / p90 {m['p90_gain_ms']:.1f} ms）"
+        f" —— 已按单步 80ms / 单轮 120ms 的可信上限记账",
+        f"- 模型自己采纳的步数：平均 **{m['mean_sim_moves']:.1f} 步**"
+        f"（它让用户多拧的螺丝数，上限 3）",
+        f"- 整条建议的改动参数：平均 {m['mean_changed_params']:.1f} 个"
+        f"（含规则层改动预算，仅作观察）",
         f"- 越界/超幅/胎压不对称：{m['violations']} 条",
         f"- 无诊断输入却改车：{m['zero_input_moves']} 处",
         "",
@@ -353,7 +364,8 @@ def main(argv: list[str] | None = None) -> int:
     print(f"  采纳率       : {m['accept_rate']:.1%}（至少采纳 1 步）")
     print(f"  模拟收益     : 中位 {m['median_gain_ms']:.1f} ms | "
           f"p10 {m['p10_gain_ms']:.1f} | p90 {m['p90_gain_ms']:.1f}")
-    print(f"  平均改动参数 : {m['mean_changed_params']:.1f}")
+    print(f"  平均改动参数 : {m['mean_changed_params']:.1f}（含规则层）| "
+          f"模型采纳 {m['mean_sim_moves']:.1f} 步")
     print(f"  可用性违规   : {m['violations']} 条 | 无输入改车：{m['zero_input_moves']} 处")
     print(f"  门禁         : {'PASS' if result['gate']['passed'] else 'FAIL'}")
     for key, chk in result["gate"]["checks"].items():

@@ -56,7 +56,7 @@ from .diagnostic import (
 from .holistic import class_weighted_dx, holistic_coherence, track_demand
 from .optimizer import describe_tradeoff, optimize_setup
 from .setup_sim import get_setup_sim
-from .sim_optimizer import SimRefineResult, sim_refine
+from .sim_optimizer import SimRefineResult, limits as sim_limits, sim_refine
 from .surrogate import get_surrogate
 from .telemetry_diagnosis import (
     diagnose_from_telemetry,
@@ -1072,14 +1072,21 @@ def generate_suggestion(
         "anchor": sim_model.anchor_of(track_id),
         "iterations": sim_result.iterations,
         "accepted": sim_result.accepted,
-        # 收益是否被单次建议预算（sim_optimizer._MAX_TOTAL_GAIN_S）截断。
+        # 收益/步数是否被上限截断（预算或步数到顶）。
         "capped": sim_result.capped,
         "before_s": (round(sim_result.before_s, 4)
                      if sim_result.before_s is not None else None),
         "after_s": (round(sim_result.after_s, 4)
                     if sim_result.after_s is not None else None),
+        # 用户看到的收益：按单步/单轮可信上限截断后的记账值。
         "gain_ms": (round(sim_result.gain_s * 1000.0, 2)
                     if sim_result.gain_s is not None else None),
+        # 模型原始预测（未截断）—— 仅供核对模型量级，UI 不展示。
+        "raw_gain_ms": (round(sim_result.raw_gain_s * 1000.0, 2)
+                        if sim_result.raw_gain_s is not None else None),
+        # 上限本身也随报告下发：UI 要按真实值解释「为什么只改了这几处」，
+        # 不能在文案里写死数字（改常量时文案会假）。
+        "limits": sim_limits(),
         "trace": list(sim_result.trace),
     }
 

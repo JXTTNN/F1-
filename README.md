@@ -104,7 +104,7 @@ python -m setup_tuner.cli
 ### 方式 B：免安装便携包（Windows）
 
 从 [Releases](https://github.com/JXTTNN/F1-/releases) 下载
-[`F1OPT-portable.zip`](https://github.com/JXTTNN/F1-/releases/download/v1.6.12/F1OPT-portable.zip)（约 22 MB），
+[`F1OPT-portable.zip`](https://github.com/JXTTNN/F1-/releases/download/v1.6.13/F1OPT-portable.zip)（约 22 MB），
 解压后双击「一键启动.bat」即可，无需安装 Python、无需任何配置。
 >
 > 便携包每次发布都会自动通过**打包产物测试**（6 阶段 / 100+ 检查）才会公开：

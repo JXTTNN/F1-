@@ -546,3 +546,22 @@ class TestMechanicalParticipationAllTracks:
                     f"{track}/{symptom} 参与度规则放大了总改动幅度："
                     f"{with_rules} > {without_rules}（应为置换而非追加）"
                 )
+
+
+def test_change_budget_ranks_by_normalized_magnitude() -> None:
+    """改动预算排序必须跨量纲可比（v1.6.13）。
+
+    回归：原实现按 ``abs(delta)`` 排序，而各参数量纲完全不同 —— 翼片 0~7 档、
+    束角 0~0.05°。束角走满整幅（0.05，等价于一次完整的束角改动）会被
+    翼片动 5 档（5.0，只走满 5/7）挤掉，等于「谁数字大谁重要」。
+    """
+    from setup_tuner.engine import holistic as holistic_mod
+
+    # 满幅束角 vs 5/7 幅度的前翼：归一化后束角更大，必须排在前面
+    assert holistic_mod._normalized_magnitude("front_toe", 0.05) > \
+        holistic_mod._normalized_magnitude("front_wing", 5.0)
+    # 同一参数内仍然单调
+    assert holistic_mod._normalized_magnitude("front_wing", 5.0) > \
+        holistic_mod._normalized_magnitude("front_wing", 2.0)
+    # 未知参数不得抛异常（回落到原始绝对值）
+    assert holistic_mod._normalized_magnitude("not_a_param", 1.5) == 1.5
