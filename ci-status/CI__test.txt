@@ -1,76 +1,115 @@
 workflow : CI
 job      : test
-sha      : 824257f28906cd7f9182bf07736320b64c6d9274
+sha      : a49f3d686e3ee80fc04708d288d074d023451205
 ref      : main
 event    : push
-run      : https://github.com/JXTTNN/F1-/actions/runs/41562217710
-time     : 2026-11-03T01:52:10Z
-steps    : install=success lint=success js=success pytest=cancelled usage=skipped
+run      : https://github.com/JXTTNN/F1-/actions/runs/41562394876
+time     : 2026-11-03T01:59:15Z
+steps    : install=success lint=success js=success pytest=success usage=success
 
 ================ .ci/pytest.log ================
+---- 失败 / 错误用例 ----
+---- 断言摘要 ----
+---- 最慢用例 ----
+============================= slowest 15 durations =============================
+4.20s call     tests/test_feedback_lifecycle.py::TestSuggestConsumesFeedback::test_next_round_only_sees_its_own_feedback
+2.60s call     tests/deep_integration/test_concurrent.py::TestConcurrentApiRequests::test_concurrent_mixed_api_operations
+2.35s call     tests/deep_slice/test_slice_02_telemetry_listener.py::TestSmoke::test_smoke_real_udp_short_packet_skipped
+2.29s call     tests/deep_integration/test_concurrent.py::TestConcurrentApiRequests::test_concurrent_suggest_no_deadlock
+2.20s call     tests/test_api_edge_cases.py::test_iteration_history_no_track
+2.19s call     tests/test_car_status.py::TestEndToEnd::test_simulated_lap_reaches_suggestion
+2.19s call     tests/deep_integration/test_e2e_business.py::TestMultiRoundConvergence::test_multi_round_iteration_history_grows
+2.17s call     tests/deep_integration/test_e2e_business.py::TestMultiRoundConvergence::test_repeated_suggest_is_deterministic
+2.16s call     tests/deep_integration/test_e2e_business.py::TestFullClosedLoop::test_full_6_step_loop
+2.14s call     tests/test_api_contract.py::TestRecordingTrainingExport::test_export_produces_samples
+2.13s call     tests/test_car_status.py::TestSimulatorCoverage::test_simulator_emits_car_status
+2.13s call     tests/test_api_edge_cases.py::test_multiple_suggestions_generate_iterations
+2.13s call     tests/deep_integration/test_e2e_business.py::TestMultiRoundConvergence::test_increasing_strength_increases_delta_magnitude
+2.12s call     tests/test_feedback_lifecycle.py::TestSuggestConsumesFeedback::test_disabled_keeps_accumulation_semantics
+2.12s call     tests/test_telemetry_surrogate.py::TestSuggestApiTelemetryOnly::test_suggest_works_without_driver_feedback
+=========================== short test summary info ============================
+SKIPPED [1] tests/test_telemetry_importer.py:484: 未设置 F1OPT_REAL_DATA_DIR（或目录不存在）
+SKIPPED [1] tests/test_telemetry_importer.py:500: 未设置 F1OPT_REAL_DATA_DIR（或目录不存在）
+SKIPPED [1] tests/test_telemetry_importer.py:512: 未设置 F1OPT_REAL_DATA_DIR（或目录不存在）
+============ 2154 passed, 3 skipped, 1 warning in 394.31s (0:06:34) ============
+---- 结果行 ----
+============ 2154 passed, 3 skipped, 1 warning in 394.31s (0:06:34) ============
+---- 超时 / 崩溃痕迹 ----
+---- 日志尾部 ----
+tests/test_track_arcs.py::TestAnchorsSitOnCorners::test_anchors_not_on_straights[shanghai] PASSED [ 98%]
+tests/test_track_arcs.py::TestAnchorsSitOnCorners::test_anchors_not_on_straights[silverstone] PASSED [ 98%]
+tests/test_track_arcs.py::TestAnchorsSitOnCorners::test_anchors_not_on_straights[singapore] PASSED [ 98%]
+tests/test_track_arcs.py::TestAnchorsSitOnCorners::test_anchors_not_on_straights[spa] PASSED [ 98%]
+tests/test_track_arcs.py::TestAnchorsSitOnCorners::test_anchors_not_on_straights[spielberg] PASSED [ 98%]
+tests/test_track_arcs.py::TestAnchorsSitOnCorners::test_anchors_not_on_straights[suzuka] PASSED [ 98%]
+tests/test_track_arcs.py::TestAnchorsSitOnCorners::test_anchors_not_on_straights[yas_marina] PASSED [ 98%]
+tests/test_track_arcs.py::TestAnchorsSitOnCorners::test_anchors_not_on_straights[zandvoort] PASSED [ 98%]
+tests/test_track_gain.py::TestGainDefinition::test_covers_all_params PASSED [ 98%]
+tests/test_track_gain.py::TestGainDefinition::test_moderate_range_only PASSED [ 98%]
+tests/test_track_gain.py::TestGainDefinition::test_neutral_types_are_identity PASSED [ 99%]
+tests/test_track_gain.py::TestGainDefinition::test_unknown_track_is_neutral PASSED [ 99%]
+tests/test_track_gain.py::TestGainDefinition::test_all_tracks_resolvable PASSED [ 99%]
+tests/test_track_gain.py::TestSuggestionVariesByTrack::test_suzuka_differs_from_monza PASSED [ 99%]
+tests/test_track_gain.py::TestSuggestionVariesByTrack::test_monza_amplifies_aero_and_damps_ride_height PASSED [ 99%]
+tests/test_track_gain.py::TestSuggestionVariesByTrack::test_street_circuit_amplifies_ride_height PASSED [ 99%]
+tests/test_track_gain.py::TestSuggestionVariesByTrack::test_direction_not_flipped PASSED [ 99%]
+tests/test_track_gain.py::TestSuggestionVariesByTrack::test_deterministic PASSED [ 99%]
+tests/test_training_dataset.py::TestCompoundClass::test_compound_mapping PASSED [ 99%]
+tests/test_training_dataset.py::TestWeatherMapping::test_light_cloud_is_dry PASSED [ 99%]
+tests/test_training_dataset.py::TestWeatherMapping::test_overcast_is_dry PASSED [ 99%]
+tests/test_training_dataset.py::TestWeatherMapping::test_storm_is_wet PASSED [ 99%]
+tests/test_training_dataset.py::TestWeatherMapping::test_rain_codes_are_wet PASSED [ 99%]
+tests/test_training_dataset.py::TestWeatherMapping::test_raw_code_kept_as_feature PASSED [ 99%]
+tests/test_training_dataset.py::TestWeatherMapping::test_missing_weather_defaults_dry PASSED [ 99%]
+tests/test_training_dataset.py::TestBuildRow::test_valid_row_has_universal_features PASSED [ 99%]
+tests/test_training_dataset.py::TestBuildRow::test_meta_records_track_length PASSED [ 99%]
+tests/test_training_dataset.py::TestBuildRow::test_invalid_lap_rejected PASSED [ 99%]
+tests/test_training_dataset.py::TestBuildRow::test_unknown_track_rejected PASSED [ 99%]
+tests/test_training_dataset.py::TestBuildDataset::test_build_from_files PASSED [ 99%]
+tests/test_training_dataset.py::TestBuildDataset::test_empty_dir PASSED  [ 99%]
+tests/test_training_dataset.py::TestBuildDataset::test_collect_lap_files_ignores_other_files PASSED [100%]
+
+=============================== warnings summary ===============================
+../../../../../opt/hostedtoolcache/Python/3.11.17/x64/lib/python3.11/site-packages/fastapi/testclient.py:1
+  /opt/hostedtoolcache/Python/3.11.17/x64/lib/python3.11/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+============================= slowest 15 durations =============================
+4.20s call     tests/test_feedback_lifecycle.py::TestSuggestConsumesFeedback::test_next_round_only_sees_its_own_feedback
+2.60s call     tests/deep_integration/test_concurrent.py::TestConcurrentApiRequests::test_concurrent_mixed_api_operations
+2.35s call     tests/deep_slice/test_slice_02_telemetry_listener.py::TestSmoke::test_smoke_real_udp_short_packet_skipped
+2.29s call     tests/deep_integration/test_concurrent.py::TestConcurrentApiRequests::test_concurrent_suggest_no_deadlock
+2.20s call     tests/test_api_edge_cases.py::test_iteration_history_no_track
+2.19s call     tests/test_car_status.py::TestEndToEnd::test_simulated_lap_reaches_suggestion
+2.19s call     tests/deep_integration/test_e2e_business.py::TestMultiRoundConvergence::test_multi_round_iteration_history_grows
+2.17s call     tests/deep_integration/test_e2e_business.py::TestMultiRoundConvergence::test_repeated_suggest_is_deterministic
+2.16s call     tests/deep_integration/test_e2e_business.py::TestFullClosedLoop::test_full_6_step_loop
+2.14s call     tests/test_api_contract.py::TestRecordingTrainingExport::test_export_produces_samples
+2.13s call     tests/test_car_status.py::TestSimulatorCoverage::test_simulator_emits_car_status
+2.13s call     tests/test_api_edge_cases.py::test_multiple_suggestions_generate_iterations
+2.13s call     tests/deep_integration/test_e2e_business.py::TestMultiRoundConvergence::test_increasing_strength_increases_delta_magnitude
+2.12s call     tests/test_feedback_lifecycle.py::TestSuggestConsumesFeedback::test_disabled_keeps_accumulation_semantics
+2.12s call     tests/test_telemetry_surrogate.py::TestSuggestApiTelemetryOnly::test_suggest_works_without_driver_feedback
+=========================== short test summary info ============================
+SKIPPED [1] tests/test_telemetry_importer.py:484: 未设置 F1OPT_REAL_DATA_DIR（或目录不存在）
+SKIPPED [1] tests/test_telemetry_importer.py:500: 未设置 F1OPT_REAL_DATA_DIR（或目录不存在）
+SKIPPED [1] tests/test_telemetry_importer.py:512: 未设置 F1OPT_REAL_DATA_DIR（或目录不存在）
+============ 2154 passed, 3 skipped, 1 warning in 394.31s (0:06:34) ============
+
+================ .ci/usage.log ================
 ---- 失败 / 错误用例 ----
 ---- 断言摘要 ----
 ---- 最慢用例 ----
 ---- 结果行 ----
 ---- 超时 / 崩溃痕迹 ----
 ---- 日志尾部 ----
-tests/deep_slice/test_slice_06_db.py::TestStatic::test_indexes_exist PASSED [ 24%]
-tests/deep_slice/test_slice_06_db.py::TestStatic::test_track_primary_key PASSED [ 24%]
-tests/deep_slice/test_slice_06_db.py::TestStatic::test_corner_composite_primary_key PASSED [ 24%]
-tests/deep_slice/test_slice_06_db.py::TestStatic::test_feedback_strength_check_constraint PASSED [ 24%]
-tests/deep_slice/test_slice_06_db.py::TestStatic::test_setup_id_autoincrement PASSED [ 24%]
-tests/deep_slice/test_slice_06_db.py::TestSmoke::test_file_based_db_persistence PASSED [ 24%]
-tests/deep_slice/test_slice_06_db.py::TestSmoke::test_context_manager PASSED [ 24%]
-tests/deep_slice/test_slice_06_db.py::TestSmoke::test_full_workflow_chain PASSED [ 24%]
-tests/deep_slice/test_slice_06_db.py::TestSmoke::test_thread_safety_concurrent_writes PASSED [ 24%]
-tests/deep_slice/test_slice_06_db.py::TestSmoke::test_wal_file_created PASSED [ 24%]
-tests/deep_slice/test_slice_06_db.py::TestSmoke::test_reopen_memory_db_independent PASSED [ 24%]
-tests/deep_slice/test_slice_07_api.py::TestUnit::test_ok_default PASSED  [ 24%]
-tests/deep_slice/test_slice_07_api.py::TestUnit::test_ok_with_data PASSED [ 24%]
-tests/deep_slice/test_slice_07_api.py::TestUnit::test_fail_returns_http_exception PASSED [ 24%]
-tests/deep_slice/test_slice_07_api.py::TestUnit::test_error_returns_http_exception_5xx PASSED [ 24%]
-tests/deep_slice/test_slice_07_api.py::TestUnit::test_envelope_model_defaults PASSED [ 24%]
-tests/deep_slice/test_slice_07_api.py::TestUnit::test_api_error_attributes PASSED [ 24%]
-tests/deep_slice/test_slice_07_api.py::TestUnit::test_health PASSED      [ 24%]
-tests/deep_slice/test_slice_07_api.py::TestUnit::test_list_tracks PASSED [ 24%]
-tests/deep_slice/test_slice_07_api.py::TestUnit::test_get_track_detail PASSED [ 24%]
-tests/deep_slice/test_slice_07_api.py::TestUnit::test_select_current_track PASSED [ 24%]
-tests/deep_slice/test_slice_07_api.py::TestUnit::test_submit_feedback PASSED [ 24%]
-tests/deep_slice/test_slice_07_api.py::TestUnit::test_list_feedbacks PASSED [ 25%]
-tests/deep_slice/test_slice_07_api.py::TestUnit::test_get_latest_suggestion_empty PASSED [ 25%]
-tests/deep_slice/test_slice_07_api.py::TestUnit::test_iteration_history_empty PASSED [ 25%]
-tests/deep_slice/test_slice_07_api.py::TestBoundary::test_get_track_unknown PASSED [ 25%]
-tests/deep_slice/test_slice_07_api.py::TestBoundary::test_select_track_unknown PASSED [ 25%]
-tests/deep_slice/test_slice_07_api.py::TestBoundary::test_feedback_unknown_track PASSED [ 25%]
-tests/deep_slice/test_slice_07_api.py::TestBoundary::test_feedback_unknown_symptom PASSED [ 25%]
-tests/deep_slice/test_slice_07_api.py::TestBoundary::test_feedback_strength_out_of_range PASSED [ 25%]
-tests/deep_slice/test_slice_07_api.py::TestBoundary::test_feedback_strength_negative PASSED [ 25%]
-tests/deep_slice/test_slice_07_api.py::TestBoundary::test_feedback_corner_out_of_range PASSED [ 25%]
-tests/deep_slice/test_slice_07_api.py::TestBoundary::test_feedback_missing_track_id PASSED [ 25%]
-tests/deep_slice/test_slice_07_api.py::TestBoundary::test_feedback_missing_symptom PASSED [ 25%]
-tests/deep_slice/test_slice_07_api.py::TestBoundary::test_suggest_no_feedback PASSED [ 25%]
-tests/deep_slice/test_slice_07_api.py::TestBoundary::test_suggest_unknown_track PASSED [ 25%]
-tests/deep_slice/test_slice_07_api.py::TestBoundary::test_get_current_setup_no_track PASSED [ 25%]
-tests/deep_slice/test_slice_07_api.py::TestBoundary::test_get_current_setup_no_snapshot PASSED [ 25%]
-tests/deep_slice/test_slice_07_api.py::TestBoundary::test_import_setup_no_packet5 PASSED [ 25%]
-tests/deep_slice/test_slice_07_api.py::TestBoundary::test_feedback_global_symptom_corner_none PASSED [ 25%]
-tests/deep_slice/test_slice_07_api.py::TestBoundary::test_all_15_symptoms_accepted[understeer] PASSED [ 25%]
-tests/deep_slice/test_slice_07_api.py::TestBoundary::test_all_15_symptoms_accepted[oversteer] PASSED [ 25%]
-tests/deep_slice/test_slice_07_api.py::TestBoundary::test_all_15_symptoms_accepted[turnin_unresponsive] PASSED [ 25%]
-tests/deep_slice/test_slice_07_api.py::TestBoundary::test_all_15_symptoms_accepted[brake_long] PASSED [ 26%]
-tests/deep_slice/test_slice_07_api.py::TestBoundary::test_all_15_symptoms_accepted[lockup] PASSED [ 26%]
-tests/deep_slice/test_slice_07_api.py::TestBoundary::test_all_15_symptoms_accepted[midcorner_understeer] PASSED [ 26%]
-tests/deep_slice/test_slice_07_api.py::TestBoundary::test_all_15_symptoms_accepted[midcorner_unstable] PASSED [ 26%]
-tests/deep_slice/test_slice_07_api.py::TestBoundary::test_all_15_symptoms_accepted[midcorner_traction] PASSED [ 26%]
-tests/deep_slice/test_slice_07_api.py::TestBoundary::test_all_15_symptoms_accepted[exit_wheelspin] PASSED [ 26%]
-tests/deep_slice/test_slice_07_api.py::TestBoundary::test_all_15_symptoms_accepted[exit_oversteer] PASSED [ 26%]
-tests/deep_slice/test_slice_07_api.py::TestBoundary::test_all_15_symptoms_accepted[bottoming] PASSED [ 26%]
-tests/deep_slice/test_slice_07_api.py::TestBoundary::test_all_15_symptoms_accepted[tyre_wear] PASSED [ 26%]
-tests/deep_slice/test_slice_07_api.py::TestBoundary::test_all_15_symptoms_accepted[straight_slow] PASSED [ 26%]
-tests/deep_slice/test_slice_07_api.py::TestBoundary::test_all_15_symptoms_accepted[lap_slow] PASSED [ 26%]
-tests/deep_slice/test_slice_07_api.py::TestBoundary::test_all_15_symptoms_accepted[high_speed_instability] PASSED [ 26%]
-tests/deep_slice/test_slice_07_api.py::TestProperty::test_envelope_format_consistency PASSED [ 26%]
-tests/deep_slice/test_slice_07_api.py::TestProperty::test_error_envelope_format PASSED [ 26%]
-tests/deep_slice/test_slice_07_api.py::TestProperty::test_ok_function_idempotent PASSED [ 26%]
-tests/deep_slice/test_slice_07_api.py::TestProperty::test_fail_function_idempotent PASSED [ 26%]
-tests/deep_slice/test_slice_07_api.py::TestProperty::test_list_tracks_deterministic PASSED [ 26%]
+使用流程评测完成（0.9s，3 赛道 × 5 场景）
+  模型生效率   : 100.0%（未覆盖 0 条：[]）
+  采纳率       : 100.0%（至少采纳 1 步）
+  模拟收益     : 中位 116.0 ms | p10 101.5 | p90 116.2
+  平均改动参数 : 8.9（含规则层）| 模型采纳 2.0 步
+  可用性违规   : 0 条 | 无输入改车：0 处
+  门禁         : PASS
+写出: /home/runner/work/F1-/F1-/setup_tuner/resources/models/usage_flow_eval.json / /home/runner/work/F1-/F1-/setup_tuner/resources/models/usage_flow_eval.md
+
