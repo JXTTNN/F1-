@@ -542,8 +542,9 @@ def _derive_mechanical_from_matrix(dx: dict[str, float]) -> dict[str, float]:
 def _normalized_magnitude(name: str, value: float) -> float:
     """改动幅度占该参数 ``max_delta`` 的比例（跨量纲可比）。
 
-    改动预算排序必须用它而不是 ``abs(value)``：翼片的 5 档（5.0）与束角的
-    满幅（0.05）在物理上都是一次完整改动，直接比绝对值会让束角永远垫底。
+    改动预算排序必须用它而不是 ``abs(value)``：前翼走 2 档是 2.0（只占
+    max_delta 的 40%），束角走满幅是 0.05（占 100%）—— 物理上前者只是
+    半程改动、后者是完整改动，直接比绝对值却会让束角永远垫底。
     """
     spec = _FIELD_SPECS.get(name)
     if spec is None or not spec.max_delta:
@@ -618,9 +619,9 @@ def holistic_coherence(
     changed = [p for p, v in out.items() if v]
     if len(changed) > _CHANGE_BUDGET:
         # 排序必须用**归一化幅度** |Δ| / max_delta：各参数量纲完全不同
-        # （翼片 0~7 档、束角 0~0.05°、胎压 0~1.5 psi、防倾杆 0~2 级），
-        # 直接比 |Δ| 等于「谁的数字大谁重要」—— 束角走满整幅（0.05）
-        # 也会被翼片动 5 档（5.0）挤掉，实际却是一次完整的束角改动。
+        # （翼片 max_delta 5 档、束角 0.05°、胎压 1.0 psi、防倾杆 2 级），
+        # 直接比 |Δ| 等于「谁的数字大谁重要」—— 束角走满整幅（0.05）会被
+        # 只走了 40% 的翼片（2.0）挤掉，实际却是一次完整的束角改动。
         ranked = sorted(
             changed, key=lambda p: _normalized_magnitude(p, out[p]), reverse=True,
         )

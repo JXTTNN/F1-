@@ -557,9 +557,12 @@ def test_change_budget_ranks_by_normalized_magnitude() -> None:
     """
     from setup_tuner.engine import holistic as holistic_mod
 
-    # 满幅束角 vs 5/7 幅度的前翼：归一化后束角更大，必须排在前面
-    assert holistic_mod._normalized_magnitude("front_toe", 0.05) > \
-        holistic_mod._normalized_magnitude("front_wing", 5.0)
+    # 满幅束角（max_delta=0.05）vs 只走 40% 的前翼（max_delta=5.0）：
+    # 原始值 0.05 < 2.0（旧口径会把束角丢掉），归一化后 1.0 > 0.4（新口径保留）。
+    assert holistic_mod._normalized_magnitude("front_toe", 0.05) == pytest.approx(1.0)
+    assert holistic_mod._normalized_magnitude("front_wing", 2.0) == pytest.approx(0.4)
+    assert 0.05 < 2.0
+    assert 1.0 > 0.4
     # 同一参数内仍然单调
     assert holistic_mod._normalized_magnitude("front_wing", 5.0) > \
         holistic_mod._normalized_magnitude("front_wing", 2.0)
