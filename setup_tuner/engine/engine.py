@@ -56,7 +56,8 @@ from .diagnostic import (
 from .holistic import class_weighted_dx, holistic_coherence, track_demand
 from .optimizer import describe_tradeoff, optimize_setup
 from .setup_sim import get_setup_sim
-from .sim_optimizer import SimRefineResult, limits as sim_limits, sim_refine
+from .sim_optimizer import SimRefineResult, sim_refine
+from .sim_optimizer import limits as sim_limits
 from .surrogate import get_surrogate
 from .telemetry_diagnosis import (
     diagnose_from_telemetry,
