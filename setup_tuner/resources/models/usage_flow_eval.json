@@ -1,6 +1,6 @@
 {
  "schema": "f1opt-usage-flow-eval/1",
- "evaluated_at": "2026-11-03T06:50:56",
+ "evaluated_at": "2026-11-03T19:41:05",
  "entry": "engine.generate_suggestion（与 POST /api/v1/suggest 同路径）",
  "metrics": {
   "n_tracks": 24,

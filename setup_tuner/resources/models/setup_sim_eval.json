@@ -1,9 +1,10 @@
 {
  "schema": "f1opt-setup-sim-eval/1",
  "model": "setup_sim_nn.json",
- "evaluated_at": "2026-11-03T06:50:51",
+ "evaluated_at": "2026-11-03T19:40:59",
  "seed": 20261102,
  "n_tracks": 19,
+ "model_tracks": 24,
  "skipped_tracks": [],
  "labels": {
   "source": "simulate_lap_delta_ms（遥测锚定准静态物理仿真）",
