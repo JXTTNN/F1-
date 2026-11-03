@@ -153,6 +153,13 @@ class SetupSimModel:
         self.n_samples = 0
         self.created = ""
         self._mlp: MLP | None = None
+        #: 输出缩放：全局兜底（旧模型只有这一对）
+        self.y_mean = 0.0
+        self.y_scale = 1.0
+        #: 输出缩放：逐赛道口径（新模型才有）。同一套 1 s 的标签在 Monaco 与
+        #: Monza 不是同一个量级的概念，全局尺度会被「站间差异」吃掉动态范围。
+        self.y_mean_by_track: dict[str, float] = {}
+        self.y_scale_by_track: dict[str, float] = {}
         #: 每赛道「默认调教」的原始预测（差分校准基准），懒算并缓存
         self._zero_pred: dict[str, float] = {}
         self._load()
@@ -193,6 +200,15 @@ class SetupSimModel:
         # 输出缩放（训练端把目标缩到 ~1 量级；推理必须乘回）
         self.y_mean = float(data.get("y_mean") or 0.0)
         self.y_scale = float(data.get("y_scale") or 1.0)
+        raw_mean = data.get("y_mean_by_track") or {}
+        raw_scale = data.get("y_scale_by_track") or {}
+        if isinstance(raw_mean, dict) and isinstance(raw_scale, dict):
+            self.y_mean_by_track = {
+                str(k): float(v) for k, v in raw_mean.items() if v is not None
+            }
+            self.y_scale_by_track = {
+                str(k): float(v) for k, v in raw_scale.items() if v is not None
+            }
         self.available = bool(self.track_ids) and self._mlp is not None
         self.reason = "ok" if self.available else "模型不完整"
 
@@ -204,6 +220,18 @@ class SetupSimModel:
         return build_feature_row(self.track_ids, self.track_features, track_id, setup_norm)
 
     # ---------------- 推理 ---------------- #
+    def output_scale(self, track_id: str) -> tuple[float, float]:
+        """该赛道的输出缩放 ``(mean, scale)``：解码 ``y = z * scale + mean``。
+
+        逐赛道口径缺失时退回全局口径 —— 旧模型（只有 ``y_mean``/``y_scale``）
+        与测试里手搓的模型都靠这条兜底继续可用。
+        """
+        mean = self.y_mean_by_track.get(track_id)
+        scale = self.y_scale_by_track.get(track_id)
+        if mean is None or scale is None or not scale:
+            return self.y_mean, self.y_scale
+        return mean, scale
+
     def predict_raw_delta_s(
         self, track_id: str, setup_norm: dict[str, float],
     ) -> float | None:
@@ -215,7 +243,8 @@ class SetupSimModel:
             return None
         try:
             raw = float(self._mlp.predict_one(row)[0])
-            return raw * self.y_scale + self.y_mean
+            mean, scale = self.output_scale(track_id)
+            return raw * scale + mean
         except (IndexError, KeyError, ValueError):
             logger.warning("调教性能推理失败（track=%s）", track_id, exc_info=True)
             return None
@@ -284,6 +313,8 @@ class SetupSimModel:
             detail += f" / 局部 {local} ms"
         if r2 is not None:
             detail += f" / R² {r2}"
+        if self.y_scale_by_track:
+            detail += " / 逐赛道标准化"
         tele, auth = self.coverage_counts()
         composition = (
             f"{len(self.track_ids)} 赛道" if auth == 0

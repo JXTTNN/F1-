@@ -39,6 +39,10 @@ META = ROOT / "data" / "training" / "setup_sim_meta.json"
 # 也可用 --out 写到别处（例如工作目录 data/models/ 覆盖包内版本）。
 OUT = ROOT / "setup_tuner" / "resources" / "models" / "setup_sim_nn.json"
 
+#: 逐赛道标签标准差的floor（秒）。某站标签几乎没方差时（异常数据集），
+#: 除以它会把噪声放大成信号；宁可退回 1ms 的小尺度。
+_MIN_TRACK_SCALE = 0.001
+
 
 def _mae(y: list[float], p: list[float]) -> float:
     return sum(abs(a - b) for a, b in zip(y, p, strict=True)) / max(1, len(y))
@@ -53,17 +57,19 @@ def _r2(y: list[float], p: list[float]) -> float:
     return 1.0 - ss_res / ss_tot if ss_tot > 1e-12 else 0.0
 
 
-def load_dataset() -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    if not DATASET.exists():
-        raise SystemExit(f"缺少仿真数据集 {DATASET}（先跑 build_setup_sim_dataset.py）")
-    if not META.exists():
-        raise SystemExit(f"缺少数据集元信息 {META}")
+def load_dataset(
+    dataset: Path = DATASET, meta_path: Path = META,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    if not dataset.exists():
+        raise SystemExit(f"缺少仿真数据集 {dataset}（先跑 build_setup_sim_dataset.py）")
+    if not meta_path.exists():
+        raise SystemExit(f"缺少数据集元信息 {meta_path}")
     rows: list[dict[str, Any]] = []
-    for line in DATASET.read_text(encoding="utf-8").splitlines():
+    for line in dataset.read_text(encoding="utf-8").splitlines():
         line = line.strip()
         if line:
             rows.append(json.loads(line))
-    meta = json.loads(META.read_text(encoding="utf-8"))
+    meta = json.loads(meta_path.read_text(encoding="utf-8"))
     return rows, meta
 
 
@@ -84,12 +90,15 @@ def main(argv: list[str] | None = None) -> int:
              "加权后容量集中在那里；全量程样本仍保留，保证远离最优时不发散。",
     )
     ap.add_argument("--out", default=str(OUT))
+    # 允许指向别的数据集：便于用合成小数据做回归测试，不影响云端重训默认路径
+    ap.add_argument("--dataset", default=str(DATASET))
+    ap.add_argument("--meta", default=str(META))
     args = ap.parse_args(argv)
 
     from setup_tuner.engine.pure_nn import MLP, mean_abs_error, r2_score
     from setup_tuner.engine.setup_sim import build_feature_row, feature_names
 
-    rows, meta = load_dataset()
+    rows, meta = load_dataset(Path(args.dataset), Path(args.meta))
     track_ids: list[str] = list(meta.get("tracks") or [])
     track_features: dict[str, dict[str, float]] = meta.get("track_features") or {}
     if not rows or not track_ids:
@@ -137,10 +146,12 @@ def main(argv: list[str] | None = None) -> int:
     # 注意标准化的 y_mean/y_scale 是在扩样后的集合上算的，因此也跟着偏向局部，
     # 梯度条件数更好。验证集**不扩样**，指标保持无偏差。
     n_tube_train = sum(1 for i in train_idx if tiers[i] == "tube")
+    tr_tids = [tids[i] for i in train_idx]
     if args.tube_weight > 1 and n_tube_train:
         extra = [i for i in train_idx if tiers[i] == "tube"] * (args.tube_weight - 1)
         x_tr = x_tr + [x[i] for i in extra]
         y_tr = y_tr + [y[i] for i in extra]
+        tr_tids = tr_tids + [tids[i] for i in extra]
     print(f"路径管加权: tube 训练样本 {n_tube_train} → {len(x_tr)} 条训练样本"
           f"（weight={args.tube_weight}）")
 
@@ -155,8 +166,43 @@ def main(argv: list[str] | None = None) -> int:
     y_mean = sum(y_tr) / len(y_tr)
     y_var = sum((v - y_mean) ** 2 for v in y_tr) / len(y_tr)
     y_scale = math.sqrt(y_var) if y_var > 1e-12 else 1.0
-    y_tr_scaled = [(v - y_mean) / y_scale for v in y_tr]
-    print(f"输出缩放: offset={y_mean:.4f}s scale={y_scale:.4f}s")
+
+    # v1.6.14：全局标准化 → **逐赛道标准化**。
+    #
+    # 24 站的标签不是同一个尺度：同样 1s 的 lap_delta，在 Monaco 是「灾难」，
+    # 在 Monza 只是「偏慢」。全局 y_scale 会把这份「站间差异」当成主体方差，
+    # 站内几十毫秒的决策区间被压成 z 上很小的一段 —— 而优化器的每个决策恰好
+    # 都发生在站内。逐站 z-score 后每站标签恒为 ~N(0,1)，站内区分度吃满动态范围；
+    # 又因为优化器只比较同赛道候选、报告再做差分校准，还原尺度不影响任何决策。
+    #
+    # 统计量只用**训练集**算（验证集不参与），与留出评估口径一致。
+    per_track_sum: dict[str, float] = {}
+    per_track_sq: dict[str, float] = {}
+    per_track_n: dict[str, int] = {}
+    for tid, v in zip(tr_tids, y_tr, strict=True):
+        per_track_sum[tid] = per_track_sum.get(tid, 0.0) + v
+        per_track_sq[tid] = per_track_sq.get(tid, 0.0) + v * v
+        per_track_n[tid] = per_track_n.get(tid, 0) + 1
+    per_track_scale: dict[str, tuple[float, float]] = {}
+    for tid, n in per_track_n.items():
+        m = per_track_sum[tid] / n
+        var = max(per_track_sq[tid] / n - m * m, 0.0)
+        per_track_scale[tid] = (m, max(math.sqrt(var), _MIN_TRACK_SCALE))
+    if len(per_track_scale) < len(track_ids):
+        missing = sorted(set(track_ids) - set(per_track_scale))
+        print(f"[warn] 以下赛道训练集为空，输出缩放退回全局口径：{missing}")
+
+    def _scale_of(tid: str) -> tuple[float, float]:
+        return per_track_scale.get(tid, (y_mean, y_scale))
+
+    y_tr_scaled = [
+        (v - _scale_of(tid)[0]) / _scale_of(tid)[1]
+        for tid, v in zip(tr_tids, y_tr, strict=True)
+    ]
+    spread = [s for _, s in per_track_scale.values()]
+    print(f"输出缩放: 逐赛道标准化 {len(per_track_scale)} 站 | "
+          f"逐站 std {min(spread):.3f}~{max(spread):.3f}s（全局兜底 "
+          f"offset={y_mean:.4f}s scale={y_scale:.4f}s）")
 
     t0 = time.time()
     model = MLP(sizes, seed=args.seed)
@@ -166,7 +212,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     elapsed = time.time() - t0
 
-    pred = [(v[0] * y_scale + y_mean) for v in model.predict(x_va)]
+    val_tid = [tids[i] for i in val_idx]
+    pred = [
+        v[0] * _scale_of(tid)[1] + _scale_of(tid)[0]
+        for v, tid in zip(model.predict(x_va), val_tid, strict=True)
+    ]
     mae_s = mean_abs_error(y_va, pred)
     r2 = r2_score(y_va, pred)
     # 零改动基线（恒预测 0s）：模型必须显著更好
@@ -184,7 +234,6 @@ def main(argv: list[str] | None = None) -> int:
     for tid, v in zip(tids, y, strict=True):
         if tid not in best_by_track or v < best_by_track[tid]:
             best_by_track[tid] = v
-    val_tid = [tids[i] for i in val_idx]
     gap = [y_va[i] - best_by_track.get(val_tid[i], y_va[i]) for i in range(len(y_va))]
 
     def _mae_where(lo: float, hi: float) -> tuple[float, int]:
@@ -231,9 +280,20 @@ def main(argv: list[str] | None = None) -> int:
             "seed": args.seed,
             "hidden": hidden,
             "train_seconds": round(elapsed, 2),
+            # 输出标准化口径：per_track=每站 z-score；mixed=有赛道退回全局
+            "output_scaling": (
+                "per_track" if len(per_track_scale) == len(track_ids) else "mixed"
+            ),
         },
         "mlp": {"model": model.to_dict(), "metrics": {"val_mae_ms": round(mae_s * 1000.0, 3)}},
         # 输出缩放口径（推理端必须乘回；见 setup_tuner.engine.setup_sim）
+        # 逐赛道口径优先，全局口径只作旧模型/未知赛道的兜底。
+        "y_mean_by_track": {
+            tid: round(m, 6) for tid, (m, _s) in sorted(per_track_scale.items())
+        },
+        "y_scale_by_track": {
+            tid: round(s, 6) for tid, (_m, s) in sorted(per_track_scale.items())
+        },
         "y_mean": round(y_mean, 6),
         "y_scale": round(y_scale, 6),
         "created": time.strftime("%Y-%m-%dT%H:%M:%S"),
