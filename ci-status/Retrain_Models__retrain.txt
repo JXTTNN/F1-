@@ -1,10 +1,10 @@
 workflow : Retrain Models
 job      : retrain
-sha      : c94db54a34e561b822526ce3361527e70a0077c5
+sha      : e89ebe0b2000422e9bad499a4861f6dddb833ac1
 ref      : main
-event    : schedule
-run      : https://github.com/JXTTNN/F1-/actions/runs/41531002755
-time     : 2026-11-02T22:09:41Z
+event    : push
+run      : https://github.com/JXTTNN/F1-/actions/runs/41593645053
+time     : 2026-11-03T07:47:47Z
 
 ================ .ci/gate.log ================
 ---- 失败 / 错误用例 ----
@@ -14,16 +14,16 @@ time     : 2026-11-02T22:09:41Z
 ---- 超时 / 崩溃痕迹 ----
 ---- 日志尾部 ----
 == setup_sim_eval  passed=True
-  fresh_local_mae_ms: 72.55 (门槛 <=120.0) -> PASS
-  pairwise_acc: 0.7544 (门槛 >=0.75) -> PASS
-  direction_agreement: 0.9976 (门槛 >=0.8) -> PASS
+  fresh_local_mae_ms: 61.94 (门槛 <=120.0) -> PASS
+  pairwise_acc: 0.8052 (门槛 >=0.75) -> PASS
+  direction_agreement: 1.0 (门槛 >=0.8) -> PASS
   zero_bias_ms: 0.0 (门槛 <=40.0) -> PASS
-== usage_flow_eval  passed=False
+== usage_flow_eval  passed=True
   nn_active_rate: 1.0 (门槛 >=1.0) -> PASS
   accept_rate: 1.0 (门槛 >=0.9) -> PASS
-  median_gain_ms: 213.57 (门槛 >=10.0) -> PASS
-  mean_changed_params: 8.05 (门槛 <=4.0) -> FAIL
-  p90_gain_ms: 222.88 (门槛 <=400.0) -> PASS
+  median_gain_ms: 109.95 (门槛 >=10.0) -> PASS
+  mean_sim_moves: 1.93 (门槛 <=3.0) -> PASS
+  p90_gain_ms: 116.41 (门槛 <=200.0) -> PASS
   violations: 0 (门槛 <=0) -> PASS
   zero_input_moves: 0 (门槛 <=0) -> PASS
 
