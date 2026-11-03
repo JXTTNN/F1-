@@ -31,11 +31,13 @@ jobs:
           cache: pip
 
       - name: Install dependencies
+        id: install
         run: |
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
 
       - name: Run all tests
+        id: pytest
         shell: bash
         run: |
           set -o pipefail
@@ -44,4 +46,6 @@ jobs:
 
       - name: Publish CI diagnostics
         if: always()
-        run: bash scripts/ci_diag.sh "Full CI" "full-test"
+        run: >-
+          bash scripts/ci_diag.sh "Full CI" "full-test"
+          "install=${{ steps.install.outcome }} pytest=${{ steps.pytest.outcome }}"

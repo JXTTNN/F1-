@@ -15,11 +15,16 @@
 #
 # 写入失败绝不影响主流程（诊断是附加能力，不能反过来把构建搞红）。
 #
-# 用法：bash scripts/ci_diag.sh <workflow 名> <job 名>
+# 用法：bash scripts/ci_diag.sh <workflow 名> <job 名> [步骤结论]
+#
+# 第三个参数通常由工作流传入各步骤的 outcome（success/failure/skipped），
+# 例如 `lint=success js=failure pytest=skipped`。没有它时「pytest 之前就失败了」
+# 只能靠猜是哪一步（实测踩过：ruff / node --check / pip install 都可能是凶手）。
 set -u
 
 WF="${1:-ci}"
 JOB="${2:-job}"
+STEPS="${3:-}"
 SAFE_WF=$(printf '%s' "$WF" | tr ' /&' '___')
 SAFE_JOB=$(printf '%s' "$JOB" | tr ' /&' '___')
 DIR="ci-status"
@@ -35,13 +40,16 @@ mkdir -p "$DIR"
   echo "event    : ${GITHUB_EVENT_NAME:-unknown}"
   echo "run      : ${GITHUB_SERVER_URL:-https://github.com}/${GITHUB_REPOSITORY:-unknown}/actions/runs/${GITHUB_RUN_ID:-0}"
   echo "time     : $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  if [ -n "$STEPS" ]; then
+    echo "steps    : $STEPS"
+  fi
   echo
 
   shopt -s nullglob
   logs=(.ci/*.log)
   if [ ${#logs[@]} -eq 0 ]; then
-    echo "(本 job 没有产出 .ci/*.log —— 失败发生在 pytest 之前的步骤，"
-    echo " 请看上面 run 链接)"
+    echo "(本 job 没有产出 .ci/*.log —— 失败发生在 pytest 之前的步骤："
+    echo " ${STEPS:-未提供步骤结论})"
   fi
 
   for f in "${logs[@]}"; do

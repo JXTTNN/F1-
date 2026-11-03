@@ -56,10 +56,11 @@ F1OPT 读取 **EA F1 2026** 游戏的 UDP 遥测，结合你在赛道图上点�
 | 调教性能模型 | 验证集 **MAE 53.3 ms / R² 0.9959**（零改动基线 2758 ms）；相邻候选差异方向正确率 **90%**（>30ms 显著移动 **95%**） |
 | 端到端优化效果 | 6 赛道 × 3 场景：模型判定平均 **−367 ms**，解析仿真器独立复核 **−631 ms**（18/18 场景均提升） |
 | 赛道签名 | 最优翼角：Monaco **+12 档**（最想加翼）↔ Spa **−6 档**（最想减翼），与 F1 调教共识一致 |
-| 测试 | `pytest` **2114 项**（含深切片 / 端到端）；`ruff` 全绿 |
+| 测试 | `pytest` **2,100+ 项**（含深切片 / 端到端）；`ruff` 全绿 |
 
 > 复现命令见「开发与测试」与 [`docs/Setup_Simulation_Optimizer.md`](docs/Setup_Simulation_Optimizer.md)；
-> 验收报告：[`docs/Optimization_Verification.md`](docs/Optimization_Verification.md)。
+> 当前模型的实测数字（每次重训自动重算）：`setup_tuner/resources/models/setup_sim_eval.md`
+> （决策精度）与 `usage_flow_eval.md`（使用流程，24 赛道 × 5 场景）。
 
 ---
 
@@ -257,7 +258,7 @@ python scripts/api_endpoint_test.py                          # API 契约 + 模�
 | 文档 | 内容 |
 |------|------|
 | [`docs/Setup_Simulation_Optimizer.md`](docs/Setup_Simulation_Optimizer.md) | ★ 神经网络模拟优化：数据 / 模型 / 管线 / 降级契约 / 复算步骤 |
-| [`docs/Optimization_Verification.md`](docs/Optimization_Verification.md) | 端到端效果验收报告（模型判定 + 解析仿真真值复核双列） |
+| [`docs/Optimization_Verification.md`](docs/Optimization_Verification.md) | 端到端效果验收报告（2026-09-19 历史快照；当前数字见包内 `setup_sim_eval.md` / `usage_flow_eval.md`） |
 | [`docs/Telemetry_Trained_Setup_Model.md`](docs/Telemetry_Trained_Setup_Model.md) | 遥测代理模型（逐弯重要度 / 残差诊断） |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | 系统架构与模块职责 |
 | [`docs/使用方法.md`](docs/使用方法.md) | 完整使用说明（面板 / API / 常见问题） |
