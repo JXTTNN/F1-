@@ -207,7 +207,10 @@ jobs:
 
       - name: Train telemetry surrogate
         if: github.event.inputs.skip_surrogate != 'true'
-        run: python scripts/train_telemetry_surrogate.py
+        run: |
+          set -o pipefail
+          mkdir -p .ci
+          python scripts/train_telemetry_surrogate.py 2>&1 | tee .ci/surrogate.log
 
       - name: Coverage report
         run: |
@@ -243,6 +246,8 @@ jobs:
       - name: Commit retrained models
         if: steps.guard.outputs.ok == '1'
         run: |
+          mkdir -p .ci
+          exec > >(tee -a .ci/commit.log) 2>&1
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           EVAL_PASS="${{ steps.evalsim.outputs.passed }}"
