@@ -9,7 +9,7 @@
 > 「遥测锚定仿真训练 + 纯标准库神经网络模拟优化」，见
 > [`Setup_Simulation_Optimizer.md`](Setup_Simulation_Optimizer.md)：
 > `engine/setup_sim.py`（模型）+ `engine/sim_optimizer.py`（不断模拟优化），
-> 模型产物 `setup_tuner/resources/models/setup_sim_nn.json`（验证 MAE 53ms / R² 0.996），
+> 模型产物 `setup_tuner/resources/models/setup_sim_nn.json`（验证 MAE 98.2ms / R² 0.9958），
 > **零 PyTorch 依赖**；`engine/nn_model.py`（torch 分支）已删除。
 > §5「悬挂几何为什么之前没有」的修复也已于 2026-09-20 全赛道生效
 > （机械抓地参与度门槛 0.35 → 0.10，实测 40/40 场景均含悬挂几何改动）。
