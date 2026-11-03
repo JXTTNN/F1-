@@ -242,6 +242,7 @@ def evaluate(model_path: Path, seed: int = 20261102) -> dict[str, Any]:
         "evaluated_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
         "seed": seed,
         "n_tracks": len(per_track),
+        "model_tracks": len(model.track_ids),
         "skipped_tracks": skipped,
         "labels": {
             "source": "simulate_lap_delta_ms（遥测锚定准静态物理仿真）",
@@ -304,7 +305,10 @@ def render_md(result: dict[str, Any]) -> str:
         "",
         f"- 模型：`{result['model']}`",
         f"- 评测时间：{result['evaluated_at']}",
-        f"- 赛道：{result['n_tracks']} 条（跳过 {len(result['skipped_tracks'])} 条未覆盖）",
+        f"- 评测赛道：{result['n_tracks']} 条（有独立遥测锚点的站；模型共覆盖 "
+        f"{result.get('model_tracks', result['n_tracks'])} 站，其余为几何推定锚点，"
+        f"无独立标签、不参与评分）",
+        f"- 跳过：{len(result['skipped_tracks'])} 条（锚点数据不可用）",
         f"- 标签来源：{result['labels']['source']}",
         f"- **真实跑圈样本：{result['labels']['real_setup_laps']}**",
         "",
