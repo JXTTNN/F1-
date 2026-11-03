@@ -24,7 +24,10 @@ set -u
 
 WF="${1:-ci}"
 JOB="${2:-job}"
-STEPS="${3:-}"
+# 3 个及以后的参数都当作步骤结论拼接（工作流可能拆成多段引号传递）
+STEPS=""
+for arg in "${@:3}"; do STEPS="$STEPS $arg"; done
+STEPS="${STEPS# }"
 SAFE_WF=$(printf '%s' "$WF" | tr ' /&' '___')
 SAFE_JOB=$(printf '%s' "$JOB" | tr ' /&' '___')
 DIR="ci-status"

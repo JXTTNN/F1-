@@ -74,6 +74,4 @@ jobs:
         if: always()
         run: >-
           bash scripts/ci_diag.sh "CI" "test"
-          "install=${{ steps.install.outcome }} lint=${{ steps.lint.outcome }}"
-          "js=${{ steps.js.outcome }} pytest=${{ steps.pytest.outcome }}"
-          "usage=${{ steps.usage.outcome }}"
+          "install=${{ steps.install.outcome }} lint=${{ steps.lint.outcome }} js=${{ steps.js.outcome }} pytest=${{ steps.pytest.outcome }} usage=${{ steps.usage.outcome }}"
