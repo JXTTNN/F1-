@@ -1,7 +1,7 @@
 {
  "schema": "f1opt-setup-sim-eval/1",
  "model": "setup_sim_nn.json",
- "evaluated_at": "2026-11-02T09:19:36",
+ "evaluated_at": "2026-11-03T01:14:01",
  "seed": 20261102,
  "n_tracks": 19,
  "skipped_tracks": [],
