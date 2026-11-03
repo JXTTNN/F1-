@@ -1,10 +1,11 @@
 workflow : CI
 job      : test
-sha      : 40e3dbd7be628519872d4ad4059cdd861671853c
+sha      : 85266afe0ef3a868e0ecdc63d53562703ed57961
 ref      : main
 event    : push
-run      : https://github.com/JXTTNN/F1-/actions/runs/41557509740
-time     : 2026-11-03T01:06:49Z
+run      : https://github.com/JXTTNN/F1-/actions/runs/41558149620
+time     : 2026-11-03T01:12:29Z
+steps    : install=success lint=failure
 
-(本 job 没有产出 .ci/*.log —— 失败发生在 pytest 之前的步骤，
- 请看上面 run 链接)
+(本 job 没有产出 .ci/*.log —— 失败发生在 pytest 之前的步骤：
+ install=success lint=failure)
