@@ -1,11 +1,109 @@
 workflow : CI
 job      : test
-sha      : 85266afe0ef3a868e0ecdc63d53562703ed57961
+sha      : 994b5db5f37825ee5474e8181dbd670f13ee3093
 ref      : main
 event    : push
-run      : https://github.com/JXTTNN/F1-/actions/runs/41558149620
-time     : 2026-11-03T01:12:29Z
-steps    : install=success lint=failure
+run      : https://github.com/JXTTNN/F1-/actions/runs/41558775617
+time     : 2026-11-03T01:24:29Z
+steps    : install=success lint=success
 
-(本 job 没有产出 .ci/*.log —— 失败发生在 pytest 之前的步骤：
- install=success lint=failure)
+================ .ci/pytest.log ================
+---- 失败 / 错误用例 ----
+FAILED tests/test_holistic.py::test_change_budget_ranks_by_normalized_magnitude - AssertionError: assert 1.0 > 1.0
+---- 断言摘要 ----
+E       AssertionError: assert 1.0 > 1.0
+E        +  where 1.0 = <function _normalized_magnitude at 0x7fab56c225c0>('front_toe', 0.05)
+E        +    where <function _normalized_magnitude at 0x7fab56c225c0> = <module 'setup_tuner.engine.holistic' from '/home/runner/work/F1-/F1-/setup_tuner/engine/holistic.py'>._normalized_magnitude
+E        +  and   1.0 = <function _normalized_magnitude at 0x7fab56c225c0>('front_wing', 5.0)
+E        +    where <function _normalized_magnitude at 0x7fab56c225c0> = <module 'setup_tuner.engine.holistic' from '/home/runner/work/F1-/F1-/setup_tuner/engine/holistic.py'>._normalized_magnitude
+---- 最慢用例 ----
+============================= slowest 15 durations =============================
+4.17s call     tests/test_feedback_lifecycle.py::TestSuggestConsumesFeedback::test_next_round_only_sees_its_own_feedback
+2.55s call     tests/deep_integration/test_concurrent.py::TestConcurrentApiRequests::test_concurrent_mixed_api_operations
+2.35s call     tests/deep_slice/test_slice_02_telemetry_listener.py::TestSmoke::test_smoke_real_udp_short_packet_skipped
+2.26s call     tests/deep_integration/test_concurrent.py::TestConcurrentApiRequests::test_concurrent_suggest_no_deadlock
+2.20s call     tests/test_api_edge_cases.py::test_full_workflow_with_setup_import
+2.17s call     tests/test_car_status.py::TestEndToEnd::test_simulated_lap_reaches_suggestion
+2.16s call     tests/deep_integration/test_e2e_business.py::TestMultiRoundConvergence::test_multi_round_iteration_history_grows
+2.15s call     tests/deep_integration/test_e2e_business.py::TestMultiRoundConvergence::test_repeated_suggest_is_deterministic
+2.15s call     tests/deep_integration/test_e2e_business.py::TestFullClosedLoop::test_full_6_step_loop
+2.14s call     tests/test_api_contract.py::TestRecordingTrainingExport::test_export_produces_samples
+2.13s call     tests/test_car_status.py::TestSimulatorCoverage::test_simulator_emits_car_status
+2.12s call     tests/test_api_edge_cases.py::test_multiple_suggestions_generate_iterations
+2.12s call     tests/deep_integration/test_e2e_business.py::TestMultiRoundConvergence::test_increasing_strength_increases_delta_magnitude
+2.11s call     tests/test_feedback_lifecycle.py::TestSuggestConsumesFeedback::test_disabled_keeps_accumulation_semantics
+2.11s call     tests/test_telemetry_surrogate.py::TestSuggestApiTelemetryOnly::test_suggest_works_without_driver_feedback
+=========================== short test summary info ============================
+SKIPPED [1] tests/test_telemetry_importer.py:484: 未设置 F1OPT_REAL_DATA_DIR（或目录不存在）
+SKIPPED [1] tests/test_telemetry_importer.py:500: 未设置 F1OPT_REAL_DATA_DIR（或目录不存在）
+SKIPPED [1] tests/test_telemetry_importer.py:512: 未设置 F1OPT_REAL_DATA_DIR（或目录不存在）
+FAILED tests/test_holistic.py::test_change_budget_ranks_by_normalized_magnitude - AssertionError: assert 1.0 > 1.0
+ +  where 1.0 = <function _normalized_magnitude at 0x7fab56c225c0>('front_toe', 0.05)
+ +    where <function _normalized_magnitude at 0x7fab56c225c0> = <module 'setup_tuner.engine.holistic' from '/home/runner/work/F1-/F1-/setup_tuner/engine/holistic.py'>._normalized_magnitude
+ +  and   1.0 = <function _normalized_magnitude at 0x7fab56c225c0>('front_wing', 5.0)
+ +    where <function _normalized_magnitude at 0x7fab56c225c0> = <module 'setup_tuner.engine.holistic' from '/home/runner/work/F1-/F1-/setup_tuner/engine/holistic.py'>._normalized_magnitude
+---- 结果行 ----
+======= 1 failed, 2153 passed, 3 skipped, 1 warning in 391.23s (0:06:31) =======
+---- 超时 / 崩溃痕迹 ----
+---- 日志尾部 ----
+tests/test_training_dataset.py::TestBuildRow::test_invalid_lap_rejected PASSED [ 99%]
+tests/test_training_dataset.py::TestBuildRow::test_unknown_track_rejected PASSED [ 99%]
+tests/test_training_dataset.py::TestBuildDataset::test_build_from_files PASSED [ 99%]
+tests/test_training_dataset.py::TestBuildDataset::test_empty_dir PASSED  [ 99%]
+tests/test_training_dataset.py::TestBuildDataset::test_collect_lap_files_ignores_other_files PASSED [100%]
+
+=================================== FAILURES ===================================
+_______________ test_change_budget_ranks_by_normalized_magnitude _______________
+
+    def test_change_budget_ranks_by_normalized_magnitude() -> None:
+        """改动预算排序必须跨量纲可比（v1.6.13）。
+    
+        回归：原实现按 ``abs(delta)`` 排序，而各参数量纲完全不同 —— 翼片 0~7 档、
+        束角 0~0.05°。束角走满整幅（0.05，等价于一次完整的束角改动）会被
+        翼片动 5 档（5.0，只走满 5/7）挤掉，等于「谁数字大谁重要」。
+        """
+        from setup_tuner.engine import holistic as holistic_mod
+    
+        # 满幅束角 vs 5/7 幅度的前翼：归一化后束角更大，必须排在前面
+>       assert holistic_mod._normalized_magnitude("front_toe", 0.05) > \
+            holistic_mod._normalized_magnitude("front_wing", 5.0)
+E       AssertionError: assert 1.0 > 1.0
+E        +  where 1.0 = <function _normalized_magnitude at 0x7fab56c225c0>('front_toe', 0.05)
+E        +    where <function _normalized_magnitude at 0x7fab56c225c0> = <module 'setup_tuner.engine.holistic' from '/home/runner/work/F1-/F1-/setup_tuner/engine/holistic.py'>._normalized_magnitude
+E        +  and   1.0 = <function _normalized_magnitude at 0x7fab56c225c0>('front_wing', 5.0)
+E        +    where <function _normalized_magnitude at 0x7fab56c225c0> = <module 'setup_tuner.engine.holistic' from '/home/runner/work/F1-/F1-/setup_tuner/engine/holistic.py'>._normalized_magnitude
+
+tests/test_holistic.py:561: AssertionError
+=============================== warnings summary ===============================
+../../../../../opt/hostedtoolcache/Python/3.11.17/x64/lib/python3.11/site-packages/fastapi/testclient.py:1
+  /opt/hostedtoolcache/Python/3.11.17/x64/lib/python3.11/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+============================= slowest 15 durations =============================
+4.17s call     tests/test_feedback_lifecycle.py::TestSuggestConsumesFeedback::test_next_round_only_sees_its_own_feedback
+2.55s call     tests/deep_integration/test_concurrent.py::TestConcurrentApiRequests::test_concurrent_mixed_api_operations
+2.35s call     tests/deep_slice/test_slice_02_telemetry_listener.py::TestSmoke::test_smoke_real_udp_short_packet_skipped
+2.26s call     tests/deep_integration/test_concurrent.py::TestConcurrentApiRequests::test_concurrent_suggest_no_deadlock
+2.20s call     tests/test_api_edge_cases.py::test_full_workflow_with_setup_import
+2.17s call     tests/test_car_status.py::TestEndToEnd::test_simulated_lap_reaches_suggestion
+2.16s call     tests/deep_integration/test_e2e_business.py::TestMultiRoundConvergence::test_multi_round_iteration_history_grows
+2.15s call     tests/deep_integration/test_e2e_business.py::TestMultiRoundConvergence::test_repeated_suggest_is_deterministic
+2.15s call     tests/deep_integration/test_e2e_business.py::TestFullClosedLoop::test_full_6_step_loop
+2.14s call     tests/test_api_contract.py::TestRecordingTrainingExport::test_export_produces_samples
+2.13s call     tests/test_car_status.py::TestSimulatorCoverage::test_simulator_emits_car_status
+2.12s call     tests/test_api_edge_cases.py::test_multiple_suggestions_generate_iterations
+2.12s call     tests/deep_integration/test_e2e_business.py::TestMultiRoundConvergence::test_increasing_strength_increases_delta_magnitude
+2.11s call     tests/test_feedback_lifecycle.py::TestSuggestConsumesFeedback::test_disabled_keeps_accumulation_semantics
+2.11s call     tests/test_telemetry_surrogate.py::TestSuggestApiTelemetryOnly::test_suggest_works_without_driver_feedback
+=========================== short test summary info ============================
+SKIPPED [1] tests/test_telemetry_importer.py:484: 未设置 F1OPT_REAL_DATA_DIR（或目录不存在）
+SKIPPED [1] tests/test_telemetry_importer.py:500: 未设置 F1OPT_REAL_DATA_DIR（或目录不存在）
+SKIPPED [1] tests/test_telemetry_importer.py:512: 未设置 F1OPT_REAL_DATA_DIR（或目录不存在）
+FAILED tests/test_holistic.py::test_change_budget_ranks_by_normalized_magnitude - AssertionError: assert 1.0 > 1.0
+ +  where 1.0 = <function _normalized_magnitude at 0x7fab56c225c0>('front_toe', 0.05)
+ +    where <function _normalized_magnitude at 0x7fab56c225c0> = <module 'setup_tuner.engine.holistic' from '/home/runner/work/F1-/F1-/setup_tuner/engine/holistic.py'>._normalized_magnitude
+ +  and   1.0 = <function _normalized_magnitude at 0x7fab56c225c0>('front_wing', 5.0)
+ +    where <function _normalized_magnitude at 0x7fab56c225c0> = <module 'setup_tuner.engine.holistic' from '/home/runner/work/F1-/F1-/setup_tuner/engine/holistic.py'>._normalized_magnitude
+======= 1 failed, 2153 passed, 3 skipped, 1 warning in 391.23s (0:06:31) =======
+
