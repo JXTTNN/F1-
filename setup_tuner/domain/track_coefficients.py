@@ -76,12 +76,12 @@ TRACK_TYPE_MULTIPLIERS: dict[str, dict[str, float]] = {
     "mixed": {},
 }
 
-# 单一事实来源：全部 21 参数的默认系数
+# 单一事实来源：全部 20 参数的默认系数
 NEUTRAL_GAIN: dict[str, float] = {spec.name: 1.0 for spec in ALL_SETUP_FIELDS}
 
 
 def gain_for_track_type(track_type: str) -> dict[str, float]:
-    """按赛道类型返回 {param: 敏感度倍数}（覆盖全部 21 参数）。"""
+    """按赛道类型返回 {param: 敏感度倍数}（覆盖全部 20 参数）。"""
     gain = dict(NEUTRAL_GAIN)
     multipliers = TRACK_TYPE_MULTIPLIERS.get(track_type, {})
     for group, factor in multipliers.items():

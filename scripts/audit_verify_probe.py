@@ -545,13 +545,19 @@ def check_param_count():
     item("G1.实际参数个数", "INFO", f"ALL_SETUP_FIELDS={n}, default().to_dict()={len(d)}")
     item("G2.smoke.py 期望个数", "FAIL" if expect != n else "PASS",
          f"EXPECTED_PARAM_COUNT={expect} vs 实际 {n} → Smoke Test 必然失败")
-    for f, pat in (("engine/engine.py", r"21 项"),
-                   ("report/builder.py", r"20 参数"),
-                   ("api/routes.py", r"20 参数")):
-        txt = (ROOT / "setup_tuner" / f).read_text("utf-8")
-        hits = len(re.findall(pat, txt))
-        item(f"G3.文档串不一致 {f}", "WARN" if hits else "PASS",
-             f"出现 '{pat}' {hits} 次（实际 {n} 参数）")
+    # 任何「N 项/个（调教）参数」的说法都必须等于 n。原先写死「哪几个文件 + 哪个
+    # 具体数字」的检查只能认出昨天的错（21），今天换成 23 就又漏了 —— 改成扫全包。
+    stale_pat = re.compile(r"(?<![A-Za-z0-9])(\d+)\s*(?:项|个)?\s*(?:调教)?参数")
+    stale: list[str] = []
+    for path in sorted((ROOT / "setup_tuner").rglob("*.py")):
+        txt = path.read_text("utf-8")
+        for hit in stale_pat.finditer(txt):
+            if int(hit.group(1)) != n:
+                rel = path.relative_to(ROOT).as_posix()
+                stale.append(f"{rel}: {hit.group(0)}")
+    item("G3.文档串与实际参数个数一致", "WARN" if stale else "PASS",
+         f"{len(stale)} 处与实际的 {n} 参数不符：{stale[:6]}" if stale
+         else f"全部与实际的 {n} 参数一致")
 
 
 # =========================================================================== #

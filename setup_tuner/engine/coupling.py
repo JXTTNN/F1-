@@ -1,4 +1,4 @@
-"""耦合矩阵 C（9 诊断维度 × 21 调教参数）。
+"""耦合矩阵 C（9 诊断维度 × 20 调教参数）。
 
 C[d][p] = 诊断维度 d 每 +1 单位 → 参数 p 的调整量（带符号档位数）。
 
@@ -56,7 +56,7 @@ class CouplingCell:
 
 
 # ---------------------------------------------------------------------------
-# 21 个参数名（固定顺序，从 ALL_SETUP_FIELDS 读取）
+# 20 个参数名（固定顺序，从 ALL_SETUP_FIELDS 读取）
 # ---------------------------------------------------------------------------
 PARAM_NAMES: list[str] = [f.name for f in ALL_SETUP_FIELDS]
 _PARAM_INDEX: dict[str, int] = {name: i for i, name in enumerate(PARAM_NAMES)}

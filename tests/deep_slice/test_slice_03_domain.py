@@ -1,15 +1,15 @@
 """切片 3 深度测试：领域模型（setup + symptoms + track）。
 
 覆盖：
-    - setup_tuner.domain.setup（23 参数调教，7 大类，CarSetup + SetupField）
-    - setup_tuner.domain.symptoms（12 症状，4 类，Symptom 枚举）
+    - setup_tuner.domain.setup（20 参数调教，6 大类，CarSetup + SetupField）
+    - setup_tuner.domain.symptoms（22 症状，4 类，Symptom 枚举）
     - setup_tuner.domain.track（24 赛道，Corner/Track 数据模型）
 
 5 种测试方式：
     1. unit     — get_field / validate_value / get_track_by_id 等正常输入正确性
     2. boundary — 越界值、未知名称、空输入、强度越界
     3. property — 往返一致性（to_dict→from_dict）、确定性、default 不变性
-    4. static   — 23 参数 / 12 症状 / 24 赛道数量约束、值域约束
+    4. static   — 20 参数 / 22 症状 / 24 赛道数量约束、值域约束
     5. smoke    — 真实构造完整 CarSetup → validate → diff 链路
 """
 
@@ -302,7 +302,7 @@ class TestStatic:
     """静态分析：验证数量与值域约束。"""
 
     def test_static_setup_field_count_is_20(self) -> None:
-        """数量约束：ALL_SETUP_FIELDS 恰好 21 项。"""
+        """数量约束：ALL_SETUP_FIELDS 恰好 20 项。"""
         assert len(ALL_SETUP_FIELDS) == 20
 
     def test_static_group_count_is_6(self) -> None:

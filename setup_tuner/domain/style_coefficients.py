@@ -63,7 +63,7 @@ _STYLE_RULES: list[tuple[int, tuple[str, ...], float]] = [
 
 
 def gain_for_style(vector: list[float] | None) -> dict[str, float]:
-    """按 12 维风格向量返回 {param: 敏感度倍数}（覆盖全部 21 参数）。
+    """按 12 维风格向量返回 {param: 敏感度倍数}（覆盖全部 20 参数）。
 
     Args:
         vector: 风格向量（12 维，[0,1]）；None / 长度不足 / 含非数值时

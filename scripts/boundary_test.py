@@ -1,4 +1,4 @@
-"""边界条件测试脚本：验证21项参数的min/max/step边界值。
+"""边界条件测试脚本：验证每项调教参数的 min/max/step 边界值。
 
 测试内容：
 - 每项参数取min值时是否被正确接受
@@ -23,7 +23,7 @@ failed = 0
 errors = []
 
 print("=" * 80)
-print("边界条件测试：21项参数 min/max/step 验证")
+print(f"边界条件测试：{len(ALL_SETUP_FIELDS)} 项参数 min/max/step 验证")
 print("=" * 80)
 
 for field in ALL_SETUP_FIELDS:

@@ -26,7 +26,7 @@ DELTA_ZERO_EPSILON = 1e-12
 
 # ---------------------------------------------------------------------------
 # Packet 5 字段映射（UDP 字段名 → domain.setup 参数名）
-# 对照 design 1.2.1 Packet 5 与 domain/setup.py 21 参数定义
+# 对照 design 1.2.1 Packet 5 与 domain/setup.py 20 参数定义
 # ---------------------------------------------------------------------------
 _PACKET5_FIELD_MAP: dict[str, str] = {
     "m_frontWing": "front_wing",
@@ -276,12 +276,12 @@ def convert_udp_to_game_value(param_name: str, udp_value: float) -> float:
 
 
 # ---------------------------------------------------------------------------
-# 辅助：从 CarSetups 包（遥测 Packet 5）提取 21 参数快照
+# 辅助：从 CarSetups 包（遥测 Packet 5）提取 20 参数快照
 # ---------------------------------------------------------------------------
 def extract_setup_from_packet5(packet5: dict[str, Any]) -> dict[str, float]:
-    """从遥测 CarSetups 包（packet_id=5）提取 21 项调教参数快照。
+    """从遥测 CarSetups 包（packet_id=5）提取 20 项调教参数快照。
 
-    对齐 design 1.2.1 Packet 5 字段映射与 domain.setup 21 参数全集。
+    对齐 design 1.2.1 Packet 5 字段映射与 domain.setup 20 参数全集。
     缺失字段取 SetupField.default；值经 :func:`convert_udp_to_game_value`
     （当前为恒等映射）后 clamp 到合法区间。
 
@@ -289,7 +289,7 @@ def extract_setup_from_packet5(packet5: dict[str, Any]) -> dict[str, float]:
         packet5: ``parse_car_setups`` 返回的字典（含 m_frontWing 等字段）。
 
     Returns:
-        21 参数扁平字典 ``{param_name: value}``。
+        20 参数扁平字典 ``{param_name: value}``。
     """
     result: dict[str, float] = {}
     for spec in ALL_SETUP_FIELDS:
@@ -308,7 +308,7 @@ def extract_setup_from_packet5(packet5: dict[str, Any]) -> dict[str, float]:
 
 
 def _clamp_setup_to_bounds(result: dict[str, float]) -> None:
-    """将 21 参数值 clamp 到各自合法区间（原地修改）。"""
+    """将 20 参数值 clamp 到各自合法区间（原地修改）。"""
     for spec in ALL_SETUP_FIELDS:
         val = result[spec.name]
         if val < spec.min_val:
@@ -451,7 +451,7 @@ def aggregate_feedback_symptoms(
         早期 ``/suggest`` 直接把每条反馈都作为一个症状丢给 ``compute_dx``。
         而 ``compute_dx`` 对同症状是**代数求和**，于是同一条反馈重复 N 次就会让
         Dx 线性放大 —— 云端实测：同一条反馈 ×20 时 ``|Dx|max`` 从 2.4 涨到 48，
-        21 个参数里 16 个被 ``max_delta`` 顶满 → 建议不再随输入变化，
+        20 个参数里 16 个被 ``max_delta`` 顶满 → 建议不再随输入变化，
         且反馈越多越极端。这既不是"更多信息"，也不是个性化。
 
         聚合规则：同一 ``(corner_number, symptom)`` 只保留**最强强度**；

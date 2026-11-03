@@ -174,7 +174,7 @@ def optimize_setup(
 
     Args:
         dx: 诊断向量（9 维）—— 与遥测/反馈合成后的需求。
-        current_setup: 当前调教（21 参数，真实单位）。
+        current_setup: 当前调教（20 参数，真实单位）。
         track_id: 赛道标识。
         telemetry: 遥测摘要（参与代价项与抓地修正）。
         feedbacks: 逐弯反馈，用于抬高车手关心弯的重要度。

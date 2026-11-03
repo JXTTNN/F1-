@@ -846,7 +846,7 @@ def build(
             tagged.append((dict(optimum), "seed_optimum"))
             # 路径管采样：先在「默认→最优」路径上取位置 t，再逐参数加抖动。
             for (half_width, _share, t_max), count in zip(
-                _SAMPLE_TIERS, _tier_counts(max(0, n_setups - len(tagged)))
+                _SAMPLE_TIERS, _tier_counts(max(0, n_setups - len(tagged))), strict=True
             ):
                 for _ in range(count):
                     if half_width is None:

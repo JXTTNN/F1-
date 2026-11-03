@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import os
+import urllib.request
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
@@ -34,6 +35,21 @@ FAILED_REQUESTS: list[str] = []
 def item(tag: str, ok: bool, detail: str = "") -> None:
     RESULTS.append((tag, "PASS" if ok else "FAIL", detail))
     print(f"[{'PASS' if ok else 'FAIL'}] {tag}" + (f" :: {detail}" if detail else ""), flush=True)
+
+
+def param_count_from_api() -> int:
+    """以 ``/api/v1/setup/fields`` 为唯一口径。
+
+    这里曾写死 21 项，而实际只有 20 项 —— 审计自己先失真了，既不能发现真问题，
+    还会把正确实现报成 FAIL。参数个数只能从服务端要，不能在脚本里猜。
+    """
+    try:
+        with urllib.request.urlopen(f"{BASE}/api/v1/setup/fields", timeout=10) as resp:
+            payload = json.loads(resp.read().decode("utf-8"))
+        data = payload.get("data", payload) if isinstance(payload, dict) else payload
+        return len(data) if isinstance(data, list) else 0
+    except Exception:
+        return 0
 
 
 def main() -> int:
@@ -98,7 +114,9 @@ def main() -> int:
         rows = page.locator("#report-table-wrap table tr").count()
         summary = page.inner_text("#report-summary")
         item("④建议报告生成", rows > 0, f"表格行数={rows}")
-        item("④报告参数行数=21", rows - 1 == 21, f"数据行={rows - 1}")
+        expected_rows = param_count_from_api()
+        item(f"④报告参数行数={expected_rows}", expected_rows > 0 and rows - 1 == expected_rows,
+             f"数据行={rows - 1}")
         item("④报告摘要非空", len(summary.strip()) > 0, f"summary={summary[:60]!r}")
         page.screenshot(path=str(SHOTS / "05_report.png"), full_page=True)
 

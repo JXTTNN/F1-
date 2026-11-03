@@ -626,7 +626,7 @@ def compute_setup_delta(
 
     Args:
         dx: 诊断向量字典 {dim_key: value}（9 维，来自 compute_dx）。
-        current_setup: 当前调教快照 {param: value}（21 参数）。
+        current_setup: 当前调教快照 {param: value}（20 参数）。
         telemetry_gain: 每参数的遥测幅度增益 {param: gain}；
             None 时全部默认 1.0。
         track_gain: 每参数的**赛道敏感度增益** {param: gain}（见
@@ -635,7 +635,7 @@ def compute_setup_delta(
             ``domain.style_coefficients``）；None 时全部默认 1.0。
 
     Returns:
-        SetupDelta 字典 {param: delta_value}，覆盖全部 21 参数。
+        SetupDelta 字典 {param: delta_value}，覆盖全部 20 参数。
         每参数 delta 满足：
             - |delta| <= max_delta[p]（单次上限）；
             - current[p] + delta ∈ [min[p], max[p]（合法区间）；
@@ -908,7 +908,7 @@ Returns:
           "track_id": str,
           "dx": {{dim: value}},
           "setup_delta": {{param: delta}},
-          "parameters": [param_detail, ...],   # 21 项
+          "parameters": [param_detail, ...],   # 全部调教参数（20 项）
           "confidence": "high|medium|low",
           "summary": str,
           "model_type": str,            # 实际使用的模型类型
@@ -931,7 +931,7 @@ def generate_suggestion(
 
     Args:
         symptoms: ``[(symptom, strength[, stage]), ...]``。
-        current_setup: 当前调教（21 参数）。
+        current_setup: 当前调教（20 参数）。
         track_id: 赛道标识。
         telemetry: 遥测摘要。
         model_type: 模型类型。

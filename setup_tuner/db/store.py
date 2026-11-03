@@ -302,7 +302,7 @@ class Store:
 
         Args:
             track_id: 所属赛道标识。
-            params: 21 项参数字典（序列化为 JSON 存储）。
+            params: 20 项参数字典（序列化为 JSON 存储）。
 
         Returns:
             新插入的 setup.id。

@@ -181,7 +181,7 @@ def main(argv: list[str] | None = None) -> int:
     #   local = 距该赛道最优 <300 ms（坐标上升主要活动区）
     #   wide  = 其余（远离最优，只要求不发散）
     best_by_track: dict[str, float] = {}
-    for tid, v in zip(tids, y):
+    for tid, v in zip(tids, y, strict=True):
         if tid not in best_by_track or v < best_by_track[tid]:
             best_by_track[tid] = v
     val_tid = [tids[i] for i in val_idx]

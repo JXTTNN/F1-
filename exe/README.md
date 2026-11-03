@@ -1,5 +1,9 @@
 # EXE 打包
 
+> **已废弃**：当前打包走 Nuitka —— 见 `.github/workflows/build-release.yml` 与
+> `scripts/build_nuitka.py`。本目录的 PyInstaller 方案（`build.bat` /
+> `f1opt.spec` / `portable-build.ps1`）已不再维护，仅作历史留档，不要用它出包。
+
 两种方案任选其一：
 
 ## 方案 A：PyInstaller onedir (release.yml)

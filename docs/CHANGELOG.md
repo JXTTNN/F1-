@@ -20,8 +20,12 @@
   拿它当门禁等于用规则层否决模型，实测每轮重训必然红（8.05 > 4）。
 - **改动预算排序修复**：`holistic._CHANGE_BUDGET` 收口原按 `abs(delta)` 排序，
   跨量纲不可比（翼片 5 档 vs 束角满幅 0.05），改为 `|delta| / max_delta`。
-- **验证**：pytest 2152 passed / 0 failed（云端 CI 与 Full CI 双绿）；
-  21 项便携包自检全过（`model_type=nn`）。
+- **验证**：pytest 2153 passed / 0 failed（云端 CI 与 Full CI 双绿）；
+  便携包 80 项深度自检全过（`model_type=nn`）。
+- **口径清理**：全仓「N 项参数」的说法统一回 20（`api/routes.py` /
+  `engine/*` / `report/builder.py` / `db/store.py` 等 30 余处仍是 21）；
+  便携自检项数按脚本实际值（80）表述；`scripts/audit_verify_probe.py` 的
+  文档串检查从「写死文件名 + 写死数字」改成扫全包比对，避免只能认出昨天的错。
 
 ### v1.6.12：调教性能模型覆盖 24/24 赛道（2026-11-02）
 - **覆盖补全**：遥测锚定 19 站 + 几何推定 5 站（jeddah / las_vegas / lusail /

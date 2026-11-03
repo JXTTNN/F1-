@@ -6,7 +6,7 @@
 
 [![CI](https://github.com/JXTTNN/F1-/actions/workflows/ci.yml/badge.svg)](https://github.com/JXTTNN/F1-/actions/workflows/ci.yml)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
-[![Tests](https://img.shields.io/badge/tests-2114%20collected-brightgreen.svg)](#开发与测试)
+[![Tests](https://img.shields.io/badge/tests-2153%20collected-brightgreen.svg)](#开发与测试)
 [![Runtime AI deps](https://img.shields.io/badge/runtime%20AI%20deps-none-success.svg)](#为什么不需要-pytorch)
 
 ---

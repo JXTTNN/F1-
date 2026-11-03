@@ -14,7 +14,7 @@ dependencies = [
     "fastapi>=0.100",
     "uvicorn[standard]>=0.20",
     "pydantic>=2",
-    "structlog>=20.1",
+    # zstandard 可选：仅录制压缩用（recorder.py 里 try/except 导入）
     "zstandard>=0.22",
 ]
 

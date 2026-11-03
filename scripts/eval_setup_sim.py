@@ -56,6 +56,7 @@ from build_setup_sim_dataset import (  # noqa: E402
     simulate_lap_delta_ms,
     snap_to_step,
 )
+
 from setup_tuner.domain.setup import ALL_SETUP_FIELDS, get_field  # noqa: E402
 from setup_tuner.engine.setup_sim import SetupSimModel  # noqa: E402
 
@@ -228,8 +229,8 @@ def evaluate(model_path: Path, seed: int = 20261102) -> dict[str, Any]:
         per_track[tid] = {
             "optimum_delta_ms": round(opt_ms, 2),
             "n_local": len(t_loc),
-            "fresh_local_mae_ms": round(_mae(list(zip(t_loc, p_loc))), 2),
-            "fresh_wide_mae_ms": round(_mae(list(zip(t_wide, p_wide))), 2),
+            "fresh_local_mae_ms": round(_mae(list(zip(t_loc, p_loc, strict=True))), 2),
+            "fresh_wide_mae_ms": round(_mae(list(zip(t_wide, p_wide, strict=True))), 2),
         }
 
     def _acc(ok: int, total: int) -> float:

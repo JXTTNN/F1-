@@ -46,7 +46,7 @@ from setup_tuner.telemetry.style_extractor import StyleExtractor
 
 logger = logging.getLogger(__name__)
 
-# Packet 5（CarSetups）玩家段调教字段（对齐 setup_tuner 调教模型的 21 项）
+# Packet 5（CarSetups）玩家段调教字段（对齐 setup_tuner 调教模型的 20 项）
 _SETUP_KEYS: tuple[str, ...] = (
     "m_frontWing", "m_rearWing", "m_onThrottleDiff", "m_offThrottleDiff",
     "m_frontCamber", "m_rearCamber", "m_frontToe", "m_rearToe",

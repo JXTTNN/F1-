@@ -126,12 +126,12 @@ class SelectTrackResponse(BaseModel):
 
 
 class SetupSnapshot(BaseModel):
-    """调教快照视图（21 参数 + 元数据）。"""
+    """调教快照视图（20 参数 + 元数据）。"""
 
     setup_id: int | None = None
     track_id: str
     imported_at: str | None = None
-    params: dict[str, float] = Field(..., description="21 项参数字典")
+    params: dict[str, float] = Field(..., description="20 项参数字典")
 
 
 class FeedbackItem(BaseModel):
@@ -261,7 +261,7 @@ class ManualSetupRequest(BaseModel):
     """手动设置调教请求。"""
 
     track_id: str = Field(..., description="赛道标识")
-    params: dict[str, float] = Field(..., description="21 项参数字典")
+    params: dict[str, float] = Field(..., description="20 项参数字典")
 
 
 class TelemetrySimulateRequest(BaseModel):
@@ -463,7 +463,7 @@ async def import_setup(request: Request) -> dict[str, Any]:
             http_status=409,
         )
 
-    # 提取 21 参数快照
+    # 提取 20 参数快照
     params = extract_setup_from_packet5(packet5)
 
     # 确定赛道：优先用当前选定赛道，其次用遥测 Session 包的 m_trackId
@@ -521,13 +521,13 @@ async def get_current_setup(
     return ok(data=data.model_dump())
 
 
-# setup/fields 响应缓存：21 项参数定义为静态数据，启动后不变。
+# setup/fields 响应缓存：20 项参数定义为静态数据，启动后不变。
 _SETUP_FIELDS_CACHE: dict[str, Any] | None = None
 
 
 @router.get("/setup/fields")
 async def list_setup_fields() -> dict[str, Any]:
-    """返回 21 项调教参数的完整定义（供前端渲染参数输入面板）。
+    """返回 20 项调教参数的完整定义（供前端渲染参数输入面板）。
 
     性能优化：参数定义为静态数据，首次请求后缓存响应 dict。
     """
@@ -553,7 +553,7 @@ async def list_setup_fields() -> dict[str, Any]:
 
 
 def _validate_manual_setup_params(params: dict[str, float]) -> None:
-    """校验手动调教参数：包含全部 21 项且每项在 [min, max] 范围内。"""
+    """校验手动调教参数：包含全部 20 项且每项在 [min, max] 范围内。"""
     expected_names = {f.name for f in ALL_SETUP_FIELDS}
     provided_names = set(params.keys())
 
@@ -587,9 +587,9 @@ def _validate_manual_setup_params(params: dict[str, float]) -> None:
 async def manual_setup(
     body: ManualSetupRequest, request: Request,
 ) -> dict[str, Any]:
-    """手动设置 21 参数调教快照。
+    """手动设置 20 参数调教快照。
 
-    校验 params 包含全部 21 项且每项在 [min, max] 范围内，
+    校验 params 包含全部 20 项且每项在 [min, max] 范围内，
     然后调用 store.import_setup 保存。
     """
     svc = _get_services(request)
@@ -828,7 +828,7 @@ def _resolve_current_setup(store: Any, track_id: str) -> tuple[dict[str, float],
     对数据库中的 params 做格式归一化（CarSetup.from_dict → to_dict）：
     - 忽略旧版多余字段（active_aero_x / ballast / damping / front_spring 等）；
     - 用默认值补全新版缺失字段（front_suspension / rear_suspension / 四轮独立胎压等）。
-    这样无论数据库里存的是旧格式还是新格式，返回的都是完整 21 项参数。
+    这样无论数据库里存的是旧格式还是新格式，返回的都是完整 20 项参数。
     """
     snapshot = store.get_latest_setup(track_id)
     if snapshot is not None:
@@ -1890,7 +1890,7 @@ class ExperimentComparisonView(BaseModel):
 def _validate_experiment_setups(
     setup_a: dict[str, float], setup_b: dict[str, float],
 ) -> None:
-    """校验两份调教参数包含全部 21 项且在合法范围内。"""
+    """校验两份调教参数包含全部 20 项且在合法范围内。"""
     _validate_manual_setup_params(setup_a)
     _validate_manual_setup_params(setup_b)
 

@@ -1,8 +1,8 @@
 """T4 调教 schema + 症状枚举单元测试。
 
 覆盖验收标准：
-1. ALL_SETUP_FIELDS 长度 == 23，7 大类
-2. Symptom 枚举 == 12，4 类
+1. ALL_SETUP_FIELDS 长度 == 20，6 大类
+2. Symptom 枚举 == 22，4 类
 3. tyre_wear 中文为「胎耗偏高」
 4. validate_value 校验范围
 """

@@ -21,6 +21,11 @@ def check(name: str, ok: bool, detail: str = "") -> None:
 
 
 def main() -> int:
+    # 参数个数不写死：以领域模型为唯一口径（曾出现过写死 23 的陈旧断言）
+    sys.path.insert(0, str(ROOT))
+    from setup_tuner.domain.setup import ALL_SETUP_FIELDS
+
+    expected_params = len(ALL_SETUP_FIELDS)
     # 启动应用
     print("=== 启动应用 ===")
     proc = subprocess.Popen(
@@ -40,7 +45,7 @@ def main() -> int:
         html = r.text
         check("返回HTML", "<html" in html.lower(), "有<html>标签")
         # 前端关键元素
-        check("23参数输入面板", "param" in html.lower() or "参数" in html, "含参数面板")
+        check(f"{expected_params}参数输入面板", "param" in html.lower() or "参数" in html, "含参数面板")
         check("checkbox多选反馈", "checkbox" in html.lower(), "含checkbox")
         check("Cyberpunk风格", "cyberpunk" in html.lower() or "neon" in html.lower()
               or "racing" in html.lower() or "f1" in html.lower(), "Cyberpunk风格")
@@ -63,14 +68,15 @@ def main() -> int:
         track_count = len(tracks_data) if isinstance(tracks_data, list) else 0
         check("24条赛道", track_count == 24, f"实际{track_count}条")
 
-        # 4. GET /api/v1/setup/fields (23参数定义，新端点)
+        # 4. GET /api/v1/setup/fields (参数定义，新端点)
         print("\n=== 4. GET /api/v1/setup/fields (新端点) ===")
         r = requests.get(f"{BASE}/api/v1/setup/fields", timeout=10)
         check("setup/fields 200", r.status_code == 200, f"status={r.status_code}")
         fields_resp = r.json()
         fields_data = fields_resp.get("data", fields_resp) if isinstance(fields_resp, dict) else fields_resp
         field_count = len(fields_data) if isinstance(fields_data, list) else 0
-        check("23参数定义", field_count == 23, f"实际{field_count}个参数")
+        check(f"{expected_params}参数定义", field_count == expected_params,
+              f"实际{field_count}个参数")
         # 提取参数名和默认值，供 setup/manual 使用
         all_params = {}
         if isinstance(fields_data, list):

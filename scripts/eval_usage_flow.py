@@ -54,7 +54,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from setup_tuner.domain.setup import ALL_SETUP_FIELDS, CarSetup, get_field  # noqa: E402
+from setup_tuner.domain.setup import ALL_SETUP_FIELDS, CarSetup  # noqa: E402
 from setup_tuner.domain.track import ALL_TRACKS  # noqa: E402
 from setup_tuner.engine.engine import generate_suggestion  # noqa: E402
 from setup_tuner.engine.setup_sim import get_setup_sim  # noqa: E402
