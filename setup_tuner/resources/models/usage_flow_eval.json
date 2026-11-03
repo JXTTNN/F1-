@@ -1,6 +1,6 @@
 {
  "schema": "f1opt-usage-flow-eval/1",
- "evaluated_at": "2026-11-03T02:02:15",
+ "evaluated_at": "2026-11-03T06:50:56",
  "entry": "engine.generate_suggestion（与 POST /api/v1/suggest 同路径）",
  "metrics": {
   "n_tracks": 24,
@@ -8,16 +8,16 @@
   "n_runs": 120,
   "nn_active_rate": 1.0,
   "accept_rate": 1.0,
-  "median_gain_ms": 112.26,
-  "p10_gain_ms": 105.87,
-  "p90_gain_ms": 116.25,
-  "mean_gain_ms": 111.57,
-  "mean_changed_params": 8.55,
-  "mean_sim_moves": 1.98,
+  "median_gain_ms": 109.95,
+  "p10_gain_ms": 100.73,
+  "p90_gain_ms": 116.41,
+  "mean_gain_ms": 108.6,
+  "mean_changed_params": 8.53,
+  "mean_sim_moves": 1.93,
   "violations": 0,
   "zero_input_moves": 0,
   "model_tracks": 24,
-  "model_desc": "调教性能 NN（纯标准库，9600 仿真样本 / 24 赛道（遥测 19 + 几何推定 5），验证 MAE 98.159 ms / 局部 86.131 ms / R² 0.99577）",
+  "model_desc": "调教性能 NN（纯标准库，9600 仿真样本 / 24 赛道（遥测 19 + 几何推定 5），验证 MAE 76.933 ms / 局部 54.278 ms / R² 0.99737 / 逐赛道标准化）",
   "tracks_without_model": []
  },
  "gate": {
@@ -34,17 +34,17 @@
     "ok": true
    },
    "median_gain_ms": {
-    "value": 112.26,
+    "value": 109.95,
     "threshold": ">=10.0",
     "ok": true
    },
    "mean_sim_moves": {
-    "value": 1.98,
+    "value": 1.93,
     "threshold": "<=3.0",
     "ok": true
    },
    "p90_gain_ms": {
-    "value": 116.25,
+    "value": 116.41,
     "threshold": "<=200.0",
     "ok": true
    },
@@ -71,7 +71,7 @@
    "reason": "ok",
    "iterations": 2,
    "accepted": 2,
-   "gain_ms": 116.02,
+   "gain_ms": 107.33,
    "changed_params": 10
   },
   {
@@ -82,7 +82,7 @@
    "reason": "ok",
    "iterations": 2,
    "accepted": 2,
-   "gain_ms": 116.02,
+   "gain_ms": 107.33,
    "changed_params": 7
   },
   {
@@ -93,7 +93,7 @@
    "reason": "ok",
    "iterations": 2,
    "accepted": 2,
-   "gain_ms": 111.17,
+   "gain_ms": 107.36,
    "changed_params": 9
   },
   {
@@ -104,7 +104,7 @@
    "reason": "ok",
    "iterations": 2,
    "accepted": 2,
-   "gain_ms": 113.19,
+   "gain_ms": 107.33,
    "changed_params": 8
   },
   {
@@ -115,7 +115,7 @@
    "reason": "ok",
    "iterations": 2,
    "accepted": 2,
-   "gain_ms": 111.17,
+   "gain_ms": 118.65,
    "changed_params": 6
   },
   {
@@ -126,7 +126,7 @@
    "reason": "ok",
    "iterations": 2,
    "accepted": 2,
-   "gain_ms": 107.69,
+   "gain_ms": 108.28,
    "changed_params": 10
   },
   {
@@ -137,7 +137,7 @@
    "reason": "ok",
    "iterations": 2,
    "accepted": 2,
-   "gain_ms": 107.69,
+   "gain_ms": 108.28,
    "changed_params": 7
   },
   {
@@ -148,7 +148,7 @@
    "reason": "ok",
    "iterations": 2,
    "accepted": 2,
-   "gain_ms": 110.94,
+   "gain_ms": 112.43,
    "changed_params": 9
   },
   {
@@ -159,7 +159,7 @@
    "reason": "ok",
    "iterations": 2,
    "accepted": 2,
-   "gain_ms": 106.0,
+   "gain_ms": 107.43,
    "changed_params": 8
   },
   {
@@ -170,7 +170,7 @@
    "reason": "ok",
    "iterations": 2,
    "accepted": 2,
-   "gain_ms": 110.94,
+   "gain_ms": 119.99,
    "changed_params": 6
   },
   {
@@ -181,7 +181,7 @@
    "reason": "ok",
    "iterations": 2,
    "accepted": 2,
-   "gain_ms": 115.11,
+   "gain_ms": 110.99,
    "changed_params": 10
   },
   {
@@ -192,7 +192,7 @@
    "reason": "ok",
    "iterations": 2,
    "accepted": 2,
-   "gain_ms": 116.02,
+   "gain_ms": 110.99,
    "changed_params": 7
   },
   {
@@ -203,7 +203,7 @@
    "reason": "ok",
    "iterations": 2,
    "accepted": 2,
-   "gain_ms": 116.02,
+   "gain_ms": 110.99,
    "changed_params": 9
   },
   {
@@ -214,7 +214,7 @@
    "reason": "ok",
    "iterations": 2,
    "accepted": 2,
-   "gain_ms": 114.33,
+   "gain_ms": 110.99,
    "changed_params": 8
   },
   {
@@ -225,7 +225,7 @@
    "reason": "ok",
    "iterations": 2,
    "accepted": 2,
-   "gain_ms": 116.02,
+   "gain_ms": 110.99,
    "changed_params": 6
   },
   {
@@ -236,7 +236,7 @@
    "reason": "ok",
    "iterations": 2,
    "accepted": 2,
-   "gain_ms": 106.0,
+   "gain_ms": 100.73,
    "changed_params": 10
   },
   {
@@ -247,7 +247,7 @@
    "reason": "ok",
    "iterations": 2,
    "accepted": 2,
-   "gain_ms": 109.6,
+   "gain_ms": 119.02,
    "changed_params": 7
   },
   {
@@ -257,8 +257,8 @@
    "nn_available": true,
    "reason": "ok",
    "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 109.16,
+   "accepted": 1,
+   "gain_ms": 80.0,
    "changed_params": 9
   },
   {
@@ -269,429 +269,759 @@
    "reason": "ok",
    "iterations": 2,
    "accepted": 2,
-   "gain_ms": 106.22,
+   "gain_ms": 100.73,
    "changed_params": 8
   },
   {
    "track_id": "sakhir",
    "scenario": "single_symptom",
+   "model_type": "nn",
+   "nn_available": true,
+   "reason": "ok",
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 100.73,
+   "changed_params": 6
+  },
+  {
+   "track_id": "jeddah",
+   "scenario": "entry_understeer",
+   "model_type": "nn",
+   "nn_available": true,
+   "reason": "ok",
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 116.41,
+   "changed_params": 13
+  },
+  {
+   "track_id": "jeddah",
+   "scenario": "exit_traction",
+   "model_type": "nn",
+   "nn_available": true,
+   "reason": "ok",
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 115.31,
+   "changed_params": 8
+  },
+  {
+   "track_id": "jeddah",
+   "scenario": "high_speed",
+   "model_type": "nn",
+   "nn_available": true,
+   "reason": "ok",
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 115.44,
+   "changed_params": 12
+  },
+  {
+   "track_id": "jeddah",
+   "scenario": "global_mixed",
+   "model_type": "nn",
+   "nn_available": true,
+   "reason": "ok",
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 116.41,
+   "changed_params": 8
+  },
+  {
+   "track_id": "jeddah",
+   "scenario": "single_symptom",
+   "model_type": "nn",
+   "nn_available": true,
+   "reason": "ok",
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 116.41,
+   "changed_params": 6
+  },
+  {
+   "track_id": "miami",
+   "scenario": "entry_understeer",
+   "model_type": "nn",
+   "nn_available": true,
+   "reason": "ok",
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 109.95,
+   "changed_params": 10
+  },
+  {
+   "track_id": "miami",
+   "scenario": "exit_traction",
+   "model_type": "nn",
+   "nn_available": true,
+   "reason": "ok",
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 109.95,
+   "changed_params": 10
+  },
+  {
+   "track_id": "miami",
+   "scenario": "high_speed",
+   "model_type": "nn",
+   "nn_available": true,
+   "reason": "ok",
+   "iterations": 2,
+   "accepted": 1,
+   "gain_ms": 80.0,
+   "changed_params": 9
+  },
+  {
+   "track_id": "miami",
+   "scenario": "global_mixed",
+   "model_type": "nn",
+   "nn_available": true,
+   "reason": "ok",
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 109.95,
+   "changed_params": 8
+  },
+  {
+   "track_id": "miami",
+   "scenario": "single_symptom",
+   "model_type": "nn",
+   "nn_available": true,
+   "reason": "ok",
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 118.85,
+   "changed_params": 6
+  },
+  {
+   "track_id": "montreal",
+   "scenario": "entry_understeer",
+   "model_type": "nn",
+   "nn_available": true,
+   "reason": "ok",
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 112.33,
+   "changed_params": 13
+  },
+  {
+   "track_id": "montreal",
+   "scenario": "exit_traction",
+   "model_type": "nn",
+   "nn_available": true,
+   "reason": "ok",
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 115.57,
+   "changed_params": 8
+  },
+  {
+   "track_id": "montreal",
+   "scenario": "high_speed",
+   "model_type": "nn",
+   "nn_available": true,
+   "reason": "ok",
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 117.23,
+   "changed_params": 12
+  },
+  {
+   "track_id": "montreal",
+   "scenario": "global_mixed",
+   "model_type": "nn",
+   "nn_available": true,
+   "reason": "ok",
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 101.08,
+   "changed_params": 8
+  },
+  {
+   "track_id": "montreal",
+   "scenario": "single_symptom",
+   "model_type": "nn",
+   "nn_available": true,
+   "reason": "ok",
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 109.66,
+   "changed_params": 6
+  },
+  {
+   "track_id": "monaco",
+   "scenario": "entry_understeer",
+   "model_type": "nn",
+   "nn_available": true,
+   "reason": "ok",
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 109.0,
+   "changed_params": 10
+  },
+  {
+   "track_id": "monaco",
+   "scenario": "exit_traction",
+   "model_type": "nn",
+   "nn_available": true,
+   "reason": "ok",
+   "iterations": 2,
+   "accepted": 1,
+   "gain_ms": 80.0,
+   "changed_params": 9
+  },
+  {
+   "track_id": "monaco",
+   "scenario": "high_speed",
+   "model_type": "nn",
+   "nn_available": true,
+   "reason": "ok",
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 105.51,
+   "changed_params": 8
+  },
+  {
+   "track_id": "monaco",
+   "scenario": "global_mixed",
+   "model_type": "nn",
+   "nn_available": true,
+   "reason": "ok",
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 105.62,
+   "changed_params": 8
+  },
+  {
+   "track_id": "monaco",
+   "scenario": "single_symptom",
+   "model_type": "nn",
+   "nn_available": true,
+   "reason": "ok",
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 105.05,
+   "changed_params": 7
+  },
+  {
+   "track_id": "barcelona",
+   "scenario": "entry_understeer",
+   "model_type": "nn",
+   "nn_available": true,
+   "reason": "ok",
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 100.55,
+   "changed_params": 10
+  },
+  {
+   "track_id": "barcelona",
+   "scenario": "exit_traction",
+   "model_type": "nn",
+   "nn_available": true,
+   "reason": "ok",
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 112.1,
+   "changed_params": 7
+  },
+  {
+   "track_id": "barcelona",
+   "scenario": "high_speed",
+   "model_type": "nn",
+   "nn_available": true,
+   "reason": "ok",
+   "iterations": 2,
+   "accepted": 1,
+   "gain_ms": 80.0,
+   "changed_params": 9
+  },
+  {
+   "track_id": "barcelona",
+   "scenario": "global_mixed",
+   "model_type": "nn",
+   "nn_available": true,
+   "reason": "ok",
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 109.15,
+   "changed_params": 8
+  },
+  {
+   "track_id": "barcelona",
+   "scenario": "single_symptom",
+   "model_type": "nn",
+   "nn_available": true,
+   "reason": "ok",
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 113.29,
+   "changed_params": 6
+  },
+  {
+   "track_id": "spielberg",
+   "scenario": "entry_understeer",
+   "model_type": "nn",
+   "nn_available": true,
+   "reason": "ok",
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 106.3,
+   "changed_params": 11
+  },
+  {
+   "track_id": "spielberg",
+   "scenario": "exit_traction",
+   "model_type": "nn",
+   "nn_available": true,
+   "reason": "ok",
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 106.3,
+   "changed_params": 7
+  },
+  {
+   "track_id": "spielberg",
+   "scenario": "high_speed",
+   "model_type": "nn",
+   "nn_available": true,
+   "reason": "ok",
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 119.27,
+   "changed_params": 11
+  },
+  {
+   "track_id": "spielberg",
+   "scenario": "global_mixed",
+   "model_type": "nn",
+   "nn_available": true,
+   "reason": "ok",
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 106.3,
+   "changed_params": 8
+  },
+  {
+   "track_id": "spielberg",
+   "scenario": "single_symptom",
+   "model_type": "nn",
+   "nn_available": true,
+   "reason": "ok",
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 117.19,
+   "changed_params": 6
+  },
+  {
+   "track_id": "silverstone",
+   "scenario": "entry_understeer",
+   "model_type": "nn",
+   "nn_available": true,
+   "reason": "ok",
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 109.41,
+   "changed_params": 10
+  },
+  {
+   "track_id": "silverstone",
+   "scenario": "exit_traction",
+   "model_type": "nn",
+   "nn_available": true,
+   "reason": "ok",
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 109.41,
+   "changed_params": 7
+  },
+  {
+   "track_id": "silverstone",
+   "scenario": "high_speed",
+   "model_type": "nn",
+   "nn_available": true,
+   "reason": "ok",
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 109.41,
+   "changed_params": 9
+  },
+  {
+   "track_id": "silverstone",
+   "scenario": "global_mixed",
+   "model_type": "nn",
+   "nn_available": true,
+   "reason": "ok",
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 109.41,
+   "changed_params": 8
+  },
+  {
+   "track_id": "silverstone",
+   "scenario": "single_symptom",
+   "model_type": "nn",
+   "nn_available": true,
+   "reason": "ok",
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 109.41,
+   "changed_params": 6
+  },
+  {
+   "track_id": "spa",
+   "scenario": "entry_understeer",
+   "model_type": "nn",
+   "nn_available": true,
+   "reason": "ok",
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 109.96,
+   "changed_params": 10
+  },
+  {
+   "track_id": "spa",
+   "scenario": "exit_traction",
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
    "iterations": 2,
    "accepted": 2,
    "gain_ms": 119.3,
-   "changed_params": 6
-  },
-  {
-   "track_id": "jeddah",
-   "scenario": "entry_understeer",
-   "model_type": "nn",
-   "nn_available": true,
-   "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 117.71,
    "changed_params": 13
   },
   {
-   "track_id": "jeddah",
-   "scenario": "exit_traction",
-   "model_type": "nn",
-   "nn_available": true,
-   "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 117.94,
-   "changed_params": 8
-  },
-  {
-   "track_id": "jeddah",
+   "track_id": "spa",
    "scenario": "high_speed",
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
    "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 117.94,
-   "changed_params": 12
+   "accepted": 1,
+   "gain_ms": 80.0,
+   "changed_params": 6
   },
   {
-   "track_id": "jeddah",
+   "track_id": "spa",
    "scenario": "global_mixed",
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
    "iterations": 2,
    "accepted": 2,
-   "gain_ms": 116.25,
+   "gain_ms": 118.05,
    "changed_params": 8
   },
   {
-   "track_id": "jeddah",
+   "track_id": "spa",
    "scenario": "single_symptom",
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
    "iterations": 2,
    "accepted": 2,
-   "gain_ms": 116.25,
+   "gain_ms": 118.05,
    "changed_params": 6
   },
   {
-   "track_id": "miami",
+   "track_id": "hungaroring",
    "scenario": "entry_understeer",
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
    "iterations": 2,
    "accepted": 2,
-   "gain_ms": 112.72,
-   "changed_params": 10
+   "gain_ms": 110.59,
+   "changed_params": 8
   },
   {
-   "track_id": "miami",
+   "track_id": "hungaroring",
    "scenario": "exit_traction",
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
    "iterations": 2,
    "accepted": 2,
-   "gain_ms": 111.3,
-   "changed_params": 10
+   "gain_ms": 109.5,
+   "changed_params": 12
   },
   {
-   "track_id": "miami",
+   "track_id": "hungaroring",
    "scenario": "high_speed",
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
    "iterations": 2,
    "accepted": 2,
-   "gain_ms": 112.99,
+   "gain_ms": 109.5,
+   "changed_params": 12
+  },
+  {
+   "track_id": "hungaroring",
+   "scenario": "global_mixed",
+   "model_type": "nn",
+   "nn_available": true,
+   "reason": "ok",
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 108.72,
+   "changed_params": 8
+  },
+  {
+   "track_id": "hungaroring",
+   "scenario": "single_symptom",
+   "model_type": "nn",
+   "nn_available": true,
+   "reason": "ok",
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 110.59,
+   "changed_params": 6
+  },
+  {
+   "track_id": "zandvoort",
+   "scenario": "entry_understeer",
+   "model_type": "nn",
+   "nn_available": true,
+   "reason": "ok",
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 113.81,
+   "changed_params": 13
+  },
+  {
+   "track_id": "zandvoort",
+   "scenario": "exit_traction",
+   "model_type": "nn",
+   "nn_available": true,
+   "reason": "ok",
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 104.91,
+   "changed_params": 8
+  },
+  {
+   "track_id": "zandvoort",
+   "scenario": "high_speed",
+   "model_type": "nn",
+   "nn_available": true,
+   "reason": "ok",
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 109.89,
+   "changed_params": 12
+  },
+  {
+   "track_id": "zandvoort",
+   "scenario": "global_mixed",
+   "model_type": "nn",
+   "nn_available": true,
+   "reason": "ok",
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 103.91,
+   "changed_params": 8
+  },
+  {
+   "track_id": "zandvoort",
+   "scenario": "single_symptom",
+   "model_type": "nn",
+   "nn_available": true,
+   "reason": "ok",
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 113.81,
+   "changed_params": 6
+  },
+  {
+   "track_id": "monza",
+   "scenario": "entry_understeer",
+   "model_type": "nn",
+   "nn_available": true,
+   "reason": "ok",
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 114.06,
+   "changed_params": 12
+  },
+  {
+   "track_id": "monza",
+   "scenario": "exit_traction",
+   "model_type": "nn",
+   "nn_available": true,
+   "reason": "ok",
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 112.84,
+   "changed_params": 8
+  },
+  {
+   "track_id": "monza",
+   "scenario": "high_speed",
+   "model_type": "nn",
+   "nn_available": true,
+   "reason": "ok",
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 102.95,
+   "changed_params": 8
+  },
+  {
+   "track_id": "monza",
+   "scenario": "global_mixed",
+   "model_type": "nn",
+   "nn_available": true,
+   "reason": "ok",
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 109.82,
+   "changed_params": 8
+  },
+  {
+   "track_id": "monza",
+   "scenario": "single_symptom",
+   "model_type": "nn",
+   "nn_available": true,
+   "reason": "ok",
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 114.06,
+   "changed_params": 6
+  },
+  {
+   "track_id": "madrid",
+   "scenario": "entry_understeer",
+   "model_type": "nn",
+   "nn_available": true,
+   "reason": "ok",
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 113.27,
+   "changed_params": 10
+  },
+  {
+   "track_id": "madrid",
+   "scenario": "exit_traction",
+   "model_type": "nn",
+   "nn_available": true,
+   "reason": "ok",
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 113.27,
+   "changed_params": 10
+  },
+  {
+   "track_id": "madrid",
+   "scenario": "high_speed",
+   "model_type": "nn",
+   "nn_available": true,
+   "reason": "ok",
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 114.07,
    "changed_params": 9
   },
   {
-   "track_id": "miami",
+   "track_id": "madrid",
    "scenario": "global_mixed",
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
    "iterations": 2,
    "accepted": 2,
-   "gain_ms": 111.3,
+   "gain_ms": 113.27,
    "changed_params": 8
   },
   {
-   "track_id": "miami",
+   "track_id": "madrid",
    "scenario": "single_symptom",
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
    "iterations": 2,
    "accepted": 2,
-   "gain_ms": 111.3,
+   "gain_ms": 113.27,
    "changed_params": 6
   },
   {
-   "track_id": "montreal",
+   "track_id": "baku",
    "scenario": "entry_understeer",
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
    "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 112.17,
-   "changed_params": 13
-  },
-  {
-   "track_id": "montreal",
-   "scenario": "exit_traction",
-   "model_type": "nn",
-   "nn_available": true,
-   "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 104.36,
-   "changed_params": 8
-  },
-  {
-   "track_id": "montreal",
-   "scenario": "high_speed",
-   "model_type": "nn",
-   "nn_available": true,
-   "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 112.17,
+   "accepted": 1,
+   "gain_ms": 80.0,
    "changed_params": 12
   },
   {
-   "track_id": "montreal",
-   "scenario": "global_mixed",
-   "model_type": "nn",
-   "nn_available": true,
-   "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 100.71,
-   "changed_params": 8
-  },
-  {
-   "track_id": "montreal",
-   "scenario": "single_symptom",
-   "model_type": "nn",
-   "nn_available": true,
-   "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 112.17,
-   "changed_params": 6
-  },
-  {
-   "track_id": "monaco",
-   "scenario": "entry_understeer",
-   "model_type": "nn",
-   "nn_available": true,
-   "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 105.2,
-   "changed_params": 10
-  },
-  {
-   "track_id": "monaco",
+   "track_id": "baku",
    "scenario": "exit_traction",
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
    "iterations": 2,
    "accepted": 2,
-   "gain_ms": 102.79,
-   "changed_params": 10
+   "gain_ms": 113.12,
+   "changed_params": 8
   },
   {
-   "track_id": "monaco",
+   "track_id": "baku",
    "scenario": "high_speed",
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
    "iterations": 2,
    "accepted": 2,
-   "gain_ms": 107.23,
+   "gain_ms": 113.12,
+   "changed_params": 12
+  },
+  {
+   "track_id": "baku",
+   "scenario": "global_mixed",
+   "model_type": "nn",
+   "nn_available": true,
+   "reason": "ok",
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 114.16,
    "changed_params": 8
   },
   {
-   "track_id": "monaco",
-   "scenario": "global_mixed",
+   "track_id": "baku",
+   "scenario": "single_symptom",
+   "model_type": "nn",
+   "nn_available": true,
+   "reason": "ok",
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 114.16,
+   "changed_params": 6
+  },
+  {
+   "track_id": "singapore",
+   "scenario": "entry_understeer",
+   "model_type": "nn",
+   "nn_available": true,
+   "reason": "ok",
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 116.74,
+   "changed_params": 12
+  },
+  {
+   "track_id": "singapore",
+   "scenario": "exit_traction",
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
    "iterations": 2,
    "accepted": 2,
    "gain_ms": 107.39,
-   "changed_params": 8
-  },
-  {
-   "track_id": "monaco",
-   "scenario": "single_symptom",
-   "model_type": "nn",
-   "nn_available": true,
-   "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 107.32,
-   "changed_params": 7
-  },
-  {
-   "track_id": "barcelona",
-   "scenario": "entry_understeer",
-   "model_type": "nn",
-   "nn_available": true,
-   "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 107.69,
    "changed_params": 10
   },
   {
-   "track_id": "barcelona",
-   "scenario": "exit_traction",
-   "model_type": "nn",
-   "nn_available": true,
-   "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 112.17,
-   "changed_params": 7
-  },
-  {
-   "track_id": "barcelona",
-   "scenario": "high_speed",
-   "model_type": "nn",
-   "nn_available": true,
-   "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 112.17,
-   "changed_params": 9
-  },
-  {
-   "track_id": "barcelona",
-   "scenario": "global_mixed",
-   "model_type": "nn",
-   "nn_available": true,
-   "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 106.22,
-   "changed_params": 8
-  },
-  {
-   "track_id": "barcelona",
-   "scenario": "single_symptom",
-   "model_type": "nn",
-   "nn_available": true,
-   "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 111.17,
-   "changed_params": 6
-  },
-  {
-   "track_id": "spielberg",
-   "scenario": "entry_understeer",
-   "model_type": "nn",
-   "nn_available": true,
-   "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 115.6,
-   "changed_params": 11
-  },
-  {
-   "track_id": "spielberg",
-   "scenario": "exit_traction",
-   "model_type": "nn",
-   "nn_available": true,
-   "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 113.68,
-   "changed_params": 7
-  },
-  {
-   "track_id": "spielberg",
-   "scenario": "high_speed",
-   "model_type": "nn",
-   "nn_available": true,
-   "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 116.54,
-   "changed_params": 11
-  },
-  {
-   "track_id": "spielberg",
-   "scenario": "global_mixed",
-   "model_type": "nn",
-   "nn_available": true,
-   "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 115.6,
-   "changed_params": 8
-  },
-  {
-   "track_id": "spielberg",
-   "scenario": "single_symptom",
-   "model_type": "nn",
-   "nn_available": true,
-   "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 115.6,
-   "changed_params": 6
-  },
-  {
-   "track_id": "silverstone",
-   "scenario": "entry_understeer",
-   "model_type": "nn",
-   "nn_available": true,
-   "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 116.02,
-   "changed_params": 10
-  },
-  {
-   "track_id": "silverstone",
-   "scenario": "exit_traction",
-   "model_type": "nn",
-   "nn_available": true,
-   "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 116.02,
-   "changed_params": 7
-  },
-  {
-   "track_id": "silverstone",
-   "scenario": "high_speed",
-   "model_type": "nn",
-   "nn_available": true,
-   "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 116.25,
-   "changed_params": 9
-  },
-  {
-   "track_id": "silverstone",
-   "scenario": "global_mixed",
-   "model_type": "nn",
-   "nn_available": true,
-   "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 116.02,
-   "changed_params": 8
-  },
-  {
-   "track_id": "silverstone",
-   "scenario": "single_symptom",
-   "model_type": "nn",
-   "nn_available": true,
-   "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 116.02,
-   "changed_params": 6
-  },
-  {
-   "track_id": "spa",
-   "scenario": "entry_understeer",
-   "model_type": "nn",
-   "nn_available": true,
-   "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 105.87,
-   "changed_params": 10
-  },
-  {
-   "track_id": "spa",
-   "scenario": "exit_traction",
-   "model_type": "nn",
-   "nn_available": true,
-   "reason": "ok",
-   "iterations": 2,
-   "accepted": 1,
-   "gain_ms": 80.0,
-   "changed_params": 13
-  },
-  {
-   "track_id": "spa",
+   "track_id": "singapore",
    "scenario": "high_speed",
    "model_type": "nn",
    "nn_available": true,
@@ -699,336 +1029,6 @@
    "iterations": 2,
    "accepted": 1,
    "gain_ms": 80.0,
-   "changed_params": 6
-  },
-  {
-   "track_id": "spa",
-   "scenario": "global_mixed",
-   "model_type": "nn",
-   "nn_available": true,
-   "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 110.08,
-   "changed_params": 7
-  },
-  {
-   "track_id": "spa",
-   "scenario": "single_symptom",
-   "model_type": "nn",
-   "nn_available": true,
-   "reason": "ok",
-   "iterations": 2,
-   "accepted": 1,
-   "gain_ms": 80.0,
-   "changed_params": 6
-  },
-  {
-   "track_id": "hungaroring",
-   "scenario": "entry_understeer",
-   "model_type": "nn",
-   "nn_available": true,
-   "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 105.87,
-   "changed_params": 8
-  },
-  {
-   "track_id": "hungaroring",
-   "scenario": "exit_traction",
-   "model_type": "nn",
-   "nn_available": true,
-   "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 109.1,
-   "changed_params": 12
-  },
-  {
-   "track_id": "hungaroring",
-   "scenario": "high_speed",
-   "model_type": "nn",
-   "nn_available": true,
-   "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 107.23,
-   "changed_params": 12
-  },
-  {
-   "track_id": "hungaroring",
-   "scenario": "global_mixed",
-   "model_type": "nn",
-   "nn_available": true,
-   "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 116.06,
-   "changed_params": 8
-  },
-  {
-   "track_id": "hungaroring",
-   "scenario": "single_symptom",
-   "model_type": "nn",
-   "nn_available": true,
-   "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 118.87,
-   "changed_params": 6
-  },
-  {
-   "track_id": "zandvoort",
-   "scenario": "entry_understeer",
-   "model_type": "nn",
-   "nn_available": true,
-   "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 113.87,
-   "changed_params": 13
-  },
-  {
-   "track_id": "zandvoort",
-   "scenario": "exit_traction",
-   "model_type": "nn",
-   "nn_available": true,
-   "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 109.22,
-   "changed_params": 8
-  },
-  {
-   "track_id": "zandvoort",
-   "scenario": "high_speed",
-   "model_type": "nn",
-   "nn_available": true,
-   "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 112.17,
-   "changed_params": 12
-  },
-  {
-   "track_id": "zandvoort",
-   "scenario": "global_mixed",
-   "model_type": "nn",
-   "nn_available": true,
-   "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 106.02,
-   "changed_params": 8
-  },
-  {
-   "track_id": "zandvoort",
-   "scenario": "single_symptom",
-   "model_type": "nn",
-   "nn_available": true,
-   "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 110.94,
-   "changed_params": 6
-  },
-  {
-   "track_id": "monza",
-   "scenario": "entry_understeer",
-   "model_type": "nn",
-   "nn_available": true,
-   "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 101.51,
-   "changed_params": 13
-  },
-  {
-   "track_id": "monza",
-   "scenario": "exit_traction",
-   "model_type": "nn",
-   "nn_available": true,
-   "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 112.26,
-   "changed_params": 8
-  },
-  {
-   "track_id": "monza",
-   "scenario": "high_speed",
-   "model_type": "nn",
-   "nn_available": true,
-   "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 110.94,
-   "changed_params": 8
-  },
-  {
-   "track_id": "monza",
-   "scenario": "global_mixed",
-   "model_type": "nn",
-   "nn_available": true,
-   "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 101.51,
-   "changed_params": 8
-  },
-  {
-   "track_id": "monza",
-   "scenario": "single_symptom",
-   "model_type": "nn",
-   "nn_available": true,
-   "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 110.94,
-   "changed_params": 6
-  },
-  {
-   "track_id": "madrid",
-   "scenario": "entry_understeer",
-   "model_type": "nn",
-   "nn_available": true,
-   "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 116.02,
-   "changed_params": 10
-  },
-  {
-   "track_id": "madrid",
-   "scenario": "exit_traction",
-   "model_type": "nn",
-   "nn_available": true,
-   "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 116.25,
-   "changed_params": 10
-  },
-  {
-   "track_id": "madrid",
-   "scenario": "high_speed",
-   "model_type": "nn",
-   "nn_available": true,
-   "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 116.25,
-   "changed_params": 9
-  },
-  {
-   "track_id": "madrid",
-   "scenario": "global_mixed",
-   "model_type": "nn",
-   "nn_available": true,
-   "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 114.56,
-   "changed_params": 8
-  },
-  {
-   "track_id": "madrid",
-   "scenario": "single_symptom",
-   "model_type": "nn",
-   "nn_available": true,
-   "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 116.25,
-   "changed_params": 6
-  },
-  {
-   "track_id": "baku",
-   "scenario": "entry_understeer",
-   "model_type": "nn",
-   "nn_available": true,
-   "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 116.02,
-   "changed_params": 13
-  },
-  {
-   "track_id": "baku",
-   "scenario": "exit_traction",
-   "model_type": "nn",
-   "nn_available": true,
-   "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 116.02,
-   "changed_params": 8
-  },
-  {
-   "track_id": "baku",
-   "scenario": "high_speed",
-   "model_type": "nn",
-   "nn_available": true,
-   "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 116.02,
-   "changed_params": 12
-  },
-  {
-   "track_id": "baku",
-   "scenario": "global_mixed",
-   "model_type": "nn",
-   "nn_available": true,
-   "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 112.77,
-   "changed_params": 8
-  },
-  {
-   "track_id": "baku",
-   "scenario": "single_symptom",
-   "model_type": "nn",
-   "nn_available": true,
-   "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 116.02,
-   "changed_params": 6
-  },
-  {
-   "track_id": "singapore",
-   "scenario": "entry_understeer",
-   "model_type": "nn",
-   "nn_available": true,
-   "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 117.42,
-   "changed_params": 12
-  },
-  {
-   "track_id": "singapore",
-   "scenario": "exit_traction",
-   "model_type": "nn",
-   "nn_available": true,
-   "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 110.49,
-   "changed_params": 10
-  },
-  {
-   "track_id": "singapore",
-   "scenario": "high_speed",
-   "model_type": "nn",
-   "nn_available": true,
-   "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 119.3,
    "changed_params": 8
   },
   {
@@ -1039,7 +1039,7 @@
    "reason": "ok",
    "iterations": 2,
    "accepted": 2,
-   "gain_ms": 116.06,
+   "gain_ms": 114.49,
    "changed_params": 8
   },
   {
@@ -1050,7 +1050,7 @@
    "reason": "ok",
    "iterations": 2,
    "accepted": 2,
-   "gain_ms": 119.3,
+   "gain_ms": 116.74,
    "changed_params": 6
   },
   {
@@ -1061,7 +1061,7 @@
    "reason": "ok",
    "iterations": 2,
    "accepted": 2,
-   "gain_ms": 112.77,
+   "gain_ms": 112.33,
    "changed_params": 10
   },
   {
@@ -1072,7 +1072,7 @@
    "reason": "ok",
    "iterations": 2,
    "accepted": 2,
-   "gain_ms": 117.94,
+   "gain_ms": 110.96,
    "changed_params": 11
   },
   {
@@ -1083,7 +1083,7 @@
    "reason": "ok",
    "iterations": 2,
    "accepted": 2,
-   "gain_ms": 116.25,
+   "gain_ms": 116.27,
    "changed_params": 9
   },
   {
@@ -1094,7 +1094,7 @@
    "reason": "ok",
    "iterations": 2,
    "accepted": 2,
-   "gain_ms": 115.09,
+   "gain_ms": 112.33,
    "changed_params": 8
   },
   {
@@ -1105,7 +1105,7 @@
    "reason": "ok",
    "iterations": 2,
    "accepted": 2,
-   "gain_ms": 116.02,
+   "gain_ms": 112.33,
    "changed_params": 6
   },
   {
@@ -1116,7 +1116,7 @@
    "reason": "ok",
    "iterations": 2,
    "accepted": 2,
-   "gain_ms": 113.1,
+   "gain_ms": 105.09,
    "changed_params": 10
   },
   {
@@ -1127,7 +1127,7 @@
    "reason": "ok",
    "iterations": 2,
    "accepted": 2,
-   "gain_ms": 109.45,
+   "gain_ms": 105.09,
    "changed_params": 7
   },
   {
@@ -1138,7 +1138,7 @@
    "reason": "ok",
    "iterations": 2,
    "accepted": 2,
-   "gain_ms": 112.17,
+   "gain_ms": 113.3,
    "changed_params": 9
   },
   {
@@ -1149,7 +1149,7 @@
    "reason": "ok",
    "iterations": 2,
    "accepted": 2,
-   "gain_ms": 109.48,
+   "gain_ms": 105.09,
    "changed_params": 8
   },
   {
@@ -1160,7 +1160,7 @@
    "reason": "ok",
    "iterations": 2,
    "accepted": 2,
-   "gain_ms": 111.17,
+   "gain_ms": 115.48,
    "changed_params": 6
   },
   {
@@ -1171,7 +1171,7 @@
    "reason": "ok",
    "iterations": 2,
    "accepted": 2,
-   "gain_ms": 103.22,
+   "gain_ms": 102.95,
    "changed_params": 10
   },
   {
@@ -1182,7 +1182,7 @@
    "reason": "ok",
    "iterations": 2,
    "accepted": 2,
-   "gain_ms": 112.17,
+   "gain_ms": 108.71,
    "changed_params": 7
   },
   {
@@ -1192,8 +1192,8 @@
    "nn_available": true,
    "reason": "ok",
    "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 112.17,
+   "accepted": 1,
+   "gain_ms": 80.0,
    "changed_params": 9
   },
   {
@@ -1204,7 +1204,7 @@
    "reason": "ok",
    "iterations": 2,
    "accepted": 2,
-   "gain_ms": 103.06,
+   "gain_ms": 102.95,
    "changed_params": 8
   },
   {
@@ -1215,7 +1215,7 @@
    "reason": "ok",
    "iterations": 2,
    "accepted": 2,
-   "gain_ms": 111.17,
+   "gain_ms": 109.78,
    "changed_params": 6
   },
   {
@@ -1226,7 +1226,7 @@
    "reason": "ok",
    "iterations": 2,
    "accepted": 2,
-   "gain_ms": 116.25,
+   "gain_ms": 113.88,
    "changed_params": 13
   },
   {
@@ -1237,7 +1237,7 @@
    "reason": "ok",
    "iterations": 2,
    "accepted": 2,
-   "gain_ms": 116.02,
+   "gain_ms": 112.74,
    "changed_params": 8
   },
   {
@@ -1248,7 +1248,7 @@
    "reason": "ok",
    "iterations": 2,
    "accepted": 2,
-   "gain_ms": 116.25,
+   "gain_ms": 110.74,
    "changed_params": 12
   },
   {
@@ -1259,7 +1259,7 @@
    "reason": "ok",
    "iterations": 2,
    "accepted": 2,
-   "gain_ms": 116.25,
+   "gain_ms": 111.7,
    "changed_params": 8
   },
   {
@@ -1270,7 +1270,7 @@
    "reason": "ok",
    "iterations": 2,
    "accepted": 2,
-   "gain_ms": 116.25,
+   "gain_ms": 111.7,
    "changed_params": 6
   },
   {
@@ -1281,7 +1281,7 @@
    "reason": "ok",
    "iterations": 2,
    "accepted": 2,
-   "gain_ms": 116.02,
+   "gain_ms": 107.99,
    "changed_params": 10
   },
   {
@@ -1292,7 +1292,7 @@
    "reason": "ok",
    "iterations": 2,
    "accepted": 2,
-   "gain_ms": 116.02,
+   "gain_ms": 107.99,
    "changed_params": 7
   },
   {
@@ -1303,7 +1303,7 @@
    "reason": "ok",
    "iterations": 2,
    "accepted": 2,
-   "gain_ms": 116.02,
+   "gain_ms": 107.99,
    "changed_params": 10
   },
   {
@@ -1314,7 +1314,7 @@
    "reason": "ok",
    "iterations": 2,
    "accepted": 2,
-   "gain_ms": 116.25,
+   "gain_ms": 107.99,
    "changed_params": 8
   },
   {
@@ -1325,7 +1325,7 @@
    "reason": "ok",
    "iterations": 2,
    "accepted": 2,
-   "gain_ms": 116.02,
+   "gain_ms": 107.99,
    "changed_params": 5
   },
   {
@@ -1336,7 +1336,7 @@
    "reason": "ok",
    "iterations": 2,
    "accepted": 2,
-   "gain_ms": 107.69,
+   "gain_ms": 100.11,
    "changed_params": 10
   },
   {
@@ -1347,7 +1347,7 @@
    "reason": "ok",
    "iterations": 2,
    "accepted": 2,
-   "gain_ms": 112.26,
+   "gain_ms": 111.42,
    "changed_params": 7
   },
   {
@@ -1358,7 +1358,7 @@
    "reason": "ok",
    "iterations": 2,
    "accepted": 2,
-   "gain_ms": 112.26,
+   "gain_ms": 106.99,
    "changed_params": 9
   },
   {
@@ -1369,7 +1369,7 @@
    "reason": "ok",
    "iterations": 2,
    "accepted": 2,
-   "gain_ms": 107.69,
+   "gain_ms": 108.53,
    "changed_params": 8
   },
   {
@@ -1380,7 +1380,7 @@
    "reason": "ok",
    "iterations": 2,
    "accepted": 2,
-   "gain_ms": 107.69,
+   "gain_ms": 112.58,
    "changed_params": 6
   }
  ]
