@@ -36,8 +36,11 @@ _SCALES = {"alpha": 1.0, "beta": 2.0, "gamma": 3.5}
 _ACTIVE = ("front_wing", "rear_wing", "front_toe", "brake_bias")
 
 
-def _write_dataset(tmp_path: Path, n_per_track: int = 60) -> tuple[Path, Path]:
-    """合成数据集：标签 = 每站尺度 × 少数参数平方和（默认调教 → 0）。"""
+def _write_dataset(tmp_path: Path, n_per_track: int = 400) -> tuple[Path, Path]:
+    """合成数据集：标签 = 每站尺度 × 少数参数平方和（默认调教 → 0）。
+
+    行数必须够：训练脚本的验证集下限是 200 条，样本不足会（正确地）报错退出。
+    """
     track_features: dict[str, dict[str, float]] = {}
     for i, tid in enumerate(_TRACKS):
         feats = {k: 0.2 + 0.1 * i for k in TRACK_FEATURE_KEYS}
@@ -125,6 +128,25 @@ def test_default_setup_still_predicts_zero(trained: Path) -> None:
         delta = model.predict_delta_s(tid, norm)
         assert delta is not None
         assert abs(delta) < 1e-9, f"{tid} 默认点未归零：{delta}"
+
+
+def test_tiny_dataset_fails_with_actionable_message(tmp_path: Path) -> None:
+    """样本不足时必须报一条能照做的错，而不是 ZeroDivisionError。
+
+    历史坑：验证集下限 200 条，数据集小于 400 时旧写法会把训练集吃空，
+    最终在 ``sum(y)/len(y)`` 上炸成 ``ZeroDivisionError``，看不出是谁的问题。
+    """
+    ds, meta = _write_dataset(tmp_path, n_per_track=8)  # 24 条 < 40
+    sys.path.insert(0, str(ROOT / "scripts"))
+    import train_setup_sim_nn as tr
+
+    with pytest.raises(SystemExit) as excinfo:
+        tr.main([
+            "--dataset", str(ds), "--meta", str(meta),
+            "--out", str(tmp_path / "never.json"), "--epochs", "1",
+        ])
+    assert "样本太少" in str(excinfo.value)
+    assert not (tmp_path / "never.json").exists()
 
 
 def test_legacy_model_falls_back_to_global_scale(trained: Path, tmp_path: Path) -> None:

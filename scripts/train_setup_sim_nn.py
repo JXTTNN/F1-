@@ -133,7 +133,16 @@ def main(argv: list[str] | None = None) -> int:
     rng = random.Random(args.seed)
     idx = list(range(len(x)))
     rng.shuffle(idx)
-    n_val = max(200, int(args.val_ratio * len(x)))
+    # 验证集至少 200 条（指标才稳定），但绝不能把训练集吃空：数据集小于 400 条时
+    # 旧写法 ``max(200, ...)`` 会令 train_idx 为空，最后炸成一个看不出原因的
+    # ZeroDivisionError（实测在合成小数据集上踩过）。这里夹到「至少留一半」，
+    # 并给一条能直接照做的报错。
+    if len(x) < 40:
+        raise SystemExit(
+            f"样本太少（{len(x)} 条）：至少需要 40 条才能划分训练/验证集，"
+            f"先跑 scripts/build_setup_sim_dataset.py 生成数据",
+        )
+    n_val = min(max(200, int(args.val_ratio * len(x))), len(x) - max(1, len(x) // 2))
     val_idx, train_idx = idx[:n_val], idx[n_val:]
     x_tr = [x[i] for i in train_idx]
     y_tr = [y[i] for i in train_idx]
