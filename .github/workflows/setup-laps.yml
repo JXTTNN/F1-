@@ -1,0 +1,168 @@
+name: Setup Laps
+
+# 抓取真实「调教 → 圈速」配对（F1Laps 公开社区调教库），并用它校准调教性能模型。
+#
+# 为什么需要独立 workflow：
+#   - 抓取是慢 IO（每站 20 条详情页，限速 1.2s），塞进 retrain 会把 30 分钟的
+#     重训拖到 50 分钟；
+#   - 数据每周才需要刷新一次，而模型重训是每 6 小时；
+#   - 抓回来的数据要入库（`data/setup_laps/`），与模型产物分开提交更清晰。
+#
+# 合规：只访问公开 HTML 页面，robots.txt 明确 `Content-Signal: ai-train=yes`，
+# 不触碰 `/api/` 与登录区；默认 1.2 秒/请求限速。
+
+on:
+  workflow_dispatch:
+    inputs:
+      max_minutes:
+        description: "抓取时间预算（分钟），到点停止并可下次续传"
+        required: false
+        default: "25"
+      skip_fetch:
+        description: "只跑校准，不抓新数据"
+        type: boolean
+        required: false
+        default: false
+  schedule:
+    - cron: "23 3 * * 1"   # 每周一 03:23 UTC
+  push:
+    branches: [main]
+    paths:
+      - "scripts/fetch_setup_laps.py"
+      - "scripts/calibrate_sim_with_real_laps.py"
+      - ".github/workflows/setup-laps.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: setup-laps
+  cancel-in-progress: false
+
+env:
+  PYTHONIOENCODING: utf-8
+
+jobs:
+  calibrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install package
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+
+      # 已抓到的样本入库在 data/setup_laps/；缓存只是为中断续传兜底。
+      - name: Restore fetch cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            data/setup_laps/_fetch_state.json
+            data/setup_laps/f1laps_setups.jsonl
+          key: setup-laps-${{ github.run_id }}
+          restore-keys: setup-laps-
+
+      - name: Fetch real setup → lap pairs
+        if: github.event.inputs.skip_fetch != 'true'
+        shell: bash
+        run: |
+          set -o pipefail
+          python scripts/fetch_setup_laps.py --dry --sleep 1.2 \
+            --max-minutes "${{ github.event.inputs.max_minutes || '25' }}" 2>&1 | tee fetch.log
+          echo '--- 概况 ---'
+          python scripts/fetch_setup_laps.py --summary || true
+
+      - name: Save fetch cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            data/setup_laps/_fetch_state.json
+            data/setup_laps/f1laps_setups.jsonl
+          key: setup-laps-${{ github.run_id }}
+
+      # 校准不是门禁：它的作用是「给出真实性与量级的结论」，不是拦截发布。
+      # 让 job 因校准结论变红会逼着人关掉这道检查。
+      - name: Calibrate sim against real laps
+        continue-on-error: true
+        shell: bash
+        run: |
+          python scripts/calibrate_sim_with_real_laps.py 2>&1 | tee calibrate.log || true
+          echo '--- 结论 ---'
+          python - <<'PY' || true
+          import json, pathlib
+          p = pathlib.Path('data/setup_laps/calibration_report.json')
+          if not p.exists():
+              print('未生成校准报告')
+              raise SystemExit(0)
+          r = json.loads(p.read_text(encoding='utf-8'))
+          print(json.dumps(r['summary'], ensure_ascii=False, indent=2))
+          for v in r['verdict']:
+              print(f'- {v}')
+          PY
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: setup-laps-report
+          path: |
+            data/setup_laps/calibration_report.json
+            data/setup_laps/calibration_report.md
+            data/setup_laps/f1laps_setups.jsonl
+            fetch.log
+            calibrate.log
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Commit data and report
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "setup-laps-bot"
+          git config user.email "setup-laps-bot@users.noreply.github.com"
+          git add data/setup_laps/f1laps_setups.jsonl \
+                  data/setup_laps/calibration_report.json \
+                  data/setup_laps/calibration_report.md 2>/dev/null || true
+          git add data/setup_laps/_fetch_state.json 2>/dev/null || true
+          if git diff --cached --quiet; then
+            echo "无变化，跳过提交"
+            exit 0
+          fi
+          N=$(wc -l < data/setup_laps/f1laps_setups.jsonl || echo 0)
+          RHO=$(python -c "import json;print(json.load(open('data/setup_laps/calibration_report.json'))['summary']['median_spearman_rho'])" 2>/dev/null || echo "n/a")
+          git commit -m "data(setup-laps): 真实调教-圈速配对 ${N} 条（中位 ρ=${RHO}）"
+          for attempt in 1 2 3; do
+            if git fetch origin main && git rebase origin/main && git push origin HEAD:main; then
+              echo "已推送（第 ${attempt} 次尝试）"
+              exit 0
+            fi
+            git rebase --abort || true
+            echo "第 ${attempt} 次失败，重试"
+            sleep 10
+          done
+          echo "::error::提交连续 3 次失败"
+          exit 1
+
+      # 结论必须进 Job Summary：校准的价值就在于它可能推翻「模型很准」的说法，
+      # 埋在 artifact 里没人会看。
+      - name: Write summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## 真实调教 → 圈速 校准"
+            echo
+            if [ -f data/setup_laps/calibration_report.md ]; then
+              cat data/setup_laps/calibration_report.md
+            else
+              echo "未生成校准报告（抓取或依赖失败，见 fetch.log / calibrate.log）"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
