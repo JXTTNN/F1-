@@ -1,8 +1,8 @@
 workflow   : Build & Release
-sha        : 2e2ff6b4ac63b8a057fc04edd21588789669e075
-ref        : v1.6.14
+sha        : d500383e8a7df7bf800072b098882df39d61e948
+ref        : v1.6.15
 test step  : success
-zip size   : 22.69 MB
+zip size   : 22.71 MB
 ---- dist/test-report.json ----
 {
   "all_passed": true,
@@ -13,7 +13,7 @@ zip size   : 22.69 MB
       "details": "产物完整性验证完成",
       "sub_items": [
         "exe 存在：D:\\a\\F1-\\F1-\\dist\\F1OPT.exe",
-        "exe 大小合理：22.83 MB",
+        "exe 大小合理：22.85 MB",
         "zip 存在：D:\\a\\F1-\\F1-\\dist\\F1OPT-portable.zip",
         "zip 无损坏",
         "zip 内含 F1OPT.exe",
@@ -25,7 +25,7 @@ zip size   : 22.69 MB
       "passed": true,
       "details": "exe 启动冒烟通过",
       "sub_items": [
-        "已启动 exe（PID=3600）",
+        "已启动 exe（PID=2792）",
         "API 就绪：http://127.0.0.1:8000/api/v1/health（200）",
         "health 信封格式正确（status=ok, telemetry_connected=True）"
       ]
@@ -63,18 +63,18 @@ zip size   : 22.69 MB
       "details": "80项深度检查：80/80 通过",
       "sub_items": [
         "── A. 产物完整性（10项）──",
-        "✓ A1 zip>10MB — 22.69MB",
+        "✓ A1 zip>10MB — 22.71MB",
         "✓ A2 zip无损坏",
         "✓ A3 zip含F1OPT.exe",
         "✓ A4 zip含一键启动.bat",
-        "✓ A5 exe>10MB — 22.83MB",
+        "✓ A5 exe>10MB — 22.85MB",
         "✓ A6 bat含start",
         "✓ A7 bat含health检查",
         "✓ A8 bat不含^字符",
         "✓ A9 zip文件数>=2 — 2个文件",
         "✓ A10 bat UTF-8编码",
         "── B. 启动检查（10项）──",
-        "✓ B1 exe能启动 — PID=3600（复用Phase 2实例）",
+        "✓ B1 exe能启动 — PID=2792（复用Phase 2实例）",
         "✓ B2 API 20秒就绪 — 复用Phase 2已就绪API",
         "✓ B9 启动<15秒 — 0.00s",
         "✓ B3 health 200",
@@ -83,21 +83,21 @@ zip size   : 22.69 MB
         "✓ B6 udp_host=0.0.0.0 — udp_host=0.0.0.0",
         "✓ B7 udp_port=20777 — udp_port=20777",
         "✓ B8 current_track_id字段存在 — current_track_id=suzuka",
-        "✓ B10 内存<200MB — 30.64MB",
+        "✓ B10 内存<200MB — 30.67MB",
         "── C. UI完整性（15项）──",
         "✓ C1 GET/ 200",
         "✓ C2 GET/ 返回HTML",
         "✓ C3 index.html 200",
-        "✓ C4 index.html>5000字节 — 23188字节",
+        "✓ C4 index.html>5000字节 — 23193字节",
         "✓ C5 含<title>",
         "✓ C6 含app.js引用",
         "✓ C7 含style.css引用",
         "✓ C8 app.js 200",
-        "✓ C9 app.js>10000字节 — 99308字节",
+        "✓ C9 app.js>10000字节 — 101323字节",
         "✓ C10 app.js含fetch",
         "✓ C11 app.js含WebSocket",
         "✓ C12 style.css 200",
-        "✓ C13 style.css>5000字节 — 50765字节",
+        "✓ C13 style.css>5000字节 — 50766字节",
         "✓ C14 style.css含body",
         "✓ C15 style.css含track-map",
         "── D. 数据正确性（20项）──",
@@ -138,13 +138,13 @@ zip size   : 22.69 MB
         "✓ E10 无遥测setup/import 409 — status=409",
         "✓ E14 重复反馈不崩溃 — status=200",
         "── F. 性能基准（10项）──",
-        "✓ F1 health<50ms — 1.4ms",
-        "✓ F2 tracks<100ms — 1.5ms",
-        "✓ F3 select<100ms — 1.9ms",
-        "✓ F4 feedback<200ms — 1.7ms",
-        "✓ F5 suggest<500ms — 111.2ms",
-        "✓ F6 history<100ms — 2.4ms",
-        "✓ F7 24SVG总加载<1000ms — 94.7ms",
+        "✓ F1 health<50ms — 1.2ms",
+        "✓ F2 tracks<100ms — 1.3ms",
+        "✓ F3 select<100ms — 2.1ms",
+        "✓ F4 feedback<200ms — 1.9ms",
+        "✓ F5 suggest<500ms — 78.3ms",
+        "✓ F6 history<100ms — 2.1ms",
+        "✓ F7 24SVG总加载<1000ms — 85.3ms",
         "✓ F8 并发10请求全成功",
         "✓ F9 连续50次health无错误",
         "✓ F10 数据库<10MB — 0.00MB"
@@ -155,9 +155,9 @@ zip size   : 22.69 MB
       "passed": true,
       "details": "便携性验证完成",
       "sub_items": [
-        "已解压 zip 到临时目录：C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\f1opt_portable_nm2za3gu",
-        "临时目录 exe 就绪：C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\f1opt_portable_nm2za3gu\\F1OPT.exe",
-        "已从临时目录启动 exe（PID=7956）",
+        "已解压 zip 到临时目录：C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\f1opt_portable_w6km_rra",
+        "临时目录 exe 就绪：C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\f1opt_portable_w6km_rra\\F1OPT.exe",
+        "已从临时目录启动 exe（PID=6064）",
         "API 就绪：http://127.0.0.1:8000/api/v1/health（200）",
         "数据目录落在安装文件夹内，f1opt.db 存在（4096 bytes）✓",
         "便携模式 API 正常（24 赛道）✓",
