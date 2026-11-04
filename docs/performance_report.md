@@ -2,8 +2,9 @@
 
 > **历史快照（2026-09-11，v1.0.x 时期）** —— 保留作优化方法学参考，文中
 > 「1162 个测试」等数字不是当前值。当前性能请运行 `python scripts/perf_benchmark.py`
-> 与 `python scripts/check_performance.py`（v1.6.15 本机实测：`POST /suggest`
-> p95 ≈ 97 ms、`GET /health` ≈ 6 ms、冷启动 ≈ 3.4 s、24/24 赛道 SVG）。
+> 与 `python scripts/check_performance.py`（v1.6.16 实测：冷启动 **3.71 s**、
+> API 平均 **34.0 ms**、`GET /api/v1/health` ≈ 18 ms、常驻 RSS ≈ **64 MB**、
+> 24/24 赛道 SVG 加载成功；`POST /suggest` 端到端 ≈ 55 ms）。
 
 > 生成时间：2026-09-11  
 > 任务：task-36 性能分析与优化  
