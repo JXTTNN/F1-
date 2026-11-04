@@ -112,7 +112,13 @@ def main(argv: list[str] | None = None) -> int:
 
     rows = [json.loads(line) for line in src.read_text(encoding="utf-8").splitlines() if line.strip()]
 
-    # 按 (赛道, 会话, 辅助组合) 分组：只比较「同条件」下的调教
+    # 分组粒度：赛道 × 会话 × TC 开关。
+    #
+    # 为什么不用「全部辅助设置」做键：实测 20 条记录里能出现 9 种组合，
+    # 每组只剩 1~8 条，全被 min_per_track 挡掉，校准变成空报告。
+    # 牵引力控制是圈速影响最大的一项（TC Off vs Full 常差 1 s 以上），
+    # 必须同质；ABS / 变速箱 / 行车线对圈速影响小一个量级，作为残余混淆记录在
+    # 报告里，不参与分组。
     groups: dict[tuple[str, str, str], list[dict[str, Any]]] = defaultdict(list)
     unknown_track = 0
     no_pred = 0
@@ -126,22 +132,22 @@ def main(argv: list[str] | None = None) -> int:
             no_pred += 1
             continue
         assists = rec.get("assists") or {}
+        tc = str(assists.get("traction_control") or "").lower()
         key = (
             tid,
             str(rec.get("session") or "unknown"),
-            "|".join(f"{k}={v}" for k, v in sorted(assists.items())),
+            "tc_off" if tc.startswith("off") else "tc_on",
         )
         groups[key].append({"lap_ms": rec["lap_time_ms"], "pred_s": pred})
 
     per_track: dict[str, Any] = {}
-    by_track: dict[str, list[dict[str, float]]] = defaultdict(list)
-    for (tid, _session, _assist), items in groups.items():
-        by_track[tid].extend(items)
-
     track_rows: list[dict[str, Any]] = []
-    for tid, items in sorted(by_track.items()):
+    # 逐组统计：TC Off 与 TC On 的圈速基线差 1 s 以上，混在一起算相关会被
+    # 这层台阶吃掉，所以分组独立评估，报告里按 `track/tc_*` 展示。
+    for (tid, _session, tc_group), items in sorted(groups.items()):
+        label = f"{tid}/{tc_group}"
         if len(items) < args.min_per_track:
-            per_track[tid] = {"n": len(items), "skipped": "样本不足"}
+            per_track[label] = {"n": len(items), "skipped": "样本不足"}
             continue
         actual = [it["lap_ms"] / 1000.0 for it in items]
         pred = [it["pred_s"] for it in items]
@@ -157,7 +163,7 @@ def main(argv: list[str] | None = None) -> int:
         fast = [actual[i] for i in order[:k]]
         slow = [actual[i] for i in order[-k:]]
         med_fast, med_slow = statistics.median(fast), statistics.median(slow)
-        per_track[tid] = {
+        per_track[label] = {
             "n": len(items),
             "spearman_rho": None if rho is None else round(rho, 4),
             "pearson_r": None if pear is None else round(pear, 4),
@@ -167,7 +173,7 @@ def main(argv: list[str] | None = None) -> int:
             "median_gap_slow_minus_fast_s": round(med_slow - med_fast, 3),
             "monotonic": bool(med_slow > med_fast),
         }
-        track_rows.append(per_track[tid])
+        track_rows.append(per_track[label])
 
     def _median(key: str) -> float | None:
         vals = [r[key] for r in track_rows if r.get(key) is not None]
