@@ -1,6 +1,6 @@
 {
   "schema": "f1opt-real-lap-holdout/1",
-  "created": "2026-11-04T05:39:07",
+  "created": "2026-11-04T07:24:33",
   "source": "f1laps_setups.jsonl",
   "ridge_lambda": 100000.0,
   "n_samples": 1667,
