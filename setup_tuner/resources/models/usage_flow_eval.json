@@ -1,6 +1,6 @@
 {
  "schema": "f1opt-usage-flow-eval/1",
- "evaluated_at": "2026-11-03T19:41:05",
+ "evaluated_at": "2026-11-04T08:52:38",
  "entry": "engine.generate_suggestion（与 POST /api/v1/suggest 同路径）",
  "metrics": {
   "n_tracks": 24,
@@ -11,7 +11,7 @@
   "median_gain_ms": 109.95,
   "p10_gain_ms": 100.73,
   "p90_gain_ms": 116.41,
-  "mean_gain_ms": 108.6,
+  "mean_gain_ms": 108.57,
   "mean_changed_params": 8.53,
   "mean_sim_moves": 1.93,
   "violations": 0,
@@ -456,7 +456,7 @@
    "reason": "ok",
    "iterations": 2,
    "accepted": 2,
-   "gain_ms": 109.0,
+   "gain_ms": 105.05,
    "changed_params": 10
   },
   {

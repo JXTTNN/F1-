@@ -3057,7 +3057,7 @@
   "min_deviation": 0.1,
   "model": "调教性能 NN（纯标准库，9600 仿真样本 / 24 赛道（遥测 19 + 几何推定 5），验证 MAE 76.933 ms / 局部 54.278 ms / R² 0.99737 / 逐赛道标准化）"
  },
- "evaluated_at": "2026-11-04T08:46:24",
+ "evaluated_at": "2026-11-04T08:53:23",
  "gate": {
   "checks": {
    "rough.effect_rate": {
