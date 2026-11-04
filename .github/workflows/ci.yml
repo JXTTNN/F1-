@@ -20,6 +20,10 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-latest
+    # 默认没有上限（6 小时）：pytest 一旦卡住，runner 就一直白跑，
+    # 而「卡住」时日志是空的，看起来和「还在跑」一模一样。
+    # 实测正常一轮 7 分钟，给到 25 分钟足够容纳慢 runner。
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
 

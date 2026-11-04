@@ -21,7 +21,7 @@ jobs:
     # 整套用例（含 deep_integration / deep_slice）在 2 核 runner 上要跑半小时量级，
     # 旧的 30 分钟上限会把「跑得慢」误判成「测试挂了」—— cloud-audit 的同名 job
     # 一直给的是 40 分钟，这里对齐并留余量。
-    timeout-minutes: 60
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
