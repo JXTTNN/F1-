@@ -968,6 +968,73 @@ h1, h2, h3 {
   margin-top: 4px;
   letter-spacing: var(--ls-normal);
 }
+/* ---- 车手风格画像（12 维条形 + 调制状态，task-62 M4）---- */
+.style-profile {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border-soft);
+  background: var(--bg-card-2);
+  font-size: 12px;
+}
+.style-profile:empty { display: none; }
+.style-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.style-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-family: var(--mono);
+  letter-spacing: var(--ls-normal);
+  white-space: nowrap;
+}
+.style-badge.on {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border: 1px solid var(--accent-glow);
+}
+.style-badge.off {
+  background: var(--bg-inset);
+  color: var(--text-faint);
+  border: 1px solid var(--border-soft);
+}
+.style-row {
+  display: flex;
+  align-items: center;
+  margin: 6px 0;
+}
+.style-name {
+  width: 88px;
+  flex-shrink: 0;
+  color: var(--text-dim);
+  font-size: 11px;
+}
+.style-bar {
+  flex: 1;
+  height: 8px;
+  background: var(--bg-inset);
+  border-radius: 999px;
+  overflow: hidden;
+  margin: 0 10px;
+}
+.style-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--data, #3b9eff), var(--accent, #ff2a2a));
+}
+.style-val {
+  width: 28px;
+  flex-shrink: 0;
+  text-align: right;
+  color: var(--text-body);
+  font-family: var(--mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
 .report-table-wrap { padding: 0; max-height: 480px; overflow: auto; }
 .report-empty, .history-empty {
   padding: 28px 16px;

@@ -114,3 +114,9 @@ audit_verify_result.json
 .audit_data/
 audit_dbg/
 scripts/perf_benchmark_result.json
+
+# 宣传片制作产物（大体积 mp4 + 第三方 bgm 素材，不入主仓库）
+promo/
+
+# 本地测试残留数据目录（运行期生成的 SQLite 库）
+data_test_*/
