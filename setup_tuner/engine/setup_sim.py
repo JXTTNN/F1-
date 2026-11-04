@@ -270,7 +270,9 @@ class SetupSimModel:
                     acc = float(value)
                 except (TypeError, ValueError):
                     continue
-                # 0.5 以下等于随机，当成「没有可用精度」处理，别在面板上误导用户
+                # 50% 及以下等于抛硬币，当成「没有可用精度」处理，别在面板上
+                # 误导用户。边界必须与训练侧 `_weight_for_track`（≤50% 归零）
+                # 一致，否则会出现「有权重、没准确率」的自相矛盾。
                 if 0.5 < acc <= 1.0:
                     self.real_accuracy_by_track[str(tid)] = acc
         self.real_metrics = data.get("metrics") or {}

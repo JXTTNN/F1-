@@ -213,6 +213,17 @@ class TestTrackAccuracy:
         model = SetupSimModel(_zero_model(tmp_path), calibration_path=path)
         assert model.real_accuracy_for(_TRACK) is None
 
+    def test_exactly_half_is_discarded(self, tmp_path: Path) -> None:
+        """恰好 50% 也必须丢弃 —— 边界要与训练侧「≤50% 归零」对齐。
+
+        回归背景：shanghai 的留出配对准确率正好落在 0.500（并列按半分记），
+        训练侧当时按 `acc >= 0.50` 给了 0.45 半权重，引擎侧却按 `> 0.5`
+        不显示准确率，面板于是出现「有权重、没准确率」的自相矛盾。
+        """
+        path = _calibration(tmp_path, track_accuracy={_TRACK: 0.5})
+        model = SetupSimModel(_zero_model(tmp_path), calibration_path=path)
+        assert model.real_accuracy_for(_TRACK) is None
+
     def test_unknown_track_returns_none(self, tmp_path: Path) -> None:
         path = _calibration(tmp_path, track_accuracy={_TRACK: 0.7})
         model = SetupSimModel(_zero_model(tmp_path), calibration_path=path)
@@ -222,3 +233,49 @@ class TestTrackAccuracy:
         path = _calibration(tmp_path, track_accuracy={_TRACK: "high"})
         model = SetupSimModel(_zero_model(tmp_path), calibration_path=path)
         assert model.real_accuracy_for(_TRACK) is None
+
+
+_MODEL_FILE = (
+    Path(__file__).resolve().parents[1]
+    / "setup_tuner" / "resources" / "models" / "real_lap_calibration.json"
+)
+
+
+@pytest.fixture(scope="module")
+def shipped_payload() -> dict:
+    """随包发布的校准文件（缺失则跳过，便于只装代码不装模型的场景）。"""
+    if not _MODEL_FILE.exists():
+        pytest.skip("校准文件未随包提供")
+    return json.loads(_MODEL_FILE.read_text(encoding="utf-8"))
+
+
+class TestShippedWeightsAreConsistent:
+    """随包发布的校准文件里，「有权重」与「有准确率」必须一一对应。
+
+    两个模块各管一半：训练侧 `_weight_for_track` 按准确率派生权重，引擎侧
+    `_load_real_calibration` 按准确率决定是否对外显示。边界只要写错一边，
+    面板就会出现「权重 45%、准确率未知」这种自相矛盾（shanghai 0.500 曾踩中）。
+    这里对**真实产物**做不变量检查，训练/引擎任一侧单独改动都会被抓到。
+    """
+
+    def test_positive_weight_implies_visible_accuracy(self, shipped_payload: dict) -> None:
+        acc = shipped_payload.get("track_accuracy") or {}
+        for tid, w in (shipped_payload.get("blend_weight_by_track") or {}).items():
+            if w <= 0:
+                continue
+            got = acc.get(tid)
+            assert got is not None and got > 0.5, (
+                f"{tid} 权重 {w}，却没有 >50% 的准确率可显示（{got}）"
+            )
+
+    def test_zero_weight_only_for_no_skill_tracks(self, shipped_payload: dict) -> None:
+        if not shipped_payload.get("blend_weight"):
+            pytest.skip("全局权重为 0（总门禁未过），逐站权重无意义")
+        acc = shipped_payload.get("track_accuracy") or {}
+        for tid, w in (shipped_payload.get("blend_weight_by_track") or {}).items():
+            if w > 0:
+                continue
+            got = acc.get(tid)
+            assert got is None or got <= 0.55, (
+                f"{tid} 准确率 {got} 明显好于随机，却被归零"
+            )

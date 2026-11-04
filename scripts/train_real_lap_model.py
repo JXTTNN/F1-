@@ -588,15 +588,21 @@ def _weight_for_track(acc: float | None, global_w: float) -> float:
     退回纯仿真：
 
     - ``acc >= 0.55``：正常信任，用全局权重；
-    - ``0.50 <= acc < 0.55``：只比随机好一点，权重减半；
-    - ``acc < 0.50``：还不如抛硬币，直接归零（该站退回纯仿真）。
+    - ``0.50 < acc < 0.55``：只比随机好一点，权重减半；
+    - ``acc <= 0.50``：还不如抛硬币，直接归零（该站退回纯仿真）。
+
+    边界取不到等号（`acc == 0.50` 归零）是刻意的：引擎侧把「≤50%」当成
+    「没有可用精度」而不对外显示准确率（见 `setup_sim._load_real_calibration`）。
+    若这里把恰好 0.500 的站按半权重融合，就会出现「有权重、没准确率」的
+    自相矛盾 —— 实测 shanghai 的留出配对准确率正好 0.500（并列按半分记，
+    恰好落在 1/2 上），两边必须用同一个边界。
 
     实测 hungaroring 的留出配对准确率只有 43.4%（114 对，标准误约 4.7%），
     显著低于随机；这种站继续按 0.9 融合等于用噪声改车。
     """
     if acc is None:
         return global_w
-    if acc < 0.50:
+    if acc <= 0.50:
         return 0.0
     if acc < 0.55:
         return round(global_w * 0.5, 3)
@@ -801,6 +807,16 @@ def main(argv: list[str] | None = None) -> int:
         default_w = 0.0
         weight_by_track = dict.fromkeys(weight_by_track, 0.0)
 
+    # 4) 逐站权重**真正生效后**的表现 —— 线上就是按这个组合出建议的。
+    # 前面的 matched_acc_real 是「全站一律用真实预测」，等于假设 24 站都学得动；
+    # 这里把「学不动的站退回纯仿真」也计入，才是用户实际拿到的准确率。
+    blend_vec = [
+        (1.0 - weight_by_track.get(rec["track_id"], default_w)) * (sim_pred[i] or 0.0)
+        + weight_by_track.get(rec["track_id"], default_w) * pred_scaled[i]
+        for i, rec in enumerate(rows)
+    ]
+    blend_acc, blend_pairs = pooled_matched_accuracy(rows, blend_vec)
+
     verdict: list[str] = []
     if real_acc is None:
         verdict.append("留出集配对样本不足，无法给出可信结论")
@@ -816,6 +832,11 @@ def main(argv: list[str] | None = None) -> int:
             verdict.append("真实校准未超过仿真，融合权重归零（不改变现有行为）")
         else:
             verdict.append("两者接近：权重保守，只用于修正方向性错误")
+        if blend_acc is not None:
+            verdict.append(
+                f"逐站权重生效后整体融合配对准确率 {blend_acc:.1%}"
+                f"（{blend_pairs} 对；学不动的站已退回纯仿真）"
+            )
 
     payload = {
         "schema": "f1opt-real-lap-calibration/1",
@@ -864,6 +885,9 @@ def main(argv: list[str] | None = None) -> int:
             "matched_acc_sim": sim_acc,
             "matched_pairs": real_pairs,
             "matched_acc_gain": gain,
+            # 逐站权重生效后的实际表现（线上口径）
+            "blend_matched_acc": blend_acc,
+            "blend_pairs": blend_pairs,
             # 参考指标：逐站中位（含车手差异，仅作对照）
             "median_pair_acc_real": real_acc_med,
             "median_pair_acc_sim": sim_acc_med,
@@ -911,6 +935,9 @@ def main(argv: list[str] | None = None) -> int:
         "|---|---|---|---|",
         f"| 配对排序准确率（合并 {real_pairs} 对） | {_fmt_pct(sim_acc)} | "
         f"{_fmt_pct(real_acc)} | {'n/a' if gain is None else f'{gain:+.1%}'} |",
+        f"| 逐站权重生效后融合准确率（合并 {blend_pairs} 对） | {_fmt_pct(sim_acc)} | "
+        f"{_fmt_pct(blend_acc)} | "
+        f"{'n/a' if (sim_acc is None or blend_acc is None) else f'{blend_acc - sim_acc:+.1%}'} |",
         f"| 站内混比准确率（中位，参考） | {_fmt_pct(sim_acc_med)} | "
         f"{_fmt_pct(real_acc_med)} | "
         f"{'n/a' if (sim_acc_med is None or real_acc_med is None) else f'{real_acc_med - sim_acc_med:+.1%}'} |",
