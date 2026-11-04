@@ -1,6 +1,6 @@
 {
  "schema": "f1opt-usage-flow-eval/1",
- "evaluated_at": "2026-11-04T01:04:06",
+ "evaluated_at": "2026-11-04T12:02:50",
  "entry": "engine.generate_suggestion（与 POST /api/v1/suggest 同路径）",
  "metrics": {
   "n_tracks": 24,
@@ -8,16 +8,16 @@
   "n_runs": 120,
   "nn_active_rate": 1.0,
   "accept_rate": 1.0,
-  "median_gain_ms": 109.95,
-  "p10_gain_ms": 100.73,
-  "p90_gain_ms": 116.41,
-  "mean_gain_ms": 108.57,
-  "mean_changed_params": 8.53,
-  "mean_sim_moves": 1.93,
+  "median_gain_ms": 104.71,
+  "p10_gain_ms": 83.78,
+  "p90_gain_ms": 117.11,
+  "mean_gain_ms": 102.14,
+  "mean_changed_params": 8.77,
+  "mean_sim_moves": 2.76,
   "violations": 0,
   "zero_input_moves": 0,
   "model_tracks": 24,
-  "model_desc": "调教性能 NN（纯标准库，9600 仿真样本 / 24 赛道（遥测 19 + 几何推定 5），验证 MAE 76.933 ms / 局部 54.278 ms / R² 0.99737 / 逐赛道标准化）",
+  "model_desc": "调教性能 NN（纯标准库，9600 仿真样本 / 24 赛道（遥测 19 + 几何推定 5），验证 MAE 76.933 ms / 局部 54.278 ms / R² 0.99737 / 逐赛道标准化 / 真实校准 24 站（1424 条配对，权重 0.90））",
   "tracks_without_model": []
  },
  "gate": {
@@ -34,17 +34,17 @@
     "ok": true
    },
    "median_gain_ms": {
-    "value": 109.95,
+    "value": 104.71,
     "threshold": ">=10.0",
     "ok": true
    },
    "mean_sim_moves": {
-    "value": 1.93,
+    "value": 2.76,
     "threshold": "<=3.0",
     "ok": true
    },
    "p90_gain_ms": {
-    "value": 116.41,
+    "value": 117.11,
     "threshold": "<=200.0",
     "ok": true
    },
@@ -70,8 +70,8 @@
    "nn_available": true,
    "reason": "ok",
    "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 107.33,
+   "accepted": 3,
+   "gain_ms": 102.84,
    "changed_params": 10
   },
   {
@@ -81,9 +81,9 @@
    "nn_available": true,
    "reason": "ok",
    "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 107.33,
-   "changed_params": 7
+   "accepted": 3,
+   "gain_ms": 116.78,
+   "changed_params": 8
   },
   {
    "track_id": "melbourne",
@@ -92,8 +92,8 @@
    "nn_available": true,
    "reason": "ok",
    "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 107.36,
+   "accepted": 3,
+   "gain_ms": 94.03,
    "changed_params": 9
   },
   {
@@ -103,9 +103,9 @@
    "nn_available": true,
    "reason": "ok",
    "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 107.33,
-   "changed_params": 8
+   "accepted": 3,
+   "gain_ms": 116.78,
+   "changed_params": 9
   },
   {
    "track_id": "melbourne",
@@ -113,9 +113,9 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 118.65,
+   "iterations": 1,
+   "accepted": 3,
+   "gain_ms": 93.32,
    "changed_params": 6
   },
   {
@@ -126,7 +126,7 @@
    "reason": "ok",
    "iterations": 2,
    "accepted": 2,
-   "gain_ms": 108.28,
+   "gain_ms": 112.24,
    "changed_params": 10
   },
   {
@@ -137,7 +137,7 @@
    "reason": "ok",
    "iterations": 2,
    "accepted": 2,
-   "gain_ms": 108.28,
+   "gain_ms": 112.24,
    "changed_params": 7
   },
   {
@@ -148,7 +148,7 @@
    "reason": "ok",
    "iterations": 2,
    "accepted": 2,
-   "gain_ms": 112.43,
+   "gain_ms": 117.11,
    "changed_params": 9
   },
   {
@@ -159,7 +159,7 @@
    "reason": "ok",
    "iterations": 2,
    "accepted": 2,
-   "gain_ms": 107.43,
+   "gain_ms": 111.78,
    "changed_params": 8
   },
   {
@@ -170,7 +170,7 @@
    "reason": "ok",
    "iterations": 2,
    "accepted": 2,
-   "gain_ms": 119.99,
+   "gain_ms": 113.65,
    "changed_params": 6
   },
   {
@@ -180,8 +180,8 @@
    "nn_available": true,
    "reason": "ok",
    "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 110.99,
+   "accepted": 3,
+   "gain_ms": 108.57,
    "changed_params": 10
   },
   {
@@ -191,9 +191,9 @@
    "nn_available": true,
    "reason": "ok",
    "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 110.99,
-   "changed_params": 7
+   "accepted": 3,
+   "gain_ms": 119.45,
+   "changed_params": 8
   },
   {
    "track_id": "suzuka",
@@ -202,8 +202,8 @@
    "nn_available": true,
    "reason": "ok",
    "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 110.99,
+   "accepted": 3,
+   "gain_ms": 97.98,
    "changed_params": 9
   },
   {
@@ -213,9 +213,9 @@
    "nn_available": true,
    "reason": "ok",
    "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 110.99,
-   "changed_params": 8
+   "accepted": 3,
+   "gain_ms": 119.45,
+   "changed_params": 9
   },
   {
    "track_id": "suzuka",
@@ -223,9 +223,9 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 110.99,
+   "iterations": 1,
+   "accepted": 3,
+   "gain_ms": 97.65,
    "changed_params": 6
   },
   {
@@ -235,8 +235,8 @@
    "nn_available": true,
    "reason": "ok",
    "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 100.73,
+   "accepted": 3,
+   "gain_ms": 104.71,
    "changed_params": 10
   },
   {
@@ -245,9 +245,9 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 119.02,
+   "iterations": 1,
+   "accepted": 3,
+   "gain_ms": 89.31,
    "changed_params": 7
   },
   {
@@ -257,8 +257,8 @@
    "nn_available": true,
    "reason": "ok",
    "iterations": 2,
-   "accepted": 1,
-   "gain_ms": 80.0,
+   "accepted": 3,
+   "gain_ms": 85.76,
    "changed_params": 9
   },
   {
@@ -268,9 +268,9 @@
    "nn_available": true,
    "reason": "ok",
    "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 100.73,
-   "changed_params": 8
+   "accepted": 3,
+   "gain_ms": 112.38,
+   "changed_params": 9
   },
   {
    "track_id": "sakhir",
@@ -278,9 +278,9 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 100.73,
+   "iterations": 1,
+   "accepted": 3,
+   "gain_ms": 91.92,
    "changed_params": 6
   },
   {
@@ -289,9 +289,9 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 116.41,
+   "iterations": 1,
+   "accepted": 3,
+   "gain_ms": 92.47,
    "changed_params": 13
   },
   {
@@ -300,9 +300,9 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 115.31,
+   "iterations": 1,
+   "accepted": 3,
+   "gain_ms": 86.4,
    "changed_params": 8
   },
   {
@@ -312,8 +312,8 @@
    "nn_available": true,
    "reason": "ok",
    "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 115.44,
+   "accepted": 3,
+   "gain_ms": 88.23,
    "changed_params": 12
   },
   {
@@ -323,9 +323,9 @@
    "nn_available": true,
    "reason": "ok",
    "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 116.41,
-   "changed_params": 8
+   "accepted": 3,
+   "gain_ms": 107.75,
+   "changed_params": 9
   },
   {
    "track_id": "jeddah",
@@ -333,9 +333,9 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 116.41,
+   "iterations": 1,
+   "accepted": 3,
+   "gain_ms": 92.47,
    "changed_params": 6
   },
   {
@@ -345,8 +345,8 @@
    "nn_available": true,
    "reason": "ok",
    "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 109.95,
+   "accepted": 3,
+   "gain_ms": 107.89,
    "changed_params": 10
   },
   {
@@ -356,9 +356,9 @@
    "nn_available": true,
    "reason": "ok",
    "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 109.95,
-   "changed_params": 10
+   "accepted": 3,
+   "gain_ms": 119.0,
+   "changed_params": 11
   },
   {
    "track_id": "miami",
@@ -367,8 +367,8 @@
    "nn_available": true,
    "reason": "ok",
    "iterations": 2,
-   "accepted": 1,
-   "gain_ms": 80.0,
+   "accepted": 3,
+   "gain_ms": 93.18,
    "changed_params": 9
   },
   {
@@ -378,9 +378,9 @@
    "nn_available": true,
    "reason": "ok",
    "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 109.95,
-   "changed_params": 8
+   "accepted": 3,
+   "gain_ms": 119.0,
+   "changed_params": 9
   },
   {
    "track_id": "miami",
@@ -388,9 +388,9 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 118.85,
+   "iterations": 1,
+   "accepted": 3,
+   "gain_ms": 97.32,
    "changed_params": 6
   },
   {
@@ -401,7 +401,7 @@
    "reason": "ok",
    "iterations": 2,
    "accepted": 2,
-   "gain_ms": 112.33,
+   "gain_ms": 110.8,
    "changed_params": 13
   },
   {
@@ -412,7 +412,7 @@
    "reason": "ok",
    "iterations": 2,
    "accepted": 2,
-   "gain_ms": 115.57,
+   "gain_ms": 117.97,
    "changed_params": 8
   },
   {
@@ -423,7 +423,7 @@
    "reason": "ok",
    "iterations": 2,
    "accepted": 2,
-   "gain_ms": 117.23,
+   "gain_ms": 113.43,
    "changed_params": 12
   },
   {
@@ -434,7 +434,7 @@
    "reason": "ok",
    "iterations": 2,
    "accepted": 2,
-   "gain_ms": 101.08,
+   "gain_ms": 110.19,
    "changed_params": 8
   },
   {
@@ -445,7 +445,7 @@
    "reason": "ok",
    "iterations": 2,
    "accepted": 2,
-   "gain_ms": 109.66,
+   "gain_ms": 109.37,
    "changed_params": 6
   },
   {
@@ -455,9 +455,9 @@
    "nn_available": true,
    "reason": "ok",
    "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 105.05,
-   "changed_params": 10
+   "accepted": 3,
+   "gain_ms": 77.76,
+   "changed_params": 11
   },
   {
    "track_id": "monaco",
@@ -466,9 +466,9 @@
    "nn_available": true,
    "reason": "ok",
    "iterations": 2,
-   "accepted": 1,
-   "gain_ms": 80.0,
-   "changed_params": 9
+   "accepted": 3,
+   "gain_ms": 84.5,
+   "changed_params": 11
   },
   {
    "track_id": "monaco",
@@ -477,8 +477,8 @@
    "nn_available": true,
    "reason": "ok",
    "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 105.51,
+   "accepted": 3,
+   "gain_ms": 77.78,
    "changed_params": 8
   },
   {
@@ -488,9 +488,9 @@
    "nn_available": true,
    "reason": "ok",
    "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 105.62,
-   "changed_params": 8
+   "accepted": 3,
+   "gain_ms": 84.5,
+   "changed_params": 9
   },
   {
    "track_id": "monaco",
@@ -499,9 +499,9 @@
    "nn_available": true,
    "reason": "ok",
    "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 105.05,
-   "changed_params": 7
+   "accepted": 3,
+   "gain_ms": 84.5,
+   "changed_params": 8
   },
   {
    "track_id": "barcelona",
@@ -510,8 +510,8 @@
    "nn_available": true,
    "reason": "ok",
    "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 100.55,
+   "accepted": 3,
+   "gain_ms": 89.12,
    "changed_params": 10
   },
   {
@@ -520,9 +520,9 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 112.1,
+   "iterations": 1,
+   "accepted": 3,
+   "gain_ms": 75.89,
    "changed_params": 7
   },
   {
@@ -532,8 +532,8 @@
    "nn_available": true,
    "reason": "ok",
    "iterations": 2,
-   "accepted": 1,
-   "gain_ms": 80.0,
+   "accepted": 3,
+   "gain_ms": 80.67,
    "changed_params": 9
   },
   {
@@ -543,9 +543,9 @@
    "nn_available": true,
    "reason": "ok",
    "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 109.15,
-   "changed_params": 8
+   "accepted": 3,
+   "gain_ms": 96.1,
+   "changed_params": 9
   },
   {
    "track_id": "barcelona",
@@ -553,9 +553,9 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 113.29,
+   "iterations": 1,
+   "accepted": 3,
+   "gain_ms": 78.18,
    "changed_params": 6
   },
   {
@@ -565,8 +565,8 @@
    "nn_available": true,
    "reason": "ok",
    "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 106.3,
+   "accepted": 3,
+   "gain_ms": 103.57,
    "changed_params": 11
   },
   {
@@ -576,9 +576,9 @@
    "nn_available": true,
    "reason": "ok",
    "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 106.3,
-   "changed_params": 7
+   "accepted": 3,
+   "gain_ms": 113.66,
+   "changed_params": 8
   },
   {
    "track_id": "spielberg",
@@ -587,8 +587,8 @@
    "nn_available": true,
    "reason": "ok",
    "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 119.27,
+   "accepted": 3,
+   "gain_ms": 95.34,
    "changed_params": 11
   },
   {
@@ -598,9 +598,9 @@
    "nn_available": true,
    "reason": "ok",
    "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 106.3,
-   "changed_params": 8
+   "accepted": 3,
+   "gain_ms": 113.66,
+   "changed_params": 9
   },
   {
    "track_id": "spielberg",
@@ -608,9 +608,9 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 117.19,
+   "iterations": 1,
+   "accepted": 3,
+   "gain_ms": 94.66,
    "changed_params": 6
   },
   {
@@ -620,8 +620,8 @@
    "nn_available": true,
    "reason": "ok",
    "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 109.41,
+   "accepted": 3,
+   "gain_ms": 93.1,
    "changed_params": 10
   },
   {
@@ -631,9 +631,9 @@
    "nn_available": true,
    "reason": "ok",
    "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 109.41,
-   "changed_params": 7
+   "accepted": 3,
+   "gain_ms": 96.89,
+   "changed_params": 8
   },
   {
    "track_id": "silverstone",
@@ -642,8 +642,8 @@
    "nn_available": true,
    "reason": "ok",
    "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 109.41,
+   "accepted": 3,
+   "gain_ms": 81.97,
    "changed_params": 9
   },
   {
@@ -653,9 +653,9 @@
    "nn_available": true,
    "reason": "ok",
    "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 109.41,
-   "changed_params": 8
+   "accepted": 3,
+   "gain_ms": 96.89,
+   "changed_params": 9
   },
   {
    "track_id": "silverstone",
@@ -663,9 +663,9 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 109.41,
+   "iterations": 1,
+   "accepted": 3,
+   "gain_ms": 81.6,
    "changed_params": 6
   },
   {
@@ -675,8 +675,8 @@
    "nn_available": true,
    "reason": "ok",
    "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 109.96,
+   "accepted": 3,
+   "gain_ms": 100.05,
    "changed_params": 10
   },
   {
@@ -685,9 +685,9 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 119.3,
+   "iterations": 1,
+   "accepted": 3,
+   "gain_ms": 83.53,
    "changed_params": 13
   },
   {
@@ -697,9 +697,9 @@
    "nn_available": true,
    "reason": "ok",
    "iterations": 2,
-   "accepted": 1,
-   "gain_ms": 80.0,
-   "changed_params": 6
+   "accepted": 3,
+   "gain_ms": 101.47,
+   "changed_params": 7
   },
   {
    "track_id": "spa",
@@ -708,9 +708,9 @@
    "nn_available": true,
    "reason": "ok",
    "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 118.05,
-   "changed_params": 8
+   "accepted": 3,
+   "gain_ms": 101.25,
+   "changed_params": 9
   },
   {
    "track_id": "spa",
@@ -718,9 +718,9 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 118.05,
+   "iterations": 1,
+   "accepted": 3,
+   "gain_ms": 84.57,
    "changed_params": 6
   },
   {
@@ -785,74 +785,74 @@
    "nn_available": true,
    "reason": "ok",
    "iterations": 2,
+   "accepted": 3,
+   "gain_ms": 116.88,
+   "changed_params": 14
+  },
+  {
+   "track_id": "zandvoort",
+   "scenario": "exit_traction",
+   "model_type": "nn",
+   "nn_available": true,
+   "reason": "ok",
+   "iterations": 2,
    "accepted": 2,
-   "gain_ms": 113.81,
+   "gain_ms": 87.15,
+   "changed_params": 8
+  },
+  {
+   "track_id": "zandvoort",
+   "scenario": "high_speed",
+   "model_type": "nn",
+   "nn_available": true,
+   "reason": "ok",
+   "iterations": 2,
+   "accepted": 3,
+   "gain_ms": 118.7,
+   "changed_params": 12
+  },
+  {
+   "track_id": "zandvoort",
+   "scenario": "global_mixed",
+   "model_type": "nn",
+   "nn_available": true,
+   "reason": "ok",
+   "iterations": 2,
+   "accepted": 2,
+   "gain_ms": 83.73,
+   "changed_params": 8
+  },
+  {
+   "track_id": "zandvoort",
+   "scenario": "single_symptom",
+   "model_type": "nn",
+   "nn_available": true,
+   "reason": "ok",
+   "iterations": 1,
+   "accepted": 3,
+   "gain_ms": 116.68,
+   "changed_params": 6
+  },
+  {
+   "track_id": "monza",
+   "scenario": "entry_understeer",
+   "model_type": "nn",
+   "nn_available": true,
+   "reason": "ok",
+   "iterations": 1,
+   "accepted": 3,
+   "gain_ms": 89.83,
    "changed_params": 13
   },
   {
-   "track_id": "zandvoort",
-   "scenario": "exit_traction",
-   "model_type": "nn",
-   "nn_available": true,
-   "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 104.91,
-   "changed_params": 8
-  },
-  {
-   "track_id": "zandvoort",
-   "scenario": "high_speed",
-   "model_type": "nn",
-   "nn_available": true,
-   "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 109.89,
-   "changed_params": 12
-  },
-  {
-   "track_id": "zandvoort",
-   "scenario": "global_mixed",
-   "model_type": "nn",
-   "nn_available": true,
-   "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 103.91,
-   "changed_params": 8
-  },
-  {
-   "track_id": "zandvoort",
-   "scenario": "single_symptom",
-   "model_type": "nn",
-   "nn_available": true,
-   "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 113.81,
-   "changed_params": 6
-  },
-  {
-   "track_id": "monza",
-   "scenario": "entry_understeer",
-   "model_type": "nn",
-   "nn_available": true,
-   "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 114.06,
-   "changed_params": 12
-  },
-  {
    "track_id": "monza",
    "scenario": "exit_traction",
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 112.84,
+   "iterations": 1,
+   "accepted": 3,
+   "gain_ms": 88.02,
    "changed_params": 8
   },
   {
@@ -862,8 +862,8 @@
    "nn_available": true,
    "reason": "ok",
    "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 102.95,
+   "accepted": 3,
+   "gain_ms": 83.47,
    "changed_params": 8
   },
   {
@@ -873,9 +873,9 @@
    "nn_available": true,
    "reason": "ok",
    "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 109.82,
-   "changed_params": 8
+   "accepted": 3,
+   "gain_ms": 114.82,
+   "changed_params": 9
   },
   {
    "track_id": "monza",
@@ -883,9 +883,9 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 114.06,
+   "iterations": 1,
+   "accepted": 3,
+   "gain_ms": 89.83,
    "changed_params": 6
   },
   {
@@ -895,8 +895,8 @@
    "nn_available": true,
    "reason": "ok",
    "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 113.27,
+   "accepted": 3,
+   "gain_ms": 100.89,
    "changed_params": 10
   },
   {
@@ -906,9 +906,9 @@
    "nn_available": true,
    "reason": "ok",
    "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 113.27,
-   "changed_params": 10
+   "accepted": 3,
+   "gain_ms": 104.44,
+   "changed_params": 11
   },
   {
    "track_id": "madrid",
@@ -917,8 +917,8 @@
    "nn_available": true,
    "reason": "ok",
    "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 114.07,
+   "accepted": 3,
+   "gain_ms": 84.19,
    "changed_params": 9
   },
   {
@@ -928,9 +928,9 @@
    "nn_available": true,
    "reason": "ok",
    "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 113.27,
-   "changed_params": 8
+   "accepted": 3,
+   "gain_ms": 104.44,
+   "changed_params": 9
   },
   {
    "track_id": "madrid",
@@ -938,9 +938,9 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 113.27,
+   "iterations": 1,
+   "accepted": 3,
+   "gain_ms": 87.96,
    "changed_params": 6
   },
   {
@@ -949,10 +949,10 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 2,
-   "accepted": 1,
-   "gain_ms": 80.0,
-   "changed_params": 12
+   "iterations": 1,
+   "accepted": 3,
+   "gain_ms": 101.9,
+   "changed_params": 13
   },
   {
    "track_id": "baku",
@@ -961,8 +961,8 @@
    "nn_available": true,
    "reason": "ok",
    "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 113.12,
+   "accepted": 3,
+   "gain_ms": 111.88,
    "changed_params": 8
   },
   {
@@ -972,8 +972,8 @@
    "nn_available": true,
    "reason": "ok",
    "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 113.12,
+   "accepted": 3,
+   "gain_ms": 101.31,
    "changed_params": 12
   },
   {
@@ -983,8 +983,8 @@
    "nn_available": true,
    "reason": "ok",
    "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 114.16,
+   "accepted": 3,
+   "gain_ms": 116.13,
    "changed_params": 8
   },
   {
@@ -993,9 +993,9 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 114.16,
+   "iterations": 1,
+   "accepted": 3,
+   "gain_ms": 104.26,
    "changed_params": 6
   },
   {
@@ -1006,7 +1006,7 @@
    "reason": "ok",
    "iterations": 2,
    "accepted": 2,
-   "gain_ms": 116.74,
+   "gain_ms": 113.96,
    "changed_params": 12
   },
   {
@@ -1017,7 +1017,7 @@
    "reason": "ok",
    "iterations": 2,
    "accepted": 2,
-   "gain_ms": 107.39,
+   "gain_ms": 110.12,
    "changed_params": 10
   },
   {
@@ -1027,8 +1027,8 @@
    "nn_available": true,
    "reason": "ok",
    "iterations": 2,
-   "accepted": 1,
-   "gain_ms": 80.0,
+   "accepted": 2,
+   "gain_ms": 103.6,
    "changed_params": 8
   },
   {
@@ -1039,7 +1039,7 @@
    "reason": "ok",
    "iterations": 2,
    "accepted": 2,
-   "gain_ms": 114.49,
+   "gain_ms": 108.93,
    "changed_params": 8
   },
   {
@@ -1050,7 +1050,7 @@
    "reason": "ok",
    "iterations": 2,
    "accepted": 2,
-   "gain_ms": 116.74,
+   "gain_ms": 113.96,
    "changed_params": 6
   },
   {
@@ -1061,7 +1061,7 @@
    "reason": "ok",
    "iterations": 2,
    "accepted": 2,
-   "gain_ms": 112.33,
+   "gain_ms": 85.99,
    "changed_params": 10
   },
   {
@@ -1070,9 +1070,9 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 110.96,
+   "iterations": 1,
+   "accepted": 3,
+   "gain_ms": 115.31,
    "changed_params": 11
   },
   {
@@ -1082,8 +1082,8 @@
    "nn_available": true,
    "reason": "ok",
    "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 116.27,
+   "accepted": 3,
+   "gain_ms": 116.26,
    "changed_params": 9
   },
   {
@@ -1094,7 +1094,7 @@
    "reason": "ok",
    "iterations": 2,
    "accepted": 2,
-   "gain_ms": 112.33,
+   "gain_ms": 85.99,
    "changed_params": 8
   },
   {
@@ -1103,9 +1103,9 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 112.33,
+   "iterations": 1,
+   "accepted": 3,
+   "gain_ms": 118.66,
    "changed_params": 6
   },
   {
@@ -1116,7 +1116,7 @@
    "reason": "ok",
    "iterations": 2,
    "accepted": 2,
-   "gain_ms": 105.09,
+   "gain_ms": 83.78,
    "changed_params": 10
   },
   {
@@ -1127,7 +1127,7 @@
    "reason": "ok",
    "iterations": 2,
    "accepted": 2,
-   "gain_ms": 105.09,
+   "gain_ms": 83.78,
    "changed_params": 7
   },
   {
@@ -1137,8 +1137,8 @@
    "nn_available": true,
    "reason": "ok",
    "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 113.3,
+   "accepted": 3,
+   "gain_ms": 114.55,
    "changed_params": 9
   },
   {
@@ -1149,7 +1149,7 @@
    "reason": "ok",
    "iterations": 2,
    "accepted": 2,
-   "gain_ms": 105.09,
+   "gain_ms": 83.78,
    "changed_params": 8
   },
   {
@@ -1158,9 +1158,9 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 115.48,
+   "iterations": 1,
+   "accepted": 3,
+   "gain_ms": 116.57,
    "changed_params": 6
   },
   {
@@ -1170,8 +1170,8 @@
    "nn_available": true,
    "reason": "ok",
    "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 102.95,
+   "accepted": 3,
+   "gain_ms": 114.73,
    "changed_params": 10
   },
   {
@@ -1180,9 +1180,9 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 108.71,
+   "iterations": 1,
+   "accepted": 3,
+   "gain_ms": 106.29,
    "changed_params": 7
   },
   {
@@ -1192,8 +1192,8 @@
    "nn_available": true,
    "reason": "ok",
    "iterations": 2,
-   "accepted": 1,
-   "gain_ms": 80.0,
+   "accepted": 3,
+   "gain_ms": 107.06,
    "changed_params": 9
   },
   {
@@ -1203,8 +1203,8 @@
    "nn_available": true,
    "reason": "ok",
    "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 102.95,
+   "accepted": 3,
+   "gain_ms": 114.73,
    "changed_params": 8
   },
   {
@@ -1213,9 +1213,9 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 109.78,
+   "iterations": 1,
+   "accepted": 3,
+   "gain_ms": 108.36,
    "changed_params": 6
   },
   {
@@ -1225,9 +1225,9 @@
    "nn_available": true,
    "reason": "ok",
    "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 113.88,
-   "changed_params": 13
+   "accepted": 3,
+   "gain_ms": 118.35,
+   "changed_params": 12
   },
   {
    "track_id": "las_vegas",
@@ -1237,7 +1237,7 @@
    "reason": "ok",
    "iterations": 2,
    "accepted": 2,
-   "gain_ms": 112.74,
+   "gain_ms": 86.81,
    "changed_params": 8
   },
   {
@@ -1247,8 +1247,8 @@
    "nn_available": true,
    "reason": "ok",
    "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 110.74,
+   "accepted": 3,
+   "gain_ms": 117.98,
    "changed_params": 12
   },
   {
@@ -1259,7 +1259,7 @@
    "reason": "ok",
    "iterations": 2,
    "accepted": 2,
-   "gain_ms": 111.7,
+   "gain_ms": 88.27,
    "changed_params": 8
   },
   {
@@ -1269,8 +1269,8 @@
    "nn_available": true,
    "reason": "ok",
    "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 111.7,
+   "accepted": 3,
+   "gain_ms": 119.76,
    "changed_params": 6
   },
   {
@@ -1280,8 +1280,8 @@
    "nn_available": true,
    "reason": "ok",
    "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 107.99,
+   "accepted": 3,
+   "gain_ms": 105.56,
    "changed_params": 10
   },
   {
@@ -1291,9 +1291,9 @@
    "nn_available": true,
    "reason": "ok",
    "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 107.99,
-   "changed_params": 7
+   "accepted": 3,
+   "gain_ms": 113.39,
+   "changed_params": 8
   },
   {
    "track_id": "lusail",
@@ -1302,8 +1302,8 @@
    "nn_available": true,
    "reason": "ok",
    "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 107.99,
+   "accepted": 3,
+   "gain_ms": 105.9,
    "changed_params": 10
   },
   {
@@ -1313,9 +1313,9 @@
    "nn_available": true,
    "reason": "ok",
    "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 107.99,
-   "changed_params": 8
+   "accepted": 3,
+   "gain_ms": 113.39,
+   "changed_params": 9
   },
   {
    "track_id": "lusail",
@@ -1324,9 +1324,9 @@
    "nn_available": true,
    "reason": "ok",
    "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 107.99,
-   "changed_params": 5
+   "accepted": 3,
+   "gain_ms": 113.39,
+   "changed_params": 6
   },
   {
    "track_id": "yas_marina",
@@ -1335,8 +1335,8 @@
    "nn_available": true,
    "reason": "ok",
    "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 100.11,
+   "accepted": 3,
+   "gain_ms": 117.83,
    "changed_params": 10
   },
   {
@@ -1345,9 +1345,9 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 111.42,
+   "iterations": 1,
+   "accepted": 3,
+   "gain_ms": 104.7,
    "changed_params": 7
   },
   {
@@ -1357,8 +1357,8 @@
    "nn_available": true,
    "reason": "ok",
    "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 106.99,
+   "accepted": 3,
+   "gain_ms": 108.05,
    "changed_params": 9
   },
   {
@@ -1368,8 +1368,8 @@
    "nn_available": true,
    "reason": "ok",
    "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 108.53,
+   "accepted": 3,
+   "gain_ms": 117.83,
    "changed_params": 8
   },
   {
@@ -1378,9 +1378,9 @@
    "model_type": "nn",
    "nn_available": true,
    "reason": "ok",
-   "iterations": 2,
-   "accepted": 2,
-   "gain_ms": 112.58,
+   "iterations": 1,
+   "accepted": 3,
+   "gain_ms": 109.67,
    "changed_params": 6
   }
  ]
