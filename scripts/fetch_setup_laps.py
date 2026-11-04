@@ -331,6 +331,20 @@ def run(
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     state = _load_state()
     done: set[str] = set(state.get("done", []))
+    # 以「已落盘数据」为准去重：状态文件可能在换机器 / 换 CI 缓存后丢失，
+    # 只靠它会让同一套调教被重复写入（同一 URL 两行），把数据集污染成
+    # 重复样本加权。数据文件本身才是唯一可信的去重依据。
+    if OUT_JSONL.exists():
+        for line in OUT_JSONL.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                url = json.loads(line).get("source_url")
+            except json.JSONDecodeError:
+                continue
+            if url:
+                done.add(url)
     deadline = time.time() + max_minutes * 60 if max_minutes else None
 
     written = 0
