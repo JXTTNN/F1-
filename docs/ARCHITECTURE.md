@@ -176,7 +176,12 @@
 |---|---|---|
 | 源码 | `python -m setup_tuner.cli` / `uvicorn setup_tuner.app:create_app --factory` | `<仓库根>/data` |
 | pip 安装 | `f1opt` | `<安装根>/data`（`F1OPT_DATA_DIR` 可覆盖） |
-| Nuitka 便携包 | 双击 `F1OPT.exe` | 安装文件夹内 `data/` |
+| Nuitka 便携包 | 双击 `F1OPT.exe` 或 `一键启动.bat` | 安装文件夹内 `data/` |
+
+便携包是**控制台程序**（`--windows-console-mode=force`），不是静默的 GUI 程序：
+双击后那个窗口就是运行日志，关掉即停止。1.6.17 及以前用 `disable`，双击后既无
+窗口也无提示，首次解压的 3–10 秒里用户只看到「没反应」，出错更是一个字都没有。
+日志同时写 `<数据目录>/logs/f1opt.log`（2 MB × 3 轮转），启动器失败时 tail 它。
 
 ## 6. Tech Stack
 

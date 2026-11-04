@@ -6,7 +6,7 @@
 
 [![CI](https://github.com/JXTTNN/F1-/actions/workflows/ci.yml/badge.svg)](https://github.com/JXTTNN/F1-/actions/workflows/ci.yml)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
-[![Tests](https://img.shields.io/badge/tests-2205%20collected-brightgreen.svg)](#开发与测试)
+[![Tests](https://img.shields.io/badge/tests-2211%20collected-brightgreen.svg)](#开发与测试)
 [![Runtime AI deps](https://img.shields.io/badge/runtime%20AI%20deps-none-success.svg)](#为什么不需要-pytorch)
 
 ---
@@ -111,6 +111,11 @@ python -m setup_tuner.cli
 从 [Releases](https://github.com/JXTTNN/F1-/releases) 下载
 [`F1OPT-portable.zip`](https://github.com/JXTTNN/F1-/releases/latest/download/F1OPT-portable.zip)（约 22 MB），
 解压后双击「一键启动.bat」即可，无需安装 Python、无需任何配置。
+
+> **会弹出一个控制台窗口，那是正常的**：它就是运行日志（启动进度、遥测监听、
+> 每个请求一行）。关掉窗口 = 停止程序；浏览器会自动打开面板。
+> 直接双击 `F1OPT.exe` 效果相同（启动器只是多做了「已在运行就直接开面板」的判断）。
+> 完整日志同时落盘在 `data\logs\f1opt.log`，出问题时把最后几十行发出来即可定位。
 >
 > 便携包每次发布都会自动通过**打包产物测试**（6 阶段 / 80 项）才会公开：
 > 包含「模型确实随包内嵌并在跑（`model_type=nn`）」与「数据落在解压目录内」两项硬断言。
@@ -286,7 +291,7 @@ setup_tuner/            运行时包（pip 安装的就是它）
 └── ui/                 面板（index.html + app.js + 赛道 SVG）
 
 scripts/                训练、校验、验收、审计脚本
-tests/                  2205 项测试（含 deep_slice / deep_integration）
+tests/                  2211 项测试（含 deep_slice / deep_integration）
 docs/                   设计文档、变更日志、验证报告
 assets/                 一键启动.bat 等
 legacy/                 重构前的旧实现存档（只读参考，不参与运行与 lint）
