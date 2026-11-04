@@ -11,7 +11,7 @@
 
 编译命令（封装本脚本）::
 
-    python -m nuitka --onefile --windows-console-mode=disable
+    python -m nuitka --onefile --windows-console-mode=force
       --enable-plugin=no-qt --follow-imports
       --include-data-dir=setup_tuner/ui=setup_tuner/ui
       --include-data-files=setup_tuner/db/schema.sql=setup_tuner/db/schema.sql
@@ -152,8 +152,12 @@ def build_nuitka_command() -> list[str]:
         "--onefile",
         # 自动下载依赖（Dependency Walker 等），CI 非交互模式必需
         "--assume-yes-for-downloads",
-        # Windows GUI 模式（无控制台窗口）
-        "--windows-console-mode=disable",
+        # Windows 控制台模式：**必须保留控制台**。
+        # 曾用 `disable`（GUI 子系统），双击后既没有窗口、也没有任何提示：
+        # 首次启动要解压 3~10 秒，用户看到的就是「双击没反应」，而服务其实
+        # 已经在后台跑起来了；真出错（端口占用、被杀软拦截）更是连一句话都
+        # 看不到。改成 `force` 后，双击就是一个实时日志窗口，问题自己说话。
+        "--windows-console-mode=force",
         # 禁用 Qt 插件（本项目无 Qt 依赖，加速编译）
         "--enable-plugin=no-qt",
         # 递归跟踪所有 import

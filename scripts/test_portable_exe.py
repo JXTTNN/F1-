@@ -133,10 +133,15 @@ def start_exe(exe_path: Path, cwd: Path | None = None) -> subprocess.Popen[bytes
         cwd = exe_path.parent
 
     # CREATE_NEW_WINDOW 让 exe 在独立进程组运行，便于终止
-    # Nuitka --windows-console-mode=disable 产出的 GUI exe 无控制台
+    # 打包已改为 --windows-console-mode=force（保留控制台，双击能看到日志），
+    # 所以这里再加 CREATE_NO_WINDOW：CI 里不要把控制台窗口弹出来
+    # （输出本来就重定向到 DEVNULL，窗口只会闪一下，纯噪声）。
     creationflags = 0
     if sys.platform == "win32":
-        creationflags = subprocess.CREATE_NEW_PROCESS_GROUP  # type: ignore[attr-defined]
+        creationflags = (
+            subprocess.CREATE_NEW_PROCESS_GROUP  # type: ignore[attr-defined]
+            | subprocess.CREATE_NO_WINDOW  # type: ignore[attr-defined]
+        )
 
     # 关键修复：用 DEVNULL 代替 PIPE。
     # 原因：uvicorn 每处理一个请求都写日志到 stdout（约100-200字节/条），

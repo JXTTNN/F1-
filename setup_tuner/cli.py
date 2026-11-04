@@ -24,6 +24,8 @@ import socket
 import sys
 import threading
 import webbrowser
+from logging.handlers import RotatingFileHandler
+from pathlib import Path
 from time import sleep
 from typing import Any
 
@@ -100,13 +102,15 @@ def _start_browser_thread(url: str) -> threading.Thread:
     return browser_thread
 
 
-def _print_startup_banner(url: str, config: Any) -> None:
+def _print_startup_banner(url: str, config: Any, log_path: Path | None = None) -> None:
     """打印启动横幅。"""
     print("\n🏁 F1OPT 赛车调教优化助手已启动")
     print(f"   服务地址：{url}")
     print(f"   API 文档：{url}/docs")
     print(f"   WebSocket：{url}/api/v1/ws")
     print(f"   遥测监听：{config.udp_host}:{config.udp_port}")
+    if log_path:
+        print(f"   运行日志：{log_path}")
     print("   按 Ctrl+C 退出\n")
 
 
@@ -156,6 +160,41 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _setup_logging(config: Any) -> Path | None:
+    """建立「控制台 + 文件」双通道日志，返回日志文件路径（失败时 None）。
+
+    控制台输出在三种情况下会丢：以窗口方式启动后立刻被关闭、被当作后台进程
+    启动（stdout 无处可去）、以及用户只截到最后几行。固定写一份带轮转的
+    日志到 ``<数据目录>/logs/``，出问题时能回看完整现场，启动器也能 tail 它
+    给出可读的失败原因。
+
+    写不了（只读目录、权限不足）时退回仅控制台，不影响启动。
+    """
+    level = getattr(logging, config.log_level.upper(), logging.INFO)
+    handlers: list[logging.Handler] = [logging.StreamHandler()]
+
+    log_path: Path | None = None
+    try:
+        log_dir = Path(config.resolved_data_dir()) / "logs"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        log_path = log_dir / "f1opt.log"
+        handlers.append(
+            RotatingFileHandler(
+                log_path, maxBytes=2_000_000, backupCount=3, encoding="utf-8",
+            )
+        )
+    except OSError:
+        log_path = None
+
+    logging.basicConfig(
+        level=level,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        handlers=handlers,
+        force=True,
+    )
+    return log_path
+
+
 def main(argv: list[str] | None = None) -> int:
     """一键启动主入口。
 
@@ -185,10 +224,9 @@ def main(argv: list[str] | None = None) -> int:
             api_port=args.port or config.api_port,
             keep_telemetry=config.keep_telemetry or args.keep_telemetry,
         )
-    logging.basicConfig(
-        level=getattr(logging, config.log_level.upper(), logging.INFO),
-        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    )
+    log_path = _setup_logging(config)
+    if log_path:
+        logger.info("log file: %s", log_path)
 
     host = config.api_host
     port = config.api_port
@@ -206,7 +244,7 @@ def main(argv: list[str] | None = None) -> int:
         _start_browser_thread(url)
 
     # ⑤ 启动 uvicorn
-    _print_startup_banner(url, config)
+    _print_startup_banner(url, config, log_path)
     return _run_uvicorn(app, host, port, config.log_level)
 
 
