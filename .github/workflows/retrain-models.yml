@@ -301,6 +301,67 @@ jobs:
           exec > >(tee -a .ci/commit.log) 2>&1
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # 训练是确定性的：语料没变时重训得到同一套权重，只有 created /
+          # train_seconds / evaluated_at 这类时间戳不同。这种提交没有任何信息量，
+          # 却会让 5 个 workflow 再各跑一遍（CI / Full CI / Cloud Audit / Smoke /
+          # Deep Slice ≈ 7 分钟）。权重与三份评测结论都没变时直接收工、把树还原。
+          # 任何异常都按「有变化」处理（宁可多提交一次，也不能吞掉真正的更新）。
+          SAME=$(python - <<'PY'
+          import json
+          import subprocess
+
+
+          MODEL = "setup_tuner/resources/models/setup_sim_nn.json"
+          EVALS = [f"setup_tuner/resources/models/{n}.json"
+                   for n in ("setup_sim_eval", "usage_flow_eval", "style_flow_eval")]
+          WEIGHT_KEYS = ("mlp", "y_mean", "y_scale", "y_mean_by_track",
+                         "y_scale_by_track", "track_features", "feature_keys")
+          VOLATILE = ("created", "evaluated_at", "train_seconds")
+
+
+          def load_new(path):
+              with open(path, encoding="utf-8") as fh:
+                  return json.load(fh)
+
+
+          def load_head(path):
+              r = subprocess.run(["git", "show", "HEAD:" + path],
+                                 capture_output=True, text=True)
+              return json.loads(r.stdout) if r.returncode == 0 else None
+
+
+          def strip_volatile(doc):
+              if not isinstance(doc, dict):
+                  return doc
+              return {k: v for k, v in doc.items() if k not in VOLATILE}
+
+
+          def dumps(obj):
+              return json.dumps(obj, sort_keys=True)
+
+
+          try:
+              new_model, head_model = load_new(MODEL), load_head(MODEL)
+              same = head_model is not None and all(
+                  dumps(new_model.get(k)) == dumps(head_model.get(k)) for k in WEIGHT_KEYS)
+              if same:
+                  for path in EVALS:
+                      new, old = load_new(path), load_head(path)
+                      if old is None or dumps(strip_volatile(new)) != dumps(strip_volatile(old)):
+                          same = False
+                          break
+              print("1" if same else "0")
+          except Exception:
+              print("0")
+          PY
+          )
+          if [ "$SAME" = "1" ]; then
+            git checkout -- setup_tuner/resources/models/
+            echo "权重与三项评测结论都没变（只有时间戳不同），本轮跳过提交"
+            exit 0
+          fi
+
           EVAL_PASS="${{ steps.evalsim.outputs.passed }}"
           USAGE_PASS="${{ steps.evalusage.outputs.passed }}"
           STYLE_PASS="${{ steps.evalstyle.outputs.passed }}"
