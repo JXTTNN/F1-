@@ -279,3 +279,48 @@ class TestShippedWeightsAreConsistent:
             assert got is None or got <= 0.55, (
                 f"{tid} 准确率 {got} 明显好于随机，却被归零"
             )
+
+
+_SETUPS_FILE = (
+    Path(__file__).resolve().parents[1] / "data" / "setup_laps" / "f1laps_setups.jsonl"
+)
+
+
+class TestCorpusMetadata:
+    """语料每一行都必须能答出「哪一年、干还是湿」。
+
+    回归背景：最早那 480 条是旧版抓取脚本写的，只有 `conditions` 没有
+    `game_year`/`surface`。它们因此自成一个「年份组」，去混淆时被单独
+    去均值（K 折指标虚高），并让「2025 干 → 2026 干」跨年检验整项不跑。
+    训练入口已用 `normalize_meta` 统一归一化，这里再从**产物**侧锁一道：
+    不许再写出缺字段的行。
+    """
+
+    @pytest.fixture(scope="class")
+    def rows(self) -> list[dict]:
+        if not _SETUPS_FILE.exists():
+            pytest.skip("语料文件不存在")
+        out = []
+        for line in _SETUPS_FILE.read_text(encoding="utf-8").splitlines():
+            if line.strip():
+                out.append(json.loads(line))
+        return out
+
+    def test_every_row_has_year_and_surface(self, rows: list[dict]) -> None:
+        missing = [
+            (i, r.get("source_url"))
+            for i, r in enumerate(rows)
+            if not r.get("game_year") or not r.get("surface")
+        ]
+        assert not missing, f"{len(missing)} 行缺 game_year/surface，例：{missing[:3]}"
+
+    def test_year_and_surface_are_known_values(self, rows: list[dict]) -> None:
+        years = {r["game_year"] for r in rows}
+        surfaces = {r["surface"] for r in rows}
+        assert years <= {2024, 2025, 2026}, f"意外年份：{sorted(years)}"
+        assert surfaces <= {"dry", "wet"}, f"意外条件：{sorted(surfaces)}"
+
+
+_SETUPS_FILE = (
+    Path(__file__).resolve().parents[1] / "data" / "setup_laps" / "f1laps_setups.jsonl"
+)

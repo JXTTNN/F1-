@@ -54,6 +54,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import statistics
 import sys
 import time
@@ -283,6 +284,30 @@ def _in_range(value: float, lo: float, hi: float) -> bool:
     return lo - 1e-6 <= value <= hi + 1e-6
 
 
+def normalize_meta(rec: dict[str, Any]) -> dict[str, Any]:
+    """补齐早期抓取记录缺失的 ``game_year`` / ``surface``。
+
+    第一批 480 条是旧版抓取脚本写的，字段里没有 `game_year`/`surface`（只有
+    `conditions`），但它们的 `source_url` 全部落在 ``/f1-26/`` 列表页下 —— 即
+    2026 干地。不补齐的后果很隐蔽：跨年检验（2025 干 → 2026 干）会因为找不到
+    「2026 干」样本而**整项不跑**，报告上看起来像「本轮没做这项检验」，实际是
+    元数据丢了。同类问题还会让 `version_incompatible` 判定漏掉年份、让逐站
+    样本统计偏小，所以放在 `load_rows` 入口统一归一化，而不是只改某一份数据。
+    """
+    if rec.get("game_year") and rec.get("surface"):
+        return rec
+    url = str(rec.get("source_url") or "")
+    if not rec.get("game_year"):
+        m = re.search(r"/f1-(\d{2})/", url)
+        if m:
+            rec["game_year"] = 2000 + int(m.group(1))
+    if not rec.get("surface"):
+        cond = str(rec.get("conditions") or "").strip().lower()
+        if cond in ("dry", "wet"):
+            rec["surface"] = cond
+    return rec
+
+
 def load_rows(path: Path, min_fields: int = 20) -> tuple[list[dict[str, Any]], dict[str, int]]:
     """读取并做合法性过滤，返回 (rows, 丢弃原因计数)。
 
@@ -314,6 +339,7 @@ def load_rows(path: Path, min_fields: int = 20) -> tuple[list[dict[str, Any]], d
         except json.JSONDecodeError:
             dropped["json_broken"] += 1
             continue
+        rec = normalize_meta(rec)
         setup = rec.get("setup") or {}
         if len(setup) < min_fields:
             dropped["fields_incomplete"] += 1
