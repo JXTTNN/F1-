@@ -2,8 +2,21 @@
 
 数据源
 ------
-``https://www.f1laps.com/f1-26/setups/<track>/`` —— 社区上传的 F1 26 游戏调教，
-每套调教带 20 项数值、圈速、车队、会话类型、干湿、日期与全部辅助设置。
+``https://www.f1laps.com/f1-26/setups/<track>/``（干地）
+``https://www.f1laps.com/f1-26/setups/<track>/wet/``（湿地）
+
+同一套模板在 F1 25 / F1 24 的版面同样可用，因此每个赛道最多有 **6 个切面**：
+
+===========  ==============  ============================================
+游戏年版      干/湿            用途
+===========  ==============  ============================================
+F1 26         dry / wet       主口径（与项目 2026 赛季对齐）
+F1 25         dry / wet       辅助（同一套 20 项参数区间，跨年可比）
+F1 24         dry / wet       辅助（同上）
+===========  ==============  ============================================
+
+2026 版面每站只展示 20 条且无分页参数（``?page`` / ``?offset`` 均无效，
+已验证），所以「多切面」是唯一能成倍扩样的合规方式：6 × 24 × 20 ≈ 2,880 条。
 
 合规依据（robots.txt 原文）
 --------------------------
@@ -16,7 +29,7 @@
     Disallow: /accounts/     # 私有区域，禁止
 
 本脚本**只走公开 HTML 页面**，不触碰 ``/api/`` 与任何登录区；默认 1.2 秒/请求
-的限速，并带明确 UA。抓取结果仅用于本地训练。
+的限速，并带明确 UA。
 
 为什么需要它
 ------------
@@ -36,6 +49,8 @@
       "team": "Racing Bulls",
       "session": "Time Trial",
       "conditions": "dry",
+      "surface": "dry",                 # 抓取切面（干/湿）
+      "game_year": 2026,                # 抓取切面对应的游戏年版
       "assists": {"traction_control": "Full", "abs": "On", ...},
       "recorded_date": "2026-10-31",
       "source_url": "https://www.f1laps.com/f1-26/setups/australia/<uuid>/",
@@ -47,8 +62,9 @@
 ::
 
     python scripts/fetch_setup_laps.py --check          # 只抓 2 页自检解析
-    python scripts/fetch_setup_laps.py --dry            # 全部 24 站干地
-    python scripts/fetch_setup_laps.py --dry --wet      # 干 + 湿
+    python scripts/fetch_setup_laps.py --dry            # 24 站干地（F1 26）
+    python scripts/fetch_setup_laps.py --all-slices     # 6 切面全量（默认 2026）
+    python scripts/fetch_setup_laps.py --games 2026,2025,2024 --dry --wet
     python scripts/fetch_setup_laps.py --max-minutes 20 # 带预算，可续传
 """
 
@@ -62,6 +78,7 @@ import sys
 import time
 import urllib.error
 import urllib.request
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -70,7 +87,11 @@ OUT_DIR = ROOT / "data" / "setup_laps"
 OUT_JSONL = OUT_DIR / "f1laps_setups.jsonl"
 STATE_FILE = OUT_DIR / "_fetch_state.json"
 
-BASE = "https://www.f1laps.com/f1-26/setups"
+#: 游戏年版 → URL 前缀里的年份代号（F1 2026 版面 = ``/f1-26/``）
+GAME_SLUGS: dict[int, str] = {2026: "f1-26", 2025: "f1-25", 2024: "f1-24"}
+DEFAULT_GAMES: tuple[int, ...] = (2026,)
+ALL_GAMES: tuple[int, ...] = (2026, 2025, 2024)
+
 UA = "F1OPT-research/0.1 (+https://github.com/JXTTNN/F1-)"
 TIMEOUT = 45
 RETRIES = 3
@@ -133,17 +154,23 @@ LABEL_TO_FIELD: dict[str, str] = {
     "rear right tyre pressure": "rear_right_tyre_pressure",
 }
 
-#: 元数据标签（不属于调教 20 项）
-META_LABELS = {
-    "team", "session", "lap time", "conditions", "date",
-    "traction control", "anti-lock brakes", "steering assist",
-    "braking assist", "gearbox", "racing line",
-}
 
-DETAIL_ID_RE = re.compile(
-    r"/f1-26/setups/([a-z_]+)/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-"
-    r"[0-9a-f]{4}-[0-9a-f]{12})/",
-)
+def base_url(game_year: int) -> str:
+    """游戏年版 → 调教列表根路径。"""
+    return f"https://www.f1laps.com/{GAME_SLUGS[game_year]}/setups"
+
+
+def detail_id_re(game_year: int) -> re.Pattern[str]:
+    """该年版详情页 URL 里的 UUID 正则。"""
+    slug = GAME_SLUGS[game_year]
+    return re.compile(
+        rf"/{slug}/setups/([a-z_]+)/([0-9a-f]{{8}}-[0-9a-f]{{4}}-[0-9a-f]{{4}}-"
+        r"[0-9a-f]{4}-[0-9a-f]{12})/",
+    )
+
+
+# 兼容旧调用（外部脚本可能 import 过）
+DETAIL_ID_RE = detail_id_re(2026)
 
 
 # --------------------------------------------------------------------------- #
@@ -236,7 +263,9 @@ def parse_date(text: str) -> str | None:
     return None
 
 
-def parse_detail(page: str, track_id: str, url: str) -> dict[str, Any] | None:
+def parse_detail(
+    page: str, track_id: str, url: str, game_year: int, surface: str,
+) -> dict[str, Any] | None:
     """解析单个调教详情页；缺圈速或缺关键字段返回 None。"""
     pairs = parse_pairs(page)
     if not pairs:
@@ -266,6 +295,14 @@ def parse_detail(page: str, track_id: str, url: str) -> dict[str, Any] | None:
         "racing_line": pairs.get("Racing Line"),
     }
     conditions = (pairs.get("Conditions") or "").lower()
+    # 湿地面板只是一个**筛选视图**，详情页 URL 不含 `wet/`（实测 `/wet/<uuid>/`
+    # 一律 404）。干湿以页面上的 Conditions 字段为准，缺失时才回退到抓取切面。
+    if "wet" in conditions:
+        surface_final = "wet"
+    elif conditions:
+        surface_final = "dry"
+    else:
+        surface_final = surface
 
     # 作者名：同一位作者在同一赛道上的多套调教才具备可比性（消除车手差异），
     # 这是把「圈速差异归因到调教」的唯一可用分组键。
@@ -284,7 +321,9 @@ def parse_detail(page: str, track_id: str, url: str) -> dict[str, Any] | None:
         "lap_time_ms": lap_ms,
         "team": pairs.get("Team"),
         "session": pairs.get("Session"),
-        "conditions": "wet" if "wet" in conditions else "dry",
+        "conditions": surface_final,
+        "surface": surface_final,
+        "game_year": game_year,
         "assists": {k: v for k, v in assists.items() if v},
         "recorded_date": parse_date(pairs.get("Date") or ""),
         "source_url": url,
@@ -292,105 +331,148 @@ def parse_detail(page: str, track_id: str, url: str) -> dict[str, Any] | None:
     }
 
 
-def list_setup_ids(slug: str, wet: bool = False) -> list[str]:
+def list_setup_ids(slug: str, game_year: int = 2026, wet: bool = False) -> list[str]:
     """列表页上的详情 UUID（每页 20 条，页面无分页参数）。"""
-    url = f"{BASE}/{slug}/wet/" if wet else f"{BASE}/{slug}/"
+    base = base_url(game_year)
+    url = f"{base}/{slug}/wet/" if wet else f"{base}/{slug}/"
     page = _get(url)
     if not page:
         return []
-    ids = [m[1] for m in DETAIL_ID_RE.findall(page) if m[0] == slug]
+    pat = detail_id_re(game_year)
+    ids = [m[1] for m in pat.findall(page) if m[0] == slug]
     return list(dict.fromkeys(ids))
 
 
 # --------------------------------------------------------------------------- #
 # 主流程
-def _load_state() -> dict[str, Any]:
-    if STATE_FILE.exists():
+def _paths(out: Path | None = None) -> tuple[Path, Path]:
+    """返回 (数据文件, 状态文件)；`--out` 用于并行分片抓取。"""
+    if out is None:
+        return OUT_JSONL, STATE_FILE
+    return out, out.with_name(out.stem + "_state.json")
+
+
+def _load_state(state_file: Path) -> dict[str, Any]:
+    if state_file.exists():
         try:
-            return json.loads(STATE_FILE.read_text(encoding="utf-8"))
+            return json.loads(state_file.read_text(encoding="utf-8"))
         except json.JSONDecodeError:
             pass
     return {"done": [], "failed": [], "updated_at": None}
 
 
-def _save_state(state: dict[str, Any]) -> None:
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
+def _save_state(state: dict[str, Any], state_file: Path) -> None:
+    state_file.parent.mkdir(parents=True, exist_ok=True)
     state["updated_at"] = time.strftime("%Y-%m-%dT%H:%M:%S")
-    STATE_FILE.write_text(
+    state_file.write_text(
         json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8",
     )
 
 
+def _done_urls(data_file: Path, extra: Sequence[Path] = ()) -> set[str]:
+    """以「已落盘数据」为准去重。
+
+    状态文件可能在换机器 / 换 CI 缓存后丢失，只靠它会让同一套调教被重复写入
+    （同一 URL 两行），把数据集污染成重复样本加权。数据文件本身才是唯一可信
+    的去重依据。
+
+    ``extra`` 是并行分片文件：合并前也要互相去重，否则同一套调教会在
+    两片里各出现一次。
+    """
+    done: set[str] = set()
+    for path in (data_file, *extra):
+        done |= _urls_in(path)
+    return done
+
+
+def _urls_in(data_file: Path) -> set[str]:
+    done: set[str] = set()
+    if not data_file.exists():
+        return done
+    for line in data_file.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            url = json.loads(line).get("source_url")
+        except json.JSONDecodeError:
+            continue
+        if url:
+            done.add(url)
+    return done
+
+
 def run(
     tracks: list[str],
-    wet: bool,
+    games: tuple[int, ...],
+    surfaces: tuple[str, ...],
     sleep_s: float,
     max_minutes: float | None,
     check_only: bool,
+    out: Path | None = None,
 ) -> int:
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
-    state = _load_state()
-    done: set[str] = set(state.get("done", []))
-    # 以「已落盘数据」为准去重：状态文件可能在换机器 / 换 CI 缓存后丢失，
-    # 只靠它会让同一套调教被重复写入（同一 URL 两行），把数据集污染成
-    # 重复样本加权。数据文件本身才是唯一可信的去重依据。
-    if OUT_JSONL.exists():
-        for line in OUT_JSONL.read_text(encoding="utf-8").splitlines():
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                url = json.loads(line).get("source_url")
-            except json.JSONDecodeError:
-                continue
-            if url:
-                done.add(url)
+    data_file, state_file = _paths(out)
+    data_file.parent.mkdir(parents=True, exist_ok=True)
+    state = _load_state(state_file)
+    done: set[str] = _done_urls(OUT_JSONL if out is not None else data_file)
+    state["done"] = sorted(done)
     deadline = time.time() + max_minutes * 60 if max_minutes else None
 
     written = 0
     skipped = 0
     total_seen = 0
-    mode = "a" if OUT_JSONL.exists() else "w"
+    mode = "a" if data_file.exists() else "w"
 
-    with open(OUT_JSONL, mode, encoding="utf-8", newline="\n") as fout:
-        for slug in tracks:
-            track_id = TRACK_SLUGS[slug]
-            ids = list_setup_ids(slug, wet=wet)
-            print(f"[{track_id}] 列表页 {len(ids)} 条（{'wet' if wet else 'dry'}）",
-                  flush=True)
-            time.sleep(sleep_s)
-            for uid in ids:
-                if deadline and time.time() > deadline:
-                    print("[budget] 到达时间预算，停止（可重跑续传）", flush=True)
-                    _save_state(state)
-                    return 0
-                total_seen += 1
-                url = f"{BASE}/{slug}/{'wet/' if wet else ''}{uid}/"
-                if url in done:
-                    skipped += 1
-                    continue
-                page = _get(url)
-                time.sleep(sleep_s)
-                if not page:
-                    state.setdefault("failed", []).append(url)
-                    continue
-                rec = parse_detail(page, track_id, url)
-                if rec is None:
-                    state.setdefault("failed", []).append(url)
-                    continue
-                fout.write(json.dumps(rec, ensure_ascii=False) + "\n")
-                fout.flush()
-                written += 1
-                done.add(url)
-                state["done"] = sorted(done)
-                if check_only and written >= 2:
-                    _save_state(state)
-                    print(f"[check] 已解析 {written} 条，字段数 "
-                          f"{[r['setup_field_count'] for r in [rec]]}", flush=True)
-                    print(json.dumps(rec, ensure_ascii=False, indent=2)[:1200])
-                    return 0
+    with open(data_file, mode, encoding="utf-8", newline="\n") as fout:
+        for game_year in games:
+            for surface in surfaces:
+                for slug in tracks:
+                    track_id = TRACK_SLUGS[slug]
+                    wet = surface == "wet"
+                    ids = list_setup_ids(slug, game_year, wet=wet)
+                    print(
+                        f"[{track_id}] {GAME_SLUGS[game_year]} {surface} "
+                        f"列表页 {len(ids)} 条",
+                        flush=True,
+                    )
+                    time.sleep(sleep_s)
+                    for uid in ids:
+                        if deadline and time.time() > deadline:
+                            print("[budget] 到达时间预算，停止（可重跑续传）", flush=True)
+                            _save_state(state, state_file)
+                            return 0
+                        total_seen += 1
+                        # 详情页 URL 与干/湿切面无关（`wet/` 只是列表筛选），
+                        # 带上它一定会 404 —— 这是实测过的站点结构。
+                        url = f"{base_url(game_year)}/{slug}/{uid}/"
+                        if url in done:
+                            skipped += 1
+                            continue
+                        page = _get(url)
+                        time.sleep(sleep_s)
+                        if not page:
+                            state.setdefault("failed", []).append(url)
+                            continue
+                        rec = parse_detail(page, track_id, url, game_year, surface)
+                        if rec is None:
+                            state.setdefault("failed", []).append(url)
+                            continue
+                        fout.write(json.dumps(rec, ensure_ascii=False) + "\n")
+                        fout.flush()
+                        written += 1
+                        done.add(url)
+                        state["done"] = sorted(done)
+                        if check_only and written >= 2:
+                            _save_state(state, state_file)
+                            print(
+                                f"[check] 已解析 {written} 条，字段数 "
+                                f"{rec['setup_field_count']}",
+                                flush=True,
+                            )
+                            print(json.dumps(rec, ensure_ascii=False, indent=2)[:1200])
+                            return 0
 
-    _save_state(state)
+    _save_state(state, state_file)
     print(f"[done] 新写入 {written} 条；跳过已完成 {skipped}；"
           f"处理 {total_seen} 条；失败 {len(state.get('failed', []))}")
     return 0
@@ -406,14 +488,15 @@ def summarize() -> int:
         print("[summary] 空数据集")
         return 1
     by_track: dict[str, int] = {}
-    by_session: dict[str, int] = {}
+    by_slice: dict[str, int] = {}
     for r in rows:
         by_track[r["track_id"]] = by_track.get(r["track_id"], 0) + 1
-        by_session[r.get("session") or "?"] = by_session.get(r.get("session") or "?", 0) + 1
+        key = f"{r.get('game_year', '?')}-{r.get('surface', '?')}"
+        by_slice[key] = by_slice.get(key, 0) + 1
     fields = [r["setup_field_count"] for r in rows]
     print(f"[summary] 总样本 {len(rows)}；覆盖赛道 {len(by_track)}；"
           f"字段数 min/median/max = {min(fields)}/{sorted(fields)[len(fields)//2]}/{max(fields)}")
-    print(f"[summary] 会话分布: {by_session}")
+    print(f"[summary] 切面分布: {json.dumps(by_slice, ensure_ascii=False, sort_keys=True)}")
     print(f"[summary] 每站: {json.dumps(by_track, ensure_ascii=False, sort_keys=True)}")
     missing = [t for t in TRACK_SLUGS.values() if t not in by_track]
     print(f"[summary] 缺数据赛道: {missing or '无'}")
@@ -425,8 +508,17 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--tracks", default="", help="逗号分隔 slug；空=全部 24 站")
     ap.add_argument("--dry", action="store_true", help="抓干地（默认）")
     ap.add_argument("--wet", action="store_true", help="抓湿地")
+    ap.add_argument(
+        "--games", default="2026",
+        help="逗号分隔游戏年版（2026/2025/2024）；默认 2026",
+    )
+    ap.add_argument(
+        "--all-slices", action="store_true",
+        help="等价于 --games 2026,2025,2024 --dry --wet（6 切面全量）",
+    )
     ap.add_argument("--sleep", type=float, default=DEFAULT_SLEEP, help="请求间隔秒")
     ap.add_argument("--max-minutes", type=float, default=None)
+    ap.add_argument("--out", default="", help="输出 jsonl 路径（并行分片时用）")
     ap.add_argument("--check", action="store_true", help="只抓 2 条自检解析")
     ap.add_argument("--summary", action="store_true", help="打印数据集概况")
     args = ap.parse_args(argv)
@@ -441,17 +533,30 @@ def main(argv: list[str] | None = None) -> int:
         print(f"[error] 未知赛道 slug: {unknown}", file=sys.stderr)
         return 2
 
+    games: tuple[int, ...]
+    if args.all_slices:
+        games = ALL_GAMES
+        surfaces: tuple[str, ...] = ("dry", "wet")
+    else:
+        games = tuple(int(g.strip()) for g in args.games.split(",") if g.strip())
+        bad = [g for g in games if g not in GAME_SLUGS]
+        if bad:
+            print(f"[error] 不支持的游戏年版: {bad}", file=sys.stderr)
+            return 2
+        surfaces = tuple(s for s, on in (("dry", True), ("wet", args.wet)) if on)
+
     if args.check:
         tracks = tracks[:1]
+        games = games[:1]
+        # 保留用户选的干/湿：`--wet --check` 要验证的就是湿地解析
 
-    rc = run(tracks, wet=False, sleep_s=args.sleep,
-             max_minutes=args.max_minutes, check_only=args.check)
-    if rc == 0 and not args.check and args.wet:
-        rc = run(tracks, wet=True, sleep_s=args.sleep,
-                 max_minutes=args.max_minutes, check_only=False)
-    if rc == 0 and not args.check:
-        summarize()
-    return rc
+    return run(
+        tracks, games, surfaces,
+        sleep_s=args.sleep,
+        max_minutes=args.max_minutes,
+        check_only=args.check,
+        out=Path(args.out) if args.out else None,
+    )
 
 
 if __name__ == "__main__":
