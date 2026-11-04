@@ -74,13 +74,16 @@ jobs:
             echo "::warning::无法快进（本地有改动），继续用当前基线"
           fi
 
-      # 已抓到的样本入库在 data/setup_laps/；缓存只是为中断续传兜底。
+      # 缓存只为「同一 run 中断续传」兜底，**只存状态文件**。
+      # 教训（run #6）：早先把 f1laps_setups.jsonl 也放进缓存，恢复时会用
+      # 上一次 run 的旧快照覆盖仓库里已提交的语料 —— 480 行被抹掉
+      # game_year/surface，2026 干地样本直接归零，跨年检验又静默不跑，
+      # 而且这次覆盖是以一次「正常」的数据提交落库的，极难发现。
+      # 语料以仓库为准（去重也读它），状态文件才需要跨 run 续传。
       - name: Restore fetch cache
         uses: actions/cache/restore@v4
         with:
-          path: |
-            data/setup_laps/_fetch_state.json
-            data/setup_laps/f1laps_setups.jsonl
+          path: data/setup_laps/_fetch_state.json
           key: setup-laps-${{ github.run_id }}
           restore-keys: setup-laps-
 
@@ -94,13 +97,19 @@ jobs:
           echo '--- 概况 ---'
           python scripts/fetch_setup_laps.py --summary || true
 
+      # 产物侧门禁：缺 game_year/surface 或出现重复 URL 直接判红。
+      # 追加写 + 缓存回灌都可能把历史缺陷带进文件，光靠训练期归一化治不了
+      # 产物本身；这一步让「脏数据落库」变成一次显式失败，而不是指标悄悄掉。
+      - name: Verify corpus integrity
+        if: github.event.inputs.skip_fetch != 'true'
+        shell: bash
+        run: python scripts/fetch_setup_laps.py --verify
+
       - name: Save fetch cache
         if: always()
         uses: actions/cache/save@v4
         with:
-          path: |
-            data/setup_laps/_fetch_state.json
-            data/setup_laps/f1laps_setups.jsonl
+          path: data/setup_laps/_fetch_state.json
           key: setup-laps-${{ github.run_id }}
 
       # 校准不是门禁：它的作用是「给出真实性与量级的结论」，不是拦截发布。

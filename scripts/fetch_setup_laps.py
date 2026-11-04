@@ -89,6 +89,7 @@ STATE_FILE = OUT_DIR / "_fetch_state.json"
 
 #: 游戏年版 → URL 前缀里的年份代号（F1 2026 版面 = ``/f1-26/``）
 GAME_SLUGS: dict[int, str] = {2026: "f1-26", 2025: "f1-25", 2024: "f1-24"}
+GAME_YEAR_BY_SLUG: dict[str, int] = {v: k for k, v in GAME_SLUGS.items()}
 DEFAULT_GAMES: tuple[int, ...] = (2026,)
 ALL_GAMES: tuple[int, ...] = (2026, 2025, 2024)
 
@@ -402,6 +403,123 @@ def _urls_in(data_file: Path) -> set[str]:
     return done
 
 
+_YEAR_IN_URL = re.compile(r"/(f1-\d{2})/setups/")
+
+
+def normalize_meta(rec: dict[str, Any]) -> dict[str, Any]:
+    """补齐 ``game_year`` / ``surface``，返回同一条记录（原地修改）。
+
+    旧版抓取脚本只写 ``conditions``，不写 ``game_year``/``surface``。这类行
+    会自成一个 ``None`` 年份组：去混淆时被单独去均值（K 折指标虚高），跨年
+    检验也取不到「2026 干」样本而**整项静默不跑**。年份能从 ``source_url``
+    的 ``/f1-NN/`` 反推、干湿能从 ``conditions`` 取，所以不必重新抓取。
+    """
+    m = _YEAR_IN_URL.search(str(rec.get("source_url") or ""))
+    if not rec.get("game_year") and m:
+        rec["game_year"] = GAME_YEAR_BY_SLUG.get(m.group(1))
+    cond = str(rec.get("conditions") or "").strip().lower()
+    if not rec.get("surface") and cond in ("dry", "wet"):
+        rec["surface"] = cond
+    return rec
+
+
+def _filled(rec: dict[str, Any]) -> int:
+    """非空字段数，用来在重复行里挑「更完整」的那条。"""
+    return sum(1 for v in rec.values() if v not in (None, "", [], {}))
+
+
+def normalize_corpus(path: Path) -> dict[str, int]:
+    """对语料做一次自愈式重写：补元数据 + 按 URL 去重。
+
+    抓取是**追加**写；一旦有旧行、缓存回灌或重复写入混进文件，只靠训练期
+    归一化治不了产物本身。这里把文件读全、逐行补字段、按 ``source_url``
+    去重（保留字段更全的那条），再原样顺序写回，生成稳定的最小 diff。
+
+    Returns:
+        统计字典：``total`` / ``repaired`` / ``duplicates`` / ``broken``。
+    """
+    if not path.exists():
+        return {"total": 0, "repaired": 0, "duplicates": 0, "broken": 0}
+
+    rows: list[dict[str, Any]] = []
+    index: dict[str, int] = {}
+    repaired = duplicates = broken = 0
+
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        try:
+            rec = json.loads(line)
+        except json.JSONDecodeError:
+            broken += 1
+            continue
+        lacked = not rec.get("game_year") or not rec.get("surface")
+        rec = normalize_meta(rec)
+        if lacked and rec.get("game_year") and rec.get("surface"):
+            repaired += 1
+        url = str(rec.get("source_url") or "")
+        if url and url in index:
+            duplicates += 1
+            i = index[url]
+            rows[i] = rows[i] if _filled(rows[i]) >= _filled(rec) else rec
+            continue
+        if url:
+            index[url] = len(rows)
+        rows.append(rec)
+
+    if repaired or duplicates or broken:
+        path.write_text(
+            "".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows),
+            encoding="utf-8",
+            newline="\n",
+        )
+    return {
+        "total": len(rows),
+        "repaired": repaired,
+        "duplicates": duplicates,
+        "broken": broken,
+    }
+
+
+def verify_corpus(path: Path) -> list[str]:
+    """返回语料的问题列表；空列表表示通过。
+
+    这是给 CI 用的**产物侧门禁**：抓取/合并一旦写出缺字段或重复的行，
+    立刻在流水线里报错，而不是等训练指标莫名其妙掉下来才回头查。
+    """
+    if not path.exists():
+        return [f"语料文件不存在：{path}"]
+
+    problems: list[str] = []
+    rows: list[dict[str, Any]] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if line.strip():
+            try:
+                rows.append(json.loads(line))
+            except json.JSONDecodeError:
+                problems.append("存在无法解析的 JSON 行")
+    if not rows:
+        return problems or ["语料为空"]
+
+    no_year = [r.get("source_url") for r in rows if not r.get("game_year")]
+    no_surface = [r.get("source_url") for r in rows if not r.get("surface")]
+    if no_year:
+        problems.append(f"{len(no_year)} 行缺 game_year，例：{no_year[0]}")
+    if no_surface:
+        problems.append(f"{len(no_surface)} 行缺 surface，例：{no_surface[0]}")
+
+    known_years = set(GAME_SLUGS)
+    bad_year = {r["game_year"] for r in rows} - known_years if not no_year else set()
+    if bad_year:
+        problems.append(f"出现未知年份：{sorted(bad_year)}")
+
+    urls = [r.get("source_url") for r in rows if r.get("source_url")]
+    if len(urls) != len(set(urls)):
+        problems.append(f"存在重复 source_url：{len(urls) - len(set(urls))} 条")
+
+    return problems
+
+
 def run(
     tracks: list[str],
     games: tuple[int, ...],
@@ -475,6 +593,12 @@ def run(
     _save_state(state, state_file)
     print(f"[done] 新写入 {written} 条；跳过已完成 {skipped}；"
           f"处理 {total_seen} 条；失败 {len(state.get('failed', []))}")
+
+    # 追加写会让历史缺陷行一直留在文件里（缺元数据、重复 URL）。收尾做一次
+    # 自愈，保证产物**本身**满足不变量，而不是只在训练时被临时修正。
+    stats = normalize_corpus(data_file)
+    print(f"[normalize] 共 {stats['total']} 条；补元数据 {stats['repaired']} 条；"
+          f"去重 {stats['duplicates']} 条；坏行 {stats['broken']} 条")
     return 0
 
 
@@ -521,10 +645,36 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--out", default="", help="输出 jsonl 路径（并行分片时用）")
     ap.add_argument("--check", action="store_true", help="只抓 2 条自检解析")
     ap.add_argument("--summary", action="store_true", help="打印数据集概况")
+    ap.add_argument(
+        "--normalize", action="store_true",
+        help="不抓取，只对现有语料做自愈（补 game_year/surface、按 URL 去重）",
+    )
+    ap.add_argument(
+        "--verify", action="store_true",
+        help="只校验现有语料（缺元数据/重复 URL 即非零退出），给 CI 当门禁",
+    )
     args = ap.parse_args(argv)
 
     if args.summary:
         return summarize()
+
+    if args.normalize:
+        target = Path(args.out) if args.out else OUT_JSONL
+        stats = normalize_corpus(target)
+        print(f"[normalize] {target}：共 {stats['total']} 条；"
+              f"补元数据 {stats['repaired']} 条；去重 {stats['duplicates']} 条；"
+              f"坏行 {stats['broken']} 条")
+        return 0
+
+    if args.verify:
+        target = Path(args.out) if args.out else OUT_JSONL
+        problems = verify_corpus(target)
+        if problems:
+            for p in problems:
+                print(f"[verify] ✗ {p}", file=sys.stderr)
+            return 1
+        print(f"[verify] ✓ 语料通过（{target}）")
+        return 0
 
     tracks = ([s.strip() for s in args.tracks.split(",") if s.strip()]
               if args.tracks else list(TRACK_SLUGS))
