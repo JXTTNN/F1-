@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh-CN" data-theme="broadcast">
+<html lang="zh-CN" data-theme="broadcast" data-layout="classic">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -11,14 +11,20 @@
   <title>F1OPT · 赛车调教优化助手</title>
   <link rel="stylesheet" href="/static/style.css" />
   <link rel="stylesheet" href="/static/themes.css" />
-  <!-- 首屏前落地已保存的主题，避免浅色主题先渲染成深色再跳变（FOUC）。
-       主题 id 列表与 app.js 的 THEMES 一致，由 tests/test_ui_theme.py 锁定。 -->
+  <link rel="stylesheet" href="/static/layouts.css" />
+  <!-- 首屏前落地已保存的主题与布局，避免浅色主题先渲染成深色再跳变（FOUC），
+       也避免三栏先渲染一遍再跳成选中的布局。id 列表与 app.js 的 THEMES /
+       LAYOUTS 一致，由 tests/test_ui_theme.py 与 tests/test_ui_layout.py 锁定。 -->
   <script>
     (function () {
       try {
         var saved = localStorage.getItem("f1opt.ui.theme");
         if (["broadcast", "pitwall", "carbon", "nightrace"].indexOf(saved) !== -1) {
           document.documentElement.setAttribute("data-theme", saved);
+        }
+        var layout = localStorage.getItem("f1opt.ui.layout");
+        if (["classic", "cockpit", "workbench", "flow"].indexOf(layout) !== -1) {
+          document.documentElement.setAttribute("data-layout", layout);
         }
       } catch (err) {}
     })();
@@ -32,6 +38,26 @@
       <h1>F1OPT <span class="topbar-sub">赛车调教优化助手</span></h1>
     </div>
     <div class="topbar-right">
+      <!-- 布局切换：4 套骨架，只改卡片位置与栏宽，不改任何功能。
+           图标即微缩线框：竖条数 = 列数，宽块 = 主视觉区。 -->
+      <div class="layout-switch" role="group" aria-label="界面布局">
+        <button class="layout-chip" type="button" data-layout-set="classic" aria-pressed="true"
+                aria-label="布局：经典三栏" title="经典三栏 —— 赛道与遥测 / 参数与反馈 / 建议与历史">
+          <svg viewBox="0 0 24 16" aria-hidden="true"><rect x="1" y="1" width="6" height="14" rx="1"/><rect x="9" y="1" width="6" height="14" rx="1"/><rect x="17" y="1" width="6" height="14" rx="1"/></svg>
+        </button>
+        <button class="layout-chip" type="button" data-layout-set="cockpit" aria-pressed="false"
+                aria-label="布局：驾驶舱" title="驾驶舱 —— 遥测收成左侧竖带，赛道图居中放大，参数在右">
+          <svg viewBox="0 0 24 16" aria-hidden="true"><rect x="1" y="1" width="4" height="14" rx="1"/><rect x="6" y="1" width="11" height="14" rx="1"/><rect x="18" y="1" width="5" height="14" rx="1"/></svg>
+        </button>
+        <button class="layout-chip" type="button" data-layout-set="workbench" aria-pressed="false"
+                aria-label="布局：工作台" title="工作台 —— 左右对分：左侧输入（参数/反馈），右侧输出（遥测/赛道图/建议）">
+          <svg viewBox="0 0 24 16" aria-hidden="true"><rect x="1" y="1" width="9" height="14" rx="1"/><rect x="11" y="1" width="12" height="14" rx="1"/></svg>
+        </button>
+        <button class="layout-chip" type="button" data-layout-set="flow" aria-pressed="false"
+                aria-label="布局：流程单列" title="流程单列 —— 按操作顺序竖排：选赛道→录反馈→看遥测→调参数→出建议">
+          <svg viewBox="0 0 24 16" aria-hidden="true"><rect x="1" y="1" width="22" height="4" rx="1"/><rect x="1" y="6" width="22" height="4" rx="1"/><rect x="1" y="11" width="10" height="4" rx="1"/><rect x="13" y="11" width="10" height="4" rx="1"/></svg>
+        </button>
+      </div>
       <!-- 界面主题切换：4 个版本，选择记忆在 localStorage -->
       <div class="theme-switch" role="group" aria-label="界面主题">
         <button class="theme-chip" type="button" data-theme-set="broadcast" aria-pressed="true" title="转播 · 深黑蓝 + F1 红（默认）">
@@ -331,7 +357,7 @@
 
   <!-- ==================== Footer ==================== -->
   <footer class="app-footer" role="contentinfo">
-    <span class="footer-version">F1OPT v1.6.19</span>
+    <span class="footer-version">F1OPT v1.6.20</span>
     <span class="footer-sep" aria-hidden="true">·</span>
     <span>数据基准：F1 2026</span>
     <span class="footer-sep" aria-hidden="true">·</span>

@@ -155,6 +155,10 @@ h1, h2, h3 {
   position: sticky;
   top: 0;
   z-index: 50;
+  /* 扫描线用 translateX(400%) 跑到 4 倍栏宽外，它的「溢出区域」会被算进
+     scrollWidth —— 页面因此常年能横向滚约 460px，滚动条还看得见。
+     裁掉即可：扫描线本来只在顶栏那一条线上跑。 */
+  overflow: hidden;
 }
 .topbar-title { display: flex; align-items: center; gap: 12px; }
 .logo-mark {
@@ -297,6 +301,10 @@ h1, h2, h3 {
   background: var(--bg-card-2);
   gap: 8px;
   position: relative;
+  /* 布局窄栏（驾驶舱左栏 272px）里头部按钮会把标题挤成两行，
+     允许换行后标题独占一行、按钮另起一行 */
+  flex-wrap: wrap;
+  row-gap: 6px;
 }
 .card-head h2 {
   font-size: 12px;
@@ -304,6 +312,9 @@ h1, h2, h3 {
   text-transform: uppercase;
   letter-spacing: var(--ls-wider);
   color: var(--text);
+  /* 「实时遥测」曾在这类窄栏里被压成「实时 / 遥测」两行 */
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 /* 标题左侧 F1 红色指示条 — 带微妙渐变 */
 .card-head h2::before {
@@ -378,7 +389,9 @@ h1, h2, h3 {
   justify-content: center;
   align-items: center;
   padding: 10px;
-  background: var(--bg-inset);
+  /* 用 SVG 画布同色：宽布局下图不会撑满整张卡，两侧若用 --bg-inset 会露出
+     一条深色边，像贴了张画在卡上。主题里 --track-bg 与画布一致。 */
+  background: var(--track-bg, var(--bg-inset));
   min-height: 320px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
@@ -386,7 +399,7 @@ h1, h2, h3 {
 }
 .track-map-wrap.is-active {
   border-color: var(--border-glow);
-  background: linear-gradient(180deg, var(--bg-inset) 0%, #080c14 100%);
+  /* 背景交给上面的 --track-bg，这里只强调边框 */
 }
 .track-map-empty { color: var(--text-faint); font-size: 12px; font-family: var(--mono); letter-spacing: var(--ls-normal); }
 .track-svg-box {
@@ -671,8 +684,9 @@ h1, h2, h3 {
 .setup-fields-wrap {
   padding: 6px 0;
   /* 分组修复后每个页签只显示本类参数（2~6 项），高度差异达 3 倍。
-     固定下限避免切换页签时整张卡片剧烈跳动、中栏下方留出大片空白。 */
-  min-height: 320px;
+     给一个下限减少切换页签时的卡片跳动，但别给太高 —— 320px 会让只有
+     2 项的「空气动力学」页签下面空出 200px。 */
+  min-height: 200px;
   max-height: 540px;
   overflow-y: auto;
 }

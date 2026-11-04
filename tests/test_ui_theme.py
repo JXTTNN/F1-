@@ -153,7 +153,10 @@ class TestThemeInventory:
         )
 
     def test_default_theme_is_applied_in_markup(self) -> None:
-        assert f'<html lang="zh-CN" data-theme="{_DEFAULT_THEME}">' in _read(_INDEX)
+        # 不整串匹配：html 标签还会带 data-layout 等属性，属性增删不该让本测试红
+        m = re.search(r"<html[^>]*>", _read(_INDEX))
+        assert m, "index.html 缺少 <html> 标签"
+        assert f'data-theme="{_DEFAULT_THEME}"' in m.group(0)
 
     def test_themes_css_is_linked_after_style(self) -> None:
         """顺序反了会被 style.css 的 :root 覆盖回去，切换看起来"没生效"。"""

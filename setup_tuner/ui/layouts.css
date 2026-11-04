@@ -1,0 +1,153 @@
+/* ==========================================================================
+   F1OPT —— 布局变体（4 套骨架）
+   -------------------------------------------------------------------------
+   与 themes.css 的分工：
+     themes.css 换「皮」——配色、圆角、底纹；
+     本文件换「骨架」——每张卡片归属哪一栏、栏宽多少。
+
+   为什么不用 grid-template-areas 做跨栏重排：
+     grid 的行高由该行最高的卡片决定。建议报告常驻 1400px 以上（20 行表格），
+     一旦它和别的卡片同处一行，同列其它卡片就会被顶开几百像素，中间出现
+     大片空白（实测 workbench 的「反馈摘要」被推到 y=2429）。
+     因此卡片归栏由 app.js 直接移动 DOM 完成，各栏仍是 flex 纵向堆叠，
+     天然不留空档；本文件只负责栏宽、栏数与栏内细节适配。
+
+   设计约束：
+     classic 是默认布局，本文件**不含它的任何规则** —— 不选布局时页面
+     与上版完全一致，改动风险为零。
+   ========================================================================== */
+
+/* ---------- 空栏收起：没有卡片的栏不占网格位 ---------- */
+.layout > .col-left.is-empty,
+.layout > .col-mid.is-empty,
+.layout > .col-right.is-empty {
+  display: none;
+}
+
+/* 布局切换时栏数会变，style.css 里 @media 的「右栏跨整行」需要复位，
+   否则 workbench（两栏）的右栏会横跨两列。 */
+html:not([data-layout="classic"]) .layout > .col-left,
+html:not([data-layout="classic"]) .layout > .col-mid,
+html:not([data-layout="classic"]) .layout > .col-right {
+  grid-column: auto;
+}
+
+/* ==========================================================================
+   1. classic —— 经典三栏（默认，本文件不参与）
+   左：选赛道 + 赛道图 + 遥测 ｜ 中：参数 + 反馈 ｜ 右：建议 + 历史
+   ========================================================================== */
+
+/* ==========================================================================
+   2. cockpit —— 驾驶舱
+   左栏收窄成仪表柱（只有选赛道 + 遥测竖排），中栏放最大的赛道图，
+   右栏是参数 / 建议 / 历史。
+   适合：一边跑圈一边盯遥测，视线从「仪表 → 赛道 → 调教」横扫。
+   ========================================================================== */
+html[data-layout="cockpit"] .layout {
+  grid-template-columns: 272px minmax(0, 1.55fr) minmax(330px, 1.05fr);
+}
+/* 竖带只有 272px：8 个仪表改单列，按钮允许换行，提示文字缩小 */
+html[data-layout="cockpit"] .telemetry-grid { grid-template-columns: 1fr; }
+html[data-layout="cockpit"] .telemetry-head-actions { flex-wrap: wrap; row-gap: 6px; }
+html[data-layout="cockpit"] .collect-tip { font-size: 10px; line-height: 1.45; }
+/* 中栏变宽，赛道图跟着铺满（.track-svg-box 原本写死 max-width: 800px，
+   在 800px 以上的容器里会缩在中间、两侧留边） */
+html[data-layout="cockpit"] .track-svg-box { max-width: 100%; }
+/* 中栏赛道图变大后，图注不必再挤成两行 */
+html[data-layout="cockpit"] .track-map-card .card-hint { max-width: 420px; }
+
+/* ==========================================================================
+   3. workbench —— 工作台
+   两栏对分：左「输入」（选赛道、20 项参数、反馈），
+   右「输出」（遥测、赛道图、建议、历史）。
+   适合：一次只改一处参数，立刻在右边看建议怎么变。
+   ========================================================================== */
+html[data-layout="workbench"] .layout {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.32fr);
+}
+/* 左栏窄、参数页更短，滚动窗口给大一点，尽量一屏看全 */
+html[data-layout="workbench"] .setup-fields-wrap { max-height: 620px; }
+/* 右栏有 929px 宽，赛道图铺满才能用上这块面积 */
+html[data-layout="workbench"] .track-svg-box { max-width: 100%; }
+
+/* ==========================================================================
+   4. flow —— 流程单列
+   卡片按真实操作顺序竖排（centered）：
+   选赛道 → 赛道图录反馈 → 遥测 → 反馈摘要 → 调参数 → 生成建议 → 迭代历史
+   适合：第一次上手、笔记本单屏、投影演示（从上往下讲一遍就能讲完）。
+   ========================================================================== */
+html[data-layout="flow"] .layout {
+  grid-template-columns: minmax(0, 1120px);
+  justify-content: center;
+}
+/* 单列下地图不必撑满，收窄避免把后面卡片全推出屏外 */
+html[data-layout="flow"] .track-svg-box { max-width: 720px; }
+/* 单列里参数不再需要固定滚动窗口，全展开更顺手 */
+html[data-layout="flow"] .setup-fields-wrap { max-height: none; min-height: 0; }
+
+/* ==========================================================================
+   窄屏降级：三套新布局在 1180px 以下统一退回单列
+   （classic 有自己的媒体查询，在 style.css 里，这里不碰）
+   ========================================================================== */
+@media (max-width: 1180px) {
+  html:not([data-layout="classic"]) .layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  html:not([data-layout="classic"]) .telemetry-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  html:not([data-layout="classic"]) .collect-tip { font-size: 11px; }
+  html:not([data-layout="classic"]) .setup-fields-wrap {
+    min-height: 0;
+    max-height: none;
+  }
+}
+
+/* ==========================================================================
+   顶部栏布局切换器（纯图标，省宽度）
+   ========================================================================== */
+.layout-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  padding: 2px;
+  margin-right: 8px;
+  background: var(--bg-inset);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.layout-chip {
+  width: 27px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-faint);
+  border-radius: var(--radius-xs);
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+.layout-chip:hover { color: var(--text); background: var(--bg-hover); }
+.layout-chip[aria-pressed="true"] {
+  color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px var(--accent-glow);
+}
+.layout-chip:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.layout-chip svg {
+  width: 17px;
+  height: 12px;
+  display: block;
+  fill: currentColor;
+}
+/* 窄屏把切换器再压一点，保证右侧状态区不被挤掉 */
+@media (max-width: 900px) {
+  .layout-chip { width: 24px; }
+  .layout-chip svg { width: 15px; height: 11px; }
+}

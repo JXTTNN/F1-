@@ -213,6 +213,152 @@
     });
   }
 
+  /* ---------- 界面布局（4 套骨架，切换后记忆在 localStorage） ---------- */
+  // 布局只决定「哪张卡片在哪一栏」与「栏有多宽」，不改任何功能。
+  // 实现上用移动 DOM 而不是 grid-template-areas：grid 的行高由该行最高卡片
+  // 决定，而建议报告常驻 1400px+（20 行表格），一旦与别的卡片同处一行，同列
+  // 其它卡片会被顶开几百像素，中间留出大片空白（实测 workbench 的反馈摘要
+  // 被推到 y=2429）。移动 DOM 后每栏仍是 flex 纵向堆叠，天然不留空档。
+  const LAYOUT_STORAGE_KEY = "f1opt.ui.layout";
+  // 卡片短名 → 选择器。短名只用于下面布局定义的可读性。
+  const LAYOUT_CARDS = {
+    selector: ".track-select-card",
+    map: ".track-map-card",
+    telemetry: ".telemetry-card",
+    setup: ".setup-panel-card",
+    feed: ".feedback-summary-card",
+    report: ".report-card",
+    history: ".history-card",
+  };
+  const LAYOUT_COLS = { left: ".col-left", mid: ".col-mid", right: ".col-right" };
+
+  const LAYOUTS = [
+    {
+      id: "classic",
+      name: "经典三栏",
+      hint: "赛道与遥测 / 参数与反馈 / 建议与历史",
+      cols: {
+        left: ["selector", "map", "telemetry"],
+        mid: ["setup", "feed"],
+        right: ["report", "history"],
+      },
+    },
+    {
+      id: "cockpit",
+      name: "驾驶舱",
+      hint: "遥测收成左侧仪表柱，赛道图居中放大，参数在右",
+      cols: {
+        left: ["selector", "telemetry"],
+        mid: ["map", "feed"],
+        right: ["setup", "report", "history"],
+      },
+    },
+    {
+      id: "workbench",
+      name: "工作台",
+      hint: "左右对分：左侧输入（参数/反馈），右侧输出（遥测/赛道图/建议）",
+      cols: {
+        left: ["selector", "setup", "feed"],
+        mid: [],
+        right: ["telemetry", "map", "report", "history"],
+      },
+    },
+    {
+      id: "flow",
+      name: "流程单列",
+      hint: "按操作顺序竖排：选赛道 → 录反馈 → 看遥测 → 调参数 → 出建议",
+      cols: {
+        left: ["selector", "map", "telemetry"],
+        mid: ["feed", "setup"],
+        right: ["report", "history"],
+      },
+    },
+  ];
+  const LAYOUT_IDS = LAYOUTS.map((l) => l.id);
+  const DEFAULT_LAYOUT = "classic";
+
+  /** 判断是否为受支持的布局 id。
+   *  @param {string} id 候选布局 id
+   *  @returns {boolean} 受支持返回 true
+   */
+  function isLayoutId(id) {
+    return LAYOUT_IDS.indexOf(id) !== -1;
+  }
+
+  /** 读取上次选择的布局；localStorage 不可用时回退默认值。
+   *  @returns {string} 布局 id
+   */
+  function readStoredLayout() {
+    try {
+      const saved = window.localStorage.getItem(LAYOUT_STORAGE_KEY);
+      return isLayoutId(saved) ? saved : DEFAULT_LAYOUT;
+    } catch (err) {
+      return DEFAULT_LAYOUT;
+    }
+  }
+
+  /** 按布局定义把卡片移入对应栏，并同步栏的 aria-label / 空栏状态。
+   *  @param {object} layout LAYOUTS 里的一项
+   *  @returns {void}
+   */
+  function arrangeCards(layout) {
+    Object.keys(LAYOUT_COLS).forEach((key) => {
+      const host = document.querySelector(".layout > " + LAYOUT_COLS[key]);
+      if (!host) return;
+      const names = layout.cols[key] || [];
+      host.classList.toggle("is-empty", names.length === 0);
+
+      const titles = [];
+      names.forEach((card) => {
+        const el = document.querySelector(LAYOUT_CARDS[card]);
+        if (!el) return;
+        host.appendChild(el);
+        const head = el.querySelector(".card-head h2");
+        if (head) titles.push(head.textContent.trim());
+      });
+      // 栏的区域名原本写在 HTML 里（「赛道与遥测区」等），换了布局就过期了，
+      // 这里跟随实际内容更新，避免读屏念出与实际不符的分区名。
+      host.setAttribute("aria-label", titles.length ? "面板区：" + titles.join("、") : "面板区");
+    });
+  }
+
+  /** 应用布局：移卡片、切 data-layout、同步切换器选中态。
+   *  @param {string} id 布局 id（未知 id 回退默认）
+   *  @param {boolean} persist 是否写入 localStorage
+   *  @returns {void}
+   */
+  function applyLayout(id, persist) {
+    const layout = LAYOUTS.find((l) => l.id === id) || LAYOUTS[0];
+    document.documentElement.setAttribute("data-layout", layout.id);
+    arrangeCards(layout);
+
+    document.querySelectorAll(".layout-chip").forEach((chip) => {
+      const on = chip.getAttribute("data-layout-set") === layout.id;
+      chip.setAttribute("aria-pressed", on ? "true" : "false");
+    });
+
+    if (persist) {
+      try {
+        window.localStorage.setItem(LAYOUT_STORAGE_KEY, layout.id);
+      } catch (err) {
+        // localStorage 不可用时布局只在本次会话生效
+      }
+    }
+  }
+
+  /** 初始化布局：应用已保存的选择并绑定切换器点击。
+   *  @returns {void}
+   */
+  function initLayout() {
+    applyLayout(readStoredLayout(), false);
+    document.querySelectorAll(".layout-chip").forEach((chip) => {
+      chip.addEventListener("click", () => {
+        // 不弹 toast：整页重排本身就是反馈；连点几次会把提示堆满顶部栏
+        applyLayout(chip.getAttribute("data-layout-set"), true);
+      });
+    });
+  }
+
   const dom = {
     trackSelect: $("track-select"),
     trackMeta: $("track-meta"),
@@ -2480,6 +2626,7 @@
    */
   function init() {
     initTheme();
+    initLayout();
     bindEvents();
     loadTracks();
     loadSetupFields();

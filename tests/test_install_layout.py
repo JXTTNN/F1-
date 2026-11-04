@@ -98,7 +98,7 @@ class TestInstalledPackageIsComplete:
 
     def test_ui_assets_shipped(self) -> None:
         ui = _PKG / "ui"
-        for name in ("index.html", "app.js", "style.css", "themes.css"):
+        for name in ("index.html", "app.js", "style.css", "themes.css", "layouts.css"):
             assert (ui / name).is_file(), f"包内缺少 UI 资源：{name}"
         tracks = sorted((ui / "tracks").glob("*.svg"))
         assert len(tracks) >= 24, f"赛道 SVG 数量不足：{len(tracks)}"
