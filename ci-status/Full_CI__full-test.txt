@@ -1,76 +1,99 @@
 workflow : Full CI
 job      : full-test
-sha      : 4ec22c2dc3cc90730127b16ca21cf7ccbe4627ea
+sha      : 527f091f0514705c37d3b9b8bbe4855f30ea8c2e
 ref      : main
 event    : push
-run      : https://github.com/JXTTNN/F1-/actions/runs/41772234580
-time     : 2026-11-04T04:23:22Z
-steps    : install=success pytest=cancelled
+run      : https://github.com/JXTTNN/F1-/actions/runs/41772783018
+time     : 2026-11-04T04:30:19Z
+steps    : install=success pytest=success
 
 ================ .ci/pytest.log ================
 ---- 失败 / 错误用例 ----
 ---- 断言摘要 ----
 ---- 最慢用例 ----
+============================= slowest 15 durations =============================
+4.13s call     tests/test_feedback_lifecycle.py::TestSuggestConsumesFeedback::test_next_round_only_sees_its_own_feedback
+2.42s teardown tests/deep_slice/test_slice_07_api.py::TestSmoke::test_root_endpoint
+2.36s call     tests/deep_integration/test_concurrent.py::TestConcurrentApiRequests::test_concurrent_mixed_api_operations
+2.35s call     tests/deep_slice/test_slice_02_telemetry_listener.py::TestSmoke::test_smoke_real_udp_short_packet_skipped
+2.29s call     tests/deep_slice/test_slice_09_app.py::TestSmoke::test_app_exception_handlers_registered
+2.25s teardown tests/deep_slice/test_slice_07_api.py::TestUnit::test_iteration_history_empty
+2.22s teardown tests/deep_slice/test_slice_07_api.py::TestUnit::test_select_current_track
+2.20s call     tests/test_api_contract.py::TestRecordingTrainingExport::test_export_produces_samples
+2.20s teardown tests/deep_slice/test_slice_07_api.py::TestSmoke::test_multiple_feedbacks_then_suggest
+2.19s call     tests/test_car_status.py::TestEndToEnd::test_simulated_lap_reaches_suggestion
+2.19s call     tests/test_car_status.py::TestSimulatorCoverage::test_simulator_emits_car_status
+2.19s teardown tests/deep_slice/test_slice_07_api.py::TestUnit::test_submit_feedback
+2.16s call     tests/deep_integration/test_concurrent.py::TestConcurrentApiRequests::test_concurrent_suggest_no_deadlock
+2.14s call     tests/test_api_edge_cases.py::test_select_track_not_found
+2.13s call     tests/deep_integration/test_e2e_business.py::TestMultiRoundConvergence::test_multi_round_iteration_history_grows
+=========================== short test summary info ============================
+SKIPPED [1] tests/test_telemetry_importer.py:484: 未设置 F1OPT_REAL_DATA_DIR（或目录不存在）
+SKIPPED [1] tests/test_telemetry_importer.py:500: 未设置 F1OPT_REAL_DATA_DIR（或目录不存在）
+SKIPPED [1] tests/test_telemetry_importer.py:512: 未设置 F1OPT_REAL_DATA_DIR（或目录不存在）
+============ 2200 passed, 3 skipped, 1 warning in 394.90s (0:06:34) ============
 ---- 结果行 ----
+============ 2200 passed, 3 skipped, 1 warning in 394.90s (0:06:34) ============
 ---- 超时 / 崩溃痕迹 ----
 ---- 日志尾部 ----
-tests/deep_slice/test_slice_09_app.py::TestSmoke::test_config_env_var_overrides_file PASSED [ 32%]
-tests/deep_slice/test_slice_09_app.py::TestSmoke::test_main_with_argv_parameter PASSED [ 32%]
-tests/deep_slice/test_slice_09_app.py::TestSmoke::test_main_help_and_version_exit_zero PASSED [ 32%]
-tests/deep_slice/test_slice_09_app.py::TestSmoke::test_main_keep_telemetry_flag PASSED [ 32%]
-tests/deep_slice/test_slice_09_app.py::TestSmoke::test_webbrowser_open_attempted PASSED [ 32%]
-tests/deep_slice/test_slice_09_app.py::TestSmoke::test_create_app_with_custom_config PASSED [ 32%]
-tests/deep_slice/test_slice_09_app.py::TestSmoke::test_app_exception_handlers_registered PASSED [ 32%]
-tests/test_api_contract.py::TestFrontendBackendContract::test_frontend_calls_exist_in_backend PASSED [ 32%]
-tests/test_api_contract.py::TestFrontendBackendContract::test_no_silently_unwired_endpoints PASSED [ 32%]
-tests/test_api_contract.py::TestFrontendBackendContract::test_known_unwired_entries_still_exist PASSED [ 32%]
-tests/test_api_contract.py::TestPostBodyContracts::test_frontend_posts_satisfy_required_body_fields PASSED [ 32%]
-tests/test_api_contract.py::TestPostBodyContracts::test_all_backend_post_bodies_are_covered PASSED [ 32%]
-tests/test_api_contract.py::TestRouteHandlersAreRealEndpoints::test_no_private_function_is_registered_as_route PASSED [ 32%]
-tests/test_api_contract.py::TestRouteHandlersAreRealEndpoints::test_no_inline_body_schema_leak PASSED [ 32%]
-tests/test_api_contract.py::TestRouteHandlersAreRealEndpoints::test_key_endpoints_use_their_declared_models PASSED [ 32%]
-tests/test_api_contract.py::TestUnwiredEndpointsAreReachable::test_health_ok PASSED [ 32%]
-tests/test_api_contract.py::TestUnwiredEndpointsAreReachable::test_recordings_list_empty_ok PASSED [ 32%]
-tests/test_api_contract.py::TestUnwiredEndpointsAreReachable::test_replay_status_ok PASSED [ 33%]
-tests/test_api_contract.py::TestUnwiredEndpointsAreReachable::test_track_detail_ok PASSED [ 33%]
-tests/test_api_contract.py::TestUnwiredEndpointsAreReachable::test_track_detail_unknown_returns_error PASSED [ 33%]
-tests/test_api_contract.py::TestExperimentEndpointWorks::test_documented_contract_is_accepted PASSED [ 33%]
-tests/test_api_contract.py::TestExperimentEndpointWorks::test_telemetry_is_optional PASSED [ 33%]
-tests/test_api_contract.py::TestExperimentEndpointWorks::test_dx_diff_equals_a_minus_b PASSED [ 33%]
-tests/test_api_contract.py::TestExperimentEndpointWorks::test_split_telemetry_makes_dx_diff_informative PASSED [ 33%]
-tests/test_api_contract.py::TestExperimentEndpointWorks::test_identical_setups_give_zero_delta_diff PASSED [ 33%]
-tests/test_api_contract.py::TestExperimentEndpointWorks::test_unknown_track_returns_404 PASSED [ 33%]
-tests/test_api_contract.py::TestExperimentEndpointWorks::test_missing_setup_b_returns_422 PASSED [ 33%]
-tests/test_api_contract.py::TestExperimentEndpointWorks::test_incomplete_setup_returns_400 PASSED [ 33%]
-tests/test_api_contract.py::TestExperimentEndpointWorks::test_out_of_range_param_returns_400 PASSED [ 33%]
-tests/test_api_contract.py::TestIndexHtmlReferencesExistingAssets::test_script_and_style_assets_exist PASSED [ 33%]
-tests/test_api_contract.py::TestDomIdConsistency::test_all_referenced_ids_exist PASSED [ 33%]
-tests/test_api_contract.py::TestRecordingTrainingExport::test_export_produces_samples PASSED [ 33%]
-tests/test_api_contract.py::TestRecordingTrainingExport::test_export_unknown_session_404 PASSED [ 33%]
-tests/test_api_contract.py::TestRecordingTrainingExport::test_export_rejects_path_traversal PASSED [ 33%]
-tests/test_api_contract.py::TestRootServesVersionedUI::test_footer_version_matches_package PASSED [ 33%]
-tests/test_api_edge_cases.py::test_root_path PASSED                      [ 33%]
-tests/test_api_edge_cases.py::test_track_detail_not_found PASSED         [ 33%]
-tests/test_api_edge_cases.py::test_select_track_not_found PASSED         [ 33%]
-tests/test_api_edge_cases.py::test_feedback_invalid_track PASSED         [ 33%]
-tests/test_api_edge_cases.py::test_suggest_invalid_track PASSED          [ 33%]
-tests/test_api_edge_cases.py::test_feedback_invalid_symptom PASSED       [ 34%]
-tests/test_api_edge_cases.py::test_feedback_strength_too_high PASSED     [ 34%]
-tests/test_api_edge_cases.py::test_feedback_strength_too_low PASSED      [ 34%]
-tests/test_api_edge_cases.py::test_feedback_corner_number_out_of_range PASSED [ 34%]
-tests/test_api_edge_cases.py::test_feedback_corner_number_pydantic_reject PASSED [ 34%]
-tests/test_api_edge_cases.py::test_suggest_no_feedback PASSED            [ 34%]
-tests/test_api_edge_cases.py::test_import_setup_no_telemetry PASSED      [ 34%]
-tests/test_api_edge_cases.py::test_get_current_setup_no_data PASSED      [ 34%]
-tests/test_api_edge_cases.py::test_get_latest_suggestion_no_data PASSED  [ 34%]
-tests/test_api_edge_cases.py::test_list_feedbacks_no_track PASSED        [ 34%]
-tests/test_api_edge_cases.py::test_suggest_latest_no_track PASSED        [ 34%]
-tests/test_api_edge_cases.py::test_iteration_history_no_track PASSED     [ 34%]
-tests/test_api_edge_cases.py::test_full_workflow_with_setup_import PASSED [ 34%]
-tests/test_api_edge_cases.py::test_feedback_with_global_symptom PASSED   [ 34%]
-tests/test_api_edge_cases.py::test_multiple_suggestions_generate_iterations PASSED [ 34%]
-tests/test_api_edge_cases.py::test_concurrent_feedback_submission PASSED [ 34%]
-tests/test_api_edge_cases.py::test_envelope_format_all_responses PASSED  [ 34%]
-tests/test_api_edge_cases.py::test_health_status_degraded_without_telemetry PASSED [ 34%]
-tests/test_api_edge_cases.py::test_tracks_count_24 PASSED                [ 34%]
-tests/test_api_edge_cases.py::test_all_tracks_have_detail 
+tests/test_track_arcs.py::TestAnchorsSitOnCorners::test_anchors_not_on_straights[shanghai] PASSED [ 98%]
+tests/test_track_arcs.py::TestAnchorsSitOnCorners::test_anchors_not_on_straights[silverstone] PASSED [ 98%]
+tests/test_track_arcs.py::TestAnchorsSitOnCorners::test_anchors_not_on_straights[singapore] PASSED [ 98%]
+tests/test_track_arcs.py::TestAnchorsSitOnCorners::test_anchors_not_on_straights[spa] PASSED [ 98%]
+tests/test_track_arcs.py::TestAnchorsSitOnCorners::test_anchors_not_on_straights[spielberg] PASSED [ 98%]
+tests/test_track_arcs.py::TestAnchorsSitOnCorners::test_anchors_not_on_straights[suzuka] PASSED [ 98%]
+tests/test_track_arcs.py::TestAnchorsSitOnCorners::test_anchors_not_on_straights[yas_marina] PASSED [ 98%]
+tests/test_track_arcs.py::TestAnchorsSitOnCorners::test_anchors_not_on_straights[zandvoort] PASSED [ 98%]
+tests/test_track_gain.py::TestGainDefinition::test_covers_all_params PASSED [ 98%]
+tests/test_track_gain.py::TestGainDefinition::test_moderate_range_only PASSED [ 99%]
+tests/test_track_gain.py::TestGainDefinition::test_neutral_types_are_identity PASSED [ 99%]
+tests/test_track_gain.py::TestGainDefinition::test_unknown_track_is_neutral PASSED [ 99%]
+tests/test_track_gain.py::TestGainDefinition::test_all_tracks_resolvable PASSED [ 99%]
+tests/test_track_gain.py::TestSuggestionVariesByTrack::test_suzuka_differs_from_monza PASSED [ 99%]
+tests/test_track_gain.py::TestSuggestionVariesByTrack::test_monza_amplifies_aero_and_damps_ride_height PASSED [ 99%]
+tests/test_track_gain.py::TestSuggestionVariesByTrack::test_street_circuit_amplifies_ride_height PASSED [ 99%]
+tests/test_track_gain.py::TestSuggestionVariesByTrack::test_direction_not_flipped PASSED [ 99%]
+tests/test_track_gain.py::TestSuggestionVariesByTrack::test_deterministic PASSED [ 99%]
+tests/test_training_dataset.py::TestCompoundClass::test_compound_mapping PASSED [ 99%]
+tests/test_training_dataset.py::TestWeatherMapping::test_light_cloud_is_dry PASSED [ 99%]
+tests/test_training_dataset.py::TestWeatherMapping::test_overcast_is_dry PASSED [ 99%]
+tests/test_training_dataset.py::TestWeatherMapping::test_storm_is_wet PASSED [ 99%]
+tests/test_training_dataset.py::TestWeatherMapping::test_rain_codes_are_wet PASSED [ 99%]
+tests/test_training_dataset.py::TestWeatherMapping::test_raw_code_kept_as_feature PASSED [ 99%]
+tests/test_training_dataset.py::TestWeatherMapping::test_missing_weather_defaults_dry PASSED [ 99%]
+tests/test_training_dataset.py::TestBuildRow::test_valid_row_has_universal_features PASSED [ 99%]
+tests/test_training_dataset.py::TestBuildRow::test_meta_records_track_length PASSED [ 99%]
+tests/test_training_dataset.py::TestBuildRow::test_invalid_lap_rejected PASSED [ 99%]
+tests/test_training_dataset.py::TestBuildRow::test_unknown_track_rejected PASSED [ 99%]
+tests/test_training_dataset.py::TestBuildDataset::test_build_from_files PASSED [ 99%]
+tests/test_training_dataset.py::TestBuildDataset::test_empty_dir PASSED  [ 99%]
+tests/test_training_dataset.py::TestBuildDataset::test_collect_lap_files_ignores_other_files PASSED [100%]
+
+=============================== warnings summary ===============================
+../../../../../opt/hostedtoolcache/Python/3.11.17/x64/lib/python3.11/site-packages/fastapi/testclient.py:1
+  /opt/hostedtoolcache/Python/3.11.17/x64/lib/python3.11/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+============================= slowest 15 durations =============================
+4.13s call     tests/test_feedback_lifecycle.py::TestSuggestConsumesFeedback::test_next_round_only_sees_its_own_feedback
+2.42s teardown tests/deep_slice/test_slice_07_api.py::TestSmoke::test_root_endpoint
+2.36s call     tests/deep_integration/test_concurrent.py::TestConcurrentApiRequests::test_concurrent_mixed_api_operations
+2.35s call     tests/deep_slice/test_slice_02_telemetry_listener.py::TestSmoke::test_smoke_real_udp_short_packet_skipped
+2.29s call     tests/deep_slice/test_slice_09_app.py::TestSmoke::test_app_exception_handlers_registered
+2.25s teardown tests/deep_slice/test_slice_07_api.py::TestUnit::test_iteration_history_empty
+2.22s teardown tests/deep_slice/test_slice_07_api.py::TestUnit::test_select_current_track
+2.20s call     tests/test_api_contract.py::TestRecordingTrainingExport::test_export_produces_samples
+2.20s teardown tests/deep_slice/test_slice_07_api.py::TestSmoke::test_multiple_feedbacks_then_suggest
+2.19s call     tests/test_car_status.py::TestEndToEnd::test_simulated_lap_reaches_suggestion
+2.19s call     tests/test_car_status.py::TestSimulatorCoverage::test_simulator_emits_car_status
+2.19s teardown tests/deep_slice/test_slice_07_api.py::TestUnit::test_submit_feedback
+2.16s call     tests/deep_integration/test_concurrent.py::TestConcurrentApiRequests::test_concurrent_suggest_no_deadlock
+2.14s call     tests/test_api_edge_cases.py::test_select_track_not_found
+2.13s call     tests/deep_integration/test_e2e_business.py::TestMultiRoundConvergence::test_multi_round_iteration_history_grows
+=========================== short test summary info ============================
+SKIPPED [1] tests/test_telemetry_importer.py:484: 未设置 F1OPT_REAL_DATA_DIR（或目录不存在）
+SKIPPED [1] tests/test_telemetry_importer.py:500: 未设置 F1OPT_REAL_DATA_DIR（或目录不存在）
+SKIPPED [1] tests/test_telemetry_importer.py:512: 未设置 F1OPT_REAL_DATA_DIR（或目录不存在）
+============ 2200 passed, 3 skipped, 1 warning in 394.90s (0:06:34) ============
+
