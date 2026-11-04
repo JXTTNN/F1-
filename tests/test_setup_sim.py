@@ -437,6 +437,75 @@ class TestSimRefineEndToEnd:
         assert r.raw_gain_s is not None and r.raw_gain_s > 0.25
         assert any("单步上限截断" in t for t in r.trace)
 
+    def test_cannot_flip_rule_direction(self, monkeypatch) -> None:
+        """模型不得翻转/归零规则引擎已定下的参数符号。
+
+        规则引擎的符号来自第一性关系（转向不足 → 前翼加大），模型是约 63%
+        准确率的统计平均。允许后者否决前者，会让同一症状在强度 1 与强度 3
+        下给出互斥方向。这里构造一个「明确偏好把前翼调到负值」的模型，
+        验证 ``sim_refine`` 一步都不接受。
+        """
+        import setup_tuner.engine.sim_optimizer as opt_mod
+        from setup_tuner.domain.setup import CarSetup
+
+        class _FlipModel:
+            available = True
+            reason = "ok"
+            track_ids = ("alpha",)
+
+            def covers(self, track_id: str) -> bool:
+                return track_id in self.track_ids
+
+            def predict_delta_s(self, track_id: str, setup_norm: dict) -> float:
+                n = setup_norm.get("front_wing", 0.0)
+                # 线性项让「n 越负越优」，二次项保证凹性有界
+                return 200.0 * n * n + 100.0 * n
+
+            def describe(self) -> str:
+                return "test"
+
+        monkeypatch.setattr(opt_mod, "get_setup_sim", lambda *a, **k: _FlipModel())
+
+        setup = CarSetup.default().to_dict()
+        delta0 = {f.name: 0.0 for f in ALL_SETUP_FIELDS}
+        delta0["front_wing"] = 0.5
+        r = opt_mod.sim_refine(delta0, setup, "alpha", dx=None, max_passes=3)
+
+        assert r.available
+        # 反号（0.5 → −0.5）或归零（0.5 → 0.0）都必须被拒绝
+        assert r.delta["front_wing"] == pytest.approx(0.5)
+        assert r.accepted == 0
+
+    def test_free_parameter_can_be_introduced(self, monkeypatch) -> None:
+        """规则引擎没动过的参数，模型仍可自由引入（保留发现遗漏因素的能力）。"""
+        import setup_tuner.engine.sim_optimizer as opt_mod
+        from setup_tuner.domain.setup import CarSetup
+
+        class _GreedyModel:
+            available = True
+            reason = "ok"
+            track_ids = ("alpha",)
+
+            def covers(self, track_id: str) -> bool:
+                return track_id in self.track_ids
+
+            def predict_delta_s(self, track_id: str, setup_norm: dict) -> float:
+                # 前翼越大越快
+                return -8.0 * setup_norm.get("front_wing", 0.0)
+
+            def describe(self) -> str:
+                return "test"
+
+        monkeypatch.setattr(opt_mod, "get_setup_sim", lambda *a, **k: _GreedyModel())
+
+        setup = CarSetup.default().to_dict()
+        delta0 = {f.name: 0.0 for f in ALL_SETUP_FIELDS}
+        r = opt_mod.sim_refine(delta0, setup, "alpha", dx=None, max_passes=3)
+
+        assert r.available
+        assert r.delta["front_wing"] > 0.0
+        assert r.accepted >= 1
+
 
 # ===========================================================================
 # 6. 引擎级契约：nn 模式真的跑模拟优化，rule 模式不跑
@@ -456,6 +525,20 @@ class _FakeSim:
     y_scale = 1.0
     n_samples = 1
     metrics = {"val_mae_ms": 0.0, "val_r2": 1.0}
+    # 真实圈速校准层的字段（真实模型有；这里声明为「未启用」，
+    # 报告里的 real_calibration 块据此渲染为 weight=0）
+    real_track_coef: dict = {}
+    real_sim_coef: dict = {}
+    real_weight = 0.0
+    real_weight_by_track: dict = {}
+    real_n_samples = 0
+    real_created = ""
+
+    def real_weight_for(self, track_id: str) -> float:
+        return 0.0
+
+    def real_accuracy_for(self, track_id: str):
+        return None
 
     def covers(self, track_id: str) -> bool:
         return track_id in self.track_ids

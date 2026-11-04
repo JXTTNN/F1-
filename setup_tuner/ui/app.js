@@ -1669,9 +1669,25 @@
         const anchorTag = sim.anchor === "authored"
           ? `　<span class="holistic-tag" title="该站暂无 2026 遥测语料，模型由赛道几何 + 19 站实测常数推定">几何推定</span>`
           : "";
+        // 真实圈速校准：这一站的预测里有多少来自真实「调教→圈速」配对。
+        // 权重 0 时完全不显示 —— 不能让人以为一直有外部真值在兜底。
+        // 徽标文字用**准确率**而不是权重：「真实校准 90%」会被读成「9 成准」，
+        // 而 0.9 其实只是「9 成听真实数据」。两者含义差得很远。
+        const rc = sim.real_calibration;
+        const rcTips = rc
+          ? `该站用 ${rc.samples} 条真实「调教→圈速」配对校准；融合权重 ${rc.weight}`
+            + (rc.accuracy != null
+              ? `（同队同会话配对，留出集排序正确率 ${Math.round(rc.accuracy * 100)}%）`
+              : "")
+          : "";
+        const realTag = rc && rc.available && rc.weight > 0
+          ? (rc.accuracy != null
+            ? `　<span class="holistic-tag" title="${esc(rcTips)}">真实校准 ${Math.round(rc.accuracy * 100)}% 准</span>`
+            : `　<span class="holistic-tag" title="${esc(rcTips)}">真实校准 权重 ${Math.round(rc.weight * 100)}%</span>`)
+          : "";
         simLine = `<div class="holistic-line holistic-sim">` +
           `<span class="holistic-tag">神经网络模拟</span>` +
-          `${esc(sim.model || "")}${anchorTag}　迭代 ${sim.iterations} 轮 / 采纳 ${sim.accepted} 次` +
+          `${esc(sim.model || "")}${anchorTag}${realTag}　迭代 ${sim.iterations} 轮 / 采纳 ${sim.accepted} 次` +
           `　模拟${gainTxt}` +
           (sim.before_s != null && sim.after_s != null
             ? `（${(sim.before_s * 1000).toFixed(0)} → ${(sim.after_s * 1000).toFixed(0)} ms）`

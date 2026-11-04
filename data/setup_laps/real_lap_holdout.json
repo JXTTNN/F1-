@@ -1,0 +1,356 @@
+{
+  "schema": "f1opt-real-lap-holdout/1",
+  "created": "2026-11-04T12:02:30",
+  "source": "f1laps_setups.jsonl",
+  "ridge_lambda": 300000.0,
+  "n_samples": 1424,
+  "n_tracks": 24,
+  "dropped": {
+    "version_incompatible:2024": 460
+  },
+  "cv": {
+    "n": 1424,
+    "pairs": 2671,
+    "acc": 0.6016,
+    "sim_acc": 0.4936,
+    "ci95": [
+      0.5829,
+      0.6201
+    ],
+    "significant": true
+  },
+  "leave_one_track_out": {
+    "pooled": {
+      "pairs": 2671,
+      "acc": 0.609,
+      "ci95": [
+        0.5903,
+        0.6273
+      ],
+      "significant": true,
+      "tracks_above_55": 21,
+      "tracks": 24
+    },
+    "per_track": {
+      "austin": {
+        "n": 53,
+        "pairs": 109,
+        "acc": 0.633,
+        "sim_acc": 0.4495,
+        "ci95": [
+          0.5395,
+          0.7175
+        ],
+        "significant": true
+      },
+      "baku": {
+        "n": 47,
+        "pairs": 76,
+        "acc": 0.7105,
+        "sim_acc": 0.3553,
+        "ci95": [
+          0.6004,
+          0.8004
+        ],
+        "significant": true
+      },
+      "barcelona": {
+        "n": 78,
+        "pairs": 124,
+        "acc": 0.6976,
+        "sim_acc": 0.5282,
+        "ci95": [
+          0.6118,
+          0.7715
+        ],
+        "significant": true
+      },
+      "hungaroring": {
+        "n": 53,
+        "pairs": 114,
+        "acc": 0.4518,
+        "sim_acc": 0.636,
+        "ci95": [
+          0.3635,
+          0.5432
+        ],
+        "significant": false
+      },
+      "jeddah": {
+        "n": 52,
+        "pairs": 84,
+        "acc": 0.5893,
+        "sim_acc": 0.4464,
+        "ci95": [
+          0.4824,
+          0.6883
+        ],
+        "significant": false
+      },
+      "las_vegas": {
+        "n": 44,
+        "pairs": 97,
+        "acc": 0.7526,
+        "sim_acc": 0.4845,
+        "ci95": [
+          0.6582,
+          0.8277
+        ],
+        "significant": true
+      },
+      "lusail": {
+        "n": 42,
+        "pairs": 60,
+        "acc": 0.7333,
+        "sim_acc": 0.6667,
+        "ci95": [
+          0.6099,
+          0.8287
+        ],
+        "significant": true
+      },
+      "madrid": {
+        "n": 32,
+        "pairs": 31,
+        "acc": 0.6129,
+        "sim_acc": 0.6452,
+        "ci95": [
+          0.4382,
+          0.7627
+        ],
+        "significant": false
+      },
+      "melbourne": {
+        "n": 80,
+        "pairs": 214,
+        "acc": 0.5678,
+        "sim_acc": 0.4836,
+        "ci95": [
+          0.5008,
+          0.6324
+        ],
+        "significant": true
+      },
+      "mexico_city": {
+        "n": 48,
+        "pairs": 91,
+        "acc": 0.5824,
+        "sim_acc": 0.4066,
+        "ci95": [
+          0.4798,
+          0.6784
+        ],
+        "significant": false
+      },
+      "miami": {
+        "n": 80,
+        "pairs": 148,
+        "acc": 0.6047,
+        "sim_acc": 0.4561,
+        "ci95": [
+          0.5243,
+          0.6799
+        ],
+        "significant": true
+      },
+      "monaco": {
+        "n": 76,
+        "pairs": 147,
+        "acc": 0.6429,
+        "sim_acc": 0.534,
+        "ci95": [
+          0.5627,
+          0.7158
+        ],
+        "significant": true
+      },
+      "montreal": {
+        "n": 80,
+        "pairs": 172,
+        "acc": 0.5203,
+        "sim_acc": 0.4157,
+        "ci95": [
+          0.4461,
+          0.5937
+        ],
+        "significant": false
+      },
+      "monza": {
+        "n": 56,
+        "pairs": 81,
+        "acc": 0.6605,
+        "sim_acc": 0.463,
+        "ci95": [
+          0.5522,
+          0.7543
+        ],
+        "significant": true
+      },
+      "sakhir": {
+        "n": 52,
+        "pairs": 69,
+        "acc": 0.6739,
+        "sim_acc": 0.471,
+        "ci95": [
+          0.5567,
+          0.7728
+        ],
+        "significant": true
+      },
+      "sao_paulo": {
+        "n": 48,
+        "pairs": 89,
+        "acc": 0.6461,
+        "sim_acc": 0.4551,
+        "ci95": [
+          0.5426,
+          0.7375
+        ],
+        "significant": true
+      },
+      "shanghai": {
+        "n": 80,
+        "pairs": 176,
+        "acc": 0.4972,
+        "sim_acc": 0.6108,
+        "ci95": [
+          0.4241,
+          0.5703
+        ],
+        "significant": false
+      },
+      "silverstone": {
+        "n": 60,
+        "pairs": 123,
+        "acc": 0.626,
+        "sim_acc": 0.3496,
+        "ci95": [
+          0.5379,
+          0.7065
+        ],
+        "significant": true
+      },
+      "singapore": {
+        "n": 60,
+        "pairs": 89,
+        "acc": 0.5674,
+        "sim_acc": 0.5674,
+        "ci95": [
+          0.4638,
+          0.6654
+        ],
+        "significant": false
+      },
+      "spa": {
+        "n": 60,
+        "pairs": 95,
+        "acc": 0.5526,
+        "sim_acc": 0.4368,
+        "ci95": [
+          0.4525,
+          0.6486
+        ],
+        "significant": false
+      },
+      "spielberg": {
+        "n": 63,
+        "pairs": 113,
+        "acc": 0.6018,
+        "sim_acc": 0.5664,
+        "ci95": [
+          0.5096,
+          0.6873
+        ],
+        "significant": true
+      },
+      "suzuka": {
+        "n": 80,
+        "pairs": 210,
+        "acc": 0.6119,
+        "sim_acc": 0.4595,
+        "ci95": [
+          0.5445,
+          0.6752
+        ],
+        "significant": true
+      },
+      "yas_marina": {
+        "n": 40,
+        "pairs": 68,
+        "acc": 0.625,
+        "sim_acc": 0.5515,
+        "ci95": [
+          0.5062,
+          0.7305
+        ],
+        "significant": true
+      },
+      "zandvoort": {
+        "n": 60,
+        "pairs": 91,
+        "acc": 0.7473,
+        "sim_acc": 0.5604,
+        "ci95": [
+          0.6492,
+          0.8253
+        ],
+        "significant": true
+      }
+    }
+  },
+  "transfer": [
+    {
+      "tag": "2025 干 → 2026 干",
+      "train": 464,
+      "n": 480,
+      "pairs": 626,
+      "acc": 0.5743,
+      "sim_acc": 0.5024,
+      "ci95": [
+        0.5352,
+        0.6124
+      ],
+      "significant": true
+    },
+    {
+      "tag": "2026 干 → 2025 干",
+      "train": 480,
+      "n": 464,
+      "pairs": 448,
+      "acc": 0.5112,
+      "sim_acc": 0.5067,
+      "ci95": [
+        0.465,
+        0.5572
+      ],
+      "significant": false
+    },
+    {
+      "tag": "2025 干 → 2025 湿",
+      "train": 464,
+      "n": 164,
+      "pairs": 201,
+      "acc": 0.5697,
+      "sim_acc": 0.5299,
+      "ci95": [
+        0.5005,
+        0.6362
+      ],
+      "significant": true
+    },
+    {
+      "tag": "2026 干 → 2026 湿",
+      "train": 480,
+      "n": 316,
+      "pairs": 240,
+      "acc": 0.5437,
+      "sim_acc": 0.4688,
+      "ci95": [
+        0.4805,
+        0.6056
+      ],
+      "significant": false
+    }
+  ],
+  "caveat": "配对口径 = 同赛道同车队同会话内的两套调教谁更快；留一赛道时该站完全不参与训练，模型只能靠赛道特征外推。"
+}

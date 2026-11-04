@@ -31,6 +31,7 @@ from __future__ import annotations
 import json
 import logging
 import threading
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -44,6 +45,9 @@ logger = logging.getLogger(__name__)
 #: 模型文件名（解析顺序见 :func:`.model_io.resolve_model_path`）
 MODEL_NAME = "setup_sim_nn.json"
 DEFAULT_PATH = Path("data") / "models" / MODEL_NAME
+#: 真实调教-圈速校准文件（由 ``scripts/train_real_lap_model.py`` 产出）。
+#: 缺失时纯仿真运行，不报错 —— 旧版本部署/测试自建模型都走这条路径。
+CALIBRATION_NAME = "real_lap_calibration.json"
 
 #: 赛道聚合特征（顺序即特征向量顺序，训练/推理必须一致）
 TRACK_FEATURE_KEYS: tuple[str, ...] = (
@@ -93,6 +97,16 @@ def denormalize_param(name: str, n: float) -> float:
     return max(spec.min_val, min(spec.max_val, value))
 
 
+def build_norm_vector(real_setup: dict[str, float]) -> list[float]:
+    """真实调教 → 归一化向量（顺序 = :data:`ALL_SETUP_FIELDS`）。
+
+    训练端（真实圈速校准）与推理端（``predict_real_delta_s``）共用这一个
+    实现，避免「训练时列顺序与推理时不一致」这类静默错位。
+    """
+    norm = normalize_setup(real_setup)
+    return [float(norm[spec.name]) for spec in ALL_SETUP_FIELDS]
+
+
 def build_feature_row(
     track_ids: list[str],
     track_features: dict[str, dict[str, float]],
@@ -138,9 +152,17 @@ class SetupSimModel:
     线程安全的懒加载单例由 :func:`get_setup_sim` 管理；本类只管加载与推理。
     """
 
-    def __init__(self, path: str | Path | None = None) -> None:
+    def __init__(
+        self,
+        path: str | Path | None = None,
+        calibration_path: str | Path | None = None,
+    ) -> None:
         self.path = _resolve_path(
             Path(path) if path is not None else DEFAULT_PATH,
+        )
+        #: 真实校准文件的显式路径（测试用）；None = 按 model_io 搜索规则解析
+        self.calibration_path = (
+            Path(calibration_path) if calibration_path is not None else None
         )
         self.available = False
         self.reason = "模型未加载"
@@ -162,7 +184,99 @@ class SetupSimModel:
         self.y_scale_by_track: dict[str, float] = {}
         #: 每赛道「默认调教」的原始预测（差分校准基准），懒算并缓存
         self._zero_pred: dict[str, float] = {}
+        #: 真实圈速校准（可选）：逐站线性系数 + 与仿真的融合权重。
+        #: 缺失时保持空，`predict_delta_s` 退化为纯仿真（向后兼容）。
+        self.real_track_coef: dict[str, list[float]] = {}
+        #: 每站对**纯仿真预测**的系数（堆叠校准的第一项；缺失视为 0）
+        self.real_sim_coef: dict[str, float] = {}
+        self.real_weight = 0.0
+        self.real_weight_by_track: dict[str, float] = {}
+        #: 逐站留出集配对准确率（0~1）。Panel 用它告诉用户「这一站有多可信」，
+        #: 而不是只显示融合权重（0.9 很容易被读成「准确率 90%」）。
+        self.real_accuracy_by_track: dict[str, float] = {}
+        self.real_metrics: dict[str, Any] = {}
+        self.real_n_samples = 0
+        self.real_created = ""
+        self.real_reason = "未加载"
         self._load()
+        self._load_real_calibration()
+
+    # ---------------- 真实圈速校准（可选层） ---------------- #
+    def _load_real_calibration(self) -> None:
+        """加载 ``real_lap_calibration.json``；缺失/损坏一律静默降级。
+
+        为什么单独一层而不是重训仿真：仿真标签是自洽的，重训只会更贴近仿真。
+        真实校准是**外部真值**，它修正的是仿真里「一组全局系数无法同时适配
+        Monza 与 Monaco」的结构性偏差。
+        """
+        path = (
+            self.calibration_path
+            if self.calibration_path is not None
+            else resolve_model_path(CALIBRATION_NAME)
+        )
+        if not path.exists():
+            self.real_reason = f"校准文件不存在（{path.name}），按纯仿真运行"
+            return
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            self.real_reason = "校准文件读取/解析失败"
+            logger.warning("真实圈速校准读取失败：%s", path, exc_info=True)
+            return
+
+        names = [spec.name for spec in ALL_SETUP_FIELDS]
+        # 按**名字**而不是位置取系数：模型迭代时参数顺序可能变，
+        # 名字对齐能避免「静默错位」这类最难查的故障。
+        coef: dict[str, list[float]] = {}
+        for tid, row in (data.get("track_coef") or {}).items():
+            if not isinstance(row, dict):
+                continue
+            vec: list[float] = []
+            for name in names:
+                try:
+                    vec.append(float(row.get(name, 0.0)))
+                except (TypeError, ValueError):
+                    vec.append(0.0)
+            coef[str(tid)] = vec
+        if not coef:
+            self.real_reason = "校准文件没有可用的逐站系数"
+            return
+
+        def _weight(raw: Any) -> float:
+            try:
+                w = float(raw)
+            except (TypeError, ValueError):
+                return 0.0
+            return max(0.0, min(1.0, w))
+
+        raw_sim = data.get("track_sim_coef") or {}
+        if isinstance(raw_sim, dict):
+            for tid, value in raw_sim.items():
+                try:
+                    self.real_sim_coef[str(tid)] = float(value)
+                except (TypeError, ValueError):
+                    continue
+        self.real_track_coef = coef
+        self.real_weight = _weight(data.get("blend_weight"))
+        raw_w = data.get("blend_weight_by_track") or {}
+        if isinstance(raw_w, dict):
+            self.real_weight_by_track = {
+                str(k): _weight(v) for k, v in raw_w.items()
+            }
+        raw_acc = data.get("track_accuracy") or {}
+        if isinstance(raw_acc, dict):
+            for tid, value in raw_acc.items():
+                try:
+                    acc = float(value)
+                except (TypeError, ValueError):
+                    continue
+                # 0.5 以下等于随机，当成「没有可用精度」处理，别在面板上误导用户
+                if 0.5 < acc <= 1.0:
+                    self.real_accuracy_by_track[str(tid)] = acc
+        self.real_metrics = data.get("metrics") or {}
+        self.real_n_samples = int(data.get("n_samples") or 0)
+        self.real_created = str(data.get("created") or "")
+        self.real_reason = "ok"
 
     # ---------------- 加载 ---------------- #
     def _load(self) -> None:
@@ -249,6 +363,62 @@ class SetupSimModel:
             logger.warning("调教性能推理失败（track=%s）", track_id, exc_info=True)
             return None
 
+    def sim_delta_s(
+        self, track_id: str, setup_norm: dict[str, float],
+    ) -> float | None:
+        """**纯仿真**的差分预测（秒；正 = 更慢），不含真实校准层。
+
+        单独拆出来有两个用途：一是训练真实校准时必须用不含校准的仿真分量
+        （否则会把上一次的模型当标签，形成自我强化）；二是报告要能分别
+        展示「仿真怎么说」与「真实数据怎么修正」。
+        """
+        raw = self.predict_raw_delta_s(track_id, setup_norm)
+        if raw is None:
+            return None
+        base = self._zero_pred.get(track_id)
+        if base is None:
+            base = self.predict_raw_delta_s(track_id, _ZERO_SETUP)
+            if base is None:
+                return None
+            self._zero_pred[track_id] = base
+        return raw - base
+
+    def predict_real_delta_s(
+        self,
+        track_id: str,
+        setup_norm: dict[str, float] | Sequence[float],
+        sim_delta: float | None = None,
+    ) -> float | None:
+        """真实数据校准的预测（秒；正 = 更慢）。无该校准或该站无数据 → None。
+
+        结构是**堆叠**的：``coef·n + sim_coef·仿真预测``。``sim_coef≈1`` 且
+        其余系数≈0 时退化为「完全信任仿真」，所以真实数据只能修正它。
+        线性且无截距，因此默认调教恒为 0。
+
+        ``setup_norm`` 同时接受 dict 与 :func:`build_norm_vector` 的有序向量
+        （顺序 = :data:`ALL_SETUP_FIELDS`）。训练端用的是向量，推理端用的是
+        dict，两边都走这一个入口，才能保证系数顺序不会静默错位。
+        """
+        coef = self.real_track_coef.get(track_id)
+        if not coef:
+            return None
+        if not isinstance(setup_norm, dict):
+            setup_norm = {
+                spec.name: float(v)
+                for spec, v in zip(ALL_SETUP_FIELDS, setup_norm, strict=True)
+            }
+        total = sum(
+            c * float(setup_norm.get(spec.name, 0.0))
+            for c, spec in zip(coef, ALL_SETUP_FIELDS, strict=True)
+        )
+        k = self.real_sim_coef.get(track_id, 0.0)
+        if k:
+            base = self.sim_delta_s(track_id, setup_norm) if sim_delta is None else sim_delta
+            if base is None:
+                return None
+            total += k * base
+        return total
+
     def predict_delta_s(
         self, track_id: str, setup_norm: dict[str, float],
     ) -> float | None:
@@ -263,24 +433,49 @@ class SetupSimModel:
         减去同赛道默认点后：偏置被消掉、``predict(默认) ≡ 0`` 成为可断言性质，
         而任意两套调教的差值保持不变。
 
+        若加载了真实圈速校准，则按该站权重融合：
+        ``(1−w)·仿真 + w·真实校准``。两路预测在默认点都为 0，
+        所以融合后 ``predict(默认) ≡ 0`` 依然成立。
+
         模型不可用或赛道未知 → ``None``。
         """
-        raw = self.predict_raw_delta_s(track_id, setup_norm)
-        if raw is None:
+        sim_delta = self.sim_delta_s(track_id, setup_norm)
+        if sim_delta is None:
             return None
-        base = self._zero_pred.get(track_id)
-        if base is None:
-            base = self.predict_raw_delta_s(track_id, _ZERO_SETUP)
-            if base is None:
-                return None
-            self._zero_pred[track_id] = base
-        return raw - base
+
+        weight = self.real_weight_by_track.get(track_id, self.real_weight)
+        if weight <= 0.0:
+            return sim_delta
+        real_delta = self.predict_real_delta_s(track_id, setup_norm, sim_delta)
+        if real_delta is None:
+            return sim_delta
+        return (1.0 - weight) * sim_delta + weight * real_delta
 
     def predict_for_setup(
         self, track_id: str, real_setup: dict[str, float],
     ) -> float | None:
         """便捷入口：真实调教（含默认值填充）→ 预测圈速增量（秒）。"""
         return self.predict_delta_s(track_id, normalize_setup(real_setup))
+
+    def real_weight_for(self, track_id: str) -> float:
+        """该站实际使用的真实校准权重（0 = 纯仿真）。"""
+        if track_id not in self.real_track_coef:
+            return 0.0
+        return self.real_weight_by_track.get(track_id, self.real_weight)
+
+    def real_accuracy_for(self, track_id: str) -> float | None:
+        """该站真实校准的留出集配对准确率（0~1）；无数据返回 ``None``。
+
+        这是「这一站的真实校准有多可信」的**唯一**可对外说法。融合权重
+        0.9 说的是「9 成听真实数据」，不是「9 成准确」—— 两者差得远，
+        面板必须显示前者还是后者要分清楚。
+        """
+        if track_id not in self.real_track_coef:
+            return None
+        acc = self.real_accuracy_by_track.get(track_id)
+        if acc is None or not 0.0 < acc <= 1.0:
+            return None
+        return acc
 
     def covers(self, track_id: str) -> bool:
         """该赛道是否在模型覆盖范围（决定是否参与模拟优化）。"""
@@ -315,6 +510,11 @@ class SetupSimModel:
             detail += f" / R² {r2}"
         if self.y_scale_by_track:
             detail += " / 逐赛道标准化"
+        if self.real_track_coef and self.real_weight > 0.0:
+            detail += (
+                f" / 真实校准 {len(self.real_track_coef)} 站"
+                f"（{self.real_n_samples} 条配对，权重 {self.real_weight:.2f}）"
+            )
         tele, auth = self.coverage_counts()
         composition = (
             f"{len(self.track_ids)} 赛道" if auth == 0
@@ -378,3 +578,13 @@ _FAILED_MODEL.y_mean = 0.0
 _FAILED_MODEL.y_scale = 1.0
 _FAILED_MODEL._mlp = None
 _FAILED_MODEL._zero_pred = {}
+_FAILED_MODEL.real_track_coef = {}
+_FAILED_MODEL.real_sim_coef = {}
+_FAILED_MODEL.real_sim_coef = {}
+_FAILED_MODEL.real_weight = 0.0
+_FAILED_MODEL.real_weight_by_track = {}
+_FAILED_MODEL.real_accuracy_by_track = {}
+_FAILED_MODEL.real_metrics = {}
+_FAILED_MODEL.real_n_samples = 0
+_FAILED_MODEL.real_created = ""
+_FAILED_MODEL.real_reason = "加载失败（哨兵）"

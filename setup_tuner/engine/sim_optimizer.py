@@ -24,6 +24,9 @@
 ------
 - 模型不可用 / 赛道不在覆盖范围 → **原样返回**（``available=False``），
   与纯规则引擎行为逐位一致（未知赛道/合成 id 的既有测试不受影响）；
+- **方向保护**：规则引擎为某个参数定下的符号（例如「转向不足 → 前翼加大」）
+  不允许被模型翻转或归零，模型只能在**同号区间内**调幅度、并可以为规则没有
+  涉及的参数新增改动。理由见 :func:`_blocks_direction`；
 - 完全确定性：无随机、无时间依赖；参数固定顺序、候选固定顺序；
 - 改动受 ``max_delta`` 与参数上下限约束，并按 ``step`` 档位对齐；
 - 左右胎压保持一致（跟随左胎压）；
@@ -176,6 +179,28 @@ def _candidate_value(
     return aligned
 
 
+def _blocks_direction(seed: float, new_delta: float) -> bool:
+    """模型是否在**翻转规则引擎定下的方向**。
+
+    规则引擎的符号来自气动/机械的第一性关系（转向不足 → 前翼加大、
+    出弯打滑 → 差速锁止减小），是确定性的；而调教性能模型是**统计平均**，
+    同队同会话配对准确率约 63%，意味着仍有约 37% 的单点判断是错的。
+
+    允许模型直接把 ``front_wing: +2.0`` 改成 ``-0.1``，等于让一个 63% 的
+    统计器否决一条 100% 的物理关系。实测（v1.6.16，模型量级校准到真实
+    尺度后首次具备实际影响力）这会让同一症状在强度 1 与强度 3 下给出
+    **互斥**的调教方向 —— 用户看到的是「我把问题描述得更严重，系统反而
+    把前翼调小了」。
+
+    因此：``seed`` 非零时，模型只能在同号区间内改幅度（可以为 0 以外的
+    任何值），不能归零、不能反号；``seed`` 为零（规则没动这个参数）时
+    模型完全自由，保留「发现规则遗漏因素」的能力。
+    """
+    if abs(seed) < 1e-9:
+        return False
+    return new_delta * seed <= 0.0 or abs(new_delta) < 1e-9
+
+
 def sim_refine(
     delta0: dict[str, float],
     current_setup: dict[str, float],
@@ -265,6 +290,9 @@ def sim_refine(
                 new_delta = cand - base_val
                 # 单次上限：总改动不得超过该参数的 max_delta（与规则流水线同约定）
                 if abs(new_delta) > spec.max_delta + 1e-9:
+                    continue
+                # 方向保护：不得翻转/归零规则引擎为这个参数定下的符号
+                if _blocks_direction(float(delta0.get(p, 0.0)), new_delta):
                     continue
                 trial = dict(cur)
                 trial[p] = new_delta

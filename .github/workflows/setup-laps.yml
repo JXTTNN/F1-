@@ -30,6 +30,7 @@ on:
     paths:
       - "scripts/fetch_setup_laps.py"
       - "scripts/calibrate_sim_with_real_laps.py"
+      - "scripts/train_real_lap_model.py"
       - ".github/workflows/setup-laps.yml"
 
 permissions:
@@ -45,7 +46,7 @@ env:
 jobs:
   calibrate:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
 
@@ -88,8 +89,8 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          python scripts/fetch_setup_laps.py --dry --sleep 1.2 \
-            --max-minutes "${{ github.event.inputs.max_minutes || '25' }}" 2>&1 | tee fetch.log
+          python scripts/fetch_setup_laps.py --all-slices --sleep 0.6 \
+            --max-minutes "${{ github.event.inputs.max_minutes || '55' }}" 2>&1 | tee fetch.log
           echo '--- 概况 ---'
           python scripts/fetch_setup_laps.py --summary || true
 
@@ -122,6 +123,26 @@ jobs:
               print(f'- {v}')
           PY
 
+      # 训练真实校准模型：这是唯一使用**外部真值**的模型层。
+      # 它不是门禁，但它的结论（留出集成对排序）决定 blend_weight：
+      # 真实模型打不过仿真时权重自动为 0，不会破坏现有行为。
+      - name: Train real-lap calibration model
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          python scripts/train_real_lap_model.py --min-per-track 20 2>&1 | tee train_real.log
+
+      # 零泄漏验收：K 折的配对可能跨折，折间的标准化偏移会给指标带进水分。
+      # 留一赛道（该站完全不参与训练）与跨年迁移是唯一能证明「模型学到的是
+      # 可外推规律、不是记住数据」的检验，因此与训练同等重要。
+      - name: Zero-leak holdout check
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          python scripts/eval_real_lap_model.py 2>&1 | tee holdout.log
+
       - name: Upload reports
         if: always()
         uses: actions/upload-artifact@v4
@@ -130,9 +151,16 @@ jobs:
           path: |
             data/setup_laps/calibration_report.json
             data/setup_laps/calibration_report.md
+            data/setup_laps/real_lap_report.json
+            data/setup_laps/real_lap_report.md
+            data/setup_laps/real_lap_holdout.json
+            data/setup_laps/real_lap_holdout.md
             data/setup_laps/f1laps_setups.jsonl
+            setup_tuner/resources/models/real_lap_calibration.json
             fetch.log
             calibrate.log
+            train_real.log
+            holdout.log
           if-no-files-found: ignore
           retention-days: 30
 
@@ -147,15 +175,20 @@ jobs:
           git config user.email "setup-laps-bot@users.noreply.github.com"
           git add data/setup_laps/f1laps_setups.jsonl \
                   data/setup_laps/calibration_report.json \
-                  data/setup_laps/calibration_report.md 2>/dev/null || true
+                  data/setup_laps/calibration_report.md \
+                  data/setup_laps/real_lap_report.json \
+                  data/setup_laps/real_lap_report.md \
+                  data/setup_laps/real_lap_holdout.json \
+                  data/setup_laps/real_lap_holdout.md \
+                  setup_tuner/resources/models/real_lap_calibration.json 2>/dev/null || true
           git add data/setup_laps/_fetch_state.json 2>/dev/null || true
           if git diff --cached --quiet; then
             echo "无变化，跳过提交"
             exit 0
           fi
           N=$(wc -l < data/setup_laps/f1laps_setups.jsonl || echo 0)
-          RHO=$(python -c "import json;print(json.load(open('data/setup_laps/calibration_report.json'))['summary']['median_spearman_rho'])" 2>/dev/null || echo "n/a")
-          git commit -m "data(setup-laps): 真实调教-圈速配对 ${N} 条（中位 ρ=${RHO}）"
+          ACC=$(python -c "import json;print(json.load(open('data/setup_laps/real_lap_report.json'))['metrics']['matched_acc_real'])" 2>/dev/null || echo "n/a")
+          git commit -m "data(setup-laps): 真实配对 ${N} 条 + 校准模型（配对排序 ${ACC}）"
           for attempt in 1 2 3; do
             if git fetch origin main && git rebase origin/main && git push origin HEAD:main; then
               echo "已推送（第 ${attempt} 次尝试）"
@@ -177,9 +210,17 @@ jobs:
           {
             echo "## 真实调教 → 圈速 校准"
             echo
-            if [ -f data/setup_laps/calibration_report.md ]; then
+            if [ -f data/setup_laps/real_lap_report.md ]; then
+              cat data/setup_laps/real_lap_report.md
+            elif [ -f data/setup_laps/calibration_report.md ]; then
               cat data/setup_laps/calibration_report.md
             else
               echo "未生成校准报告（抓取或依赖失败，见 fetch.log / calibrate.log）"
+            fi
+            echo
+            if [ -f data/setup_laps/real_lap_holdout.md ]; then
+              cat data/setup_laps/real_lap_holdout.md
+            else
+              echo "_未生成零泄漏检验报告（见 holdout.log）_"
             fi
           } >> "$GITHUB_STEP_SUMMARY"

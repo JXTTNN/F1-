@@ -481,11 +481,28 @@ class TestMultiRoundConvergence:
             assert round_nos == [1, 2, 3]
 
     def test_increasing_strength_increases_delta_magnitude(self) -> None:
-        """反馈强度增加时，建议的 |setup_delta| 应不减（单调性）。
+        """反馈强度增加时，系统必须**更用力地**响应同一症状。
 
-        链路：同一弯道 strength=1 → suggest → strength=3 → suggest → 比较 |delta|。
+        链路：同一弯道 strength=1 → suggest → strength=3 → suggest。
 
-        2026-09-19 修正两处：
+        判据分两层（2026-11-04 重写）：
+
+        1. **诊断需求必须严格放大** —— ``dx.front_grip_req`` 等需求值直接由
+           strength 加权，强度 3 必须是强度 1 的 ~3 倍。这是「反馈被正确消费」
+           的硬证据。
+        2. **总改动幅度不得缩水**，但**不能要求严格单调** ——
+           ``holistic_coherence`` 的「机械抓地参与度收口」会做**等量置换**
+           （把空力/差速的预算换成悬挂/防倾杆，总预算守恒，见
+           ``coherence_notes``）。因此 ``sum|setup_delta|`` 在强度 3 时可以
+           与强度 1 基本相等甚至略低，只允许小幅容差。
+
+        为什么以前是"假绿"：旧版真实圈速校准层的预测量级只有 0.003 s，
+        ``sim_refine`` 的接受阈值 20 ms 永远达不到，优化器实际上什么都没做，
+        两轮输出恰好逐位相同，``strong >= weak`` 便以 0 差值通过。v1.6.16 把
+        校准层尺度对齐到真实量级后优化器才真正生效，这条断言随之失效 ——
+        失效的是「总幅度单调」这个前提，不是「强度生效」这个业务契约。
+
+        2026-09-19 另修正两处：
         1. 原实现用 strength=5 —— 超出合法区间 [1,3]，POST /feedback 实际返回
            422，反馈从未入库，断言"strong >= weak"比较的是同一份输入（假绿）。
            现改为合法上限 3，并**断言每次 POST 的状态码**，杜绝静默失败。
@@ -508,7 +525,8 @@ class TestMultiRoundConvergence:
             assert resp.status_code == 200, resp.text
             resp1 = client.post("/api/v1/suggest", json={"track_id": track_id})
             assert resp1.status_code == 200
-            delta_weak = resp1.json()["data"]["report"]["setup_delta"]
+            report_weak = resp1.json()["data"]["report"]
+            delta_weak = report_weak["setup_delta"]
 
             # 第 2 轮：同一弯道强度 3（上一轮反馈已被消费清除，此为唯一输入）
             resp = client.post(
@@ -521,12 +539,24 @@ class TestMultiRoundConvergence:
             assert resp.status_code == 200, resp.text
             resp2 = client.post("/api/v1/suggest", json={"track_id": track_id})
             assert resp2.status_code == 200
-            delta_strong = resp2.json()["data"]["report"]["setup_delta"]
+            report_strong = resp2.json()["data"]["report"]
+            delta_strong = report_strong["setup_delta"]
 
-            # 强度更大的反馈应使总调整幅度更大（至少有一个参数 |delta| 更大）
+            # ① 诊断需求被严格放大（强度 3 ≈ 3 × 强度 1）
+            req_weak = report_weak["dx"]["front_grip_req"]
+            req_strong = report_strong["dx"]["front_grip_req"]
+            assert req_weak > 0 and req_strong > 0, "前轮抓地需求未被消费"
+            assert req_strong > req_weak * 2.0, (
+                f"强度 3 的需求 {req_strong:.3f} 未显著大于强度 1 的 {req_weak:.3f}"
+            )
+
+            # ② 总改动幅度不缩水（允许预算守恒带来的等量置换）
             weak_abs = sum(abs(v) for v in delta_weak.values())
             strong_abs = sum(abs(v) for v in delta_strong.values())
-            assert strong_abs >= weak_abs - 1e-9
+            assert weak_abs > 0 and strong_abs > 0, "两轮都应给出非零建议"
+            assert strong_abs >= weak_abs * 0.95, (
+                f"强度 3 的总改动 {strong_abs:.3f} 比强度 1 的 {weak_abs:.3f} 缩水过多"
+            )
 
 
 # ===========================================================================

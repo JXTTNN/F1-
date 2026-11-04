@@ -36,6 +36,8 @@ on:
       - "scripts/eval_setup_sim.py"
       - "scripts/eval_usage_flow.py"
       - "scripts/eval_style_targeting.py"
+      - "scripts/train_real_lap_model.py"
+      - "data/setup_laps/f1laps_setups.jsonl"
 
 permissions:
   contents: write
@@ -150,6 +152,21 @@ jobs:
 
       - name: Train setup-sim NN
         run: python scripts/train_setup_sim_nn.py
+
+      # 真实圈速校准必须**紧跟**在新仿真权重之后重训：它是堆叠在新仿真预测上的
+      # （sim_coef 项），旧校准配新权重等于把两张不同模型的系数拼在一起。
+      # 失败时把权重归零（禁用该层）而不是留着旧系数 —— 那会让报告显示
+      # 「真实校准 xx%」，但用的其实是上一版模型的校准。
+      # 注意：这里只用单行 python -c，不在 YAML 里嵌 heredoc（缩进一错就静默截断）。
+      - name: Retrain real-lap calibration (stacked on new sim)
+        shell: bash
+        run: |
+          set -o pipefail
+          python scripts/train_real_lap_model.py --min-per-track 20 2>&1 | tee real_lap_train.log || {
+            echo "::warning title=真实校准训练失败::权重归零，按纯仿真发布"
+            python -c "import json,pathlib;p=pathlib.Path('setup_tuner/resources/models/real_lap_calibration.json');d=json.loads(p.read_text(encoding='utf-8')) if p.exists() else {};d['blend_weight']=0.0;d['blend_weight_by_track']={};p.write_text(json.dumps(d,ensure_ascii=False,indent=2),encoding='utf-8')"
+          }
+          python -c "import json;d=json.load(open('setup_tuner/resources/models/real_lap_calibration.json'));m=d.get('metrics',{});print('## 真实圈速校准（外部真值）');print();print(f\"- 样本 {d.get('n_samples')} / {d.get('n_tracks')} 站；λ={d.get('ridge_lambda')}；融合权重 {d.get('blend_weight')}\");print(f\"- 留出集成对排序：仿真 {m.get('median_pair_acc_sim')} → 校准 {m.get('median_pair_acc_real')}\");print(f\"- 留出集 Spearman：仿真 {m.get('median_rho_sim')} → 校准 {m.get('median_rho_real')}\")" >> "$GITHUB_STEP_SUMMARY"
 
       # 决策能力评测：训练集/验证集的 val_mae 量的是「任意随机调教有多慢」的
       # 插值误差，而调优的真实决策是「两套都已经不错的调教，哪套快几十毫秒」。
@@ -380,6 +397,7 @@ jobs:
           # 「当前随包发布的那一版模型」，否则读报告的人会被误导。
           if [ "$EVAL_PASS" = "1" ]; then
             git add setup_tuner/resources/models/setup_sim_nn.json \
+                    setup_tuner/resources/models/real_lap_calibration.json \
                     setup_tuner/resources/models/telemetry_surrogate.json \
                     setup_tuner/resources/models/setup_sim_eval.json \
                     setup_tuner/resources/models/setup_sim_eval.md \

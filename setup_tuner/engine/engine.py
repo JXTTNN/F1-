@@ -1331,6 +1331,21 @@ def generate_suggestion(
         # 该站锚点来源：telemetry=真实遥测；authored=赛道几何+全局常数推定。
         # 报告如实标注，避免把「推定」当成「实测」。
         "anchor": sim_model.anchor_of(track_id),
+        # 真实圈速校准（外部真值）在这一站的实际权重：
+        # 0 = 纯仿真（未加载校准 / 该站无真实配对 / 真实模型未超过仿真）。
+        "real_calibration": {
+            "available": bool(sim_model.real_track_coef),
+            "weight": round(sim_model.real_weight_for(track_id), 3),
+            # 该站留出集的配对准确率（0~1）。weight 是「听谁的」，
+            # accuracy 是「有多准」，面板两者都要摆出来才不会被读错。
+            "accuracy": (
+                None if (acc := sim_model.real_accuracy_for(track_id)) is None
+                else round(acc, 3)
+            ),
+            "tracks": len(sim_model.real_track_coef),
+            "samples": sim_model.real_n_samples,
+            "created": sim_model.real_created,
+        },
         "iterations": sim_result.iterations,
         "accepted": sim_result.accepted,
         # 收益/步数是否被上限截断（预算或步数到顶）。
