@@ -104,6 +104,13 @@
     radial-gradient(ellipse 80% 50% at 50% -10%, rgba(255, 24, 1, 0.025) 0%, transparent 60%),
     radial-gradient(ellipse 60% 40% at 100% 100%, rgba(0, 217, 255, 0.015) 0%, transparent 50%),
     radial-gradient(ellipse 40% 30% at 0% 50%, rgba(139, 92, 246, 0.01) 0%, transparent 50%);
+  /* 赛道图 SVG 配色（SVG 内联进页面 DOM，故可用页面变量；默认即 broadcast 值） */
+  --track-bg: #0d0d12;
+  --track-line: #3a3e48;
+  --track-accent: rgba(59, 158, 255, 0.20);
+  --track-ring: #3B9EFF;
+  --track-label: #9494a8;
+  --track-caption: #5c5c70;
   /* 建议报告「整体性」分组左边框语义色 */
   --holistic-conflict: #e0a33c;
   --holistic-coherence: #5cb87a;

@@ -215,11 +215,35 @@ class TestThemeContrast:
 class TestNoHardcodedThemeColors:
     """主色不能硬编码，否则换主题后按钮还是旧色。"""
 
-    def test_style_css_has_no_hardcoded_accent_hover(self) -> None:
+    def test_accent_hover_literals_only_in_tokens(self) -> None:
+        """旧 hover 色字面量只能留在 :root 的设计令牌里。
+
+        回归点：``.btn-primary:hover`` 曾写死 ``linear-gradient(#FF3320, #FF5030)``，
+        换主题后按钮会从荧光黄绿跳回红色 —— 这正是"换肤只换了一半"的典型残留。
+        刹车进度条的红色是语义色（刹车就该红），不在本断言范围内。
+        """
         css = _read(_STYLE_CSS)
-        assert "#FF3320" not in css.split("--accent-hover")[1].split(";", 1)[1], (
-            "style.css 仍硬编码了 accent hover 色"
-        )
+        root_body_end = css.index("}", css.index(":root"))
+        rules = css[root_body_end:]
+        for literal in ("#FF3320", "#FF5030", "#FF4020"):
+            assert literal not in rules, f"规则体里仍硬编码 {literal}，换主题会漏色"
+
+    def test_theme_vars_exist_in_root(self) -> None:
+        """主题块只能覆盖 :root 已声明的变量。
+
+        拼错变量名（``--bg-crad``）不会报错，只会静默失效并回落到默认色 ——
+        浅色主题里出现一块深色补丁，肉眼极难定位。
+        """
+        css = _read(_STYLE_CSS)
+        root_block = css[css.index(":root"): css.index("}", css.index(":root"))]
+        declared = set(re.findall(r"(--[\w-]+)\s*:", root_block))
+        assert len(declared) > 50, "style.css :root 变量解析异常"
+        unknown: list[str] = []
+        for theme, body in _theme_blocks().items():
+            for name in _block_vars(body):
+                if name not in declared:
+                    unknown.append(f"{theme}:{name}")
+        assert not unknown, "主题覆盖了 :root 里不存在的变量：" + ", ".join(unknown)
 
     def test_primary_button_uses_theme_vars(self) -> None:
         css = _read(_STYLE_CSS)

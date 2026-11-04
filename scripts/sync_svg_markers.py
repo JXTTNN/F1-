@@ -56,9 +56,9 @@ def sync_track(track_id: str, anchors: dict[int, tuple[float, float]]) -> int:
         matched["n"] += 1
         return (
             f'<circle cx="{x:.2f}" cy="{y:.2f}" r="6" fill="none" '
-            f'stroke="#3B9EFF" stroke-width="1.5" opacity="0.85"/>'
+            f'stroke="var(--track-ring, #3B9EFF)" stroke-width="1.5" opacity="0.85"/>'
             f'{m.group("sep")}<text x="{x:.2f}" y="{y - TEXT_Y_OFFSET:.2f}" '
-            f'text-anchor="middle" fill="#9494a8" font-size="9" '
+            f'text-anchor="middle" fill="var(--track-label, #9494a8)" font-size="9" '
             f'font-family="monospace">{num}</text>'
         )
 

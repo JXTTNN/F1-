@@ -20,13 +20,16 @@ from setup_tuner.domain._track_anchors import TRACK_ANCHORS
 
 TRACKS_DIR = Path(__file__).resolve().parents[1] / "setup_tuner" / "ui" / "tracks"
 
-# 与 scripts/sync_svg_markers.py 的写入版式严格一致
+# 与 scripts/sync_svg_markers.py 的写入版式严格一致。
+# 颜色自 v1.6.19 起改为 CSS 变量（主题可换色），正则需按变量写法匹配 —— 字面量
+# 仍留在 var() 的第二参数里，所以颜色语义没丢，只是不再是"写死的十六进制"。
 CIRCLE_RE = re.compile(
     r'<circle cx="([\d.]+)" cy="([\d.]+)" r="6" fill="none" '
-    r'stroke="#3B9EFF" stroke-width="1\.5" opacity="0\.85"/>'
+    r'stroke="var\(--track-ring, #3B9EFF\)" stroke-width="1\.5" opacity="0\.85"/>'
 )
 TEXT_RE = re.compile(
-    r'<text x="([\d.]+)" y="([\d.]+)" text-anchor="middle" fill="#9494a8" '
+    r'<text x="([\d.]+)" y="([\d.]+)" text-anchor="middle" '
+    r'fill="var\(--track-label, #9494a8\)" '
     r'font-size="9" font-family="monospace">(\d+)</text>'
 )
 
