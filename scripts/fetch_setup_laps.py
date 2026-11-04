@@ -541,6 +541,22 @@ def run(
     total_seen = 0
     mode = "a" if data_file.exists() else "w"
 
+    def finish() -> None:
+        """收尾：落盘状态 + 自愈语料。
+
+        任何退出路径都要走这里 —— 尤其是「到达时间预算」，那是云端 CI 的
+        常态路径（55 分钟必然用尽）。早先只在正常结束时自愈，预算一停就
+        把历史缺陷行原样留在文件里。
+        """
+        _save_state(state, state_file)
+        print(f"[done] 新写入 {written} 条；跳过已完成 {skipped}；"
+              f"处理 {total_seen} 条；失败 {len(state.get('failed', []))}")
+        # 追加写会让历史缺陷行一直留在文件里（缺元数据、重复 URL）。收尾做一次
+        # 自愈，保证产物**本身**满足不变量，而不是只在训练时被临时修正。
+        stats = normalize_corpus(data_file)
+        print(f"[normalize] 共 {stats['total']} 条；补元数据 {stats['repaired']} 条；"
+              f"去重 {stats['duplicates']} 条；坏行 {stats['broken']} 条")
+
     with open(data_file, mode, encoding="utf-8", newline="\n") as fout:
         for game_year in games:
             for surface in surfaces:
@@ -557,7 +573,7 @@ def run(
                     for uid in ids:
                         if deadline and time.time() > deadline:
                             print("[budget] 到达时间预算，停止（可重跑续传）", flush=True)
-                            _save_state(state, state_file)
+                            finish()
                             return 0
                         total_seen += 1
                         # 详情页 URL 与干/湿切面无关（`wet/` 只是列表筛选），
@@ -590,15 +606,7 @@ def run(
                             print(json.dumps(rec, ensure_ascii=False, indent=2)[:1200])
                             return 0
 
-    _save_state(state, state_file)
-    print(f"[done] 新写入 {written} 条；跳过已完成 {skipped}；"
-          f"处理 {total_seen} 条；失败 {len(state.get('failed', []))}")
-
-    # 追加写会让历史缺陷行一直留在文件里（缺元数据、重复 URL）。收尾做一次
-    # 自愈，保证产物**本身**满足不变量，而不是只在训练时被临时修正。
-    stats = normalize_corpus(data_file)
-    print(f"[normalize] 共 {stats['total']} 条；补元数据 {stats['repaired']} 条；"
-          f"去重 {stats['duplicates']} 条；坏行 {stats['broken']} 条")
+    finish()
     return 0
 
 
