@@ -670,6 +670,9 @@ h1, h2, h3 {
 .setup-panel-actions { display: flex; gap: 6px; }
 .setup-fields-wrap {
   padding: 6px 0;
+  /* 分组修复后每个页签只显示本类参数（2~6 项），高度差异达 3 倍。
+     固定下限避免切换页签时整张卡片剧烈跳动、中栏下方留出大片空白。 */
+  min-height: 320px;
   max-height: 540px;
   overflow-y: auto;
 }

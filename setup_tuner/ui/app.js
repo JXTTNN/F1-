@@ -2004,7 +2004,10 @@
         // 兼容字段名：min_val/min, max_val/max, label_zh/label
         state.setupFields = list.map((f) => ({
           name: f.name,
-          group: f.group,
+          // 后端 /setup/fields 的字段名是 category（中文类别名），没有 group。
+          // 早期前端读 f.group，改名后这里恒为 undefined —— 6 大类 tab 全部
+          // 塌缩成一个「UNDEFINED」页签，20 项参数挤在同一页。
+          group: f.category || f.group || "其他",
           label: f.label_zh || f.label || PARAM_LABEL_ZH[f.name] || f.name,
           min: f.min != null ? f.min : f.min_val,
           max: f.max != null ? f.max : f.max_val,

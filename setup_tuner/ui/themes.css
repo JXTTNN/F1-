@@ -140,16 +140,16 @@ html[data-theme="carbon"] {
   color-scheme: dark;
 
   --bg-base: #07080A;
-  --bg-card: #0E1013;
-  --bg-card-2: #131519;
-  --bg-card-3: #181B20;
+  --bg-card: #101317;
+  --bg-card-2: #15181D;
+  --bg-card-3: #1A1E24;
   --bg-hover: #1C1F25;
   --bg-inset: #040506;
   --bg-elevated: #1A1D22;
 
-  --border: rgba(255, 255, 255, 0.065);
-  --border-soft: rgba(255, 255, 255, 0.04);
-  --border-glow: rgba(255, 255, 255, 0.09);
+  --border: rgba(255, 255, 255, 0.09);
+  --border-soft: rgba(255, 255, 255, 0.055);
+  --border-glow: rgba(255, 255, 255, 0.12);
   --border-strong: rgba(255, 255, 255, 0.13);
   --border-bright: rgba(255, 255, 255, 0.20);
 
@@ -242,9 +242,9 @@ html[data-theme="nightrace"] {
   color-scheme: dark;
 
   --bg-base: #080A1A;
-  --bg-card: #10132A;
-  --bg-card-2: #151936;
-  --bg-card-3: #1A1F42;
+  --bg-card: #141833;
+  --bg-card-2: #1A1F3F;
+  --bg-card-3: #20264C;
   --bg-hover: #1E2449;
   --bg-inset: #060814;
   --bg-elevated: #1B2148;
@@ -309,9 +309,9 @@ html[data-theme="nightrace"] {
 
   /* 霓虹光晕：顶部品红 + 右下青 + 左下紫 */
   --app-bg-image:
-    radial-gradient(ellipse 70% 45% at 50% -8%, rgba(255, 46, 136, 0.10) 0%, transparent 62%),
-    radial-gradient(ellipse 55% 40% at 100% 100%, rgba(34, 211, 238, 0.08) 0%, transparent 58%),
-    radial-gradient(ellipse 45% 35% at 0% 65%, rgba(139, 92, 246, 0.07) 0%, transparent 55%);
+    radial-gradient(ellipse 70% 45% at 50% -8%, rgba(255, 46, 136, 0.16) 0%, transparent 62%),
+    radial-gradient(ellipse 55% 40% at 100% 100%, rgba(34, 211, 238, 0.12) 0%, transparent 58%),
+    radial-gradient(ellipse 45% 35% at 0% 65%, rgba(139, 92, 246, 0.11) 0%, transparent 55%);
 
   --holistic-conflict: #FBBF24;
   --holistic-coherence: #34F5C5;

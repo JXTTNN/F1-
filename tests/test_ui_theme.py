@@ -225,7 +225,9 @@ class TestNoHardcodedThemeColors:
         css = _read(_STYLE_CSS)
         root_body_end = css.index("}", css.index(":root"))
         rules = css[root_body_end:]
-        for literal in ("#FF3320", "#FF5030", "#FF4020"):
+        # 只查「旧的 hover 专用色」。#FF4020 仍出现在刹车进度条（语义红，
+        # 换主题也必须保持红色），不能一起断言。
+        for literal in ("#FF3320", "#FF5030"):
             assert literal not in rules, f"规则体里仍硬编码 {literal}，换主题会漏色"
 
     def test_theme_vars_exist_in_root(self) -> None:

@@ -28,9 +28,19 @@
     同步更新，重新生成赛道图不会把变量改回硬编码。
 - **不闪屏**：`index.html` 首屏内联脚本先落地 `localStorage` 里的主题，
   浅色主题不会先渲染成深色再跳变。
+- **顺手修掉一个既有缺陷：调教参数 6 大类 tab 塌缩成「UNDEFINED」**
+  - `/api/v1/setup/fields` 的类别字段是 `category`（中文类别名），前端
+    `loadSetupFields` 却还在读 `f.group` —— 20 项的 `group` 全是 `undefined`，
+    `groupSetupFieldsByGroup` 把它们塞进同一个 `"undefined"` 键，面板顶部
+    只剩一个「UNDEFINED 20」页签：6 大类分组静默失效，所有参数挤在一页。
+  - 改为 `f.category || f.group || "其他"`，恢复为 空气动力学 2 / 变速箱 2 /
+    悬挂几何 4 / 悬挂 6 / 刹车 2 / 轮胎 4。参数面板同时给 `min-height`，
+    避免页签间高度差 3 倍时卡片剧烈跳动。
+  - 新增 `tests/test_ui_field_contract.py`：后端每个字段必须有非空 `category`、
+    类别数 ≥ 5、20 项齐全；前端映射必须读 `f.category`。
 - **测试**：新增 `tests/test_ui_theme.py`（三处主题 id 列表一致性、每套主题的
   必备变量完整性、WCAG 对比度 —— 正文 ≥7:1 / 主色按钮与数据色 ≥3:1、
-  主色不得硬编码、主题变量必须存在于 :root）；共 28 项。
+  主色不得硬编码、主题变量必须存在于 :root）；共 28 项，另有 5 项字段契约测试。
 
 ### v1.6.18：「双击没反应」的两个真原因（GUI 子系统 + 缓存覆盖语料）
 
