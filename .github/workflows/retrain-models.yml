@@ -63,10 +63,25 @@ jobs:
 
       # 必须在训练覆盖模型文件之前记录当前覆盖，供后面的「无回退守卫」比对。
       # 注意要放在 setup-python 之后：Ubuntu runner 上没有裸 `python`。
+      # 同时记下上一版「新鲜样本局部 MAE」：同一份数据同一 seed 下它可比，
+      # 换模型后明显变差就该拦下来（见 guard 步骤）。
       - name: Snapshot previous model coverage
         id: prevcov
         run: |
           python -c "import json;print('n='+str(len(json.load(open('setup_tuner/resources/models/setup_sim_nn.json'))['track_ids'])))" >> "$GITHUB_OUTPUT"
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          import pathlib
+          p = pathlib.Path("setup_tuner/resources/models/setup_sim_eval.json")
+          mae = 0.0
+          if p.exists():
+              try:
+                  mae = float(json.loads(p.read_text(encoding="utf-8"))
+                              .get("metrics", {}).get("fresh_local_mae_ms") or 0.0)
+              except Exception:
+                  mae = 0.0
+          print(f"mae={mae}")
+          PY
 
       - name: Install deps
         run: |
@@ -262,7 +277,21 @@ jobs:
             echo "ok=0" >> "$GITHUB_OUTPUT"
             echo "::warning title=语料未补齐，已保留旧模型::本轮只覆盖 ${NEW} 站（现有 ${PREV} 站），未提交。遥测缓存已保存，下一轮定时任务继续续抓，累计覆盖达到 ${PREV} 站以上时自动训练并提交。"
           else
-            echo "ok=1" >> "$GITHUB_OUTPUT"
+            # 精度回退守卫：只比「新鲜样本局部 MAE」，且只在赛道覆盖没变时比 ——
+            # 新增赛道会改变标签分布，此时 MAE 上升不代表退化，不该误拦。
+            # 同一份数据 + 同一 seed 下两次训练是可比的，超过 15% 就认为模型变差：
+            # 覆盖没变还想重训，用户等的应该是更准，不是更差。
+            PREV_MAE="${{ steps.prevcov.outputs.mae }}"
+            NEW_MAE=$(python -c "import json;print(float(json.load(open('setup_tuner/resources/models/setup_sim_eval.json'))['metrics']['fresh_local_mae_ms']))" 2>/dev/null || echo 0)
+            REGRESS=$(python -c "import sys;p=float(sys.argv[1] or 0);n=float(sys.argv[2] or 0);print(1 if sys.argv[3]==sys.argv[4] and p>0 and n>p*1.15 else 0)" "${PREV_MAE}" "${NEW_MAE}" "${PREV}" "${NEW}")
+            echo "新鲜样本局部 MAE：上一版 ${PREV_MAE:-0} ms → 本轮 ${NEW_MAE} ms（回退判定 ${REGRESS}）"
+            if [ "$REGRESS" = "1" ]; then
+              git checkout -- setup_tuner/resources/models/
+              echo "ok=0" >> "$GITHUB_OUTPUT"
+              echo "::warning title=模型精度回退，已保留旧模型::覆盖同为 ${NEW} 站，但新鲜样本局部 MAE 由 ${PREV_MAE} ms 升到 ${NEW_MAE} ms（>15%）。按「不拿更差的模型换用户手上的」处理：本轮不提交，报告见 .ci/gate.log。"
+            else
+              echo "ok=1" >> "$GITHUB_OUTPUT"
+            fi
           fi
 
       - name: Commit retrained models
