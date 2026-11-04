@@ -1,76 +1,144 @@
 workflow : Full CI
 job      : full-test
-sha      : ce76c02e41884c59388d65472296988e6e27b1fd
+sha      : e96907a267e9d86e11fda9ca33080e03b08493c2
 ref      : main
 event    : push
-run      : https://github.com/JXTTNN/F1-/actions/runs/41798127462
-time     : 2026-11-04T08:19:38Z
-steps    : install=success pytest=cancelled
+run      : https://github.com/JXTTNN/F1-/actions/runs/41798499482
+time     : 2026-11-04T08:26:32Z
+steps    : install=success pytest=failure
 
 ================ .ci/pytest.log ================
 ---- 失败 / 错误用例 ----
+FAILED tests/test_ui_theme.py::TestNoHardcodedThemeColors::test_accent_hover_literals_only_in_tokens - AssertionError: 规则体里仍硬编码 #FF4020，换主题会漏色
 ---- 断言摘要 ----
+E           AssertionError: 规则体里仍硬编码 #FF4020，换主题会漏色
+E           assert '#FF4020' not in '}\n\n/* ---...aa0aa);\n}\n'
+E             
+E             '#FF4020' is contained here:
+E               }
+E               
+E               /* ---------- 基础重置 ---------- */
+E               * { box-sizing: border-box; margin: 0; padding: 0; }
+E               html, body { height: 100%; }
+E               body {
+E                 font-family: var(--font);
+E                 /* F1 转播底色：微妙径向渐变营造空间感，无网格线 */
+E                 background-color: var(--bg-base);
+E                 background-image: var(--app-bg-image);
+E                 background-size: var(--app-bg-size);
+E                 color: var(--text-body);
+E                 line-height: 1.5;
+E                 letter-spacing: var(--ls-tight);
+E                 -webkit-font-smoothing: antialiased;
+E                 -moz-osx-font-smoothing: grayscale;
+E                 min-height: 100vh;
+E                 font-feature-settings: "cv01", "cv03", "cv04", "ss01";
+E               }
+E               h1, h2, h3 {
+E                 font-weight: 600;
+E                 color: var(--text);
+E                 letter-spacing: var(--ls-tight);
+E               }
+E               
+E               /* ---------- 顶部栏（玻璃拟态 + 微边框 + 扫描线） ---------- */
+E               .topbar {
+E                 display: flex;
+E                 align-items: center;
+E                 justify-content: space-between;
+E                 padding: 0 24px;
+E                 height: 52px;
+E                 background: var(--topbar-bg);
+E                 backdrop-filter: blur(16px) saturate(180%);
+E                 -webkit-backdrop-filter: blur(16px) saturate(180%);
+E                 border-bottom: 1px solid var(--border);
 ---- 最慢用例 ----
+============================= slowest 15 durations =============================
+4.10s call     tests/test_feedback_lifecycle.py::TestSuggestConsumesFeedback::test_next_round_only_sees_its_own_feedback
+2.35s call     tests/deep_slice/test_slice_02_telemetry_listener.py::TestSmoke::test_smoke_real_udp_short_packet_skipped
+2.27s call     tests/test_api_contract.py::TestRecordingTrainingExport::test_export_produces_samples
+2.25s call     tests/deep_integration/test_concurrent.py::TestConcurrentApiRequests::test_concurrent_mixed_api_operations
+2.25s call     tests/test_t7_api.py::test_tracks
+2.22s call     tests/test_feedback_lifecycle.py::TestSuggestConsumesFeedback::test_default_clears_feedback_and_blocks_regenerate
+2.14s call     tests/test_car_status.py::TestEndToEnd::test_simulated_lap_reaches_suggestion
+2.13s call     tests/deep_integration/test_e2e_business.py::TestIterationHistory::test_iteration_history_after_suggest
+2.12s call     tests/test_car_status.py::TestSimulatorCoverage::test_simulator_emits_car_status
+2.11s call     tests/deep_integration/test_e2e_business.py::TestMultiRoundConvergence::test_repeated_suggest_is_deterministic
+2.11s call     tests/deep_integration/test_concurrent.py::TestConcurrentApiRequests::test_concurrent_suggest_no_deadlock
+2.10s teardown tests/test_simulator_chain.py::TestSimulatorHandlerWiring::test_simulator_gets_handler_on_create
+2.10s call     tests/test_t2_telemetry_listener.py::TestListenerUdpReceive::test_receive_short_packet_no_crash
+2.09s call     tests/deep_integration/test_e2e_business.py::TestMultiRoundConvergence::test_multi_round_iteration_history_grows
+2.08s call     tests/deep_integration/test_e2e_business.py::TestMultiRoundConvergence::test_increasing_strength_increases_delta_magnitude
+=========================== short test summary info ============================
+SKIPPED [1] tests/test_telemetry_importer.py:484: 未设置 F1OPT_REAL_DATA_DIR（或目录不存在）
+SKIPPED [1] tests/test_telemetry_importer.py:500: 未设置 F1OPT_REAL_DATA_DIR（或目录不存在）
+SKIPPED [1] tests/test_telemetry_importer.py:512: 未设置 F1OPT_REAL_DATA_DIR（或目录不存在）
+FAILED tests/test_ui_theme.py::TestNoHardcodedThemeColors::test_accent_hover_literals_only_in_tokens - AssertionError: 规则体里仍硬编码 #FF4020，换主题会漏色
+assert '#FF4020' not in '}\n\n/* ---...aa0aa);\n}\n'
+  
+  '#FF4020' is contained here:
+    }
 ---- 结果行 ----
+====== 1 failed, 2235 passed, 3 skipped, 2 warnings in 386.66s (0:06:26) =======
 ---- 超时 / 崩溃痕迹 ----
 ---- 日志尾部 ----
-tests/deep_slice/test_slice_09_app.py::TestUnit::test_compare_setups_with_diff PASSED [ 29%]
-tests/deep_slice/test_slice_09_app.py::TestUnit::test_compare_setups_no_diff PASSED [ 29%]
-tests/deep_slice/test_slice_09_app.py::TestUnit::test_create_app_returns_fastapi PASSED [ 29%]
-tests/deep_slice/test_slice_09_app.py::TestUnit::test_create_app_has_routes PASSED [ 30%]
-tests/deep_slice/test_slice_09_app.py::TestUnit::test_is_port_in_use_free_port PASSED [ 30%]
-tests/deep_slice/test_slice_09_app.py::TestUnit::test_is_port_in_use_occupied_port PASSED [ 30%]
-tests/deep_slice/test_slice_09_app.py::TestUnit::test_load_config_defaults PASSED [ 30%]
-tests/deep_slice/test_slice_09_app.py::TestBoundary::test_submit_feedback_unknown_symptom PASSED [ 30%]
-tests/deep_slice/test_slice_09_app.py::TestBoundary::test_submit_feedback_strength_too_high PASSED [ 30%]
-tests/deep_slice/test_slice_09_app.py::TestBoundary::test_submit_feedback_strength_too_low PASSED [ 30%]
-tests/deep_slice/test_slice_09_app.py::TestBoundary::test_submit_feedback_strength_lower_bound PASSED [ 30%]
-tests/deep_slice/test_slice_09_app.py::TestBoundary::test_submit_feedback_strength_upper_bound PASSED [ 30%]
-tests/deep_slice/test_slice_09_app.py::TestBoundary::test_submit_feedback_strength_out_of_range PASSED [ 30%]
-tests/deep_slice/test_slice_09_app.py::TestBoundary::test_get_normal_corners_empty PASSED [ 30%]
-tests/deep_slice/test_slice_09_app.py::TestBoundary::test_get_normal_corners_all_clicked PASSED [ 30%]
-tests/deep_slice/test_slice_09_app.py::TestBoundary::test_compare_setups_empty PASSED [ 30%]
-tests/deep_slice/test_slice_09_app.py::TestBoundary::test_compare_setups_disjoint_keys PASSED [ 30%]
-tests/deep_slice/test_slice_09_app.py::TestBoundary::test_main_port_in_use_returns_1 PASSED [ 30%]
-tests/deep_slice/test_slice_09_app.py::TestBoundary::test_is_port_in_use_invalid_host PASSED [ 30%]
-tests/deep_slice/test_slice_09_app.py::TestProperty::test_get_feedbacks_deterministic PASSED [ 30%]
-tests/deep_slice/test_slice_09_app.py::TestProperty::test_validate_before_suggest_idempotent PASSED [ 30%]
-tests/deep_slice/test_slice_09_app.py::TestProperty::test_compare_setups_symmetric_count PASSED [ 30%]
-tests/deep_slice/test_slice_09_app.py::TestProperty::test_compare_setups_idempotent PASSED [ 30%]
-tests/deep_slice/test_slice_09_app.py::TestProperty::test_create_iteration_round_increments PASSED [ 30%]
-tests/deep_slice/test_slice_09_app.py::TestProperty::test_get_normal_corners_plus_clicked_equals_total PASSED [ 30%]
-tests/deep_slice/test_slice_09_app.py::TestProperty::test_config_frozen PASSED [ 31%]
-tests/deep_slice/test_slice_09_app.py::TestStatic::test_submit_feedback_return_keys PASSED [ 31%]
-tests/deep_slice/test_slice_09_app.py::TestStatic::test_submit_feedback_category_in_enum PASSED [ 31%]
-tests/deep_slice/test_slice_09_app.py::TestStatic::test_compare_setups_return_structure PASSED [ 31%]
-tests/deep_slice/test_slice_09_app.py::TestStatic::test_compare_setups_delta_correct PASSED [ 31%]
-tests/deep_slice/test_slice_09_app.py::TestStatic::test_create_app_state_has_config PASSED [ 31%]
-tests/deep_slice/test_slice_09_app.py::TestStatic::test_main_exit_code_0_on_success PASSED [ 31%]
-tests/deep_slice/test_slice_09_app.py::TestStatic::test_main_exit_code_1_on_port_in_use PASSED [ 31%]
-tests/deep_slice/test_slice_09_app.py::TestStatic::test_main_exit_code_2_on_uvicorn_error PASSED [ 31%]
-tests/deep_slice/test_slice_09_app.py::TestStatic::test_is_port_in_use_return_type PASSED [ 31%]
-tests/deep_slice/test_slice_09_app.py::TestSmoke::test_real_app_lifespan PASSED [ 31%]
-tests/deep_slice/test_slice_09_app.py::TestSmoke::test_real_app_full_flow PASSED [ 31%]
-tests/deep_slice/test_slice_09_app.py::TestSmoke::test_app_db_file_created PASSED [ 31%]
-tests/deep_slice/test_slice_09_app.py::TestSmoke::test_cli_module_importable PASSED [ 31%]
-tests/deep_slice/test_slice_09_app.py::TestSmoke::test_cli_help_via_subprocess PASSED [ 31%]
-tests/deep_slice/test_slice_09_app.py::TestSmoke::test_config_from_env_file PASSED [ 31%]
-tests/deep_slice/test_slice_09_app.py::TestSmoke::test_config_env_var_overrides_file PASSED [ 31%]
-tests/deep_slice/test_slice_09_app.py::TestSmoke::test_main_with_argv_parameter PASSED [ 31%]
-tests/deep_slice/test_slice_09_app.py::TestSmoke::test_main_help_and_version_exit_zero PASSED [ 31%]
-tests/deep_slice/test_slice_09_app.py::TestSmoke::test_main_keep_telemetry_flag PASSED [ 31%]
-tests/deep_slice/test_slice_09_app.py::TestSmoke::test_webbrowser_open_attempted PASSED [ 31%]
-tests/deep_slice/test_slice_09_app.py::TestSmoke::test_create_app_with_custom_config PASSED [ 31%]
-tests/deep_slice/test_slice_09_app.py::TestSmoke::test_app_exception_handlers_registered PASSED [ 31%]
-tests/test_api_contract.py::TestFrontendBackendContract::test_frontend_calls_exist_in_backend PASSED [ 32%]
-tests/test_api_contract.py::TestFrontendBackendContract::test_no_silently_unwired_endpoints PASSED [ 32%]
-tests/test_api_contract.py::TestFrontendBackendContract::test_known_unwired_entries_still_exist PASSED [ 32%]
-tests/test_api_contract.py::TestPostBodyContracts::test_frontend_posts_satisfy_required_body_fields PASSED [ 32%]
-tests/test_api_contract.py::TestPostBodyContracts::test_all_backend_post_bodies_are_covered PASSED [ 32%]
-tests/test_api_contract.py::TestRouteHandlersAreRealEndpoints::test_no_private_function_is_registered_as_route PASSED [ 32%]
-tests/test_api_contract.py::TestRouteHandlersAreRealEndpoints::test_no_inline_body_schema_leak PASSED [ 32%]
-tests/test_api_contract.py::TestRouteHandlersAreRealEndpoints::test_key_endpoints_use_their_declared_models PASSED [ 32%]
-tests/test_api_contract.py::TestUnwiredEndpointsAreReachable::test_health_ok PASSED [ 32%]
-tests/test_api_contract.py::TestUnwiredEndpointsAreReachable::test_recordings_list_empty_ok PASSED [ 32%]
-tests/test_api_contract.py::TestUnwiredEndpointsAreReachable::test_replay_status_ok PASSED [ 32%]
-tests/test_api_contract.py::TestUnwiredEndpointsAreReachable::test_track_detail_ok 
+      opacity: .9;
+    }
+    .holistic-group.holistic-tradeoff { border-left-color: var(--holistic-tradeoff); }
+    .holistic-group.holistic-trace { border-left-color: var(--holistic-trace); }
+    .holistic-group.holistic-trace .holistic-item {
+      font-family: var(--mono);
+      font-size: 11px;
+      opacity: .75;
+    }
+    
+    /* ---------- 遥测采集状态条（系统内一站式采集，无需额外工具） ---------- */
+    .collect-bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin: 0 0 10px;
+      padding: 7px 10px;
+      border: 1px solid var(--border-soft);
+      border-radius: 6px;
+      background: var(--bg-inset);
+      font-family: var(--mono);
+      font-size: 10.5px;
+      letter-spacing: var(--ls-normal);
+    }
+    .collect-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--text-ghost);
+      flex: 0 0 auto;
+      transition: var(--transition-fast);
+    }
+    /* 监听中：数据青；录制中：F1 红（与「涨红」无关，此处为采集中标识） */
+    .collect-bar.on .collect-dot { background: var(--data); box-shadow: 0 0 6px var(--data); }
+    .collect-bar.rec .collect-dot { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+    .collect-state { color: var(--text-body); font-weight: 500; }
+    .collect-bar.rec .collect-state { color: var(--accent); }
+    .collect-addr { color: var(--data); }
+    .collect-tip { color: var(--text-faint); margin-left: auto; }
+    @media (max-width: 720px) {
+      .collect-tip { margin-left: 0; }
+    }
+    
+    /* 神经网络模拟优化面板（2026-09-19 架构）：把"模型真的跑了"摆给用户看 */
+    .holistic-line.holistic-sim {
+      border-left: 3px solid var(--accent, #7aa2ff);
+      padding-left: 8px;
+      font-weight: 500;
+    }
+    .holistic-group.holistic-sim-trace { border-left-color: var(--accent, #7aa2ff); }
+    
+    /* 采纳 0 次时的一句解释：块级独占一行，弱化颜色，避免喧宾夺主 */
+    .holistic-sub {
+      flex: 1 0 100%;
+      font-size: 12px;
+      font-weight: 400;
+      color: var(--text-dim, #9aa0aa);
+    }
+====== 1 failed, 2235 passed, 3 skipped, 2 warnings in 386.66s (0:06:26) =======
+
