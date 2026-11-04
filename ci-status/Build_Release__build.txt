@@ -1,8 +1,8 @@
 workflow   : Build & Release
-sha        : d818a69174009df656c44c43738ec4112fe87173
-ref        : v1.6.17
+sha        : 625281e0a6222bd8f0a97162c26489e3bac03231
+ref        : v1.6.18
 test step  : success
-zip size   : 22.71 MB
+zip size   : 22.72 MB
 ---- dist/test-report.json ----
 {
   "all_passed": true,
@@ -13,7 +13,7 @@ zip size   : 22.71 MB
       "details": "产物完整性验证完成",
       "sub_items": [
         "exe 存在：D:\\a\\F1-\\F1-\\dist\\F1OPT.exe",
-        "exe 大小合理：22.85 MB",
+        "exe 大小合理：22.86 MB",
         "zip 存在：D:\\a\\F1-\\F1-\\dist\\F1OPT-portable.zip",
         "zip 无损坏",
         "zip 内含 F1OPT.exe",
@@ -25,7 +25,7 @@ zip size   : 22.71 MB
       "passed": true,
       "details": "exe 启动冒烟通过",
       "sub_items": [
-        "已启动 exe（PID=7148）",
+        "已启动 exe（PID=6576）",
         "API 就绪：http://127.0.0.1:8000/api/v1/health（200）",
         "health 信封格式正确（status=ok, telemetry_connected=True）"
       ]
@@ -63,18 +63,18 @@ zip size   : 22.71 MB
       "details": "80项深度检查：80/80 通过",
       "sub_items": [
         "── A. 产物完整性（10项）──",
-        "✓ A1 zip>10MB — 22.71MB",
+        "✓ A1 zip>10MB — 22.72MB",
         "✓ A2 zip无损坏",
         "✓ A3 zip含F1OPT.exe",
         "✓ A4 zip含一键启动.bat",
-        "✓ A5 exe>10MB — 22.85MB",
+        "✓ A5 exe>10MB — 22.86MB",
         "✓ A6 bat含start",
         "✓ A7 bat含health检查",
         "✓ A8 bat不含^字符",
         "✓ A9 zip文件数>=2 — 2个文件",
         "✓ A10 bat UTF-8编码",
         "── B. 启动检查（10项）──",
-        "✓ B1 exe能启动 — PID=7148（复用Phase 2实例）",
+        "✓ B1 exe能启动 — PID=6576（复用Phase 2实例）",
         "✓ B2 API 20秒就绪 — 复用Phase 2已就绪API",
         "✓ B9 启动<15秒 — 0.00s",
         "✓ B3 health 200",
@@ -138,13 +138,13 @@ zip size   : 22.71 MB
         "✓ E10 无遥测setup/import 409 — status=409",
         "✓ E14 重复反馈不崩溃 — status=200",
         "── F. 性能基准（10项）──",
-        "✓ F1 health<50ms — 1.3ms",
-        "✓ F2 tracks<100ms — 1.3ms",
-        "✓ F3 select<100ms — 1.6ms",
+        "✓ F1 health<50ms — 1.2ms",
+        "✓ F2 tracks<100ms — 1.2ms",
+        "✓ F3 select<100ms — 1.7ms",
         "✓ F4 feedback<200ms — 1.8ms",
-        "✓ F5 suggest<500ms — 50.4ms",
-        "✓ F6 history<100ms — 2.4ms",
-        "✓ F7 24SVG总加载<1000ms — 84.5ms",
+        "✓ F5 suggest<500ms — 53.2ms",
+        "✓ F6 history<100ms — 1.9ms",
+        "✓ F7 24SVG总加载<1000ms — 93.0ms",
         "✓ F8 并发10请求全成功",
         "✓ F9 连续50次health无错误",
         "✓ F10 数据库<10MB — 0.00MB"
@@ -155,9 +155,9 @@ zip size   : 22.71 MB
       "passed": true,
       "details": "便携性验证完成",
       "sub_items": [
-        "已解压 zip 到临时目录：C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\f1opt_portable_dhfstt7t",
-        "临时目录 exe 就绪：C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\f1opt_portable_dhfstt7t\\F1OPT.exe",
-        "已从临时目录启动 exe（PID=3540）",
+        "已解压 zip 到临时目录：C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\f1opt_portable_90nbh21u",
+        "临时目录 exe 就绪：C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\f1opt_portable_90nbh21u\\F1OPT.exe",
+        "已从临时目录启动 exe（PID=5800）",
         "API 就绪：http://127.0.0.1:8000/api/v1/health（200）",
         "数据目录落在安装文件夹内，f1opt.db 存在（4096 bytes）✓",
         "便携模式 API 正常（24 赛道）✓",
