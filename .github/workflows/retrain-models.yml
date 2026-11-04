@@ -35,6 +35,7 @@ on:
       - "scripts/train_setup_sim_nn.py"
       - "scripts/eval_setup_sim.py"
       - "scripts/eval_usage_flow.py"
+      - "scripts/eval_style_targeting.py"
 
 permissions:
   contents: write
@@ -180,7 +181,28 @@ jobs:
           print(f"\n覆盖不到的赛道：{m['tracks_without_model']}\n")
           PY
 
-      # 把两道门禁的判定拍成快照留在 .ci/ 里：这样即使后面「无回退守卫」
+      # 风格定向评测：换模型后必须重新确认「同一份遥测、换一种开法，建议确实不同」。
+      # 风格层每条动作都要过同一张性能模型算圈速代价，模型一换，代价分布就变，
+      # 上一版的 style_flow_eval 立刻失效 —— 之前正是漏了这一步，每次重训后
+      # 随包的风格报告都还描述着上一版模型，只能靠人工再补一次提交。
+      - name: Evaluate style targeting (per driving style)
+        id: evalstyle
+        run: |
+          python scripts/eval_style_targeting.py || true
+          passed=$(python -c "import json;print(1 if json.load(open('setup_tuner/resources/models/style_flow_eval.json'))['gate']['passed'] else 0)" 2>/dev/null || echo 0)
+          echo "passed=$passed" >> "$GITHUB_OUTPUT"
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          d = json.load(open('setup_tuner/resources/models/style_flow_eval.json'))
+          print('## 风格定向评测（同一遥测、不同开法）\n')
+          print('| 指标 | 值 | 门槛 | 结论 |')
+          print('|---|---|---|---|')
+          for k, c in d['gate']['checks'].items():
+              print(f"| {k} | {c['value']} | {c['threshold']} | {'PASS' if c['ok'] else 'FAIL'} |")
+          print()
+          PY
+
+      # 把三道门禁的判定拍成快照留在 .ci/ 里：这样即使后面「无回退守卫」
       # 回滚了模型、或者提交步骤挂了，失败诊断（ci_diag.sh）里也能看到
       # 「到底哪一项没过」，不用再翻 Step Summary。
       - name: Gate summary snapshot
@@ -191,7 +213,7 @@ jobs:
           import json
           import pathlib
 
-          for name in ("setup_sim_eval", "usage_flow_eval"):
+          for name in ("setup_sim_eval", "usage_flow_eval", "style_flow_eval"):
               p = pathlib.Path("setup_tuner/resources/models") / f"{name}.json"
               if not p.exists():
                   print(f"{name}: <缺失>")
@@ -252,8 +274,15 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           EVAL_PASS="${{ steps.evalsim.outputs.passed }}"
           USAGE_PASS="${{ steps.evalusage.outputs.passed }}"
+          STYLE_PASS="${{ steps.evalstyle.outputs.passed }}"
           if [ "$EVAL_PASS" = "1" ] && [ "$USAGE_PASS" != "1" ]; then
             echo "::warning title=使用流程评测未通过::模型在真实使用路径上未达标（覆盖/采纳/越界），已保留旧模型，报告写入 eval_rejected/"
+            EVAL_PASS=0
+          fi
+          # 风格定向同样算发布门禁：风格层要拿这张模型算每条动作的圈速代价，
+          # 模型退化会让「按开法微调」变成「随机乱改」或直接全部拒绝。
+          if [ "$EVAL_PASS" = "1" ] && [ "$STYLE_PASS" != "1" ]; then
+            echo "::warning title=风格定向评测未通过::换模型后风格动作失效或代价超预算，已保留旧模型，报告写入 eval_rejected/"
             EVAL_PASS=0
           fi
           # 评测不达标就不发布新模型（旧模型继续服务）。关键：把报告挪到
@@ -265,7 +294,9 @@ jobs:
                     setup_tuner/resources/models/setup_sim_eval.json \
                     setup_tuner/resources/models/setup_sim_eval.md \
                     setup_tuner/resources/models/usage_flow_eval.json \
-                    setup_tuner/resources/models/usage_flow_eval.md
+                    setup_tuner/resources/models/usage_flow_eval.md \
+                    setup_tuner/resources/models/style_flow_eval.json \
+                    setup_tuner/resources/models/style_flow_eval.md
           else
             REJ=setup_tuner/resources/models/eval_rejected
             mkdir -p "$REJ"
@@ -273,10 +304,14 @@ jobs:
             cp setup_tuner/resources/models/setup_sim_eval.md "$REJ/" 2>/dev/null || true
             cp setup_tuner/resources/models/usage_flow_eval.json "$REJ/" 2>/dev/null || true
             cp setup_tuner/resources/models/usage_flow_eval.md "$REJ/" 2>/dev/null || true
+            cp setup_tuner/resources/models/style_flow_eval.json "$REJ/" 2>/dev/null || true
+            cp setup_tuner/resources/models/style_flow_eval.md "$REJ/" 2>/dev/null || true
             rm -f setup_tuner/resources/models/setup_sim_eval.json \
                   setup_tuner/resources/models/setup_sim_eval.md \
                   setup_tuner/resources/models/usage_flow_eval.json \
-                  setup_tuner/resources/models/usage_flow_eval.md
+                  setup_tuner/resources/models/usage_flow_eval.md \
+                  setup_tuner/resources/models/style_flow_eval.json \
+                  setup_tuner/resources/models/style_flow_eval.md
             git checkout -- setup_tuner/resources/models/setup_sim_nn.json \
                             setup_tuner/resources/models/telemetry_surrogate.json || true
             git add "$REJ"
