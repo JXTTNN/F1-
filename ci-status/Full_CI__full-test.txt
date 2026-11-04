@@ -1,10 +1,10 @@
 workflow : Full CI
 job      : full-test
-sha      : 4cab5a2c5641f389eaaf2c15d7f7d75c243bfe46
+sha      : b888cb27ee3e64c6190dfd400c41eeed0f1fed71
 ref      : main
 event    : push
-run      : https://github.com/JXTTNN/F1-/actions/runs/41801226363
-time     : 2026-11-04T08:46:34Z
+run      : https://github.com/JXTTNN/F1-/actions/runs/41806456843
+time     : 2026-11-04T09:25:57Z
 steps    : install=success pytest=success
 
 ================ .ci/pytest.log ================
@@ -12,28 +12,28 @@ steps    : install=success pytest=success
 ---- 断言摘要 ----
 ---- 最慢用例 ----
 ============================= slowest 15 durations =============================
-4.10s call     tests/test_feedback_lifecycle.py::TestSuggestConsumesFeedback::test_next_round_only_sees_its_own_feedback
+4.14s call     tests/test_feedback_lifecycle.py::TestSuggestConsumesFeedback::test_next_round_only_sees_its_own_feedback
+2.36s call     tests/test_car_status.py::TestEndToEnd::test_simulated_lap_reaches_suggestion
 2.35s call     tests/deep_slice/test_slice_02_telemetry_listener.py::TestSmoke::test_smoke_real_udp_short_packet_skipped
-2.25s call     tests/test_t7_api.py::test_track_not_found
-2.24s call     tests/deep_integration/test_concurrent.py::TestConcurrentApiRequests::test_concurrent_mixed_api_operations
-2.20s call     tests/test_feedback_lifecycle.py::TestSuggestConsumesFeedback::test_default_clears_feedback_and_blocks_regenerate
-2.18s call     tests/test_t7_api.py::test_health
-2.15s call     tests/test_api_contract.py::TestExperimentEndpointWorks::test_out_of_range_param_returns_400
-2.14s call     tests/test_car_status.py::TestEndToEnd::test_simulated_lap_reaches_suggestion
-2.14s call     tests/test_api_contract.py::TestRecordingTrainingExport::test_export_produces_samples
-2.12s call     tests/deep_integration/test_concurrent.py::TestConcurrentApiRequests::test_concurrent_suggest_no_deadlock
+2.35s call     tests/deep_integration/test_concurrent.py::TestConcurrentApiRequests::test_concurrent_mixed_api_operations
+2.23s teardown tests/deep_slice/test_slice_07_api.py::TestSmoke::test_websocket_request_suggestion_action
+2.22s call     tests/test_svg_markers.py::TestStaticCacheRevalidation::test_track_svg_served_with_no_cache
+2.19s teardown tests/deep_slice/test_slice_07_api.py::TestSmoke::test_websocket_unknown_action
+2.16s call     tests/deep_integration/test_concurrent.py::TestConcurrentApiRequests::test_concurrent_suggest_no_deadlock
+2.15s call     tests/test_api_contract.py::TestExperimentEndpointWorks::test_identical_setups_give_zero_delta_diff
+2.14s teardown tests/deep_slice/test_slice_07_api.py::TestSmoke::test_websocket_invalid_json
+2.13s call     tests/test_api_contract.py::TestRecordingTrainingExport::test_export_produces_samples
+2.13s call     tests/deep_integration/test_e2e_business.py::TestMultiRoundConvergence::test_multi_round_iteration_history_grows
 2.12s call     tests/test_car_status.py::TestSimulatorCoverage::test_simulator_emits_car_status
+2.10s teardown tests/test_simulator_chain.py::TestSimulatorHandlerWiring::test_simulator_gets_handler_on_create
 2.10s call     tests/test_t2_telemetry_listener.py::TestListenerUdpReceive::test_receive_short_packet_no_crash
-2.10s call     tests/deep_integration/test_e2e_business.py::TestMultiRoundConvergence::test_multi_round_iteration_history_grows
-2.08s call     tests/deep_integration/test_e2e_business.py::TestMultiRoundConvergence::test_repeated_suggest_is_deterministic
-2.08s call     tests/deep_integration/test_e2e_business.py::TestIterationHistory::test_iteration_history_after_suggest
 =========================== short test summary info ============================
 SKIPPED [1] tests/test_telemetry_importer.py:484: 未设置 F1OPT_REAL_DATA_DIR（或目录不存在）
 SKIPPED [1] tests/test_telemetry_importer.py:500: 未设置 F1OPT_REAL_DATA_DIR（或目录不存在）
 SKIPPED [1] tests/test_telemetry_importer.py:512: 未设置 F1OPT_REAL_DATA_DIR（或目录不存在）
-=========== 2241 passed, 3 skipped, 2 warnings in 392.99s (0:06:32) ============
+=========== 2253 passed, 3 skipped, 2 warnings in 398.51s (0:06:38) ============
 ---- 结果行 ----
-=========== 2241 passed, 3 skipped, 2 warnings in 392.99s (0:06:32) ============
+=========== 2253 passed, 3 skipped, 2 warnings in 398.51s (0:06:38) ============
 ---- 超时 / 崩溃痕迹 ----
 ---- 日志尾部 ----
 tests/test_ui_theme.py::TestThemeInventory::test_every_theme_has_a_chip PASSED [ 98%]
@@ -62,12 +62,12 @@ tests/test_ui_theme.py::TestNoHardcodedThemeColors::test_theme_vars_exist_in_roo
 tests/test_ui_theme.py::TestNoHardcodedThemeColors::test_primary_button_uses_theme_vars PASSED [100%]
 
 =============================== warnings summary ===============================
-../../../../../opt/hostedtoolcache/Python/3.11.18/x64/lib/python3.11/site-packages/fastapi/testclient.py:1
-  /opt/hostedtoolcache/Python/3.11.18/x64/lib/python3.11/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+../../../../../opt/hostedtoolcache/Python/3.11.17/x64/lib/python3.11/site-packages/fastapi/testclient.py:1
+  /opt/hostedtoolcache/Python/3.11.17/x64/lib/python3.11/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
     from starlette.testclient import TestClient as TestClient  # noqa
 
 tests/test_real_lap_calibration.py::TestCorpusMetadata::test_every_row_has_year_and_surface
-  /opt/hostedtoolcache/Python/3.11.18/x64/lib/python3.11/site-packages/_pytest/fixtures.py:1392: PytestRemovedIn10Warning: Class-scoped fixtures defined as instance methods are deprecated.
+  /opt/hostedtoolcache/Python/3.11.17/x64/lib/python3.11/site-packages/_pytest/fixtures.py:1392: PytestRemovedIn10Warning: Class-scoped fixtures defined as instance methods are deprecated.
   Instance attributes set in the 'rows' fixture will NOT be visible to test methods,
   as each test gets a new instance while the fixture runs only once per class.
   Use a @classmethod decorator below @pytest.fixture and set attributes on cls instead.
@@ -76,24 +76,24 @@ tests/test_real_lap_calibration.py::TestCorpusMetadata::test_every_row_has_year_
 
 -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
 ============================= slowest 15 durations =============================
-4.10s call     tests/test_feedback_lifecycle.py::TestSuggestConsumesFeedback::test_next_round_only_sees_its_own_feedback
+4.14s call     tests/test_feedback_lifecycle.py::TestSuggestConsumesFeedback::test_next_round_only_sees_its_own_feedback
+2.36s call     tests/test_car_status.py::TestEndToEnd::test_simulated_lap_reaches_suggestion
 2.35s call     tests/deep_slice/test_slice_02_telemetry_listener.py::TestSmoke::test_smoke_real_udp_short_packet_skipped
-2.25s call     tests/test_t7_api.py::test_track_not_found
-2.24s call     tests/deep_integration/test_concurrent.py::TestConcurrentApiRequests::test_concurrent_mixed_api_operations
-2.20s call     tests/test_feedback_lifecycle.py::TestSuggestConsumesFeedback::test_default_clears_feedback_and_blocks_regenerate
-2.18s call     tests/test_t7_api.py::test_health
-2.15s call     tests/test_api_contract.py::TestExperimentEndpointWorks::test_out_of_range_param_returns_400
-2.14s call     tests/test_car_status.py::TestEndToEnd::test_simulated_lap_reaches_suggestion
-2.14s call     tests/test_api_contract.py::TestRecordingTrainingExport::test_export_produces_samples
-2.12s call     tests/deep_integration/test_concurrent.py::TestConcurrentApiRequests::test_concurrent_suggest_no_deadlock
+2.35s call     tests/deep_integration/test_concurrent.py::TestConcurrentApiRequests::test_concurrent_mixed_api_operations
+2.23s teardown tests/deep_slice/test_slice_07_api.py::TestSmoke::test_websocket_request_suggestion_action
+2.22s call     tests/test_svg_markers.py::TestStaticCacheRevalidation::test_track_svg_served_with_no_cache
+2.19s teardown tests/deep_slice/test_slice_07_api.py::TestSmoke::test_websocket_unknown_action
+2.16s call     tests/deep_integration/test_concurrent.py::TestConcurrentApiRequests::test_concurrent_suggest_no_deadlock
+2.15s call     tests/test_api_contract.py::TestExperimentEndpointWorks::test_identical_setups_give_zero_delta_diff
+2.14s teardown tests/deep_slice/test_slice_07_api.py::TestSmoke::test_websocket_invalid_json
+2.13s call     tests/test_api_contract.py::TestRecordingTrainingExport::test_export_produces_samples
+2.13s call     tests/deep_integration/test_e2e_business.py::TestMultiRoundConvergence::test_multi_round_iteration_history_grows
 2.12s call     tests/test_car_status.py::TestSimulatorCoverage::test_simulator_emits_car_status
+2.10s teardown tests/test_simulator_chain.py::TestSimulatorHandlerWiring::test_simulator_gets_handler_on_create
 2.10s call     tests/test_t2_telemetry_listener.py::TestListenerUdpReceive::test_receive_short_packet_no_crash
-2.10s call     tests/deep_integration/test_e2e_business.py::TestMultiRoundConvergence::test_multi_round_iteration_history_grows
-2.08s call     tests/deep_integration/test_e2e_business.py::TestMultiRoundConvergence::test_repeated_suggest_is_deterministic
-2.08s call     tests/deep_integration/test_e2e_business.py::TestIterationHistory::test_iteration_history_after_suggest
 =========================== short test summary info ============================
 SKIPPED [1] tests/test_telemetry_importer.py:484: 未设置 F1OPT_REAL_DATA_DIR（或目录不存在）
 SKIPPED [1] tests/test_telemetry_importer.py:500: 未设置 F1OPT_REAL_DATA_DIR（或目录不存在）
 SKIPPED [1] tests/test_telemetry_importer.py:512: 未设置 F1OPT_REAL_DATA_DIR（或目录不存在）
-=========== 2241 passed, 3 skipped, 2 warnings in 392.99s (0:06:32) ============
+=========== 2253 passed, 3 skipped, 2 warnings in 398.51s (0:06:38) ============
 
