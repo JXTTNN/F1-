@@ -1,76 +1,99 @@
 workflow : Full CI
 job      : full-test
-sha      : 680ac8045791bf959eba895ea52a1de334ab879c
+sha      : b9330c515bc311c8049fba9c6f8cdcda153e3c5f
 ref      : main
 event    : push
-run      : https://github.com/JXTTNN/F1-/actions/runs/41752223946
-time     : 2026-11-04T01:17:21Z
-steps    : install=success pytest=cancelled
+run      : https://github.com/JXTTNN/F1-/actions/runs/41752978680
+time     : 2026-11-04T01:24:24Z
+steps    : install=success pytest=success
 
 ================ .ci/pytest.log ================
 ---- 失败 / 错误用例 ----
 ---- 断言摘要 ----
 ---- 最慢用例 ----
+============================= slowest 15 durations =============================
+4.19s call     tests/test_feedback_lifecycle.py::TestSuggestConsumesFeedback::test_next_round_only_sees_its_own_feedback
+2.63s call     tests/deep_integration/test_concurrent.py::TestConcurrentApiRequests::test_concurrent_mixed_api_operations
+2.35s call     tests/deep_slice/test_slice_02_telemetry_listener.py::TestSmoke::test_smoke_real_udp_short_packet_skipped
+2.30s call     tests/deep_integration/test_concurrent.py::TestConcurrentApiRequests::test_concurrent_suggest_no_deadlock
+2.19s call     tests/test_car_status.py::TestEndToEnd::test_simulated_lap_reaches_suggestion
+2.18s call     tests/deep_integration/test_e2e_business.py::TestMultiRoundConvergence::test_multi_round_iteration_history_grows
+2.16s call     tests/deep_integration/test_e2e_business.py::TestMultiRoundConvergence::test_repeated_suggest_is_deterministic
+2.16s call     tests/deep_integration/test_e2e_business.py::TestFullClosedLoop::test_full_6_step_loop
+2.15s call     tests/test_api_edge_cases.py::test_feedback_strength_too_low
+2.14s call     tests/test_api_contract.py::TestRecordingTrainingExport::test_export_produces_samples
+2.13s call     tests/test_api_edge_cases.py::test_multiple_suggestions_generate_iterations
+2.13s call     tests/test_car_status.py::TestSimulatorCoverage::test_simulator_emits_car_status
+2.12s call     tests/deep_slice/test_slice_09_app.py::TestUnit::test_create_app_has_routes
+2.12s call     tests/deep_integration/test_e2e_business.py::TestMultiRoundConvergence::test_increasing_strength_increases_delta_magnitude
+2.12s call     tests/test_feedback_lifecycle.py::TestSuggestConsumesFeedback::test_disabled_keeps_accumulation_semantics
+=========================== short test summary info ============================
+SKIPPED [1] tests/test_telemetry_importer.py:484: 未设置 F1OPT_REAL_DATA_DIR（或目录不存在）
+SKIPPED [1] tests/test_telemetry_importer.py:500: 未设置 F1OPT_REAL_DATA_DIR（或目录不存在）
+SKIPPED [1] tests/test_telemetry_importer.py:512: 未设置 F1OPT_REAL_DATA_DIR（或目录不存在）
+============ 2180 passed, 3 skipped, 1 warning in 397.70s (0:06:37) ============
 ---- 结果行 ----
+============ 2180 passed, 3 skipped, 1 warning in 397.70s (0:06:37) ============
 ---- 超时 / 崩溃痕迹 ----
 ---- 日志尾部 ----
-tests/test_t6_engine.py::TestDiagnosticVector::test_compute_dx_single_symptom PASSED [ 87%]
-tests/test_t6_engine.py::TestDiagnosticVector::test_compute_dx_multiple_symptoms_additive PASSED [ 87%]
-tests/test_t6_engine.py::TestDiagnosticVector::test_compute_dx_strength_zero_no_contribution PASSED [ 87%]
-tests/test_t6_engine.py::TestDiagnosticVector::test_compute_dx_unknown_symptom_raises PASSED [ 87%]
-tests/test_t6_engine.py::TestDiagnosticVector::test_compute_dx_strength_out_of_range_raises PASSED [ 87%]
-tests/test_t6_engine.py::TestDiagnosticVector::test_compute_dx_deterministic PASSED [ 87%]
-tests/test_t6_engine.py::TestDiagnosticVector::test_dx_to_vector_order PASSED [ 87%]
-tests/test_t6_engine.py::TestDiagnosticVector::test_all_15_symptoms_have_dx_mapping PASSED [ 87%]
-tests/test_t6_engine.py::TestCouplingMatrix::test_validate_matrix_passes PASSED [ 87%]
-tests/test_t6_engine.py::TestCouplingMatrix::test_matrix_shape_9x20 PASSED [ 87%]
-tests/test_t6_engine.py::TestCouplingMatrix::test_param_names_count_20 PASSED [ 87%]
-tests/test_t6_engine.py::TestCouplingMatrix::test_no_empty_column PASSED [ 87%]
-tests/test_t6_engine.py::TestCouplingMatrix::test_no_empty_row PASSED    [ 87%]
-tests/test_t6_engine.py::TestCouplingMatrix::test_density_at_least_30_percent PASSED [ 87%]
-tests/test_t6_engine.py::TestCouplingMatrix::test_all_sources_valid PASSED [ 87%]
-tests/test_t6_engine.py::TestCouplingMatrix::test_cell_sign_is_plus_or_minus_1 PASSED [ 88%]
-tests/test_t6_engine.py::TestCouplingMatrix::test_cell_magnitude_positive PASSED [ 88%]
-tests/test_t6_engine.py::TestCouplingMatrix::test_get_coupling_known_nonzero PASSED [ 88%]
-tests/test_t6_engine.py::TestCouplingMatrix::test_get_coupling_zero_cell_returns_none PASSED [ 88%]
-tests/test_t6_engine.py::TestCouplingMatrix::test_get_coupling_unknown_diag_returns_none PASSED [ 88%]
-tests/test_t6_engine.py::TestCouplingMatrix::test_get_row_returns_21_entries PASSED [ 88%]
-tests/test_t6_engine.py::TestCouplingMatrix::test_get_row_unknown_diag_returns_all_none PASSED [ 88%]
-tests/test_t6_engine.py::TestCouplingMatrix::test_get_column_returns_9_entries PASSED [ 88%]
-tests/test_t6_engine.py::TestCouplingMatrix::test_nonzero_cells_for_diag PASSED [ 88%]
-tests/test_t6_engine.py::TestCouplingMatrix::test_nonzero_cells_for_diag_unknown PASSED [ 88%]
-tests/test_t6_engine.py::TestCouplingMatrix::test_nonzero_cells_for_param PASSED [ 88%]
-tests/test_t6_engine.py::TestCouplingMatrix::test_cell_value_property PASSED [ 88%]
-tests/test_t6_engine.py::TestCouplingMatrix::test_matrix_stats PASSED    [ 88%]
-tests/test_t6_engine.py::TestSetupDeltaCoverage::test_every_single_symptom_covers_20_params PASSED [ 88%]
-tests/test_t6_engine.py::TestSetupDeltaCoverage::test_setup_delta_keys_match_param_names PASSED [ 88%]
-tests/test_t6_engine.py::TestDeterminism::test_same_input_same_output_single PASSED [ 88%]
-tests/test_t6_engine.py::TestDeterminism::test_same_input_same_output_multi PASSED [ 88%]
-tests/test_t6_engine.py::TestDeterminism::test_compute_setup_delta_deterministic PASSED [ 88%]
-tests/test_t6_engine.py::TestBounds::test_next_within_bounds_all_symptoms PASSED [ 88%]
-tests/test_t6_engine.py::TestBounds::test_delta_within_max_delta_all_symptoms PASSED [ 88%]
-tests/test_t6_engine.py::TestBounds::test_bounds_with_multi_symptoms PASSED [ 88%]
-tests/test_t6_engine.py::TestSourceTraceability::test_nonzero_delta_has_source PASSED [ 89%]
-tests/test_t6_engine.py::TestSourceTraceability::test_sources_in_valid_enum PASSED [ 89%]
-tests/test_t6_engine.py::TestMultiSymptom::test_multi_symptom_dx_additive PASSED [ 89%]
-tests/test_t6_engine.py::TestMultiSymptom::test_multi_symptom_delta_not_equal_single PASSED [ 89%]
-tests/test_t6_engine.py::TestMultiSymptom::test_zero_strength_no_effect PASSED [ 89%]
-tests/test_t6_engine.py::TestMultiSymptom::test_empty_symptoms_zero_delta PASSED [ 89%]
-tests/test_t6_engine.py::TestTelemetryGain::test_wet_weather_reduces_delta PASSED [ 89%]
-tests/test_t6_engine.py::TestTelemetryGain::test_wet_weather_string_variants PASSED [ 89%]
-tests/test_t6_engine.py::TestTelemetryGain::test_wet_weather_numeric_m_weather PASSED [ 89%]
-tests/test_t6_engine.py::TestTelemetryGain::test_light_cloud_weather_is_dry PASSED [ 89%]
-tests/test_t6_engine.py::TestTelemetryGain::test_clear_weather_no_gain PASSED [ 89%]
-tests/test_t6_engine.py::TestConfidence::test_high_with_telemetry_and_clear_feedback PASSED [ 89%]
-tests/test_t6_engine.py::TestConfidence::test_medium_without_telemetry PASSED [ 89%]
-tests/test_t6_engine.py::TestConfidence::test_low_vague_feedback PASSED  [ 89%]
-tests/test_t6_engine.py::TestConfidence::test_low_conflict_pair PASSED   [ 89%]
-tests/test_t6_engine.py::TestConfidence::test_confidence_deterministic PASSED [ 89%]
-tests/test_t6_engine.py::TestEngineSelfValidation::test_validate_engine_passes PASSED [ 89%]
-tests/test_t6_engine.py::TestEngineSelfValidation::test_generate_suggestion_structure PASSED [ 89%]
-tests/test_t6_engine.py::TestEngineSelfValidation::test_summary_zero_dx PASSED [ 89%]
-tests/test_t6_engine.py::TestEngineSelfValidation::test_summary_nonzero_dx PASSED [ 89%]
-tests/test_t7_api.py::test_health PASSED                                 [ 89%]
-tests/test_t7_api.py::test_tracks PASSED                                 [ 89%]
-tests/test_t7_api.py::test_track_detail PASSED                           [ 90%]
-tests/test_t7_api.py::test_track_not_found 
+tests/test_track_arcs.py::TestAnchorsSitOnCorners::test_anchors_not_on_straights[shanghai] PASSED [ 98%]
+tests/test_track_arcs.py::TestAnchorsSitOnCorners::test_anchors_not_on_straights[silverstone] PASSED [ 98%]
+tests/test_track_arcs.py::TestAnchorsSitOnCorners::test_anchors_not_on_straights[singapore] PASSED [ 98%]
+tests/test_track_arcs.py::TestAnchorsSitOnCorners::test_anchors_not_on_straights[spa] PASSED [ 98%]
+tests/test_track_arcs.py::TestAnchorsSitOnCorners::test_anchors_not_on_straights[spielberg] PASSED [ 98%]
+tests/test_track_arcs.py::TestAnchorsSitOnCorners::test_anchors_not_on_straights[suzuka] PASSED [ 98%]
+tests/test_track_arcs.py::TestAnchorsSitOnCorners::test_anchors_not_on_straights[yas_marina] PASSED [ 98%]
+tests/test_track_arcs.py::TestAnchorsSitOnCorners::test_anchors_not_on_straights[zandvoort] PASSED [ 98%]
+tests/test_track_gain.py::TestGainDefinition::test_covers_all_params PASSED [ 98%]
+tests/test_track_gain.py::TestGainDefinition::test_moderate_range_only PASSED [ 98%]
+tests/test_track_gain.py::TestGainDefinition::test_neutral_types_are_identity PASSED [ 99%]
+tests/test_track_gain.py::TestGainDefinition::test_unknown_track_is_neutral PASSED [ 99%]
+tests/test_track_gain.py::TestGainDefinition::test_all_tracks_resolvable PASSED [ 99%]
+tests/test_track_gain.py::TestSuggestionVariesByTrack::test_suzuka_differs_from_monza PASSED [ 99%]
+tests/test_track_gain.py::TestSuggestionVariesByTrack::test_monza_amplifies_aero_and_damps_ride_height PASSED [ 99%]
+tests/test_track_gain.py::TestSuggestionVariesByTrack::test_street_circuit_amplifies_ride_height PASSED [ 99%]
+tests/test_track_gain.py::TestSuggestionVariesByTrack::test_direction_not_flipped PASSED [ 99%]
+tests/test_track_gain.py::TestSuggestionVariesByTrack::test_deterministic PASSED [ 99%]
+tests/test_training_dataset.py::TestCompoundClass::test_compound_mapping PASSED [ 99%]
+tests/test_training_dataset.py::TestWeatherMapping::test_light_cloud_is_dry PASSED [ 99%]
+tests/test_training_dataset.py::TestWeatherMapping::test_overcast_is_dry PASSED [ 99%]
+tests/test_training_dataset.py::TestWeatherMapping::test_storm_is_wet PASSED [ 99%]
+tests/test_training_dataset.py::TestWeatherMapping::test_rain_codes_are_wet PASSED [ 99%]
+tests/test_training_dataset.py::TestWeatherMapping::test_raw_code_kept_as_feature PASSED [ 99%]
+tests/test_training_dataset.py::TestWeatherMapping::test_missing_weather_defaults_dry PASSED [ 99%]
+tests/test_training_dataset.py::TestBuildRow::test_valid_row_has_universal_features PASSED [ 99%]
+tests/test_training_dataset.py::TestBuildRow::test_meta_records_track_length PASSED [ 99%]
+tests/test_training_dataset.py::TestBuildRow::test_invalid_lap_rejected PASSED [ 99%]
+tests/test_training_dataset.py::TestBuildRow::test_unknown_track_rejected PASSED [ 99%]
+tests/test_training_dataset.py::TestBuildDataset::test_build_from_files PASSED [ 99%]
+tests/test_training_dataset.py::TestBuildDataset::test_empty_dir PASSED  [ 99%]
+tests/test_training_dataset.py::TestBuildDataset::test_collect_lap_files_ignores_other_files PASSED [100%]
+
+=============================== warnings summary ===============================
+../../../../../opt/hostedtoolcache/Python/3.11.18/x64/lib/python3.11/site-packages/fastapi/testclient.py:1
+  /opt/hostedtoolcache/Python/3.11.18/x64/lib/python3.11/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+============================= slowest 15 durations =============================
+4.19s call     tests/test_feedback_lifecycle.py::TestSuggestConsumesFeedback::test_next_round_only_sees_its_own_feedback
+2.63s call     tests/deep_integration/test_concurrent.py::TestConcurrentApiRequests::test_concurrent_mixed_api_operations
+2.35s call     tests/deep_slice/test_slice_02_telemetry_listener.py::TestSmoke::test_smoke_real_udp_short_packet_skipped
+2.30s call     tests/deep_integration/test_concurrent.py::TestConcurrentApiRequests::test_concurrent_suggest_no_deadlock
+2.19s call     tests/test_car_status.py::TestEndToEnd::test_simulated_lap_reaches_suggestion
+2.18s call     tests/deep_integration/test_e2e_business.py::TestMultiRoundConvergence::test_multi_round_iteration_history_grows
+2.16s call     tests/deep_integration/test_e2e_business.py::TestMultiRoundConvergence::test_repeated_suggest_is_deterministic
+2.16s call     tests/deep_integration/test_e2e_business.py::TestFullClosedLoop::test_full_6_step_loop
+2.15s call     tests/test_api_edge_cases.py::test_feedback_strength_too_low
+2.14s call     tests/test_api_contract.py::TestRecordingTrainingExport::test_export_produces_samples
+2.13s call     tests/test_api_edge_cases.py::test_multiple_suggestions_generate_iterations
+2.13s call     tests/test_car_status.py::TestSimulatorCoverage::test_simulator_emits_car_status
+2.12s call     tests/deep_slice/test_slice_09_app.py::TestUnit::test_create_app_has_routes
+2.12s call     tests/deep_integration/test_e2e_business.py::TestMultiRoundConvergence::test_increasing_strength_increases_delta_magnitude
+2.12s call     tests/test_feedback_lifecycle.py::TestSuggestConsumesFeedback::test_disabled_keeps_accumulation_semantics
+=========================== short test summary info ============================
+SKIPPED [1] tests/test_telemetry_importer.py:484: 未设置 F1OPT_REAL_DATA_DIR（或目录不存在）
+SKIPPED [1] tests/test_telemetry_importer.py:500: 未设置 F1OPT_REAL_DATA_DIR（或目录不存在）
+SKIPPED [1] tests/test_telemetry_importer.py:512: 未设置 F1OPT_REAL_DATA_DIR（或目录不存在）
+============ 2180 passed, 3 skipped, 1 warning in 397.70s (0:06:37) ============
+
