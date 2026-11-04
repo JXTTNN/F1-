@@ -59,6 +59,20 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e .
 
+      # 抓取前对齐远端：checkout 拿到的是触发时的 SHA，而抓取要跑 20+ 分钟，
+      # 期间别的工作流可能已经往 data/setup_laps/ 提交过数据。本地落后时生成的
+      # 文件与远端不同 → 提交阶段 rebase 冲突 → 整个 job 判红（实测 #3）。
+      # 先快进到最新，抓取的去重逻辑会自动跳过已入库的条目。
+      - name: Sync latest main
+        shell: bash
+        run: |
+          git fetch origin main
+          if git merge --ff-only origin/main; then
+            echo "已快进到 origin/main"
+          else
+            echo "::warning::无法快进（本地有改动），继续用当前基线"
+          fi
+
       # 已抓到的样本入库在 data/setup_laps/；缓存只是为中断续传兜底。
       - name: Restore fetch cache
         uses: actions/cache/restore@v4
@@ -123,6 +137,9 @@ jobs:
           retention-days: 30
 
       - name: Commit data and report
+        # 提交是「顺带存证」：数据与报告都已上传 artifact，推送撞车不该让整轮
+        # 判红（真实失败由上一层的抓取/校准步骤暴露）。
+        continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
