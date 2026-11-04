@@ -276,7 +276,7 @@ def check_real_packets():
                  f"抓包 trackLength={lens[0]}m 最接近 {best.track_id}({best.length_m}m) "
                  f"→ 该赛道应有 udp_trackId={OFFICIAL_TRACK_ID.get(best.track_id,'?')}")
 
-    # A5: 真实 CarSetups 包 → 21 参数提取
+    # A5: 真实 CarSetups 包 → 20 参数提取
     if setups:
         from setup_tuner.domain.setup import ALL_SETUP_FIELDS
         from setup_tuner.report.builder import extract_setup_from_packet5

@@ -167,6 +167,10 @@ def _run_one(
         "nn_available": bool(result.get("nn_available")),
         "sim": sim,
         "changed_params": changed,
+        # 契约检查读的是 ``setup_delta``（原始 float）；这里必须同时给出，
+        # 否则 _violations 拿到空字典 → 永远 0 违规（曾经就是这样漏检
+        # "前翼 25.0 → 28.5 不在 1.0 档位上"这种用户拧不出来的建议）。
+        "setup_delta": {k: float(v) for k, v in delta.items()},
         "delta": {k: round(float(v), 4) for k, v in delta.items()},
         "summary": result.get("summary"),
     }

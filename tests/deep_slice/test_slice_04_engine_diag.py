@@ -282,11 +282,11 @@ class TestStatic:
         assert len(DIAG_DIMS) == 9
 
     def test_static_param_names_count_is_20(self) -> None:
-        """数量约束：PARAM_NAMES 恰好 21 项。"""
+        """数量约束：PARAM_NAMES 恰好 20 项。"""
         assert len(PARAM_NAMES) == 20
 
     def test_static_matrix_shape_9x20(self) -> None:
-        """形状约束：耦合矩阵为 9×21。"""
+        """形状约束：耦合矩阵为 9×20。"""
         assert len(COUPLING_MATRIX) == 9
         for diag in DIAG_DIMS:
             assert len(COUPLING_MATRIX[diag]) == 20

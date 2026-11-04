@@ -641,7 +641,7 @@ h1, h2, h3 {
   50% { opacity: 0.4; }
 }
 
-/* ---------- 21项调教参数输入面板 ---------- */
+/* ---------- 20 项调教参数输入面板 ---------- */
 .setup-panel-actions { display: flex; gap: 6px; }
 .setup-fields-wrap {
   padding: 6px 0;

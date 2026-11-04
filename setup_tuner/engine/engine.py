@@ -29,9 +29,10 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass, field
 from typing import Any
 
-from setup_tuner.domain.setup import ALL_SETUP_FIELDS
+from setup_tuner.domain.setup import ALL_SETUP_FIELDS, get_field
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +56,7 @@ from .diagnostic import (
 )
 from .holistic import class_weighted_dx, holistic_coherence, track_demand
 from .optimizer import describe_tradeoff, optimize_setup
-from .setup_sim import get_setup_sim
+from .setup_sim import get_setup_sim, normalize_setup
 from .sim_optimizer import SimRefineResult, sim_refine
 from .sim_optimizer import limits as sim_limits
 from .surrogate import get_surrogate
@@ -484,9 +485,13 @@ def _reclamp_delta(
     """整体收口后的**边界兜底夹取**。
 
     coherence 的配对等比收口（悬挂几何/防倾杆/rake/翼片）可能把参数推出
-    ``[min, max]``（实测：oversteer 强度 5 时 front_camber 越下限）。
+    ``[min, max]``（实测：oversteer 强度 5 时 front_camber 越下限），也可能
+    留下**半个档位**（实测：monaco 前翼 25.0 → 28.5，而翼片档位是 1.0 ——
+    用户在游戏里根本拧不出 28.5）。
+
     本函数保证最终建议永远满足：
-        ``|delta| <= max_delta`` 且 ``current + delta ∈ [min, max]``。
+        ``|delta| <= max_delta``、``current + delta ∈ [min, max]``、
+        **终值落在真实档位上**（按 ``step`` 对齐，原点 ``min_val``）。
 
     Args:
         delta: 收口后的调整量。
@@ -504,7 +509,13 @@ def _reclamp_delta(
             continue
         raw = _clip(value, -spec.max_delta, spec.max_delta)
         current = current_setup.get(name, spec.default)
-        out[name] = _clip(raw, spec.min_val - current, spec.max_val - current)
+        target = _clip(current + raw, spec.min_val, spec.max_val)
+        aligned = _clip(_align_to_step(target, spec.step, spec.min_val),
+                        spec.min_val, spec.max_val)
+        delta_aligned = aligned - current
+        if spec.step >= 1.0 and float(spec.step).is_integer():
+            delta_aligned = float(round(delta_aligned))
+        out[name] = _clip(delta_aligned, -spec.max_delta, spec.max_delta)
     return out
 
 
@@ -654,9 +665,19 @@ def compute_setup_delta(
     setup_delta: dict[str, float] = {}
     for spec in ALL_SETUP_FIELDS:
         p = spec.name
-        raw = _compute_param_raw_delta(p, dx, telemetry_gain, track_gain, style_gain)
+        raw = _compute_param_raw_delta(p, dx, telemetry_gain, track_gain, None)
         current = float(current_setup[p])
-        setup_delta[p] = _align_param_delta(spec, raw, current)
+        base = _align_param_delta(spec, raw, current)
+        # 风格倍数作用在**已对齐到档位**的步长上，而不是对齐之前：
+        # 之前乘在 raw 上时，只要 raw 超过 max_delta（实测 20 项里有 6 项
+        # 常年饱和）或诊断本来没动这个参数（乘 0 还是 0），风格倍数就
+        # 完全失效 —— 6 条风格规则里 4 条在 24 站上零影响。
+        # 乘在对齐后的步长上，保守型风格至少能把「顶到上限的一步」收回来，
+        # 且不会突破 max_delta（下面还会再对齐一次）。
+        gain = style_gain.get(p, 1.0) if style_gain else 1.0
+        if gain != 1.0 and base != 0.0:
+            base = _align_param_delta(spec, base * gain, current)
+        setup_delta[p] = base
     return setup_delta
 
 
@@ -679,6 +700,221 @@ def _derive_track_gain(track_id: str) -> dict[str, float]:
     from setup_tuner.domain.track_coefficients import track_gain_for
 
     return track_gain_for(track_id)
+
+
+# ---------------------------------------------------------------------------
+# 车手风格定向（第二层：补偿动作 + 性能模型仲裁）
+# ---------------------------------------------------------------------------
+#: 风格微调允许牺牲的预测圈速总额（秒）。一道硬闸：
+#: 风格是"同速下的驾驶性偏好"，不允许拿几十毫秒的圈速去换。
+_MAX_STYLE_COST_S = 0.025
+#: 单条风格动作的代价/收益可信区间（秒）。超出的属于代理模型的量级误差，
+#: 不作为"这档值不值"的依据 —— 与 sim_optimizer 的单步 80ms 上限同源问题。
+_MAX_TRIM_COST_S = 0.030
+
+
+@dataclass(slots=True)
+class StyleTargetingResult:
+    """风格定向的结果（供报告直接序列化）。"""
+
+    delta: dict[str, float]
+    applied: list[dict[str, Any]]
+    rejected: list[dict[str, Any]]
+    cost_s: float = 0.0
+    reason: str = ""
+    profile: list[dict[str, Any]] = field(default_factory=list)
+
+    @property
+    def enabled(self) -> bool:
+        return bool(self.applied)
+
+    def as_report(self) -> dict[str, Any]:
+        return {
+            "enabled": self.enabled,
+            "reason": self.reason,
+            "profile": self.profile,
+            "applied": self.applied,
+            "rejected": self.rejected,
+            # 代价为正 = 为风格让出的预测圈速（毫秒）；<=0 表示顺带更快
+            "cost_ms": round(self.cost_s * 1000.0, 2),
+            "budget_ms": round(_MAX_STYLE_COST_S * 1000.0, 1),
+        }
+
+
+def _apply_trim(delta: dict[str, float], current_setup: dict[str, float],
+                moves: tuple[tuple[str, float], ...]) -> dict[str, float]:
+    """把一组「档位动作」叠到 delta 上，返回新 dict（不改原对象）。
+
+    逐参数重新走「单次上限 + 合法区间 + 档位对齐」：风格微调和规则层用
+    同一套约束，不存在"风格可以越界"的旁路。
+    """
+    out = dict(delta)
+    for param, steps in moves:
+        spec = get_field(param)
+        current = float(current_setup[param])
+        raw = float(out.get(param, 0.0)) + steps * spec.step
+        raw = _clip(raw, -spec.max_delta, spec.max_delta)
+        next_val = _clip(current + raw, spec.min_val, spec.max_val)
+        aligned = _align_to_step(next_val, spec.step, spec.min_val)
+        aligned = _clip(aligned, spec.min_val, spec.max_val)
+        out[param] = aligned - current
+    return out
+
+
+def apply_style_targeting(
+    delta: dict[str, float],
+    current_setup: dict[str, float],
+    track_id: str,
+    style_vector: list[float] | None,
+) -> StyleTargetingResult:
+    """按车手风格对最终建议做**有预算的定向微调**。
+
+    为什么需要这一层：``gain_for_style`` 只改幅度，实测 6 条风格规则里
+    4 条（刹车/防倾杆悬挂/胎压外倾/前翼）在 24 站上对最终建议零影响 ——
+    一半是因为诊断本来没动这些参数（乘 0 还是 0），一半是因为参数已经
+    顶到 ``max_delta``（乘 1.25 仍被夹回）。结果是"风格功能看起来开了，
+    实际建议一字不差"。
+
+    做法：给风格相关参数一组 ±1 档的偏好动作，逐条用调教性能 NN 评估
+    圈速代价，按「风格强度 / 代价」排序后装进 25 ms 预算。因此：
+
+    - 每条被采纳的动作都有明确的驾驶性收益与可核对的圈速代价；
+    - 代价超预算的动作**如实拒绝并报告原因**（不静默丢弃）；
+    - 模型不可用 / 赛道未覆盖 / 诊断为空时整层不启用。
+
+    Args:
+        delta: 已收口（含模拟优化）的最终 delta。
+        current_setup: 当前调教（真实单位）。
+        track_id: 赛道标识。
+        style_vector: 12 维风格向量（样本 <3 圈时上游传 None）。
+
+    Returns:
+        ``StyleTargetingResult``：``delta`` 为可能被微调过的新 delta。
+    """
+    from setup_tuner.domain.style_coefficients import (
+        StyleTrim,
+        describe_style,
+        style_trims,
+    )
+
+    profile = describe_style(style_vector)
+    if style_vector is None:
+        return StyleTargetingResult(
+            delta=dict(delta), applied=[], rejected=[], profile=profile,
+            reason="无车手风格样本（本赛道有效圈 <3），风格定向未启用",
+        )
+    trims = style_trims(style_vector)
+    if not trims:
+        return StyleTargetingResult(
+            delta=dict(delta), applied=[], rejected=[], profile=profile,
+            reason="风格各维均接近中性，无需定向微调",
+        )
+
+    sim = get_setup_sim()
+    if not sim.covers(track_id):
+        return StyleTargetingResult(
+            delta=dict(delta), applied=[], rejected=[], profile=profile,
+            reason="调教性能模型未覆盖该赛道，风格定向未启用",
+        )
+    base_setup = {p: float(current_setup[p]) + float(delta.get(p, 0.0))
+                  for p in current_setup}
+    base_pred = sim.predict_delta_s(track_id, normalize_setup(base_setup))
+    if base_pred is None:
+        return StyleTargetingResult(
+            delta=dict(delta), applied=[], rejected=[], profile=profile,
+            reason="模型推理失败，风格定向未启用",
+        )
+
+    # 逐条评估：代价 >0 表示"为了让车更顺手，愿意慢多少"
+    scored: list[tuple[StyleTrim, dict[str, float], float]] = []
+    for trim in trims:
+        cand = _apply_trim(delta, current_setup, trim.moves)
+        moved = tuple(p for p in trim.params
+                      if abs(cand.get(p, 0.0) - delta.get(p, 0.0)) > DELTA_ZERO_EPSILON)
+        if not moved:
+            continue  # 已经顶在边界上，这一档加不进去
+        cand_setup = {p: float(current_setup[p]) + float(cand.get(p, 0.0))
+                      for p in current_setup}
+        pred = sim.predict_delta_s(track_id, normalize_setup(cand_setup))
+        if pred is None:
+            continue
+        scored.append((trim, cand, pred - base_pred))
+
+    applied: list[dict[str, Any]] = []
+    rejected: list[dict[str, Any]] = []
+    out = dict(delta)
+    spent = 0.0
+    # 「风格强度 / 代价」优先：同样 10ms，先满足更明显的开法倾向
+    scored.sort(key=lambda item: -(item[0].weight / max(item[2], 0.001)))
+    for trim, cand, cost in scored:
+        entry = {
+            "dim": trim.dim,
+            "dim_name": trim.dim_name,
+            "params": {p: cand.get(p, 0.0) for p in trim.params
+                       if abs(cand.get(p, 0.0) - delta.get(p, 0.0))
+                       > DELTA_ZERO_EPSILON},
+            "reason": trim.reason,
+            "strength": trim.weight,
+            "cost_ms": round(cost * 1000.0, 2),
+        }
+        # 单条动作的"代价/收益"必须落在可信区间：±30ms 之外属于代理模型
+        # 的量级误差（实测一档外倾角能被算成 200ms+），不能当作风格取舍依据。
+        if abs(cost) > _MAX_TRIM_COST_S:
+            entry["blocked_by"] = (
+                f"预测代价 {cost * 1000:+.0f}ms 超出可信区间"
+                f"（±{_MAX_TRIM_COST_S * 1000:.0f}ms）"
+            )
+            rejected.append(entry)
+            continue
+        if spent + max(cost, 0.0) > _MAX_STYLE_COST_S:
+            entry["blocked_by"] = f"风格预算 {_MAX_STYLE_COST_S * 1000:.0f}ms"
+            rejected.append(entry)
+            continue
+        # 注意：必须叠在**已采纳的结果**上，而不是原始 delta ——
+        # 否则每采纳一条就把前面采纳的覆盖掉（实测只剩最后一条存活）。
+        trial = _apply_trim(out, current_setup, trim.moves)
+        trial_setup = {p: float(current_setup[p]) + float(trial.get(p, 0.0))
+                       for p in current_setup}
+        trial_pred = sim.predict_delta_s(track_id, normalize_setup(trial_setup))
+        if trial_pred is None:
+            entry["blocked_by"] = "组合候选推理失败"
+            rejected.append(entry)
+            continue
+        combined = trial_pred - base_pred
+        # 组合后同样要落在可信区间：单条都在 ±30ms 内，但叠起来可能越界
+        # （实测 spa 单症状：四条各 −8ms，合起来 −33ms）。
+        if abs(combined) > _MAX_TRIM_COST_S or combined > _MAX_STYLE_COST_S:
+            entry["blocked_by"] = (
+                f"与已采纳动作组合后代价 {combined * 1000:+.0f}ms 越界"
+            )
+            rejected.append(entry)
+            continue
+        out = trial
+        spent = combined
+        entry["cost_ms"] = round(combined * 1000.0, 2)
+        applied.append(entry)
+
+    if applied:
+        # 记账按**组合后**的真实差值，而不是各条之和（一档动作之间会互相影响）
+        final_setup = {p: float(current_setup[p]) + float(out.get(p, 0.0))
+                       for p in current_setup}
+        final_pred = sim.predict_delta_s(track_id, normalize_setup(final_setup))
+        if final_pred is not None:
+            spent = final_pred - base_pred
+        reason = (
+            f"采纳 {len(applied)} 条风格动作，预测代价 {spent * 1000:+.1f} ms"
+        )
+    elif not scored:
+        # 两种情形归一到一句可读的话：向量各维接近中性（没有触发任何规则），
+        # 或规则命中的参数已经顶在边界 / 本次诊断未触及。不能只写「顶在边界」——
+        # 中性风格也会走到这里，那样会把"没有偏好"误报成"参数到顶"。
+        reason = "没有可执行的风格动作（特征不显著，或相关参数已顶到边界）"
+    else:
+        reason = "风格动作的圈速代价超出预算，全部拒绝"
+    return StyleTargetingResult(
+        delta=out, applied=applied, rejected=rejected, cost_s=spent,
+        reason=reason, profile=profile,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1037,6 +1273,30 @@ def generate_suggestion(
     holistic_block["coherence_notes"] = coherence_notes
 
     # ------------------------------------------------------------------ #
+    # 车手风格定向（第二层）
+    #   上面所有步骤只看「赛道 + 症状 + 遥测」，同样输入对任何车手给出同一套车。
+    #   风格定向在不牺牲圈速的前提下加一层 ±1 档的驾驶性偏好：攻弯凶的多给
+    #   一点前翼、修正频繁的把防倾杆悬挂放软、胎温离散大的降 0.1 bar 胎压……
+    #   它**排在模拟优化之前**，由 sim_refine 统一裁决 —— 圈速预算只有一个
+    #   账本，风格不能自己花掉几十毫秒去买"顺手"。
+    # ------------------------------------------------------------------ #
+    pre_style_delta = dict(final_delta)
+    style_result = StyleTargetingResult(delta=dict(final_delta), applied=[],
+                                        rejected=[])
+    if is_zero_dx(dx):
+        style_result.reason = "无诊断输入（无症状/遥测发现），跳过风格定向"
+    elif model_type not in ("nn", "hybrid"):
+        # 风格定向要靠调教性能模型判断"这档值不值"，纯规则模式没有模型可用；
+        # 此时悄悄用模型评估就成了"rule 模式其实跑了 NN"，必须显式跳过。
+        style_result.reason = "model_type=rule（无性能模型可评估风格代价）"
+    else:
+        style_result = apply_style_targeting(
+            final_delta, current_setup, track_id, style_vector,
+        )
+        if style_result.enabled:
+            final_delta = _reclamp_delta(style_result.delta, current_setup)
+
+    # ------------------------------------------------------------------ #
     # 神经网络不断模拟优化（用户明确的优化方式第二步）
     #   参数矩阵给方向：上面的 rule_delta → optimize_setup → 收口 = delta0；
     #   神经网络模拟优化：sim_refine 以 delta0 为起点，用训练好的调教性能
@@ -1090,6 +1350,37 @@ def generate_suggestion(
         "limits": sim_limits(),
         "trace": list(sim_result.trace),
     }
+
+    # ------------------------------------------------------------------ #
+    # 风格定向的落库口径：模拟优化可能把某些"顺手但费时"的动作改回去，
+    # 报告必须如实标出哪些活到了最终建议里（survived），不能只报"我提了"。
+    # ------------------------------------------------------------------ #
+    survival_notes: list[str] = []
+    kept = 0
+    for entry in style_result.applied:
+        survived = any(
+            abs(float(final_delta.get(p, 0.0)) - float(pre_style_delta.get(p, 0.0)))
+            > DELTA_ZERO_EPSILON
+            for p in entry["params"]
+        )
+        entry["survived"] = survived
+        if survived:
+            kept += 1
+        elif float(entry["cost_ms"]) > 0:
+            survival_notes.append(
+                f"风格动作「{entry['dim_name']}」被模拟优化改回："
+                f"要多花 {entry['cost_ms']:.0f}ms 圈速，不值"
+            )
+        else:
+            # 代价 <=0 却被改回：不是圈速问题，而是它削弱了对本次诊断的供给
+            survival_notes.append(
+                f"风格动作「{entry['dim_name']}」被整体性守卫改回："
+                f"与本次问题的需求方向冲突"
+            )
+    style_report = style_result.as_report()
+    style_report["survived"] = kept
+    style_report["notes"] = survival_notes
+    holistic_block["style_targeting"] = style_report
 
     parameters = _build_param_details(final_delta, current_setup, dx)
     confidence = assess_confidence(symptoms, telemetry)

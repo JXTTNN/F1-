@@ -32,6 +32,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import HTMLResponse, JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from setup_tuner import __version__ as _APP_VERSION
 from setup_tuner.api.routes import router
 from setup_tuner.api.ws import WSManager, ws_router
 from setup_tuner.config import Config, load_config
@@ -170,7 +171,14 @@ def _lap_writer_loop(app: FastAPI) -> None:
             old = store.get_driver_style(driver_id, track_id)
             new_vec = list(job.get("style_vector") or [])
             if len(new_vec) >= 11:
-                base = old["vector"] if old and len(old["vector"]) >= 11                     else new_vec[:11]
+                # 已存向量是 12 维（最后一位是跨圈一致性，不参与 EMA），
+                # 这里必须只取前 11 位与本次的 11 位混合 —— 旧代码直接拿
+                # 12 维的 base 去 zip 11 维的 new_vec[:11]，strict=True 抛
+                # ValueError；异常被外层 except 吞掉，结果是**第 2 圈起
+                # 每圈都落库失败**（车手风格样本永远停在 1 条，≥3 圈才启用
+                # 的风格定向因此从未真正生效过）。
+                base = (list(old["vector"])[:11]
+                        if old and len(old["vector"]) >= 11 else new_vec[:11])
                 blended = [
                     round((1 - EMA_ALPHA) * b + EMA_ALPHA * n, 4)
                     for b, n in zip(base, new_vec[:11], strict=True)
@@ -549,7 +557,13 @@ def _register_root_route(app: FastAPI) -> None:
         """根路径 —— 返回前端 index.html，用户打开浏览器即见界面。"""
         index_path = _UI_DIR / "index.html"
         if index_path.exists():
-            return HTMLResponse(index_path.read_text(encoding="utf-8"))
+            html = index_path.read_text(encoding="utf-8")
+            # 页脚版本号在静态 HTML 里是写死的，发版时极易忘记同步
+            # （实测面板一直显示 v1.0.0）。这里统一按包版本替换，单一来源。
+            import re
+            html = re.sub(r"F1OPT v\d+\.\d+\.\d+",
+                          f"F1OPT v{_APP_VERSION}", html, count=1)
+            return HTMLResponse(html)
         # UI 文件不存在时回退到提示页
         return HTMLResponse(
             "<html><body><h1>F1OPT</h1><p>UI 未找到，请检查安装。</p></body></html>",

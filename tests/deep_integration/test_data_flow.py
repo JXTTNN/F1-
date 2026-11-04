@@ -116,7 +116,7 @@ class TestTelemetryToEngine:
     """
 
     def test_packet5_to_setup_dict_covers_20_params(self) -> None:
-        """Packet 5 解析后经 extract_setup_from_packet5 应覆盖全部 21 参数。
+        """Packet 5 解析后经 extract_setup_from_packet5 应覆盖全部 20 参数。
 
         链路：parse_packet → extract_setup_from_packet5 → CarSetup.from_dict
         """
@@ -127,12 +127,12 @@ class TestTelemetryToEngine:
         assert parsed is not None
         assert parsed["packet_id"] == 5
 
-        # 解析结果 → 21 参数字典
+        # 解析结果 → 20 参数字典
         setup_params = extract_setup_from_packet5(parsed)
         assert set(setup_params.keys()) == {f.name for f in ALL_SETUP_FIELDS}
         assert len(setup_params) == 20
 
-        # 23 参数字典 → CarSetup 领域对象（不抛异常即合法）
+        # 20 参数字典 → CarSetup 领域对象（不抛异常即合法）
         setup = CarSetup.from_dict(setup_params)
         # 2026-09 修正：真实抓包证明 EA 下发即车库值 → 恒等映射（不再线性压缩）
         assert setup.front_wing == pytest.approx(7)

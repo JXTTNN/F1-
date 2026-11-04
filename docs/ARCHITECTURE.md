@@ -55,14 +55,14 @@
 | `_turn_data.py` / `_track_anchors.py` / `_track_arcs.py` | 逐弯元数据、赛道图锚点像素坐标、弯道圈内距离占比（自动生成） |
 | `_track_official.py` | 弯道数据官方来源登记表 |
 | `corner_locator.py` / `corner_groups.py` | 圈内进度 → 弯道编号的唯一实现；连续弯分组 |
-| `style_coefficients.py` | 12 维车手风格 → 参数敏感度倍数 |
+| `style_coefficients.py` | 12 维车手风格 → 参数敏感度倍数（`gain_for_style`）+ 离散偏好动作（`style_trims`，±1 档、同参数只认领一次） |
 | `track_coefficients.py` | 赛道类型 → 参数敏感度倍数 |
 
 ### engine —— 建议生成
 
 | 模块 | 职责 |
 |---|---|
-| `engine.py` | 主流水线 `generate_suggestion`（6 步，见第 3 节） |
+| `engine.py` | 主流水线 `generate_suggestion`（7 步，见第 3 节）+ 风格定向 `apply_style_targeting` |
 | `diagnostic.py` | 诊断向量 `Dx`（9 维 = 8 维能力需求 + 底盘离地） |
 | `coupling.py` | 耦合矩阵 `C`（9 × 20） |
 | `holistic.py` | 整体权衡层：改动预算 + 归一化幅度排序（`abs(Δ)/max_delta`） |
@@ -98,13 +98,17 @@
 2. **`Dx × C` → 参数方向**：耦合矩阵给出 20 项参数的方向与相对幅度。
 3. **整体权衡**（`holistic`）：按 `abs(Δ)/max_delta` 归一化排序，套改动预算
    （一次别让车手改一车），保证跨量纲可比。
-4. **模拟优化**（`sim_refine`）：以第 3 步结果为起点做坐标上升；每步都要模型
+4. **风格定向**（`apply_style_targeting`）：风格向量（≥3 圈）→ 离散 ±1 档动作，
+   逐条用性能模型评代价，单条 ±30ms 可信区间、整层 25ms 预算；采纳的叠在已采纳
+   结果上，拒绝的写进 `holistic.style_targeting.rejected`。无诊断输入时整层跳过。
+5. **模拟优化**（`sim_refine`）：以第 4 步结果为起点做坐标上升；每步都要模型
    认可才采纳，收益按**可信上限**记账（单步 ≤80ms、累计 ≤120ms、最多 3 步），
    被截断的步骤在轨迹里标 `capped`。
-5. **差分校准**（`setup_sim`）：`predict_delta_s = raw(候选) − raw(默认)`。默认点
+6. **差分校准**（`setup_sim`）：`predict_delta_s = raw(候选) − raw(默认)`。默认点
    恒为 0，消除每赛道常数偏置；两套调教的差值不受偏置影响。
-6. **组装报告**（`report/builder.py`）：参数明细、`gain_ms`（记账值）与
-   `raw_gain_ms`（模型原始预测）、代价、置信度、赛道锚点来源。
+7. **组装报告**（`report/builder.py`）：参数明细、`gain_ms`（记账值）与
+   `raw_gain_ms`（模型原始预测）、代价、置信度、赛道锚点来源，以及
+   `holistic.simulation` / `holistic.style_targeting` 两段可核对的执行记录。
 
 > 为什么收益要封顶：代理模型「差值方向可信、绝对量级不可信」。不封顶时
 > 一版 24 站模型能报出中位 733ms、平均改 9.37 个参数的「建议」—— 物理上

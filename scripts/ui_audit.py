@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 import urllib.request
 from pathlib import Path
 
@@ -48,6 +49,16 @@ def param_count_from_api() -> int:
             payload = json.loads(resp.read().decode("utf-8"))
         data = payload.get("data", payload) if isinstance(payload, dict) else payload
         return len(data) if isinstance(data, list) else 0
+    except Exception:
+        return 0
+
+
+def expected_symptom_count() -> int:
+    """反馈面板应有的症状数：后端 Symptom 枚举去掉 lap_slow（综合结论，不供勾选）。"""
+    try:
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+        from setup_tuner.domain.symptoms import Symptom
+        return len([s for s in Symptom if s.value != "lap_slow"])
     except Exception:
         return 0
 
@@ -88,7 +99,12 @@ def main() -> int:
         if panel_visible:
             boxes = page.locator('#feedback-overlay input[type="checkbox"]')
             n_boxes = boxes.count()
-            item("③症状清单条目数", n_boxes == 15, f"checkbox={n_boxes}（15 症状）")
+            # 期望值来自后端症状枚举（唯一口径），不写死数字：症状表加过项，
+            # 写死 15 的旧断言会把正确实现报成 FAIL。lap_slow 已降级为综合结论，
+            # 前端按设计不提供勾选。
+            expected_symptoms = expected_symptom_count()
+            item("③症状清单条目数", n_boxes == expected_symptoms,
+                 f"checkbox={n_boxes}（应为 {expected_symptoms}，lap_slow 不入面板）")
             # 症状按当前弯阶段分组显示：只点「当前可见」的项，并记录可见数
             visible_boxes = page.locator('#feedback-overlay input[type="checkbox"]:visible')
             n_visible = visible_boxes.count()
@@ -118,6 +134,10 @@ def main() -> int:
         item(f"④报告参数行数={expected_rows}", expected_rows > 0 and rows - 1 == expected_rows,
              f"数据行={rows - 1}")
         item("④报告摘要非空", len(summary.strip()) > 0, f"summary={summary[:60]!r}")
+        # 风格定向层必须出现在报告里（启用时给采纳明细，未启用时给原因），
+        # 否则用户只看到顶部徽标、不知道建议里哪几项来自驾驶风格。
+        item("④报告含风格定向", "风格定向" in summary,
+             "已渲染风格定向段（采纳明细或未启用原因）")
         page.screenshot(path=str(SHOTS / "05_report.png"), full_page=True)
 
         # ---------- ⑤ 遥测面板字段 ----------

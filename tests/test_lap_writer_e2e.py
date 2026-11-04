@@ -60,3 +60,32 @@ def test_lap_below_threshold_skipped(tmp_path) -> None:
     time.sleep(0.5)
     assert app.state.store.get_lap_records("suzuka", 1) == []
     assert app.state.store.get_driver_style(1, "suzuka") is None
+
+
+def test_multiple_laps_accumulate_style_samples(tmp_path) -> None:
+    """连跑 3 圈：每圈都要落库，风格样本数要累加到 3。
+
+    回归背景：第 2 圈起 ``zip(base, new_vec[:11], strict=True)`` 拿 12 维的
+    已存向量去配 11 维的新向量 → ValueError，被外层 ``except`` 吞掉，
+    结果**第 2 圈起每圈都落库失败**：赛道记录只有 1 条、风格样本永远停在
+    1，「样本 ≥3 圈才启用风格」的闸门因此从未打开过（风格功能实际是死的）。
+    """
+    app, handler = _boot(tmp_path)
+    handler({"packet_id": 2, "m_currentLapNum": 1, "m_sector": 0})
+    for lap in range(1, 4):
+        for i in range(3000):
+            handler(_frame(speed=150 + ((i + lap) % 200)))
+        handler({"packet_id": 2, "m_currentLapNum": lap + 1, "m_sector": 0,
+                 "m_lastLapTimeInMS": 90000 + lap * 100})
+    store = app.state.store
+    for _ in range(60):
+        if (store.get_driver_style(1, "suzuka") or {}).get("sample_count") == 3:
+            break
+        time.sleep(0.1)
+
+    records = store.get_lap_records("suzuka", 1)
+    assert len(records) == 3, f"3 圈都应落库，实际 {len(records)} 条"
+    style = store.get_driver_style(1, "suzuka")
+    assert style is not None
+    assert style["sample_count"] == 3
+    assert len(style["vector"]) == 12

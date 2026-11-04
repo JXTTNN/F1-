@@ -818,3 +818,24 @@ class TestRecordingTrainingExport:
             r = c.post("/api/v1/telemetry/recordings/..foo/export")
         assert r.status_code == 400
         assert r.json()["code"] == 4004
+
+
+# --------------------------------------------------------------------------- #
+# 4) 面板页脚版本号必须随包版本走
+# --------------------------------------------------------------------------- #
+class TestRootServesVersionedUI:
+    """静态 index.html 里的页脚版本号不能在发版后停留在旧值。
+
+    回归背景：页脚此前写死 ``F1OPT v1.0.0``，一路发到 v1.6.14 都没变过 ——
+    用户排查问题时按页脚报版本，会拿到完全错误的答案。现在由 ``/`` 路由
+    按 ``setup_tuner.__version__`` 替换，这里锁定「页面版本 == 包版本」。
+    """
+
+    def test_footer_version_matches_package(self, tmp_path: Path) -> None:
+        from setup_tuner import __version__
+
+        app = _isolated_app(tmp_path)
+        with TestClient(app) as c:
+            html = c.get("/").text
+        assert f"F1OPT v{__version__}" in html
+        assert "F1OPT v1.0.0" not in html

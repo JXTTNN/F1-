@@ -4,9 +4,9 @@
    职责：
       1. 赛道选择 → 加载 SVG + 弯道热区（SVG 缓存）
       2. 热区点击 → 反馈面板（17 症状 4 类 checkbox 多选 + 每症状独立强度 1-3）
-       3. 21 项调教参数手动输入面板（6 大类分组，滑块+数值输入，保存/重置/导入）
+       3. 20 项调教参数手动输入面板（6 大类分组，滑块+数值输入，保存/重置/导入）
        4. WebSocket 订阅遥测/当前弯高亮/建议结果/连接状态（指数退避重连）
-       5. 建议报告渲染（21 参数表格 + 可视化条形图 + 中文参数名映射）
+       5. 建议报告渲染（20 参数表格 + 可视化条形图 + 中文参数名映射）
       6. 迭代历史前后对比
     关键约定：
       - 后端响应统一信封 {code, message, data}，取 data 字段
@@ -88,7 +88,7 @@
     lap_slow: "圈速不高", high_speed_instability: "高速不稳", tyre_overheat: "胎温过高",
   };
 
-  // 21 参数中文显示名映射（前端 fallback，优先使用 GET /api/v1/setup/fields 返回的 label_zh）
+  // 20 参数中文显示名映射（前端 fallback，优先使用 GET /api/v1/setup/fields 返回的 label_zh）
   const PARAM_LABEL_ZH = {
     front_wing: "前翼", rear_wing: "后翼",
     on_throttle_diff: "差速器（开油门）", off_throttle_diff: "差速器（松油门）",
@@ -153,7 +153,7 @@
     btnHistory: $("btn-refresh-history"),
     historyWrap: $("history-wrap"),
     toastContainer: $("toast-container"),
-    // 21 参数面板
+    // 20 参数面板
     setupFieldsWrap: $("setup-fields-wrap"),
     btnSaveSetup: $("btn-save-setup"),
     btnResetDefault: $("btn-reset-default"),
@@ -199,7 +199,7 @@
     currentCorner: null,
     ws: null,
     wsReconnectCount: 0,
-    // 21 参数定义（从 API 加载或 fallback）
+    // 20 参数定义（从 API 加载或 fallback）
     setupFields: [],
     // 当前参数值（param_name → value）
     setupValues: {},
@@ -1694,6 +1694,43 @@
       }
     }
 
+    // 车手风格定向（第二层）：风格不只是"调幅度"，还会带 ±1 档的偏好动作。
+    // 必须把「采纳了什么 / 为什么拒绝 / 让出多少圈速」摆出来 —— 否则用户只看到
+    // 顶部「已应用风格调制」的徽标，却不知道建议里哪几项是风格带来的。
+    let styleLine = "";
+    const st = h.style_targeting;
+    if (st) {
+      if (st.enabled) {
+        const cost = Number(st.cost_ms || 0);
+        const costTxt = cost > 0
+          ? `让出 ${cost.toFixed(1)} ms`
+          : `顺带 ${Math.abs(cost).toFixed(1)} ms`;
+        const label = (p) => PARAM_LABEL_ZH[p] || p;
+        const items = (st.applied || []).map((a) => {
+          const params = Object.keys(a.params || {})
+            .map((p) => `${label(p)}${(a.params[p] || 0) > 0 ? "+" : ""}${a.params[p]}`)
+            .join("、");
+          return `${esc(a.reason || a.dim_name || "风格偏好")}（${esc(params)}）`;
+        }).join("；");
+        const rejected = st.rejected || [];
+        const rejectedTxt = rejected.length
+          ? `<span class="holistic-sub">另有 ${rejected.length} 项风格偏好未采纳：` +
+            rejected.map((r) => `${esc(r.reason || r.dim_name || "")}（${esc(r.blocked_by || "代价过高")}）`).join("；") +
+            `</span>`
+          : "";
+        styleLine = `<div class="holistic-line">` +
+          `<span class="holistic-tag">风格定向</span>` +
+          `按你的驾驶特征微调 ${(st.applied || []).length} 项：${items}` +
+          `　预测圈速代价 ${costTxt}（预算 ${st.budget_ms} ms）` +
+          rejectedTxt +
+          `</div>`;
+      } else if (st.reason) {
+        // 采集不足 / 模型不可用 / 特征不显著：如实说明，不假装风格生效
+        styleLine = `<div class="holistic-line"><span class="holistic-tag">风格定向</span>` +
+          `未启用：${esc(st.reason)}</div>`;
+      }
+    }
+
     const body = [
       group("逐弯加权依据", h.corner_notes, "holistic-corner"),
       group("跨弯道类别冲突（已折中）", h.conflicts, "holistic-conflict"),
@@ -1702,8 +1739,8 @@
             "holistic-trace"),
       group("整体收口与取舍", h.coherence_notes, "holistic-coherence"),
     ].join("");
-    if (!demandLine && !optLine && !simLine && !body) return "";
-    return `<div class="holistic">${demandLine}${optLine}${simLine}${body}</div>`;
+    if (!demandLine && !optLine && !simLine && !styleLine && !body) return "";
+    return `<div class="holistic">${demandLine}${optLine}${simLine}${styleLine}${body}</div>`;
   }
 
   function renderReportSummary(report) {
@@ -1858,7 +1895,7 @@
   }
 
   /* ========================================================================
-      7. 21 项调教参数输入面板
+      7. 20 项调教参数输入面板
      ======================================================================== */
 
   /** 加载参数定义（优先 GET /api/v1/setup/fields，失败时用 fallback）。
@@ -2001,7 +2038,7 @@
     return fieldDiv;
   }
 
-  /** 渲染 21 参数输入面板（6 大类 tab 分组）。
+  /** 渲染 20 参数输入面板（6 大类 tab 分组）。
    *  @returns {void}
    */
   function renderSetupPanel() {

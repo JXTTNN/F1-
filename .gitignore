@@ -104,3 +104,13 @@ data/training_dataset.json
 # CI/审计探针的输出产物（每次运行重新生成，不入库）
 *_probe_result.json
 audit_verify_result.json
+
+# 本地审计/测试的临时产物（每次运行重新生成，不入库）
+.pytest_audit/
+.pytest_audit2/
+.ci_junit.xml
+.ui_shots/
+.ui_audit_data/
+.audit_data/
+audit_dbg/
+scripts/perf_benchmark_result.json

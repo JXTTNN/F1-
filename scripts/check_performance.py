@@ -106,12 +106,16 @@ def measure():
 
     # 3. 内存占用
     print("\n[3] 内存占用...")
-    import psutil
-
-    pid = os.getpid()
-    proc = psutil.Process(pid)
-    rss_mb = proc.memory_info().rss / (1024 * 1024)
-    print(f"  当前进程 RSS 内存: {rss_mb:.1f} MB")
+    # psutil 是可选测量依赖（不在 pyproject 的 dev 依赖里）：
+    # 缺了就跳过这一项，不能让整份性能检查在这里崩掉、后面 4/5 步全跑不到。
+    try:
+        import psutil
+    except ImportError:
+        rss_mb = None
+        print("  跳过：未安装 psutil（pip install psutil 可测量）")
+    else:
+        rss_mb = psutil.Process(os.getpid()).memory_info().rss / (1024 * 1024)
+        print(f"  当前进程 RSS 内存: {rss_mb:.1f} MB")
 
     # 4. 功能完整性
     print("\n[4] 功能完整性检查...")
@@ -169,7 +173,7 @@ def measure():
     print("性能检查完成")
     print(f"  冷启动总时间: {import_time + ready:.3f}s")
     print(f"  API 平均延迟: {avg*1000:.1f}ms")
-    print(f"  内存占用: {rss_mb:.1f} MB")
+    print(f"  内存占用: {f'{rss_mb:.1f} MB' if rss_mb is not None else '未测量（缺 psutil）'}")
     print(f"  赛道SVG: {svg_ok}/24")
     print("=" * 70)
 

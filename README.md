@@ -6,7 +6,7 @@
 
 [![CI](https://github.com/JXTTNN/F1-/actions/workflows/ci.yml/badge.svg)](https://github.com/JXTTNN/F1-/actions/workflows/ci.yml)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
-[![Tests](https://img.shields.io/badge/tests-2159%20collected-brightgreen.svg)](#开发与测试)
+[![Tests](https://img.shields.io/badge/tests-2183%20collected-brightgreen.svg)](#开发与测试)
 [![Runtime AI deps](https://img.shields.io/badge/runtime%20AI%20deps-none-success.svg)](#为什么不需要-pytorch)
 
 ---
@@ -46,6 +46,7 @@ F1OPT 读取 **EA F1 2026** 游戏的 UDP 遥测，结合你在赛道图上点�
 | **遥测自动发现** | 你没反馈的问题也会被发现：逐弯通过时间残差、按弯路肩冲击、锁死、刮底、胎温/胎压异常、损伤 |
 | **整体性调教** | 20 项参数一次给全（含**悬挂几何 / 防倾杆 / 离地间隙 / 四轮胎压**），并给每项的联动依据与代价权衡 |
 | **神经网络模拟优化** | 遥测锚定仿真训练的性能模型（验证 MAE 77ms / R² 0.997，逐赛道标准化）在优化循环里做模拟精修，报告给出迭代轨迹与**记账收益** |
+| **车手风格定向** | 整圈遥测 → 12 维风格向量（≥3 圈启用）。风格不只调幅度，还会给 ±1 档偏好动作；每条动作先过性能模型算圈速代价，预算 25ms 内才采纳，拒绝的写明原因 |
 | **24 条赛道** | 含 Madrid 新赛道；每条赛道的弯道数据来自 80k+ 真实 2026 逐弯遥测 |
 | **录制与训练导出** | 一键录制（`.f1rec` 原始字节）→ 导出逐圈训练样本；**录制永久保留** |
 
@@ -56,6 +57,7 @@ F1OPT 读取 **EA F1 2026** 游戏的 UDP 遥测，结合你在赛道图上点�
 | 调教性能模型 | 验证集 **MAE 76.9 ms / R² 0.9974**（零改动基线 1861 ms）；近最优局部 **54.3 ms**、fine 切片 **67.4 ms**（逐赛道标准化） |
 | 使用流程（24 赛道 × 5 场景） | 模型生效率 **100%**；至少采纳 1 步 **100%**；记账收益中位 **110.0 ms**（p90 116.4）；平均只让你改 **1.9 步**；越界/胎压不对称/无输入改车 **0** |
 | 决策精度 | 成对排序 **80.5%**（30–100ms 区间 **85.6%**）；方向一致 **100%**；默认点偏置 **0.0 ms**（差分校准前 38.6 ms） |
+| 风格定向（24 赛道 × 5 场景） | 激进 / 粗糙两种开法 **100%** 改变建议、**100%** 组合存活；预测代价 p90 **+4.7 / −8.0 ms**（预算 25 ms）；覆盖 3 个风格维度；越界 / 静默丢弃 **0** |
 | 模型覆盖 | **24/24 赛道**（遥测锚定 19 + 几何推定 5，来源在报告里逐站标注） |
 | 测试 | `pytest` **2,100+ 项**（含深切片 / 端到端）；`ruff` 全绿 |
 
@@ -106,7 +108,7 @@ python -m setup_tuner.cli
 ### 方式 B：免安装便携包（Windows）
 
 从 [Releases](https://github.com/JXTTNN/F1-/releases) 下载
-[`F1OPT-portable.zip`](https://github.com/JXTTNN/F1-/releases/download/v1.6.13/F1OPT-portable.zip)（约 22 MB），
+[`F1OPT-portable.zip`](https://github.com/JXTTNN/F1-/releases/latest/download/F1OPT-portable.zip)（约 22 MB），
 解压后双击「一键启动.bat」即可，无需安装 Python、无需任何配置。
 >
 > 便携包每次发布都会自动通过**打包产物测试**（6 阶段 / 80 项）才会公开：
@@ -134,7 +136,7 @@ F1 2026 → Settings → Telemetry：
 3. **导入当前调校**（可选：游戏内导出 Car Setup，面板一键导入）
 4. **跑一圈**
 5. **点赛道图上的问题弯**录入反馈（推头 / 甩尾 / 打滑 / 锁死 / 刮底 / 压路肩…），
-   或**什么都不点** —— 遥测会自动发现问题
+   或**什么都不点** —— 遥测会自动发现问题。跑满 3 圈后，12 维驾驶风格自动生效
 6. **点「生成建议」** → 得到 20 项调整 + 每项依据 + 模拟优化轨迹
 7. 应用到游戏里，再跑一圈对比
 
@@ -153,6 +155,18 @@ F1 2026 → Settings → Telemetry：
 | 模型 | `scripts/train_setup_sim_nn.py` | 纯标准库 MLP，输入 53 维 / `[48,32]` 隐层（`setup_tuner/resources/models/setup_sim_nn.json`），验证 MAE 76.9 ms / R² 0.997，标签逐赛道标准化 |
 | 优化 | `setup_tuner/engine/sim_optimizer.py` | 坐标上升的**模拟精修**：逐参数试步 → NN 预测候选圈速 → 更优且"付得起"目标代价才接受 |
 | 报告 | `report.holistic.simulation` | 模型描述 / 迭代轮数 / 采纳次数 / 模拟提升 / 逐步采纳轨迹 —— **面板上直接可见** |
+
+### 车手风格定向（第二层，v1.6.15）
+
+`gain_for_style` 只调幅度（实测 6 条规则里 4 条在 24 站上零影响：诊断没动的参数
+乘多少还是 0，顶到 `max_delta` 的参数乘 1.25 仍被夹回）。因此新增一层**离散动作**：
+
+- 整圈遥测 → `style_extractor` 累积 12 维向量（含跨圈一致性），样本 ≥3 圈才启用；
+- `style_coefficients.style_trims` 把明显偏离中性的维度映射成 ±1 档动作
+  （前翼 / 防倾杆+悬挂 / 刹车压力 / 差速器 / 四轮胎压…），同参数只认领一次，不叠加；
+- 每条动作都用调教性能 NN 评估圈速代价：单条 ±30ms 可信区间、整层 25ms 预算，
+  超出的**如实拒绝并写进报告**（`holistic.style_targeting.rejected`）；
+- 面板报告直接展示「按你的驾驶特征微调了哪几项、让出多少圈速、哪些没采纳」。
 
 **降级是诚实的**：模型不可用、赛道不在覆盖范围、或你没有任何反馈且遥测也没发现问题时，
 自动走纯规则路径，并在报告里写明原因（不假装模型在跑）。
@@ -224,7 +238,7 @@ setup_tuner/            运行时包（pip 安装的就是它）
 └── ui/                 面板（index.html + app.js + 赛道 SVG）
 
 scripts/                训练、校验、验收、审计脚本
-tests/                  2159 项测试（含 deep_slice / deep_integration）
+tests/                  2183 项测试（含 deep_slice / deep_integration）
 docs/                   设计文档、变更日志、验证报告
 assets/                 一键启动.bat 等
 legacy/                 重构前的旧实现存档（只读参考，不参与运行与 lint）
@@ -252,6 +266,8 @@ python scripts/build_setup_sim_dataset.py --calibrate-only   # 标定表 / 赛�
 python scripts/retrain_all.py                                # 一键重训全部模型
 python scripts/verify_optimization_telemetry.py              # 端到端效果验收（含真值复核）
 python scripts/api_endpoint_test.py                          # API 契约 + 模型语义校验
+python scripts/audit_full_flow.py                            # 全流程审计（遥测→风格→反馈→建议→合法性）
+python scripts/eval_style_targeting.py                       # 风格定向评测（24 赛道 × 5 场景 × 3 风格）
 ```
 
 ### 文档索引
