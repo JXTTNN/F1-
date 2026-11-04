@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-theme="broadcast">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -10,6 +10,19 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230d0d12'/%3E%3Ctext x='16' y='22' font-size='16' text-anchor='middle' fill='%233b9eff'%3EF1%3C/text%3E%3C/svg%3E" />
   <title>F1OPT · 赛车调教优化助手</title>
   <link rel="stylesheet" href="/static/style.css" />
+  <link rel="stylesheet" href="/static/themes.css" />
+  <!-- 首屏前落地已保存的主题，避免浅色主题先渲染成深色再跳变（FOUC）。
+       主题 id 列表与 app.js 的 THEMES 一致，由 tests/test_ui_theme.py 锁定。 -->
+  <script>
+    (function () {
+      try {
+        var saved = localStorage.getItem("f1opt.ui.theme");
+        if (["broadcast", "pitwall", "carbon", "nightrace"].indexOf(saved) !== -1) {
+          document.documentElement.setAttribute("data-theme", saved);
+        }
+      } catch (err) {}
+    })();
+  </script>
 </head>
 <body>
   <!-- ==================== 顶部栏 ==================== -->
@@ -18,11 +31,28 @@
       <span class="logo-mark" aria-hidden="true">F1</span>
       <h1>F1OPT <span class="topbar-sub">赛车调教优化助手</span></h1>
     </div>
-    <div class="topbar-status" role="status" aria-live="polite">
-      <span id="ws-dot" class="status-dot status-offline" aria-label="遥测连接状态" title="遥测连接状态"></span>
-      <span id="ws-status-text" class="status-text">遥测未连接</span>
-      <span class="topbar-sep" aria-hidden="true">|</span>
-      <span class="topbar-mode" id="topbar-mode">神经网络模拟优化</span>
+    <div class="topbar-right">
+      <!-- 界面主题切换：4 个版本，选择记忆在 localStorage -->
+      <div class="theme-switch" role="group" aria-label="界面主题">
+        <button class="theme-chip" type="button" data-theme-set="broadcast" aria-pressed="true" title="转播 · 深黑蓝 + F1 红（默认）">
+          <span class="theme-dot" data-theme-dot="broadcast" aria-hidden="true"></span><span class="theme-name">转播</span>
+        </button>
+        <button class="theme-chip" type="button" data-theme-set="pitwall" aria-pressed="false" title="维修区 · 浅色工程台，白天/强光更清晰">
+          <span class="theme-dot" data-theme-dot="pitwall" aria-hidden="true"></span><span class="theme-name">维修区</span>
+        </button>
+        <button class="theme-chip" type="button" data-theme-set="carbon" aria-pressed="false" title="碳纤维 · 纯黑 + 荧光黄绿，硬核机械风">
+          <span class="theme-dot" data-theme-dot="carbon" aria-hidden="true"></span><span class="theme-name">碳纤维</span>
+        </button>
+        <button class="theme-chip" type="button" data-theme-set="nightrace" aria-pressed="false" title="夜景 · 深蓝紫 + 品红霓虹，夜赛氛围">
+          <span class="theme-dot" data-theme-dot="nightrace" aria-hidden="true"></span><span class="theme-name">夜景</span>
+        </button>
+      </div>
+      <div class="topbar-status" role="status" aria-live="polite">
+        <span id="ws-dot" class="status-dot status-offline" aria-label="遥测连接状态" title="遥测连接状态"></span>
+        <span id="ws-status-text" class="status-text">遥测未连接</span>
+        <span class="topbar-sep" aria-hidden="true">|</span>
+        <span class="topbar-mode" id="topbar-mode">神经网络模拟优化</span>
+      </div>
     </div>
   </header>
 
@@ -301,13 +331,13 @@
 
   <!-- ==================== Footer ==================== -->
   <footer class="app-footer" role="contentinfo">
-    <span class="footer-version">F1OPT v1.6.18</span>
+    <span class="footer-version">F1OPT v1.6.19</span>
     <span class="footer-sep" aria-hidden="true">·</span>
     <span>数据基准：F1 2026</span>
     <span class="footer-sep" aria-hidden="true">·</span>
     <span>24 赛道 · 20 项调教参数 · 22 类症状</span>
     <span class="footer-sep" aria-hidden="true">·</span>
-    <span class="footer-theme">F1 BROADCAST</span>
+    <span class="footer-theme" id="footer-theme">F1 BROADCAST</span>
   </footer>
 
   <script src="/static/app.js"></script>

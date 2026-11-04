@@ -40,7 +40,7 @@
             └─────────────► api/ws.py       WebSocket 实时推送
                              │
                              ▼
-   ui/  单文件前端（index.html + app.js + style.css + 24 张赛道 SVG）
+   ui/  单文件前端（index.html + app.js + style.css + themes.css + 24 张赛道 SVG）
 ```
 
 ## 2. 模块地图

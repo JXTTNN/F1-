@@ -37,6 +37,10 @@
   --accent-glow: rgba(255, 24, 1, 0.10);
   --accent-glow-strong: rgba(255, 24, 1, 0.16);
   --accent-gradient: linear-gradient(135deg, #FF1801 0%, #FF4020 100%);
+  --accent-gradient-hover: linear-gradient(135deg, #FF3320 0%, #FF5030 100%);
+  /* 主色上的前景色（按钮文字 / 勾选标记） */
+  --on-accent: #ffffff;
+  --on-success: #000000;
   /* 数据青（F1 TV Pro 数据显示色 — 速度/主要数据） */
   --data: #00D9FF;
   --data-soft: rgba(0, 217, 255, 0.06);
@@ -89,6 +93,22 @@
   /* Shimmer 光扫参数 */
   --shimmer-duration: 0.6s;
   --shimmer-angle: 110deg;
+  /* ---------- 下列变量被 themes.css 按主题整体覆盖 ---------- */
+  /* 浮层背景（顶部栏 / 弹窗遮罩 / Toast） */
+  --topbar-bg: rgba(10, 14, 20, 0.72);
+  --overlay-bg: rgba(6, 10, 16, 0.72);
+  --toast-bg: rgba(17, 21, 28, 0.88);
+  /* 页面底纹（整段 background-image + 尺寸，方便按主题替换） */
+  --app-bg-size: auto;
+  --app-bg-image:
+    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(255, 24, 1, 0.025) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 40% at 100% 100%, rgba(0, 217, 255, 0.015) 0%, transparent 50%),
+    radial-gradient(ellipse 40% 30% at 0% 50%, rgba(139, 92, 246, 0.01) 0%, transparent 50%);
+  /* 建议报告「整体性」分组左边框语义色 */
+  --holistic-conflict: #e0a33c;
+  --holistic-coherence: #5cb87a;
+  --holistic-tradeoff: #7aa2ff;
+  --holistic-trace: #8d8d99;
 }
 
 /* ---------- 基础重置 ---------- */
@@ -98,10 +118,8 @@ body {
   font-family: var(--font);
   /* F1 转播底色：微妙径向渐变营造空间感，无网格线 */
   background-color: var(--bg-base);
-  background-image:
-    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(255, 24, 1, 0.025) 0%, transparent 60%),
-    radial-gradient(ellipse 60% 40% at 100% 100%, rgba(0, 217, 255, 0.015) 0%, transparent 50%),
-    radial-gradient(ellipse 40% 30% at 0% 50%, rgba(139, 92, 246, 0.01) 0%, transparent 50%);
+  background-image: var(--app-bg-image);
+  background-size: var(--app-bg-size);
   color: var(--text-body);
   line-height: 1.5;
   letter-spacing: var(--ls-tight);
@@ -123,7 +141,7 @@ h1, h2, h3 {
   justify-content: space-between;
   padding: 0 24px;
   height: 52px;
-  background: rgba(10, 14, 20, 0.72);
+  background: var(--topbar-bg);
   backdrop-filter: blur(16px) saturate(180%);
   -webkit-backdrop-filter: blur(16px) saturate(180%);
   border-bottom: 1px solid var(--border);
@@ -138,7 +156,7 @@ h1, h2, h3 {
   justify-content: center;
   width: 28px; height: 28px;
   background: var(--accent-gradient);
-  color: #fff;
+  color: var(--on-accent);
   font-weight: 800;
   font-style: italic;
   border-radius: var(--radius-sm);
@@ -167,7 +185,7 @@ h1, h2, h3 {
   font-size: 10px;
   color: var(--data);
   padding: 2px 8px;
-  border: 1px solid rgba(0, 217, 255, 0.2);
+  border: 1px solid var(--data-glow);
   border-radius: var(--radius-xs);
   background: var(--data-soft);
   letter-spacing: var(--ls-wider);
@@ -175,8 +193,8 @@ h1, h2, h3 {
   transition: var(--transition-fast);
 }
 .topbar-mode:hover {
-  border-color: rgba(0, 217, 255, 0.35);
-  background: rgba(0, 217, 255, 0.12);
+  border-color: var(--data);
+  background: var(--data-glow);
 }
 .status-dot {
   width: 8px; height: 8px;
@@ -409,7 +427,7 @@ h1, h2, h3 {
   top: -5px; right: -5px;
   width: 12px; height: 12px;
   background: var(--success);
-  color: #000;
+  color: var(--on-success);
   border-radius: 50%;
   font-size: 8px;
   font-weight: 700;
@@ -557,13 +575,13 @@ h1, h2, h3 {
 .btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .btn-primary {
   background: var(--accent-gradient);
-  color: #fff;
+  color: var(--on-accent);
   font-weight: 600;
   border-color: var(--accent);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
 }
 .btn-primary:hover:not(:disabled) {
-  background: linear-gradient(135deg, #FF3320 0%, #FF5030 100%);
+  background: var(--accent-gradient-hover);
   border-color: var(--accent-hover);
   transform: translateY(-1px);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.15);
@@ -1011,7 +1029,7 @@ h1, h2, h3 {
   border-radius: 2px;
   transition: var(--transition);
 }
-.delta-bar-fill.up { background: linear-gradient(90deg, var(--accent) 0%, #FF4020 100%); }
+.delta-bar-fill.up { background: linear-gradient(90deg, var(--accent) 0%, var(--accent-hover) 100%); }
 .delta-bar-fill.down { background: linear-gradient(90deg, var(--data) 0%, #00B8E6 100%); }
 
 /* ---------- 迭代历史 ---------- */
@@ -1051,7 +1069,7 @@ h1, h2, h3 {
 .fb-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(6, 10, 16, 0.72);
+  background: var(--overlay-bg);
   backdrop-filter: blur(8px) saturate(180%);
   -webkit-backdrop-filter: blur(8px) saturate(180%);
   display: flex;
@@ -1185,8 +1203,8 @@ h1, h2, h3 {
   transition: var(--transition-fast);
 }
 .sym-group.expanded .sym-group-count {
-  border-color: rgba(0, 217, 255, 0.2);
-  background: rgba(0, 217, 255, 0.12);
+  border-color: var(--data);
+  background: var(--data-glow);
 }
 .sym-group-body { display: none; padding: 4px 0; }
 .sym-group.expanded .sym-group-body { display: block; animation: expand-in 0.18s ease; }
@@ -1377,7 +1395,7 @@ h1, h2, h3 {
   max-width: 90vw;
 }
 .toast {
-  background: rgba(17, 21, 28, 0.88);
+  background: var(--toast-bg);
   backdrop-filter: blur(16px) saturate(180%);
   -webkit-backdrop-filter: blur(16px) saturate(180%);
   border: 1px solid var(--border-glow);
@@ -1639,8 +1657,8 @@ h1, h2, h3 {
   border-left: 3px solid var(--border, #3a3a44);
   padding-left: 8px;
 }
-.holistic-group.holistic-conflict { border-left-color: #e0a33c; }
-.holistic-group.holistic-coherence { border-left-color: #5cb87a; }
+.holistic-group.holistic-conflict { border-left-color: var(--holistic-conflict); }
+.holistic-group.holistic-coherence { border-left-color: var(--holistic-coherence); }
 .holistic-title {
   font-size: 12px;
   font-weight: 600;
@@ -1652,8 +1670,8 @@ h1, h2, h3 {
   line-height: 1.55;
   opacity: .9;
 }
-.holistic-group.holistic-tradeoff { border-left-color: #7aa2ff; }
-.holistic-group.holistic-trace { border-left-color: #8d8d99; }
+.holistic-group.holistic-tradeoff { border-left-color: var(--holistic-tradeoff); }
+.holistic-group.holistic-trace { border-left-color: var(--holistic-trace); }
 .holistic-group.holistic-trace .holistic-item {
   font-family: var(--mono);
   font-size: 11px;

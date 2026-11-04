@@ -134,6 +134,85 @@
 
   /* ---------- DOM 引用 ---------- */
   const $ = (id) => document.getElementById(id);
+  /* ---------- 界面主题（4 个版本，切换后记忆在 localStorage） ---------- */
+  // 主题 id 必须与 themes.css 里的 html[data-theme="..."] 完全一致
+  const THEME_STORAGE_KEY = "f1opt.ui.theme";
+  const THEMES = [
+    { id: "broadcast", label: "F1 BROADCAST", name: "转播",   scheme: "dark",  color: "#0a0e14" },
+    { id: "pitwall",   label: "PIT WALL",     name: "维修区", scheme: "light", color: "#ECEFF3" },
+    { id: "carbon",    label: "CARBON SPEC",  name: "碳纤维", scheme: "dark",  color: "#07080A" },
+    { id: "nightrace", label: "NIGHT RACE",   name: "夜景",   scheme: "dark",  color: "#080A1A" },
+  ];
+  const THEME_IDS = THEMES.map((t) => t.id);
+  const DEFAULT_THEME = "broadcast";
+
+  /** 判断是否为受支持的主题 id。
+   *  @param {string} id 候选主题 id
+   *  @returns {boolean} 受支持返回 true
+   */
+  function isThemeId(id) {
+    return THEME_IDS.indexOf(id) !== -1;
+  }
+
+  /** 读取上次选择的主题；localStorage 不可用（隐私模式/file://）时回退默认值。
+   *  @returns {string} 主题 id
+   */
+  function readStoredTheme() {
+    try {
+      const saved = window.localStorage.getItem(THEME_STORAGE_KEY);
+      return isThemeId(saved) ? saved : DEFAULT_THEME;
+    } catch (err) {
+      return DEFAULT_THEME;
+    }
+  }
+
+  /** 应用主题：切换 data-theme、同步 meta、芯片选中态、页脚标签。
+   *  @param {string} id 主题 id（未知 id 回退默认）
+   *  @param {boolean} persist 是否写入 localStorage
+   *  @returns {void}
+   */
+  function applyTheme(id, persist) {
+    const theme = THEMES.find((t) => t.id === id) || THEMES[0];
+    document.documentElement.setAttribute("data-theme", theme.id);
+
+    // 浏览器原生控件（滚动条/输入框）跟随明暗
+    const metaScheme = document.querySelector('meta[name="color-scheme"]');
+    if (metaScheme) metaScheme.setAttribute("content", theme.scheme);
+    // 移动端地址栏配色
+    const metaColor = document.querySelector('meta[name="theme-color"]');
+    if (metaColor) metaColor.setAttribute("content", theme.color);
+
+    // 切换器选中态（aria-pressed 同时承担无障碍语义与样式选择器）
+    document.querySelectorAll(".theme-chip").forEach((chip) => {
+      const on = chip.getAttribute("data-theme-set") === theme.id;
+      chip.setAttribute("aria-pressed", on ? "true" : "false");
+    });
+
+    // 页脚标签（页面级唯一来源，避免两处硬编码不同步）
+    const footer = document.getElementById("footer-theme");
+    if (footer) footer.textContent = theme.label;
+
+    if (persist) {
+      try {
+        window.localStorage.setItem(THEME_STORAGE_KEY, theme.id);
+      } catch (err) {
+        // localStorage 不可用时主题只在本次会话生效，不打扰用户
+      }
+    }
+  }
+
+  /** 初始化主题：应用已保存的选择并绑定切换器点击。
+   *  @returns {void}
+   */
+  function initTheme() {
+    applyTheme(readStoredTheme(), false);
+    document.querySelectorAll(".theme-chip").forEach((chip) => {
+      chip.addEventListener("click", () => {
+        applyTheme(chip.getAttribute("data-theme-set"), true);
+      });
+    });
+  }
+
   const dom = {
     trackSelect: $("track-select"),
     trackMeta: $("track-meta"),
@@ -2397,6 +2476,7 @@
    *  @returns {void}
    */
   function init() {
+    initTheme();
     bindEvents();
     loadTracks();
     loadSetupFields();

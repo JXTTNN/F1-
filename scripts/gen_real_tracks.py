@@ -33,20 +33,20 @@ SVG_HEAD = """<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600">
   <defs>
     <style>
-      .track-bg { fill: #0d0d12; }
-      .track-line { fill: none; stroke: #3a3e48; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
-      .track-line-accent { fill: none; stroke: rgba(59,158,255,0.20); stroke-width: 1.5; stroke-linecap: round; stroke-dasharray: 6,4; }
-      .track-edge { fill: none; stroke: #3a3e48; stroke-width: 1; stroke-linecap: round; stroke-linejoin: round; opacity: 0.6; }
+      .track-bg { fill: var(--track-bg, #0d0d12); }
+      .track-line { fill: none; stroke: var(--track-line, #3a3e48); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+      .track-line-accent { fill: none; stroke: var(--track-accent, rgba(59,158,255,0.20)); stroke-width: 1.5; stroke-linecap: round; stroke-dasharray: 6,4; }
+      .track-edge { fill: none; stroke: var(--track-line, #3a3e48); stroke-width: 1; stroke-linecap: round; stroke-linejoin: round; opacity: 0.6; }
     </style>
   </defs>
   <rect class="track-bg" width="800" height="600" rx="8"/>"""
 
 CIRCLE_FMT = (
-    '  <circle cx="{x:.2f}" cy="{y:.2f}" r="6" fill="none" stroke="#3B9EFF" '
+    '  <circle cx="{x:.2f}" cy="{y:.2f}" r="6" fill="none" stroke="var(--track-ring, #3B9EFF)" '
     'stroke-width="1.5" opacity="0.85"/>'
 )
 TEXT_FMT = (
-    '  <text x="{x:.2f}" y="{y:.2f}" text-anchor="middle" fill="#9494a8" '
+    '  <text x="{x:.2f}" y="{y:.2f}" text-anchor="middle" fill="var(--track-label, #9494a8)" '
     'font-size="9" font-family="monospace">{num}</text>'
 )
 
@@ -81,7 +81,7 @@ def build_svg(track_id: str, pts: list[tuple[float, float]], anchors: list[tuple
         parts.append(CIRCLE_FMT.format(x=x, y=y))
         parts.append(TEXT_FMT.format(x=x, y=y - TEXT_Y_OFFSET, num=i))
     parts.append(
-        f'  <text x="400" y="588" text-anchor="middle" fill="#5c5c70" '
+        f'  <text x="400" y="588" text-anchor="middle" fill="var(--track-caption, #5c5c70)" '
         f'font-size="11" font-family="monospace" letter-spacing="2">'
         f'{old_caption(track_id)}</text>'
     )

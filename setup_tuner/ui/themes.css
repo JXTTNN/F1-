@@ -1,0 +1,415 @@
+/* ==========================================================================
+   F1OPT 界面主题（4 个版本，可热切换）
+   --------------------------------------------------------------------------
+   加载顺序：style.css → themes.css
+   实现方式：只覆盖 CSS 变量 + 少量结构性规则，不改任何布局与交互逻辑，
+             所以切换主题不影响功能（赛道图 / 遥测 / 调教面板 / 建议报告全一致）。
+
+   版本清单：
+     broadcast  F1 转播（默认）  深黑蓝 + F1 红 + 数据青 —— 定义在 style.css :root
+     pitwall    维修区（浅色）    白底工程台 + 深红 + 深青 —— 白天/强光环境
+     carbon     碳纤维（荧光）    纯黑 + 荧光黄绿 + 白数据 —— 车队车库硬核风
+     nightrace  夜景（霓虹）      深蓝紫 + 品红 + 青 —— 夜赛转播霓虹感
+
+   注意：broadcast 不在此文件重复定义。移除 html 上的 data-theme 即回落
+         :root 默认值，等同于 broadcast。
+   ========================================================================== */
+
+/* ==========================================================================
+   V2 · PIT WALL —— 浅色工程台
+   设计：白底 + 细网格底纹 + 深红主色。适合白天、强光、投影与打印。
+   ========================================================================== */
+html[data-theme="pitwall"] {
+  color-scheme: light;
+
+  --bg-base: #ECEFF3;
+  --bg-card: #FFFFFF;
+  --bg-card-2: #F7F9FB;
+  --bg-card-3: #EEF2F6;
+  --bg-hover: #E8EDF3;
+  --bg-inset: #E3E8EF;
+  --bg-elevated: #FFFFFF;
+
+  --border: rgba(15, 23, 42, 0.10);
+  --border-soft: rgba(15, 23, 42, 0.055);
+  --border-glow: rgba(15, 23, 42, 0.13);
+  --border-strong: rgba(15, 23, 42, 0.18);
+  --border-bright: rgba(15, 23, 42, 0.26);
+
+  --text: #0B1220;
+  --text-body: #33415C;
+  --text-dim: #64748B;
+  --text-faint: #8A99AD;
+  --text-ghost: #C3CCD8;
+
+  --accent: #E10600;
+  --accent-hover: #B90500;
+  --accent-soft: rgba(225, 6, 0, 0.06);
+  --accent-glow: rgba(225, 6, 0, 0.10);
+  --accent-glow-strong: rgba(225, 6, 0, 0.16);
+  --accent-gradient: linear-gradient(135deg, #E10600 0%, #FF2A1A 100%);
+  --accent-gradient-hover: linear-gradient(135deg, #B90500 0%, #E10600 100%);
+  --on-accent: #FFFFFF;
+
+  --data: #0E7490;
+  --data-soft: rgba(14, 116, 144, 0.08);
+  --data-glow: rgba(14, 116, 144, 0.12);
+  --data-gradient: linear-gradient(135deg, #0E7490 0%, #0891B2 100%);
+
+  --sector-1: #7C3AED;
+  --sector-1-soft: rgba(124, 58, 237, 0.08);
+  --sector-1-glow: rgba(124, 58, 237, 0.12);
+  --sector-2-soft: rgba(4, 120, 87, 0.08);
+  --sector-2-glow: rgba(4, 120, 87, 0.12);
+  --sector-3-soft: rgba(180, 83, 9, 0.08);
+  --sector-3-glow: rgba(180, 83, 9, 0.12);
+
+  --info: #1D4ED8;
+  --info-soft: rgba(29, 78, 216, 0.07);
+  --info-glow: rgba(29, 78, 216, 0.12);
+  --warn: #B45309;
+  --warn-soft: rgba(180, 83, 9, 0.08);
+  --warn-glow: rgba(180, 83, 9, 0.12);
+  --danger: #DC2626;
+  --danger-soft: rgba(220, 38, 38, 0.08);
+  --success: #047857;
+  --success-soft: rgba(4, 120, 87, 0.09);
+  --on-success: #FFFFFF;
+
+  --radius: 7px;
+  --radius-sm: 5px;
+  --radius-lg: 11px;
+
+  --shadow: 0 1px 2px rgba(15, 23, 42, 0.06), 0 1px 3px rgba(15, 23, 42, 0.07);
+  --shadow-lg: 0 14px 36px rgba(15, 23, 42, 0.18);
+  --shadow-elevated: 0 2px 8px rgba(15, 23, 42, 0.10);
+
+  --topbar-bg: rgba(255, 255, 255, 0.84);
+  --overlay-bg: rgba(15, 23, 42, 0.42);
+  --toast-bg: rgba(255, 255, 255, 0.95);
+
+  /* 工程图纸底纹：32px 细网格 */
+  --app-bg-size: 100% 32px, 32px 100%;
+  --app-bg-image:
+    linear-gradient(rgba(15, 23, 42, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(15, 23, 42, 0.035) 1px, transparent 1px);
+
+  --holistic-conflict: #B45309;
+  --holistic-coherence: #047857;
+  --holistic-tradeoff: #1D4ED8;
+  --holistic-trace: #64748B;
+
+  /* 赛道图 SVG 内联注入页面 DOM，因此可用页面级变量控制配色 */
+  --track-bg: #F7F9FB;
+  --track-line: #94A3B8;
+  --track-accent: rgba(14, 116, 144, 0.30);
+  --track-ring: #0E7490;
+  --track-label: #475569;
+  --track-caption: #94A3B8;
+}
+
+/* 浅色下卡片扫光改用深色微光（白色扫光在白卡上不可见） */
+html[data-theme="pitwall"] .card::after {
+  background: linear-gradient(
+    var(--shimmer-angle),
+    transparent 30%,
+    rgba(15, 23, 42, 0.018) 45%,
+    rgba(15, 23, 42, 0.035) 50%,
+    rgba(15, 23, 42, 0.018) 55%,
+    transparent 70%
+  );
+}
+/* 浅色下顶部栏投影更轻，避免"发灰" */
+html[data-theme="pitwall"] .topbar {
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+}
+/* 浅色下卡片用纯白，避免 style.css 的深色纵向渐变把白卡拖灰 */
+html[data-theme="pitwall"] .card {
+  background: var(--bg-card);
+}
+/* 浅色下按钮内高光改为白色（原本就是白，但底色深时才有意义） */
+html[data-theme="pitwall"] .btn-primary {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+
+/* ==========================================================================
+   V3 · CARBON —— 碳纤维车库（荧光黄绿）
+   设计：纯黑基底 + 荧光黄绿主色 + 白色数据 + 更小的圆角。硬朗、机械。
+   ========================================================================== */
+html[data-theme="carbon"] {
+  color-scheme: dark;
+
+  --bg-base: #07080A;
+  --bg-card: #0E1013;
+  --bg-card-2: #131519;
+  --bg-card-3: #181B20;
+  --bg-hover: #1C1F25;
+  --bg-inset: #040506;
+  --bg-elevated: #1A1D22;
+
+  --border: rgba(255, 255, 255, 0.065);
+  --border-soft: rgba(255, 255, 255, 0.04);
+  --border-glow: rgba(255, 255, 255, 0.09);
+  --border-strong: rgba(255, 255, 255, 0.13);
+  --border-bright: rgba(255, 255, 255, 0.20);
+
+  --text: #F2F5F2;
+  --text-body: #BFC6C0;
+  --text-dim: #7E8681;
+  --text-faint: #5A615D;
+  --text-ghost: #3A403D;
+
+  --accent: #D4FF00;
+  --accent-hover: #E8FF5C;
+  --accent-soft: rgba(212, 255, 0, 0.07);
+  --accent-glow: rgba(212, 255, 0, 0.12);
+  --accent-glow-strong: rgba(212, 255, 0, 0.20);
+  --accent-gradient: linear-gradient(135deg, #D4FF00 0%, #A6E000 100%);
+  --accent-gradient-hover: linear-gradient(135deg, #E8FF5C 0%, #C2F000 100%);
+  --on-accent: #08090A;
+
+  --data: #FFFFFF;
+  --data-soft: rgba(255, 255, 255, 0.06);
+  --data-glow: rgba(255, 255, 255, 0.10);
+  --data-gradient: linear-gradient(135deg, #FFFFFF 0%, #C3CBD4 100%);
+
+  --sector-1: #8B5CF6;
+  --sector-1-soft: rgba(139, 92, 246, 0.10);
+  --sector-1-glow: rgba(139, 92, 246, 0.14);
+  --sector-2-soft: rgba(0, 229, 160, 0.09);
+  --sector-2-glow: rgba(0, 229, 160, 0.14);
+  --sector-3-soft: rgba(255, 149, 0, 0.09);
+  --sector-3-glow: rgba(255, 149, 0, 0.14);
+
+  --info: #6BA8FF;
+  --info-soft: rgba(107, 168, 255, 0.07);
+  --info-glow: rgba(107, 168, 255, 0.12);
+  --warn: #FFB020;
+  --warn-soft: rgba(255, 176, 32, 0.08);
+  --warn-glow: rgba(255, 176, 32, 0.13);
+  --danger: #FF4B3E;
+  --danger-soft: rgba(255, 75, 62, 0.09);
+  --success: #00E5A0;
+  --success-soft: rgba(0, 229, 160, 0.09);
+  --on-success: #04120C;
+
+  --radius: 4px;
+  --radius-sm: 3px;
+  --radius-lg: 6px;
+
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+  --shadow-lg: 0 10px 30px rgba(0, 0, 0, 0.75);
+  --shadow-elevated: 0 2px 10px rgba(0, 0, 0, 0.6);
+
+  --topbar-bg: rgba(7, 8, 10, 0.86);
+  --overlay-bg: rgba(4, 5, 6, 0.80);
+  --toast-bg: rgba(19, 21, 25, 0.94);
+
+  --app-bg-image:
+    radial-gradient(ellipse 70% 45% at 50% -12%, rgba(212, 255, 0, 0.045) 0%, transparent 62%),
+    radial-gradient(ellipse 50% 40% at 100% 105%, rgba(255, 255, 255, 0.02) 0%, transparent 55%);
+
+  --holistic-conflict: #FFB020;
+  --holistic-coherence: #00E5A0;
+  --holistic-tradeoff: #6BA8FF;
+  --holistic-trace: #7E8681;
+
+  /* 赛道图 SVG 内联注入页面 DOM，因此可用页面级变量控制配色 */
+  --track-bg: #0A0B0C;
+  --track-line: #34393D;
+  --track-accent: rgba(212, 255, 0, 0.22);
+  --track-ring: #D4FF00;
+  --track-label: #9AA29B;
+  --track-caption: #5A615D;
+}
+
+/* 碳纤维：荧光主色不需要发光，改用实心描边强化"机械贴纸"感 */
+html[data-theme="carbon"] .logo-mark {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45), 0 0 0 1px rgba(0, 0, 0, 0.6);
+}
+html[data-theme="carbon"] .card {
+  border-color: rgba(255, 255, 255, 0.055);
+}
+html[data-theme="carbon"] .card:hover {
+  border-color: rgba(212, 255, 0, 0.22);
+}
+
+/* ==========================================================================
+   V4 · NIGHT RACE —— 夜赛霓虹（品红 + 青）
+   设计：深蓝紫底 + 品红主色 + 青色数据，强渐变光晕，夜赛转播氛围。
+   ========================================================================== */
+html[data-theme="nightrace"] {
+  color-scheme: dark;
+
+  --bg-base: #080A1A;
+  --bg-card: #10132A;
+  --bg-card-2: #151936;
+  --bg-card-3: #1A1F42;
+  --bg-hover: #1E2449;
+  --bg-inset: #060814;
+  --bg-elevated: #1B2148;
+
+  --border: rgba(148, 163, 255, 0.12);
+  --border-soft: rgba(148, 163, 255, 0.07);
+  --border-glow: rgba(148, 163, 255, 0.16);
+  --border-strong: rgba(148, 163, 255, 0.22);
+  --border-bright: rgba(148, 163, 255, 0.32);
+
+  --text: #F1F3FF;
+  --text-body: #C3C9E8;
+  --text-dim: #8B92B8;
+  --text-faint: #61679A;
+  --text-ghost: #3B4070;
+
+  --accent: #FF2E88;
+  --accent-hover: #FF5CA3;
+  --accent-soft: rgba(255, 46, 136, 0.08);
+  --accent-glow: rgba(255, 46, 136, 0.15);
+  --accent-glow-strong: rgba(255, 46, 136, 0.24);
+  --accent-gradient: linear-gradient(135deg, #FF2E88 0%, #FF5CA3 100%);
+  --accent-gradient-hover: linear-gradient(135deg, #FF5CA3 0%, #FF7DB8 100%);
+  --on-accent: #FFFFFF;
+
+  --data: #22D3EE;
+  --data-soft: rgba(34, 211, 238, 0.07);
+  --data-glow: rgba(34, 211, 238, 0.13);
+  --data-gradient: linear-gradient(135deg, #22D3EE 0%, #0EA5C4 100%);
+
+  --sector-1: #A78BFA;
+  --sector-1-soft: rgba(167, 139, 250, 0.10);
+  --sector-1-glow: rgba(167, 139, 250, 0.14);
+  --sector-2-soft: rgba(34, 211, 238, 0.09);
+  --sector-2-glow: rgba(34, 211, 238, 0.14);
+  --sector-3-soft: rgba(251, 191, 36, 0.09);
+  --sector-3-glow: rgba(251, 191, 36, 0.14);
+
+  --info: #60A5FA;
+  --info-soft: rgba(96, 165, 250, 0.08);
+  --info-glow: rgba(96, 165, 250, 0.13);
+  --warn: #FBBF24;
+  --warn-soft: rgba(251, 191, 36, 0.08);
+  --warn-glow: rgba(251, 191, 36, 0.13);
+  --danger: #FF5470;
+  --danger-soft: rgba(255, 84, 112, 0.10);
+  --success: #34F5C5;
+  --success-soft: rgba(52, 245, 197, 0.09);
+  --on-success: #04140F;
+
+  --radius: 10px;
+  --radius-sm: 6px;
+  --radius-lg: 14px;
+
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 12px 34px rgba(4, 6, 20, 0.75);
+  --shadow-elevated: 0 2px 12px rgba(4, 6, 20, 0.55);
+
+  --topbar-bg: rgba(8, 10, 26, 0.78);
+  --overlay-bg: rgba(4, 6, 20, 0.76);
+  --toast-bg: rgba(21, 25, 54, 0.92);
+
+  /* 霓虹光晕：顶部品红 + 右下青 + 左下紫 */
+  --app-bg-image:
+    radial-gradient(ellipse 70% 45% at 50% -8%, rgba(255, 46, 136, 0.10) 0%, transparent 62%),
+    radial-gradient(ellipse 55% 40% at 100% 100%, rgba(34, 211, 238, 0.08) 0%, transparent 58%),
+    radial-gradient(ellipse 45% 35% at 0% 65%, rgba(139, 92, 246, 0.07) 0%, transparent 55%);
+
+  --holistic-conflict: #FBBF24;
+  --holistic-coherence: #34F5C5;
+  --holistic-tradeoff: #60A5FA;
+  --holistic-trace: #8B92B8;
+
+  /* 赛道图 SVG 内联注入页面 DOM，因此可用页面级变量控制配色 */
+  --track-bg: #06081A;
+  --track-line: #2E3470;
+  --track-accent: rgba(34, 211, 238, 0.28);
+  --track-ring: #22D3EE;
+  --track-label: #9AA0C8;
+  --track-caption: #61679A;
+}
+
+/* 夜赛：卡片带一丝内发光，强化霓虹感 */
+html[data-theme="nightrace"] .card {
+  box-shadow: inset 0 1px 0 rgba(148, 163, 255, 0.06), var(--shadow);
+}
+html[data-theme="nightrace"] .card:hover {
+  border-color: rgba(255, 46, 136, 0.28);
+}
+
+/* ==========================================================================
+   主题切换器（顶部栏右侧分段控件）
+   ========================================================================== */
+.theme-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  margin-right: 12px;
+  background: var(--bg-inset);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+/* 顶部栏右侧容器：主题切换器 + 连接状态 */
+.topbar-right {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+.theme-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px;
+  border: 0;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--text-dim);
+  font-family: var(--font);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: var(--ls-wide);
+  line-height: 1.4;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: var(--transition-fast);
+}
+.theme-chip:hover {
+  color: var(--text);
+  background: var(--bg-hover);
+}
+.theme-chip[aria-pressed="true"] {
+  color: var(--text);
+  background: var(--bg-card-3);
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+}
+.theme-chip:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.theme-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: none;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25);
+}
+/* 每套主题的识别色（与主题无关，恒定） */
+.theme-dot[data-theme-dot="broadcast"] { background: linear-gradient(135deg, #FF1801 0%, #00D9FF 100%); }
+.theme-dot[data-theme-dot="pitwall"]   { background: linear-gradient(135deg, #E10600 0%, #0E7490 100%); }
+.theme-dot[data-theme-dot="carbon"]    { background: linear-gradient(135deg, #D4FF00 0%, #FFFFFF 100%); }
+.theme-dot[data-theme-dot="nightrace"] { background: linear-gradient(135deg, #FF2E88 0%, #22D3EE 100%); }
+
+/* 窄屏只留色点，名字收起（顶部栏不能换行） */
+@media (max-width: 1180px) {
+  .theme-chip .theme-name { display: none; }
+  .theme-chip { padding: 4px 6px; }
+}
+/* 单栏布局下进一步收缩顶部栏：先收起模型档位标签，再收起连接状态文字 */
+@media (max-width: 900px) {
+  .topbar-mode { display: none; }
+  .topbar-sep { display: none; }
+}
+@media (max-width: 620px) {
+  .topbar { padding: 0 12px; }
+  .topbar-sub { display: none; }
+  .theme-switch { margin-right: 6px; }
+}

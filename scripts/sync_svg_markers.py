@@ -31,9 +31,9 @@ TRACKS_DIR = REPO / "setup_tuner" / "ui" / "tracks"
 # 属性不同，不会被误匹配。
 PAIR_RE = re.compile(
     r'<circle cx="(?P<cx>[\d.]+)" cy="(?P<cy>[\d.]+)" r="6" fill="none" '
-    r'stroke="#3B9EFF" stroke-width="1\.5" opacity="0\.85"/>'
+    r'stroke="var\(--track-ring, #3B9EFF\)" stroke-width="1\.5" opacity="0\.85"/>'
     r'(?P<sep>\s*)<text x="(?P<tx>[\d.]+)" y="(?P<ty>[\d.]+)" '
-    r'text-anchor="middle" fill="#9494a8" font-size="9" '
+    r'text-anchor="middle" fill="var\(--track-label, #9494a8\)" font-size="9" '
     r'font-family="monospace">(?P<num>\d+)</text>'
 )
 
