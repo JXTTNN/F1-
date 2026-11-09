@@ -1,78 +1,78 @@
 {
   "schema": "f1opt-real-lap-holdout/1",
-  "created": "2026-11-04T07:49:44",
+  "created": "2026-11-09T11:55:35",
   "source": "f1laps_setups.jsonl",
-  "ridge_lambda": 100000.0,
-  "n_samples": 1667,
+  "ridge_lambda": 300000.0,
+  "n_samples": 1700,
   "n_tracks": 24,
   "dropped": {
-    "version_incompatible:2024": 871
+    "version_incompatible:2024": 875
   },
   "cv": {
-    "n": 1667,
-    "pairs": 3188,
-    "acc": 0.5856,
-    "sim_acc": 0.4807,
+    "n": 1700,
+    "pairs": 3336,
+    "acc": 0.5889,
+    "sim_acc": 0.4801,
     "ci95": [
-      0.5684,
-      0.6026
+      0.5721,
+      0.6055
     ],
     "significant": true
   },
   "leave_one_track_out": {
     "pooled": {
-      "pairs": 3188,
-      "acc": 0.5908,
+      "pairs": 3336,
+      "acc": 0.5949,
       "ci95": [
-        0.5737,
-        0.6078
+        0.5781,
+        0.6114
       ],
       "significant": true,
-      "tracks_above_55": 18,
+      "tracks_above_55": 20,
       "tracks": 24
     },
     "per_track": {
       "austin": {
-        "n": 73,
-        "pairs": 170,
-        "acc": 0.5765,
-        "sim_acc": 0.4353,
+        "n": 75,
+        "pairs": 177,
+        "acc": 0.5593,
+        "sim_acc": 0.435,
         "ci95": [
-          0.5013,
-          0.6483
+          0.4857,
+          0.6304
         ],
-        "significant": true
+        "significant": false
       },
       "baku": {
-        "n": 67,
-        "pairs": 122,
-        "acc": 0.6639,
-        "sim_acc": 0.418,
+        "n": 68,
+        "pairs": 123,
+        "acc": 0.6585,
+        "sim_acc": 0.4146,
         "ci95": [
-          0.5762,
-          0.7416
+          0.5711,
+          0.7364
         ],
         "significant": true
       },
       "barcelona": {
-        "n": 78,
-        "pairs": 124,
-        "acc": 0.6976,
-        "sim_acc": 0.5282,
+        "n": 79,
+        "pairs": 132,
+        "acc": 0.6932,
+        "sim_acc": 0.5265,
         "ci95": [
-          0.6118,
-          0.7715
+          0.61,
+          0.7655
         ],
         "significant": true
       },
       "hungaroring": {
-        "n": 73,
-        "pairs": 148,
-        "acc": 0.4493,
-        "sim_acc": 0.5912,
+        "n": 75,
+        "pairs": 157,
+        "acc": 0.4554,
+        "sim_acc": 0.6019,
         "ci95": [
-          0.3715,
-          0.5297
+          0.3795,
+          0.5335
         ],
         "significant": false
       },
@@ -88,13 +88,13 @@
         "significant": false
       },
       "las_vegas": {
-        "n": 64,
-        "pairs": 120,
-        "acc": 0.6042,
-        "sim_acc": 0.4792,
+        "n": 66,
+        "pairs": 139,
+        "acc": 0.6367,
+        "sim_acc": 0.4496,
         "ci95": [
-          0.5147,
-          0.6871
+          0.5541,
+          0.712
         ],
         "significant": true
       },
@@ -110,189 +110,189 @@
         "significant": true
       },
       "madrid": {
-        "n": 32,
-        "pairs": 31,
-        "acc": 0.6129,
-        "sim_acc": 0.6452,
+        "n": 35,
+        "pairs": 35,
+        "acc": 0.6571,
+        "sim_acc": 0.6571,
         "ci95": [
-          0.4382,
-          0.7627
+          0.4915,
+          0.7917
         ],
         "significant": false
       },
       "melbourne": {
         "n": 80,
         "pairs": 214,
-        "acc": 0.5491,
+        "acc": 0.5537,
         "sim_acc": 0.4836,
         "ci95": [
-          0.4821,
-          0.6143
+          0.4868,
+          0.6188
         ],
         "significant": false
       },
       "mexico_city": {
-        "n": 68,
-        "pairs": 123,
-        "acc": 0.5854,
-        "sim_acc": 0.4146,
+        "n": 69,
+        "pairs": 134,
+        "acc": 0.6045,
+        "sim_acc": 0.4478,
         "ci95": [
-          0.497,
-          0.6686
+          0.5199,
+          0.6832
         ],
-        "significant": false
+        "significant": true
       },
       "miami": {
-        "n": 80,
-        "pairs": 148,
-        "acc": 0.6047,
-        "sim_acc": 0.4561,
+        "n": 82,
+        "pairs": 154,
+        "acc": 0.5942,
+        "sim_acc": 0.4578,
         "ci95": [
-          0.5243,
-          0.6799
+          0.5152,
+          0.6685
         ],
         "significant": true
       },
       "monaco": {
-        "n": 76,
-        "pairs": 147,
-        "acc": 0.6497,
-        "sim_acc": 0.534,
+        "n": 78,
+        "pairs": 150,
+        "acc": 0.6367,
+        "sim_acc": 0.5433,
         "ci95": [
-          0.5696,
-          0.7221
+          0.5572,
+          0.7093
         ],
         "significant": true
       },
       "montreal": {
-        "n": 80,
-        "pairs": 172,
-        "acc": 0.532,
-        "sim_acc": 0.4157,
+        "n": 82,
+        "pairs": 187,
+        "acc": 0.5615,
+        "sim_acc": 0.4118,
         "ci95": [
-          0.4575,
-          0.605
+          0.4898,
+          0.6307
         ],
         "significant": false
       },
       "monza": {
-        "n": 76,
-        "pairs": 109,
-        "acc": 0.6743,
-        "sim_acc": 0.4725,
+        "n": 77,
+        "pairs": 111,
+        "acc": 0.6802,
+        "sim_acc": 0.473,
         "ci95": [
-          0.5817,
-          0.755
+          0.5886,
+          0.7597
         ],
         "significant": true
       },
       "sakhir": {
-        "n": 52,
-        "pairs": 69,
-        "acc": 0.7464,
-        "sim_acc": 0.471,
+        "n": 54,
+        "pairs": 81,
+        "acc": 0.6975,
+        "sim_acc": 0.4877,
         "ci95": [
-          0.6326,
-          0.8341
+          0.5904,
+          0.7867
         ],
         "significant": true
       },
       "sao_paulo": {
-        "n": 68,
-        "pairs": 131,
-        "acc": 0.6221,
-        "sim_acc": 0.4008,
+        "n": 71,
+        "pairs": 149,
+        "acc": 0.6242,
+        "sim_acc": 0.396,
         "ci95": [
-          0.5367,
-          0.7006
+          0.5442,
+          0.6979
         ],
         "significant": true
       },
       "shanghai": {
-        "n": 80,
-        "pairs": 176,
-        "acc": 0.5085,
-        "sim_acc": 0.6108,
+        "n": 81,
+        "pairs": 179,
+        "acc": 0.5,
+        "sim_acc": 0.6117,
         "ci95": [
-          0.4353,
-          0.5814
+          0.4275,
+          0.5725
         ],
         "significant": false
       },
       "silverstone": {
-        "n": 80,
-        "pairs": 175,
-        "acc": 0.5229,
-        "sim_acc": 0.38,
+        "n": 81,
+        "pairs": 178,
+        "acc": 0.5365,
+        "sim_acc": 0.3792,
         "ci95": [
-          0.4492,
-          0.5956
+          0.4633,
+          0.6082
         ],
         "significant": false
       },
       "singapore": {
-        "n": 80,
-        "pairs": 133,
-        "acc": 0.6053,
-        "sim_acc": 0.4925,
+        "n": 83,
+        "pairs": 145,
+        "acc": 0.6103,
+        "sim_acc": 0.4793,
         "ci95": [
-          0.5204,
-          0.6843
+          0.5291,
+          0.6859
         ],
         "significant": true
       },
       "spa": {
-        "n": 80,
-        "pairs": 134,
-        "acc": 0.5336,
-        "sim_acc": 0.4813,
+        "n": 81,
+        "pairs": 136,
+        "acc": 0.5404,
+        "sim_acc": 0.4743,
         "ci95": [
-          0.4494,
-          0.6159
+          0.4567,
+          0.6219
         ],
         "significant": false
       },
       "spielberg": {
-        "n": 77,
-        "pairs": 143,
-        "acc": 0.6084,
-        "sim_acc": 0.5385,
+        "n": 78,
+        "pairs": 149,
+        "acc": 0.6242,
+        "sim_acc": 0.5235,
         "ci95": [
-          0.5266,
-          0.6846
+          0.5442,
+          0.6979
         ],
         "significant": true
       },
       "suzuka": {
         "n": 80,
         "pairs": 210,
-        "acc": 0.5929,
+        "acc": 0.6024,
         "sim_acc": 0.4595,
         "ci95": [
-          0.5253,
-          0.6571
+          0.5349,
+          0.6662
         ],
         "significant": true
       },
       "yas_marina": {
-        "n": 46,
-        "pairs": 68,
-        "acc": 0.625,
-        "sim_acc": 0.5515,
+        "n": 47,
+        "pairs": 69,
+        "acc": 0.6014,
+        "sim_acc": 0.558,
         "ci95": [
-          0.5062,
-          0.7305
+          0.4835,
+          0.7087
         ],
-        "significant": true
+        "significant": false
       },
       "zandvoort": {
-        "n": 80,
-        "pairs": 174,
-        "acc": 0.6178,
-        "sim_acc": 0.4224,
+        "n": 81,
+        "pairs": 180,
+        "acc": 0.625,
+        "sim_acc": 0.425,
         "ci95": [
-          0.5438,
-          0.6867
+          0.5524,
+          0.6924
         ],
         "significant": true
       }
@@ -301,53 +301,53 @@
   "transfer": [
     {
       "tag": "2025 干 → 2026 干",
-      "train": 464,
-      "n": 480,
-      "pairs": 626,
-      "acc": 0.5743,
-      "sim_acc": 0.5024,
+      "train": 468,
+      "n": 500,
+      "pairs": 684,
+      "acc": 0.5987,
+      "sim_acc": 0.4963,
       "ci95": [
-        0.5352,
-        0.6124
+        0.5615,
+        0.6348
       ],
       "significant": true
     },
     {
       "tag": "2026 干 → 2025 干",
-      "train": 480,
-      "n": 464,
-      "pairs": 448,
-      "acc": 0.5089,
-      "sim_acc": 0.5067,
+      "train": 500,
+      "n": 468,
+      "pairs": 461,
+      "acc": 0.5184,
+      "sim_acc": 0.5033,
       "ci95": [
-        0.4628,
-        0.5549
+        0.4729,
+        0.5637
       ],
       "significant": false
     },
     {
       "tag": "2025 干 → 2025 湿",
-      "train": 464,
-      "n": 407,
-      "pairs": 482,
-      "acc": 0.555,
-      "sim_acc": 0.4824,
+      "train": 468,
+      "n": 409,
+      "pairs": 487,
+      "acc": 0.5534,
+      "sim_acc": 0.4836,
       "ci95": [
-        0.5104,
-        0.5987
+        0.509,
+        0.597
       ],
       "significant": true
     },
     {
       "tag": "2026 干 → 2026 湿",
-      "train": 480,
-      "n": 316,
-      "pairs": 240,
-      "acc": 0.5437,
-      "sim_acc": 0.4688,
+      "train": 500,
+      "n": 323,
+      "pairs": 244,
+      "acc": 0.5389,
+      "sim_acc": 0.4652,
       "ci95": [
-        0.4805,
-        0.6056
+        0.4763,
+        0.6004
       ],
       "significant": false
     }
