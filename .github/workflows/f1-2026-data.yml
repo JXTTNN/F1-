@@ -68,6 +68,11 @@ jobs:
         run: |
           git config user.name "f1opt-data-bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # 根 .gitignore 有全局 *.tar.gz 忽略；为 raw 逐点遥测加白名单并强制入库
+          grep -q 'raw_telemetry' .gitignore || \
+            printf '\n# F1 2026 raw 逐点遥测（必须入库）\n!data/f1_2026/raw_telemetry/*.tar.gz\n' >> .gitignore
+          git add .gitignore
+          git add -f data/f1_2026/raw_telemetry/*.tar.gz
           git add data/f1_2026 scripts/f1_2026_extras.py scripts/pack_raw_telemetry.py \
                   scripts/fetch_official_2026.py scripts/build_corner_dataset.py
           git status --short | head -40
