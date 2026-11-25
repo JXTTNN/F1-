@@ -1,0 +1,30 @@
+{
+  "unit": "race (track_id); 同一分站的圈只出现在一个 split",
+  "train": [
+    "austin",
+    "baku",
+    "barcelona",
+    "hungaroring",
+    "las_vegas",
+    "mexico_city",
+    "miami",
+    "monaco",
+    "montreal",
+    "sakhir",
+    "sao_paulo",
+    "shanghai",
+    "silverstone",
+    "spielberg",
+    "zandvoort"
+  ],
+  "val": [
+    "madrid",
+    "spa",
+    "suzuka"
+  ],
+  "test": [
+    "melbourne",
+    "monza",
+    "singapore"
+  ]
+}

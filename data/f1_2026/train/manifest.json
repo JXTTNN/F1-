@@ -1,0 +1,105 @@
+{
+  "name": "f1_2026_train_clean",
+  "built_at": "2026-11-25T03:43:20.057364+00:00",
+  "filter": {
+    "lap_gt": 1,
+    "track_status": "1 only",
+    "pit_in_out": "excluded",
+    "deleted": "excluded",
+    "accurate_timing": "iacc=true only",
+    "fastf1_generated": "excluded"
+  },
+  "counts": {
+    "timed_rows": 24612,
+    "dirty_rows": 5153,
+    "clean_laps": 19459,
+    "clean_corner_rows": 314891,
+    "dropped_zero_speed_corners": 34,
+    "setups_2026": 899,
+    "tracks": 21,
+    "dry_laps": 18953,
+    "wet_laps": 506
+  },
+  "tyre_class": {
+    "medium": 6208,
+    "hard": 7341,
+    "soft": 5345,
+    "inter": 506,
+    "unknown": 59
+  },
+  "per_track_laps": {
+    "melbourne": 829,
+    "spielberg": 1142,
+    "baku": 700,
+    "sakhir": 658,
+    "barcelona": 1016,
+    "spa": 674,
+    "silverstone": 808,
+    "montreal": 908,
+    "shanghai": 735,
+    "zandvoort": 1082,
+    "hungaroring": 1239,
+    "monza": 871,
+    "suzuka": 913,
+    "las_vegas": 774,
+    "mexico_city": 1057,
+    "miami": 783,
+    "monaco": 1136,
+    "singapore": 1036,
+    "madrid": 955,
+    "sao_paulo": 1235,
+    "austin": 908
+  },
+  "splits": {
+    "unit": "race (track_id); 同一分站的圈只出现在一个 split",
+    "train": [
+      "austin",
+      "baku",
+      "barcelona",
+      "hungaroring",
+      "las_vegas",
+      "mexico_city",
+      "miami",
+      "monaco",
+      "montreal",
+      "sakhir",
+      "sao_paulo",
+      "shanghai",
+      "silverstone",
+      "spielberg",
+      "zandvoort"
+    ],
+    "val": [
+      "madrid",
+      "spa",
+      "suzuka"
+    ],
+    "test": [
+      "melbourne",
+      "monza",
+      "singapore"
+    ]
+  },
+  "domain": {
+    "telemetry": "real F1 2026 Race telemetry (TracingInsights, Apache-2.0)",
+    "setups": "F1 26 game setups + lap times (F1Laps public pages)",
+    "pairing": "NO per-lap setup in public real telemetry; setups are a separate supervised task"
+  },
+  "files": {
+    "laps_clean.jsonl": {
+      "rows": 19459,
+      "bytes": 9182961,
+      "sha256": "67bdb2d91efc9b8102565cb7a2590e94fd8bb4affc4d4566da4a0926bb1f3eb7"
+    },
+    "corner_samples_clean.jsonl.gz": {
+      "rows": 314891,
+      "bytes": 14691254,
+      "sha256": "aa0278ee33a74ceec1522c6caf0b2b00c05adf322961c5a9cca9f6117cb5bcc2"
+    },
+    "setups_f1_26.jsonl": {
+      "rows": 899,
+      "bytes": 927619,
+      "sha256": "da848cfe7900ca9c4bb16b49e4e595e3947e867c58be9768353c3a4b9959f083"
+    }
+  }
+}
