@@ -37,7 +37,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
-from functools import cache
+from functools import cache, lru_cache
 from typing import Any
 
 from setup_tuner.domain.setup import ALL_SETUP_FIELDS, SetupField
@@ -309,12 +309,27 @@ def corner_evaluations(
 
     车手报过反馈的弯再乘 :data:`_FEEDBACK_BOOST` —— 车手明确指出的问题
     必须优先被优化，这是"结合车手反馈"的落点。
+
+    结果按 (赛道, 反馈弯集合) 缓存：`CornerEval` 是 frozen，调用方只读，
+    而坐标上升每轮都会重建这 24 项，实测占单次建议 40% 的时间。
     """
+    learned = _learned_importance(track_id)
+    # 把重要度本身作为缓存键的一部分：模型被热替换或测试里直接改
+    # `surrogate.importance` 时，键随之变化，不会读到旧权重。
+    fingerprint = tuple(sorted(learned.items())) if learned else ()
+    return list(_corner_evaluations_cached(
+        track_id, frozenset(feedback_corners or ()), fingerprint,
+    ))
+
+
+@lru_cache(maxsize=512)
+def _corner_evaluations_cached(
+    track_id: str, boosted: frozenset[int], fingerprint: tuple[tuple[int, float], ...],
+) -> tuple[CornerEval, ...]:
     track = get_track_by_id(track_id)
     if track is None or not track.corners:
-        return []
-    boosted = feedback_corners or set()
-    learned = _learned_importance(track_id)
+        return ()
+    learned = dict(fingerprint) or None
     out: list[CornerEval] = []
     for c in track.corners:
         klass = corner_class(c.corner_type)
@@ -335,10 +350,15 @@ def corner_evaluations(
     # 而把残差补到最大项又会改动该项占比、打破「各项 = 原值 / 总和」的比值契约
     # （tests/test_telemetry_surrogate 正是按比值断言的）。
     # 精度留在数据里，展示层需要时再格式化。
-    return [
+    return tuple(
         CornerEval(e.number, e.klass, e.speed_kmh, e.importance / total, e.demand)
         for e in out
-    ]
+    )
+
+
+def clear_corner_cache() -> None:
+    """清空逐弯评价缓存（模型热替换/测试重置时调用）。"""
+    _corner_evaluations_cached.cache_clear()
 
 
 def _learned_importance(track_id: str) -> dict[int, float] | None:

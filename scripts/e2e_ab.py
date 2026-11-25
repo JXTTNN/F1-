@@ -62,6 +62,8 @@ def fake_telemetry(track_id: str, wet: bool) -> dict:
 
 
 def run(model_path: Path) -> dict:
+    # 必须先 reset：逐弯评价按赛道缓存，热替换模型后不清缓存会读到上一版的重要度
+    surrogate_mod.reset_surrogate()
     surrogate_mod._SURROGATE = surrogate_mod.SurrogateModel(model_path)
     sur = surrogate_mod._SURROGATE
     out = {"model": str(model_path), "available": sur.available,

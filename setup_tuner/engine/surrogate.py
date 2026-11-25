@@ -290,7 +290,13 @@ def get_surrogate(path: str | Path | None = None) -> SurrogateModel:
 
 
 def reset_surrogate() -> None:
-    """重置单例（供测试使用）。"""
+    """重置单例（供测试使用）；同时清空逐弯评价缓存，避免读到旧重要度。"""
     global _SURROGATE
     with _LOCK:
         _SURROGATE = None
+    try:
+        from .lap_model import clear_corner_cache
+
+        clear_corner_cache()
+    except Exception:  # noqa: BLE001 — 缓存清理不得影响重置语义
+        pass

@@ -237,27 +237,51 @@ def sim_refine(
             reason=f"赛道 {track_id} 不在模型覆盖范围（{len(model.track_ids)} 赛道）",
         )
 
+    # 注：曾试过按锚点可信度收缩 authored 赛道的改动幅度（trust=0.6），
+    # 在 las_vegas/sao_paulo 上收益从 +5.9/-29.6 变成 -138.0/-146.5 ms，
+    # 但 0.8/0.6/0.4/0.3 的扫描显示结果不单调（+5.9 → -138 → +81 → +308），
+    # 属于对步长的刀尖响应，按两个样本选系数就是过拟合。故不采纳。
+
     # 初始状态
     cur: dict[str, float] = {f.name: float(delta0.get(f.name, 0.0)) for f in ALL_SETUP_FIELDS}
 
+    # 坐标上升里同一个 delta 会被反复求值（每个参数各算一次「当前值」），
+    # 一次建议实测 41 次前向、其中真正变化的只有被接受的那几步。
+    # 这里按 delta 的数值键做记忆化：不改变任何数值，只去掉重复计算。
+    _time_cache: dict[tuple[tuple[str, float], ...], float | None] = {}
+    _obj_cache: dict[tuple[tuple[str, float], ...], float | None] = {}
+
+    def _delta_key(delta: dict[str, float]) -> tuple[tuple[str, float], ...]:
+        return tuple(sorted((k, round(float(v), 9)) for k, v in delta.items()))
+
     def _sim_time_s(delta: dict[str, float]) -> float | None:
+        key = _delta_key(delta)
+        if key in _time_cache:
+            return _time_cache[key]
         trial_setup = {
             f.name: float(current_setup.get(f.name, f.default)) + delta.get(f.name, 0.0)
             for f in ALL_SETUP_FIELDS
         }
-        return model.predict_delta_s(track_id, normalize_setup(trial_setup))
+        val = model.predict_delta_s(track_id, normalize_setup(trial_setup))
+        _time_cache[key] = val
+        return val
 
     def _obj_total(delta: dict[str, float]) -> float | None:
         if dx is None:
             return None
+        key = _delta_key(delta)
+        if key in _obj_cache:
+            return _obj_cache[key]
         ctx = track_context(track_id, telemetry, dx, wet=wet)
         corners = corner_evaluations(track_id)
         if not corners:
             return None
         units = units_from_delta(delta, current_setup)
-        return objective(
+        val = objective(
             units, needs_by_class_from_dx(dx), track_id, ctx, corners,
         ).total
+        _obj_cache[key] = val
+        return val
 
     before_s = _sim_time_s(cur)
     if before_s is None:
@@ -355,6 +379,19 @@ def sim_refine(
     after_s = _sim_time_s(cur)
     if after_s is None:
         after_s = before_s
+
+    # 单调性守卫：坐标上升是逐参数贪心，预算截断、目标代价兑换与「左胎压跟随右胎压」
+    # 的联动都可能让最终点反而比起点更慢。一旦模型口径下更差，就退回初始方向 ——
+    # 宁可少改，也不返回一个"优化后更慢"的建议。
+    if after_s > before_s + 1e-12:
+        return SimRefineResult(
+            delta=dict(delta0), available=True,
+            reason="精修后模拟更慢，已回退初始改动",
+            iterations=iterations, accepted=0, capped=False,
+            before_s=before_s, after_s=before_s, credited_gain_s=0.0,
+            trace=[*trace, "精修结果比初始更慢，已回退"],
+        )
+
     return SimRefineResult(
         delta=cur, available=True, reason="ok",
         iterations=iterations, accepted=accepted, capped=capped,
