@@ -1,7 +1,7 @@
 {
   "name": "f1_2026_telemetry_setups",
-  "built_at": "2026-11-25T01:28:07.686202+00:00",
-  "privacy": "原始逐点遥测留在本地 .ref/ 缓存，不入库；入库仅赛道级聚合统计（track_profile.jsonl），不含车手姓名/车号/圈号/逐弯明细。",
+  "built_at": "2026-11-25T02:43:46.946030+00:00",
+  "privacy": "全部赛站的逐弯/逐圈明细、聚合统计与逐点原始遥测（raw_telemetry/*.tar.gz，上游原文件未裁剪）均入库；.ref/ 仅为本机抓取缓存。",
   "sources": [
     {
       "id": "tracinginsights_2026",
@@ -12,27 +12,44 @@
     },
     {
       "id": "f1laps_f1_26",
-      "kind": "setup \u2192 lap time pairs (game F1 26)",
+      "kind": "setup → lap time pairs (game F1 26)",
       "url": "https://www.f1laps.com/f1-26/setups/",
       "license": "public pages, robots.txt allows crawling; attribution kept",
       "access": "scripts/fetch_setup_laps.py"
     }
   ],
   "counts": {
-    "corner_rows": 6380,
-    "corner_rows_dropped_zero_speed": 142,
-    "corner_stats_rows": 100,
+    "corner_rows": 71222,
+    "corner_rows_dropped_zero_speed": 474,
+    "corner_stats_rows": 344,
     "setup_rows_2026": 899,
-    "profile_tracks": 24
+    "profile_tracks": 24,
+    "lap_rows": 4334,
+    "corner_samples_rows": 71222
   },
   "coverage": {
     "telemetry_tracks": [
+      "austin",
+      "baku",
+      "barcelona",
+      "hungaroring",
+      "las_vegas",
+      "madrid",
       "melbourne",
+      "mexico_city",
+      "miami",
       "monaco",
+      "montreal",
       "monza",
+      "sakhir",
+      "sao_paulo",
+      "shanghai",
       "silverstone",
       "singapore",
-      "spa"
+      "spa",
+      "spielberg",
+      "suzuka",
+      "zandvoort"
     ],
     "setup_tracks": [
       "austin",
@@ -63,21 +80,33 @@
   },
   "files": {
     "telemetry_corners.jsonl": {
-      "rows": 100,
-      "bytes": 75506,
-      "sha256": "6f9df417e6d36492f7daf94f28e69f5891ad5050969d213b05b0c8f76d7ed8f9",
-      "committed": false
+      "rows": 344,
+      "bytes": 259501,
+      "sha256": "c3010a46e665f1c344a8189a8e0bc0febe2b7df7e27b23f0563dc3e348a12f38",
+      "committed": true
     },
     "setups_f1_26.jsonl": {
       "rows": 899,
       "bytes": 927619,
       "sha256": "da848cfe7900ca9c4bb16b49e4e595e3947e867c58be9768353c3a4b9959f083",
-      "committed": false
+      "committed": true
     },
     "track_profile.jsonl": {
       "rows": 24,
-      "bytes": 35599,
-      "sha256": "23e5b50449d9c3e2b51c291a1cc770c3a5627cd1434c9f74dcd0979fc8c1a3d2",
+      "bytes": 37892,
+      "sha256": "f822d3a4a6cbdaa604817f494983c9313d4dff6e233cb9efe735428b539dbdab",
+      "committed": true
+    },
+    "telemetry_laps.jsonl": {
+      "rows": 4334,
+      "bytes": 1765564,
+      "sha256": "75de24d22daa203e76eb5fc4e2cbe45dac1ef984718f8e1836f535561adef462",
+      "committed": true
+    },
+    "corner_samples.jsonl.gz": {
+      "rows": 71222,
+      "bytes": 3443742,
+      "sha256": "573546b319acd82ee07c63f61564132ed9978bfeb5642d9beda1bb70862fba67",
       "committed": true
     }
   }

@@ -1,0 +1,184 @@
+{
+  "name": "f1_2026_raw_telemetry",
+  "built_at": "2026-11-25T02:44:40.450587+00:00",
+  "source": "https://github.com/TracingInsights/2026",
+  "license": "Apache-2.0",
+  "structure": "tar.gz 内为 <Race>/Race/<DRV>/<lap>_tel.json（上游原文件，未裁剪）",
+  "counts": {
+    "tracks": 21,
+    "files": 4518,
+    "raw_bytes": 660147451,
+    "tar_bytes": 271117560
+  },
+  "tracks": [
+    {
+      "track_id": "melbourne",
+      "race": "Australian Grand Prix",
+      "files": 204,
+      "raw_bytes": 26337960,
+      "tar_bytes": 11035472,
+      "sha256": "0f76806ec6e1afc758b9b5758a4d29cc82b34b7832dc2801904274d9a61ca11b"
+    },
+    {
+      "track_id": "spielberg",
+      "race": "Austrian Grand Prix",
+      "files": 210,
+      "raw_bytes": 23302448,
+      "tar_bytes": 9771607,
+      "sha256": "b23ddd8c95206e80439a30ffce0d542b9a2e8f5aebaf1c0b19b8d12f5faa7899"
+    },
+    {
+      "track_id": "baku",
+      "race": "Azerbaijan Grand Prix",
+      "files": 222,
+      "raw_bytes": 36550344,
+      "tar_bytes": 15137518,
+      "sha256": "2482cddcc7a507061ece7f293582d4eac7210d12fd0f07de6f4374261fe57f53"
+    },
+    {
+      "track_id": "sakhir",
+      "race": "Bahrain Grand Prix",
+      "files": 222,
+      "raw_bytes": 44089143,
+      "tar_bytes": 18012039,
+      "sha256": "cb9f99d4d08c9180dd290d349e324078b3ef471a5af4640598aa267aff2f1871"
+    },
+    {
+      "track_id": "barcelona",
+      "race": "Barcelona Grand Prix",
+      "files": 219,
+      "raw_bytes": 28253239,
+      "tar_bytes": 12089860,
+      "sha256": "540349260203d6cb08d6123b1838a9e27250ed11d2171e6cacc85d3e9e945417"
+    },
+    {
+      "track_id": "spa",
+      "race": "Belgian Grand Prix",
+      "files": 215,
+      "raw_bytes": 40963327,
+      "tar_bytes": 17129256,
+      "sha256": "de0cfb6a8a33f7f7a6e13bca8b7f8a7ccf568fee3852d4ac8274f4d6a9092f0c"
+    },
+    {
+      "track_id": "silverstone",
+      "race": "British Grand Prix",
+      "files": 224,
+      "raw_bytes": 32322603,
+      "tar_bytes": 13512479,
+      "sha256": "0a84d18b6edb6b9293149d86c7258d6dbcf743ef93f079662cbbed3607f1ebe3"
+    },
+    {
+      "track_id": "montreal",
+      "race": "Canadian Grand Prix",
+      "files": 214,
+      "raw_bytes": 25954477,
+      "tar_bytes": 10880156,
+      "sha256": "6fc2e8a7de3527e3e5f2afc2c4067629c8deef27fcaff9a525d381779ee159c9"
+    },
+    {
+      "track_id": "shanghai",
+      "race": "Chinese Grand Prix",
+      "files": 184,
+      "raw_bytes": 26850525,
+      "tar_bytes": 10833869,
+      "sha256": "5f0d5d3d23aa656ab08895dda20f13d85e9c0ed60fbc10966fdc286841ac37ec"
+    },
+    {
+      "track_id": "zandvoort",
+      "race": "Dutch Grand Prix",
+      "files": 207,
+      "raw_bytes": 32352275,
+      "tar_bytes": 12757831,
+      "sha256": "24beb8ff8c9243086bc7e311d3156bfef0752723f63be9b8eb7a1a77275aca27"
+    },
+    {
+      "track_id": "hungaroring",
+      "race": "Hungarian Grand Prix",
+      "files": 224,
+      "raw_bytes": 28598762,
+      "tar_bytes": 11750764,
+      "sha256": "e6d052011370add1472d3e6c6d609b0cdfec525ab482a5a80a3208f4c820c5e1"
+    },
+    {
+      "track_id": "monza",
+      "race": "Italian Grand Prix",
+      "files": 216,
+      "raw_bytes": 36978009,
+      "tar_bytes": 14536443,
+      "sha256": "b25bfb5d73d17a5b2d84bb2654645d0c013f2640e03877bfe7b2f12ff6d3b515"
+    },
+    {
+      "track_id": "suzuka",
+      "race": "Japanese Grand Prix",
+      "files": 224,
+      "raw_bytes": 31088851,
+      "tar_bytes": 12770359,
+      "sha256": "9df9bac0e86e39b5f95cba5ea5b41434be4bc745cb581b6a275003605873ad99"
+    },
+    {
+      "track_id": "las_vegas",
+      "race": "Las Vegas Grand Prix",
+      "files": 215,
+      "raw_bytes": 31285645,
+      "tar_bytes": 12849743,
+      "sha256": "c456da5cb7b061833f4148c425f9b609ed3250419dabfbe5748edd6c5a1e0287"
+    },
+    {
+      "track_id": "mexico_city",
+      "race": "Mexico City Grand Prix",
+      "files": 215,
+      "raw_bytes": 31375868,
+      "tar_bytes": 12081825,
+      "sha256": "2e4c8efba44d8909187cc4e8b7ca91f4db711d1a5475fcabb9f889654c9173b7"
+    },
+    {
+      "track_id": "miami",
+      "race": "Miami Grand Prix",
+      "files": 208,
+      "raw_bytes": 35600463,
+      "tar_bytes": 14695854,
+      "sha256": "1b07f4cf893307a513b99c4e45c0d6d0bda8cc166fd24a4be981a847cf92215c"
+    },
+    {
+      "track_id": "monaco",
+      "race": "Monaco Grand Prix",
+      "files": 215,
+      "raw_bytes": 17390450,
+      "tar_bytes": 6604041,
+      "sha256": "a58c559af2bcf5b403d8f944d2f41f004dfb675a034abee0d25cb62112a42e35"
+    },
+    {
+      "track_id": "singapore",
+      "race": "Singapore Grand Prix",
+      "files": 222,
+      "raw_bytes": 34330021,
+      "tar_bytes": 14244220,
+      "sha256": "e8e248c695fb02d8430f3d23ecf1e96798ee8957af96865372cfbd0539428156"
+    },
+    {
+      "track_id": "madrid",
+      "race": "Spanish Grand Prix",
+      "files": 220,
+      "raw_bytes": 33539485,
+      "tar_bytes": 13927265,
+      "sha256": "dca9759125d214c399ecec476d7b8dd97113c2549f728d04525ddebf0723e129"
+    },
+    {
+      "track_id": "sao_paulo",
+      "race": "São Paulo Grand Prix",
+      "files": 214,
+      "raw_bytes": 28628296,
+      "tar_bytes": 12042389,
+      "sha256": "bfe5309c327ec386d3f2e0e9b899693b90e4a7bd3c961c17f6b798bb9ec2c1dd"
+    },
+    {
+      "track_id": "austin",
+      "race": "United States Grand Prix",
+      "files": 224,
+      "raw_bytes": 34355260,
+      "tar_bytes": 14454570,
+      "sha256": "f6128c3a70b966dbe9bff33aa1d59854fb21028ad568a375a8365bca8aca7d51"
+    }
+  ],
+  "unknown_races": []
+}

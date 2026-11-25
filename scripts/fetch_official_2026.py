@@ -84,7 +84,7 @@ CALENDAR_2026: tuple[str, ...] = (
     "Singapore Grand Prix",
     "United States Grand Prix",
     "Mexico City Grand Prix",
-    "Sao Paulo Grand Prix",
+    "São Paulo Grand Prix",
     "Las Vegas Grand Prix",
     "Qatar Grand Prix",
     "Abu Dhabi Grand Prix",

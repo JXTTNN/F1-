@@ -64,6 +64,7 @@ MIN_POINTS_IN_WINDOW = 4
 #: 导致 barcelona 无模型覆盖。
 RACE_ALIASES: dict[str, str] = {
     "Barcelona Grand Prix": "barcelona",
+    "São Paulo Grand Prix": "sao_paulo",
 }
 
 
