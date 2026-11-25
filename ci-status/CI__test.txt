@@ -1,115 +1,155 @@
 workflow : CI
 job      : test
-sha      : 55468819fb76ac0fc5a2c4f9ceda9fa4ef3bda3d
+sha      : 2de51d2015fc917d08fd8207e76c9c7b9619e4ad
 ref      : main
 event    : push
-run      : https://github.com/JXTTNN/F1-/actions/runs/45548158343
-time     : 2026-11-25T04:45:22Z
-steps    : install=success lint=success js=success pytest=success usage=success
+run      : https://github.com/JXTTNN/F1-/actions/runs/45553114148
+time     : 2026-11-25T05:22:48Z
+steps    : install=success lint=success js=success pytest=failure usage=skipped
 
 ================ .ci/pytest.log ================
 ---- 失败 / 错误用例 ----
+ERROR tests/deep_integration/test_concurrent.py - KeyError: 'tyre_graining'
+ERROR tests/deep_integration/test_data_flow.py - KeyError: 'tyre_graining'
+ERROR tests/deep_integration/test_e2e_business.py - KeyError: 'tyre_graining'
+ERROR tests/deep_slice/test_slice_04_engine_diag.py - KeyError: 'tyre_graining'
+ERROR tests/deep_slice/test_slice_08_report.py - KeyError: 'tyre_graining'
+ERROR tests/deep_slice/test_slice_09_app.py - KeyError: 'tyre_graining'
+ERROR tests/test_api_contract.py - KeyError: 'tyre_graining'
+ERROR tests/test_api_edge_cases.py - KeyError: 'tyre_graining'
+ERROR tests/test_car_status.py - KeyError: 'tyre_graining'
+ERROR tests/test_cli_logging.py - KeyError: 'tyre_graining'
+ERROR tests/test_engine_dx_extended.py - KeyError: 'tyre_graining'
+ERROR tests/test_engine_edge_cases.py - KeyError: 'tyre_graining'
+ERROR tests/test_feedback_aggregation.py - KeyError: 'tyre_graining'
+ERROR tests/test_feedback_lifecycle.py - KeyError: 'tyre_graining'
+ERROR tests/test_holistic.py - KeyError: 'tyre_graining'
+ERROR tests/test_kerb_detection.py - KeyError: 'tyre_graining'
+ERROR tests/test_lap_aggregator.py - KeyError: 'tyre_graining'
+ERROR tests/test_lap_optimizer.py - KeyError: 'tyre_graining'
+ERROR tests/test_lap_writer_e2e.py - KeyError: 'tyre_graining'
+ERROR tests/test_motion_ex.py - KeyError: 'tyre_graining'
+ERROR tests/test_nn_manager_singleton.py - KeyError: 'tyre_graining'
+ERROR tests/test_perf_regressions.py - KeyError: 'tyre_graining'
+ERROR tests/test_personalization.py - KeyError: 'tyre_graining'
+ERROR tests/test_real_lap_calibration.py - KeyError: 'tyre_graining'
+ERROR tests/test_report_builder.py - KeyError: 'tyre_graining'
+ERROR tests/test_sector_and_ws_contract.py - KeyError: 'tyre_graining'
+ERROR tests/test_setup_sim.py - KeyError: 'tyre_graining'
+ERROR tests/test_setup_sim_per_track_scale.py - KeyError: 'tyre_graining'
+ERROR tests/test_simulator_chain.py - KeyError: 'tyre_graining'
+ERROR tests/test_style_targeting.py - KeyError: 'tyre_graining'
+ERROR tests/test_svg_markers.py - KeyError: 'tyre_graining'
+ERROR tests/test_t6_engine.py - KeyError: 'tyre_graining'
+ERROR tests/test_t7_api.py - KeyError: 'tyre_graining'
+ERROR tests/test_t7_ws.py - KeyError: 'tyre_graining'
+ERROR tests/test_telemetry_surrogate.py - KeyError: 'tyre_graining'
+ERROR tests/test_track_arcs.py - KeyError: 'tyre_graining'
+ERROR tests/test_track_gain.py - KeyError: 'tyre_graining'
+ERROR tests/test_training_dataset.py - KeyError: 'tyre_graining'
+ERROR tests/test_ui_field_contract.py - KeyError: 'tyre_graining'
 ---- 断言摘要 ----
+E   KeyError: 'tyre_graining'
+E   KeyError: 'tyre_graining'
+E   KeyError: 'tyre_graining'
+E   KeyError: 'tyre_graining'
+E   KeyError: 'tyre_graining'
+E   KeyError: 'tyre_graining'
+E   KeyError: 'tyre_graining'
+E   KeyError: 'tyre_graining'
+E   KeyError: 'tyre_graining'
+E   KeyError: 'tyre_graining'
+E   KeyError: 'tyre_graining'
+E   KeyError: 'tyre_graining'
+E   KeyError: 'tyre_graining'
+E   KeyError: 'tyre_graining'
+E   KeyError: 'tyre_graining'
+E   KeyError: 'tyre_graining'
+E   KeyError: 'tyre_graining'
+E   KeyError: 'tyre_graining'
+E   KeyError: 'tyre_graining'
+E   KeyError: 'tyre_graining'
+E   KeyError: 'tyre_graining'
+E   KeyError: 'tyre_graining'
+E   KeyError: 'tyre_graining'
+E   KeyError: 'tyre_graining'
+E   KeyError: 'tyre_graining'
+E   KeyError: 'tyre_graining'
+E   KeyError: 'tyre_graining'
+E   KeyError: 'tyre_graining'
+E   KeyError: 'tyre_graining'
+E   KeyError: 'tyre_graining'
+E   KeyError: 'tyre_graining'
+E   KeyError: 'tyre_graining'
+E   KeyError: 'tyre_graining'
+E   KeyError: 'tyre_graining'
+E   KeyError: 'tyre_graining'
+E   KeyError: 'tyre_graining'
+E   KeyError: 'tyre_graining'
+E   KeyError: 'tyre_graining'
+E   KeyError: 'tyre_graining'
 ---- 最慢用例 ----
-============================= slowest 15 durations =============================
-4.10s call     tests/test_feedback_lifecycle.py::TestSuggestConsumesFeedback::test_next_round_only_sees_its_own_feedback
-2.35s call     tests/deep_slice/test_slice_02_telemetry_listener.py::TestSmoke::test_smoke_real_udp_short_packet_skipped
-2.26s call     tests/deep_integration/test_concurrent.py::TestConcurrentApiRequests::test_concurrent_mixed_api_operations
-2.26s call     tests/test_svg_markers.py::TestStaticCacheRevalidation::test_app_js_served_with_no_cache
-2.24s call     tests/deep_integration/test_e2e_business.py::TestImportSetup::test_get_current_setup_after_import
-2.23s call     tests/deep_integration/test_e2e_business.py::TestImportSetup::test_import_with_telemetry_success
-2.14s call     tests/test_car_status.py::TestEndToEnd::test_simulated_lap_reaches_suggestion
-2.14s call     tests/deep_integration/test_concurrent.py::TestConcurrentApiRequests::test_concurrent_suggest_no_deadlock
-2.14s call     tests/test_api_contract.py::TestExperimentEndpointWorks::test_unknown_track_returns_404
-2.13s call     tests/test_api_contract.py::TestRecordingTrainingExport::test_export_produces_samples
-2.12s call     tests/test_car_status.py::TestSimulatorCoverage::test_simulator_emits_car_status
-2.10s teardown tests/test_simulator_chain.py::TestSimulatorHandlerWiring::test_simulator_gets_handler_on_create
-2.10s call     tests/test_t2_telemetry_listener.py::TestListenerUdpReceive::test_receive_short_packet_no_crash
-2.09s call     tests/deep_integration/test_e2e_business.py::TestMultiRoundConvergence::test_multi_round_iteration_history_grows
-2.09s call     tests/deep_integration/test_e2e_business.py::TestGenerateSuggestion::test_get_latest_suggestion
-=========================== short test summary info ============================
-SKIPPED [1] tests/test_telemetry_importer.py:484: 未设置 F1OPT_REAL_DATA_DIR（或目录不存在）
-SKIPPED [1] tests/test_telemetry_importer.py:500: 未设置 F1OPT_REAL_DATA_DIR（或目录不存在）
-SKIPPED [1] tests/test_telemetry_importer.py:512: 未设置 F1OPT_REAL_DATA_DIR（或目录不存在）
-=========== 2253 passed, 3 skipped, 2 warnings in 393.87s (0:06:33) ============
 ---- 结果行 ----
-=========== 2253 passed, 3 skipped, 2 warnings in 393.87s (0:06:33) ============
 ---- 超时 / 崩溃痕迹 ----
 ---- 日志尾部 ----
-tests/test_ui_theme.py::TestThemeInventory::test_every_theme_has_a_chip PASSED [ 98%]
-tests/test_ui_theme.py::TestThemeInventory::test_default_theme_is_applied_in_markup PASSED [ 99%]
-tests/test_ui_theme.py::TestThemeInventory::test_themes_css_is_linked_after_style PASSED [ 99%]
-tests/test_ui_theme.py::TestThemeVariables::test_all_required_vars_defined[pitwall] PASSED [ 99%]
-tests/test_ui_theme.py::TestThemeVariables::test_all_required_vars_defined[carbon] PASSED [ 99%]
-tests/test_ui_theme.py::TestThemeVariables::test_all_required_vars_defined[nightrace] PASSED [ 99%]
-tests/test_ui_theme.py::TestThemeVariables::test_no_empty_values[pitwall] PASSED [ 99%]
-tests/test_ui_theme.py::TestThemeVariables::test_no_empty_values[carbon] PASSED [ 99%]
-tests/test_ui_theme.py::TestThemeVariables::test_no_empty_values[nightrace] PASSED [ 99%]
-tests/test_ui_theme.py::TestThemeVariables::test_light_theme_declares_color_scheme PASSED [ 99%]
-tests/test_ui_theme.py::TestThemeVariables::test_dark_themes_declare_color_scheme[carbon] PASSED [ 99%]
-tests/test_ui_theme.py::TestThemeVariables::test_dark_themes_declare_color_scheme[nightrace] PASSED [ 99%]
-tests/test_ui_theme.py::TestThemeContrast::test_body_text_readable_on_card[carbon] PASSED [ 99%]
-tests/test_ui_theme.py::TestThemeContrast::test_body_text_readable_on_card[nightrace] PASSED [ 99%]
-tests/test_ui_theme.py::TestThemeContrast::test_body_text_readable_on_card[pitwall] PASSED [ 99%]
-tests/test_ui_theme.py::TestThemeContrast::test_accent_label_readable[carbon] PASSED [ 99%]
-tests/test_ui_theme.py::TestThemeContrast::test_accent_label_readable[nightrace] PASSED [ 99%]
-tests/test_ui_theme.py::TestThemeContrast::test_accent_label_readable[pitwall] PASSED [ 99%]
-tests/test_ui_theme.py::TestThemeContrast::test_data_color_readable[carbon] PASSED [ 99%]
-tests/test_ui_theme.py::TestThemeContrast::test_data_color_readable[nightrace] PASSED [ 99%]
-tests/test_ui_theme.py::TestThemeContrast::test_data_color_readable[pitwall] PASSED [ 99%]
-tests/test_ui_theme.py::TestNoHardcodedThemeColors::test_accent_hover_literals_only_in_tokens PASSED [ 99%]
-tests/test_ui_theme.py::TestNoHardcodedThemeColors::test_theme_vars_exist_in_root PASSED [ 99%]
-tests/test_ui_theme.py::TestNoHardcodedThemeColors::test_primary_button_uses_theme_vars PASSED [100%]
-
+setup_tuner/api/routes.py:53: in <module>
+    from setup_tuner.engine.engine import generate_suggestion
+setup_tuner/engine/__init__.py:38: in <module>
+    from .confidence import assess_confidence
+setup_tuner/engine/confidence.py:15: in <module>
+    from .diagnostic import SYMPTOM_TO_DX
+setup_tuner/engine/diagnostic.py:215: in <module>
+    SYMPTOM_TO_DX: dict[str, dict[str, float]] = {
+setup_tuner/engine/diagnostic.py:216: in <dictcomp>
+    symptom: SYMPTOM_STAGE_TO_DX[symptom][SYMPTOM_DEFAULT_STAGE[symptom]]
+                                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'tyre_graining'
 =============================== warnings summary ===============================
 ../../../../../opt/hostedtoolcache/Python/3.11.18/x64/lib/python3.11/site-packages/fastapi/testclient.py:1
   /opt/hostedtoolcache/Python/3.11.18/x64/lib/python3.11/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
     from starlette.testclient import TestClient as TestClient  # noqa
 
-tests/test_real_lap_calibration.py::TestCorpusMetadata::test_every_row_has_year_and_surface
-  /opt/hostedtoolcache/Python/3.11.18/x64/lib/python3.11/site-packages/_pytest/fixtures.py:1392: PytestRemovedIn10Warning: Class-scoped fixtures defined as instance methods are deprecated.
-  Instance attributes set in the 'rows' fixture will NOT be visible to test methods,
-  as each test gets a new instance while the fixture runs only once per class.
-  Use a @classmethod decorator below @pytest.fixture and set attributes on cls instead.
-  See https://docs.pytest.org/en/stable/deprecations.html#class-scoped-fixture-as-instance-method
-    fixturefunc = resolve_fixture_function(fixturedef, request)
-
 -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
-============================= slowest 15 durations =============================
-4.10s call     tests/test_feedback_lifecycle.py::TestSuggestConsumesFeedback::test_next_round_only_sees_its_own_feedback
-2.35s call     tests/deep_slice/test_slice_02_telemetry_listener.py::TestSmoke::test_smoke_real_udp_short_packet_skipped
-2.26s call     tests/deep_integration/test_concurrent.py::TestConcurrentApiRequests::test_concurrent_mixed_api_operations
-2.26s call     tests/test_svg_markers.py::TestStaticCacheRevalidation::test_app_js_served_with_no_cache
-2.24s call     tests/deep_integration/test_e2e_business.py::TestImportSetup::test_get_current_setup_after_import
-2.23s call     tests/deep_integration/test_e2e_business.py::TestImportSetup::test_import_with_telemetry_success
-2.14s call     tests/test_car_status.py::TestEndToEnd::test_simulated_lap_reaches_suggestion
-2.14s call     tests/deep_integration/test_concurrent.py::TestConcurrentApiRequests::test_concurrent_suggest_no_deadlock
-2.14s call     tests/test_api_contract.py::TestExperimentEndpointWorks::test_unknown_track_returns_404
-2.13s call     tests/test_api_contract.py::TestRecordingTrainingExport::test_export_produces_samples
-2.12s call     tests/test_car_status.py::TestSimulatorCoverage::test_simulator_emits_car_status
-2.10s teardown tests/test_simulator_chain.py::TestSimulatorHandlerWiring::test_simulator_gets_handler_on_create
-2.10s call     tests/test_t2_telemetry_listener.py::TestListenerUdpReceive::test_receive_short_packet_no_crash
-2.09s call     tests/deep_integration/test_e2e_business.py::TestMultiRoundConvergence::test_multi_round_iteration_history_grows
-2.09s call     tests/deep_integration/test_e2e_business.py::TestGenerateSuggestion::test_get_latest_suggestion
 =========================== short test summary info ============================
-SKIPPED [1] tests/test_telemetry_importer.py:484: 未设置 F1OPT_REAL_DATA_DIR（或目录不存在）
-SKIPPED [1] tests/test_telemetry_importer.py:500: 未设置 F1OPT_REAL_DATA_DIR（或目录不存在）
-SKIPPED [1] tests/test_telemetry_importer.py:512: 未设置 F1OPT_REAL_DATA_DIR（或目录不存在）
-=========== 2253 passed, 3 skipped, 2 warnings in 393.87s (0:06:33) ============
-
-================ .ci/usage.log ================
----- 失败 / 错误用例 ----
----- 断言摘要 ----
----- 最慢用例 ----
----- 结果行 ----
----- 超时 / 崩溃痕迹 ----
----- 日志尾部 ----
-使用流程评测完成（0.4s，3 赛道 × 5 场景）
-  模型生效率   : 100.0%（未覆盖 0 条：[]）
-  采纳率       : 100.0%（至少采纳 1 步）
-  模拟收益     : 中位 82.2 ms | p10 75.0 | p90 104.8
-  平均改动参数 : 9.2（含规则层）| 模型采纳 3.0 步
-  可用性违规   : 0 条 | 无输入改车：0 处
-  门禁         : PASS
-写出: /home/runner/work/F1-/F1-/setup_tuner/resources/models/usage_flow_eval.json / /home/runner/work/F1-/F1-/setup_tuner/resources/models/usage_flow_eval.md
+ERROR tests/deep_integration/test_concurrent.py - KeyError: 'tyre_graining'
+ERROR tests/deep_integration/test_data_flow.py - KeyError: 'tyre_graining'
+ERROR tests/deep_integration/test_e2e_business.py - KeyError: 'tyre_graining'
+ERROR tests/deep_slice/test_slice_04_engine_diag.py - KeyError: 'tyre_graining'
+ERROR tests/deep_slice/test_slice_08_report.py - KeyError: 'tyre_graining'
+ERROR tests/deep_slice/test_slice_09_app.py - KeyError: 'tyre_graining'
+ERROR tests/test_api_contract.py - KeyError: 'tyre_graining'
+ERROR tests/test_api_edge_cases.py - KeyError: 'tyre_graining'
+ERROR tests/test_car_status.py - KeyError: 'tyre_graining'
+ERROR tests/test_cli_logging.py - KeyError: 'tyre_graining'
+ERROR tests/test_engine_dx_extended.py - KeyError: 'tyre_graining'
+ERROR tests/test_engine_edge_cases.py - KeyError: 'tyre_graining'
+ERROR tests/test_feedback_aggregation.py - KeyError: 'tyre_graining'
+ERROR tests/test_feedback_lifecycle.py - KeyError: 'tyre_graining'
+ERROR tests/test_holistic.py - KeyError: 'tyre_graining'
+ERROR tests/test_kerb_detection.py - KeyError: 'tyre_graining'
+ERROR tests/test_lap_aggregator.py - KeyError: 'tyre_graining'
+ERROR tests/test_lap_optimizer.py - KeyError: 'tyre_graining'
+ERROR tests/test_lap_writer_e2e.py - KeyError: 'tyre_graining'
+ERROR tests/test_motion_ex.py - KeyError: 'tyre_graining'
+ERROR tests/test_nn_manager_singleton.py - KeyError: 'tyre_graining'
+ERROR tests/test_perf_regressions.py - KeyError: 'tyre_graining'
+ERROR tests/test_personalization.py - KeyError: 'tyre_graining'
+ERROR tests/test_real_lap_calibration.py - KeyError: 'tyre_graining'
+ERROR tests/test_report_builder.py - KeyError: 'tyre_graining'
+ERROR tests/test_sector_and_ws_contract.py - KeyError: 'tyre_graining'
+ERROR tests/test_setup_sim.py - KeyError: 'tyre_graining'
+ERROR tests/test_setup_sim_per_track_scale.py - KeyError: 'tyre_graining'
+ERROR tests/test_simulator_chain.py - KeyError: 'tyre_graining'
+ERROR tests/test_style_targeting.py - KeyError: 'tyre_graining'
+ERROR tests/test_svg_markers.py - KeyError: 'tyre_graining'
+ERROR tests/test_t6_engine.py - KeyError: 'tyre_graining'
+ERROR tests/test_t7_api.py - KeyError: 'tyre_graining'
+ERROR tests/test_t7_ws.py - KeyError: 'tyre_graining'
+ERROR tests/test_telemetry_surrogate.py - KeyError: 'tyre_graining'
+ERROR tests/test_track_arcs.py - KeyError: 'tyre_graining'
+ERROR tests/test_track_gain.py - KeyError: 'tyre_graining'
+ERROR tests/test_training_dataset.py - KeyError: 'tyre_graining'
+ERROR tests/test_ui_field_contract.py - KeyError: 'tyre_graining'
+!!!!!!!!!!!!!!!!!!! Interrupted: 39 errors during collection !!!!!!!!!!!!!!!!!!!
+======================== 1 warning, 39 errors in 3.07s =========================
 
