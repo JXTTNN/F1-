@@ -83,6 +83,10 @@ class SurrogateModel:
         self._lap_ridge: dict[str, Any] | None = None
         self._lap_setup_names: list[str] = []
         self._lap_feature_keys: list[str] = []
+        # v3 产物：先基准（赛道×弯号收缩查表）再残差，见 scripts/train_telemetry_v3.py
+        self._baseline_pair: dict[str, float] = {}
+        self._baseline_class: dict[str, float] = {}
+        self._baseline_global: float = 0.0
         self._load()
 
     # ---------------- 加载 ---------------- #
@@ -114,6 +118,15 @@ class SurrogateModel:
                     logger.warning("MLP 权重还原失败，回退到岭回归", exc_info=True)
                     self.corner_active = "ridge"
                     self._mlp = None
+            baseline = head.get("corner_baseline") or {}
+            if baseline:
+                self._baseline_pair = {
+                    str(k): float(v) for k, v in (baseline.get("by_pair") or {}).items()
+                }
+                self._baseline_class = {
+                    str(k): float(v) for k, v in (baseline.get("by_class") or {}).items()
+                }
+                self._baseline_global = float(baseline.get("global") or 0.0)
         lap = data.get("lap_head") or {}
         if lap.get("available"):
             self.lap_skill = float((lap.get("metrics") or {}).get("skill") or 0.0)
@@ -177,16 +190,39 @@ class SurrogateModel:
             float(conditions.get("fast_share") or 0.0),
         ]
 
+    def _baseline_share(
+        self, track_id: str, corner: int, conditions: dict[str, Any],
+    ) -> float | None:
+        """v3 基准项：(赛道×弯号) 收缩值 → 弯型均值 → 全局均值。
+
+        旧产物没有 ``corner_baseline`` 块时返回 ``None``，调用方保持旧行为
+        （整行 one-hot 的岭回归预测）。
+        """
+        if not self._baseline_pair:
+            return None
+        key = f"{track_id}#{corner}"
+        if key in self._baseline_pair:
+            return self._baseline_pair[key]
+        cls = str(conditions.get("corner_class") or "medium").lower()
+        if cls in self._baseline_class:
+            return self._baseline_class[cls]
+        return self._baseline_global or None
+
     def predict_corner_share(
         self, track_id: str, corner: int, conditions: dict[str, Any],
     ) -> float | None:
-        """预测该弯占整圈时间的比例。模型不可用时返回 None。"""
+        """预测该弯占整圈时间的比例。模型不可用时返回 None。
+
+        有新产物时 = 基准 + 残差（工况项）；旧产物 = 整行 one-hot 的岭回归。
+        """
         if not self.available:
             return None
         row = self._corner_row(track_id, corner, conditions)
+        base = self._baseline_share(track_id, corner, conditions)
         try:
             if self.corner_active == "mlp" and self._mlp is not None:
-                return float(self._mlp.predict_one(row)[0])
+                pred = float(self._mlp.predict_one(row)[0])
+                return pred + base if base is not None else pred
             if self._ridge is not None:
                 coef = self._ridge["coef"]
                 mean = self._ridge["mean"]
@@ -194,7 +230,7 @@ class SurrogateModel:
                 s = float(self._ridge["intercept"])
                 for j, c in enumerate(coef):
                     s += c * (row[j] - mean[j]) / std[j]
-                return float(s)
+                return float(s) + base if base is not None else float(s)
         except (IndexError, KeyError, ValueError):
             logger.warning("弯级推理失败（track=%s corner=%s）", track_id, corner,
                            exc_info=True)

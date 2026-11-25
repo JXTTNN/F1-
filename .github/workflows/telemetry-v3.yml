@@ -1,0 +1,70 @@
+name: Telemetry v3 Candidate
+
+# 用 data/f1_2026/train 的干净圈重训遥测代理 v3（基准 + 残差），
+# 产出候选权重并跑对照实验；**不覆盖生产模型**。
+# 触发：手动 dispatch。产物落在 candidates/，是否转正由人看报告决定。
+
+on:
+  workflow_dispatch:
+    inputs:
+      promote:
+        description: "同时覆盖生产模型（默认否；仅当端到端 A/B 无回退时勾选）"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: telemetry-v3
+  cancel-in-progress: false
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Materialize clean training set
+        run: |
+          mkdir -p data/training
+          gzip -dc data/f1_2026/train/corner_samples_clean.jsonl.gz > data/training/corner_dataset.jsonl
+          wc -l data/training/corner_dataset.jsonl
+
+      - name: Train v3 + holdout report
+        run: |
+          python scripts/train_telemetry_v3.py \
+            --out setup_tuner/resources/models/candidates/telemetry_surrogate_v3.json
+
+      - name: Keep report
+        run: |
+          mkdir -p docs/reports
+          cp work/telemetry_v3_report.json docs/reports/telemetry_v3_report.json || true
+
+      - name: Promote to production (opt-in)
+        if: github.event.inputs.promote == 'true'
+        run: |
+          cp setup_tuner/resources/models/candidates/telemetry_surrogate_v3.json \
+             setup_tuner/resources/models/telemetry_surrogate.json
+
+      - name: Commit artifacts
+        run: |
+          git config user.name "f1opt-data-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add setup_tuner/resources/models/candidates docs/reports 2>/dev/null || true
+          if [ "${{ github.event.inputs.promote }}" = "true" ]; then
+            git add setup_tuner/resources/models/telemetry_surrogate.json
+          fi
+          git commit -m "retrain(v3): 干净圈 21 站候选模型 + 分站留出报告" || echo "no changes"
+          git push origin HEAD:main || echo "push skipped"

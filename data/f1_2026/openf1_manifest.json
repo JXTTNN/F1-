@@ -1,0 +1,160 @@
+{
+  "source": "openf1.org",
+  "season": 2026,
+  "crawled_at": "2026-11-25T20:26:17",
+  "tracks": [
+    {
+      "track_id": "austin",
+      "session_key": 11396,
+      "laps": 1166,
+      "stints": 54,
+      "pit": 32
+    },
+    {
+      "track_id": "baku",
+      "session_key": 11377,
+      "laps": 983,
+      "stints": 58,
+      "pit": 36
+    },
+    {
+      "track_id": "barcelona",
+      "session_key": 11307,
+      "laps": 1241,
+      "stints": 70,
+      "pit": 48
+    },
+    {
+      "track_id": "hungaroring",
+      "session_key": 11342,
+      "laps": 1432,
+      "stints": 67,
+      "pit": 45
+    },
+    {
+      "track_id": "kuala_lumpur",
+      "session_key": 11731,
+      "laps": 1145,
+      "stints": 97,
+      "pit": 73
+    },
+    {
+      "track_id": "las_vegas",
+      "session_key": 11420,
+      "laps": 989,
+      "stints": 45,
+      "pit": 23
+    },
+    {
+      "track_id": "madrid",
+      "session_key": 11369,
+      "laps": 1109,
+      "stints": 47,
+      "pit": 25
+    },
+    {
+      "track_id": "melbourne",
+      "session_key": 11234,
+      "laps": 1008,
+      "stints": 53,
+      "pit": 26
+    },
+    {
+      "track_id": "mexico_city",
+      "session_key": 11404,
+      "laps": 1369,
+      "stints": 80,
+      "pit": 67
+    },
+    {
+      "track_id": "miami",
+      "session_key": 11280,
+      "laps": 1042,
+      "stints": 44,
+      "pit": 22
+    },
+    {
+      "track_id": "monaco",
+      "session_key": 11299,
+      "laps": 1452,
+      "stints": 108,
+      "pit": 86
+    },
+    {
+      "track_id": "montreal",
+      "session_key": 11291,
+      "laps": 1212,
+      "stints": 56,
+      "pit": 34
+    },
+    {
+      "track_id": "monza",
+      "session_key": 11361,
+      "laps": 1055,
+      "stints": 52,
+      "pit": 30
+    },
+    {
+      "track_id": "sao_paulo",
+      "session_key": 11412,
+      "laps": 1437,
+      "stints": 80,
+      "pit": 58
+    },
+    {
+      "track_id": "shanghai",
+      "session_key": 11245,
+      "laps": 924,
+      "stints": 41,
+      "pit": 19
+    },
+    {
+      "track_id": "silverstone",
+      "session_key": 11326,
+      "laps": 1114,
+      "stints": 73,
+      "pit": 51
+    },
+    {
+      "track_id": "singapore",
+      "session_key": 11388,
+      "laps": 1240,
+      "stints": 47,
+      "pit": 25
+    },
+    {
+      "track_id": "spa",
+      "session_key": 11334,
+      "laps": 875,
+      "stints": 51,
+      "pit": 28
+    },
+    {
+      "track_id": "spielberg",
+      "session_key": 11315,
+      "laps": 1342,
+      "stints": 63,
+      "pit": 41
+    },
+    {
+      "track_id": "suzuka",
+      "session_key": 11253,
+      "laps": 1108,
+      "stints": 51,
+      "pit": 29
+    },
+    {
+      "track_id": "zandvoort",
+      "session_key": 11353,
+      "laps": 1372,
+      "stints": 87,
+      "pit": 65
+    }
+  ],
+  "totals": {
+    "tracks": 21,
+    "laps": 24615,
+    "stints": 1324,
+    "pit": 863
+  }
+}
