@@ -1,10 +1,10 @@
 workflow : CI
 job      : test
-sha      : 98cb59ebc8a4931aef6af830399e48ceb1d5c5a1
+sha      : 9808657f13f54b887bab10ef95f02f1f0e890817
 ref      : main
 event    : push
-run      : https://github.com/JXTTNN/F1-/actions/runs/45534737675
-time     : 2026-11-25T02:42:04Z
+run      : https://github.com/JXTTNN/F1-/actions/runs/45534846316
+time     : 2026-11-25T02:48:20Z
 steps    : install=success lint=success js=success pytest=cancelled usage=skipped
 
 ================ .ci/pytest.log ================
@@ -14,58 +14,63 @@ steps    : install=success lint=success js=success pytest=cancelled usage=skippe
 ---- 结果行 ----
 ---- 超时 / 崩溃痕迹 ----
 ---- 日志尾部 ----
-/opt/hostedtoolcache/Python/3.11.18/x64/lib/python3.11/site-packages/pytest_asyncio/plugin.py:306: PytestDeprecationWarning: The configuration option "asyncio_default_fixture_loop_scope" is unset.
-The event loop scope for asynchronous fixtures will default to the fixture scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to "function" scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: "function", "class", "module", "package", "session". Set it to "fixture-scope" to keep the current behavior.
-
-  warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))
-============================= test session starts ==============================
-platform linux -- Python 3.11.18, pytest-9.2.0, pluggy-1.7.0 -- /opt/hostedtoolcache/Python/3.11.18/x64/bin/python
-cachedir: .pytest_cache
-rootdir: /home/runner/work/F1-/F1-
-configfile: pyproject.toml
-plugins: anyio-4.16.0, timeout-2.4.0, asyncio-1.5.0, cov-7.1.0
-timeout: 300.0s
-timeout method: signal
-timeout func_only: False
-asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
-collecting ... collected 2256 items
-
-tests/deep_integration/test_concurrent.py::TestConcurrentStoreWrite::test_concurrent_import_setup_no_loss PASSED [  0%]
-tests/deep_integration/test_concurrent.py::TestConcurrentStoreWrite::test_concurrent_submit_feedback_no_loss PASSED [  0%]
-tests/deep_integration/test_concurrent.py::TestConcurrentStoreWrite::test_concurrent_mixed_write_read_consistent PASSED [  0%]
-tests/deep_integration/test_concurrent.py::TestConcurrentTelemetryStream::test_concurrent_update_and_read PASSED [  0%]
-tests/deep_integration/test_concurrent.py::TestConcurrentTelemetryStream::test_concurrent_get_all_latest_snapshot PASSED [  0%]
-tests/deep_integration/test_concurrent.py::TestConcurrentTelemetryStream::test_concurrent_update_different_packet_ids PASSED [  0%]
-tests/deep_integration/test_concurrent.py::TestConcurrentApiRequests::test_concurrent_feedback_submission PASSED [  0%]
-tests/deep_integration/test_concurrent.py::TestConcurrentApiRequests::test_concurrent_suggest_no_deadlock PASSED [  0%]
-tests/deep_integration/test_concurrent.py::TestConcurrentApiRequests::test_concurrent_mixed_api_operations PASSED [  0%]
-tests/deep_integration/test_concurrent.py::TestConcurrentDataIntegrity::test_concurrent_setup_import_integrity PASSED [  0%]
-tests/deep_integration/test_concurrent.py::TestConcurrentDataIntegrity::test_concurrent_feedback_then_suggest_consistent PASSED [  0%]
-tests/deep_integration/test_concurrent.py::TestConcurrentDataIntegrity::test_no_deadlock_under_stress PASSED [  0%]
-tests/deep_integration/test_data_flow.py::TestTelemetryToEngine::test_packet5_to_setup_dict_covers_20_params PASSED [  0%]
-tests/deep_integration/test_data_flow.py::TestTelemetryToEngine::test_packet5_field_values_preserved_through_pipeline PASSED [  0%]
-tests/deep_integration/test_data_flow.py::TestTelemetryToEngine::test_parsed_setup_is_valid_engine_input PASSED [  0%]
-tests/deep_integration/test_data_flow.py::TestDxToSetupDelta::test_symptoms_to_dx_covers_9_dims PASSED [  0%]
-tests/deep_integration/test_data_flow.py::TestDxToSetupDelta::test_dx_to_setup_delta_covers_20_params PASSED [  0%]
-tests/deep_integration/test_data_flow.py::TestDxToSetupDelta::test_dx_to_setup_delta_respects_bounds PASSED [  0%]
-tests/deep_integration/test_data_flow.py::TestDxToSetupDelta::test_zero_dx_produces_zero_delta PASSED [  0%]
-tests/deep_integration/test_data_flow.py::TestDxToSetupDelta::test_dx_is_deterministic PASSED [  0%]
-tests/deep_integration/test_data_flow.py::TestDxToSetupDelta::test_setup_delta_is_deterministic PASSED [  0%]
-tests/deep_integration/test_data_flow.py::TestFeedbackToReport::test_submit_feedback_persisted_and_retrievable PASSED [  0%]
-tests/deep_integration/test_data_flow.py::TestFeedbackToReport::test_feedbacks_to_symptoms_preserves_strength PASSED [  1%]
-tests/deep_integration/test_data_flow.py::TestFeedbackToReport::test_full_pipeline_feedback_to_report PASSED [  1%]
-tests/deep_integration/test_data_flow.py::TestFeedbackToReport::test_report_persisted_via_store PASSED [  1%]
-tests/deep_integration/test_data_flow.py::TestTrackSetupConsistency::test_track_id_preserved_through_pipeline PASSED [  1%]
-tests/deep_integration/test_data_flow.py::TestTrackSetupConsistency::test_setup_dict_matches_carsetup_fields PASSED [  1%]
-tests/deep_integration/test_data_flow.py::TestTrackSetupConsistency::test_all_symptoms_produce_valid_dx PASSED [  1%]
-tests/deep_integration/test_data_flow.py::TestTrackSetupConsistency::test_all_tracks_have_valid_setup_default PASSED [  1%]
-tests/deep_integration/test_data_flow.py::TestTrackSetupConsistency::test_track_lookup_by_id_consistent PASSED [  1%]
-tests/deep_integration/test_data_flow.py::TestTelemetrySummaryFlow::test_multi_packet_to_telemetry_summary PASSED [  1%]
-tests/deep_integration/test_e2e_business.py::TestSelectTrack::test_list_tracks_returns_24 PASSED [  1%]
-tests/deep_integration/test_e2e_business.py::TestSelectTrack::test_select_track_success PASSED [  1%]
-tests/deep_integration/test_e2e_business.py::TestSelectTrack::test_select_unknown_track_404 PASSED [  1%]
-tests/deep_integration/test_e2e_business.py::TestSelectTrack::test_track_detail_with_corners PASSED [  1%]
-tests/deep_integration/test_e2e_business.py::TestImportSetup::test_import_without_telemetry_409 PASSED [  1%]
-tests/deep_integration/test_e2e_business.py::TestImportSetup::test_import_with_telemetry_success PASSED [  1%]
-tests/deep_integration/test_e2e_business.py::TestImportSetup::test_get_current_setup_after_import PASSED [  1%]
-tests/deep_integration/test_e2e_business.py::TestSubmitFeedback::test_submit_single_feedback 
+tests/test_simulator.py::TestPhysicsHelpers::test_speed_to_gear_all_gears PASSED [ 73%]
+tests/test_simulator.py::TestPhysicsHelpers::test_speed_to_rpm_idle PASSED [ 73%]
+tests/test_simulator.py::TestPhysicsHelpers::test_speed_to_rpm_within_range PASSED [ 74%]
+tests/test_simulator.py::TestPhysicsHelpers::test_estimate_lap_time_positive PASSED [ 74%]
+tests/test_simulator.py::TestSimulatorLifecycle::test_initial_state PASSED [ 74%]
+tests/test_simulator.py::TestSimulatorLifecycle::test_start_stop PASSED  [ 74%]
+tests/test_simulator.py::TestSimulatorLifecycle::test_start_idempotent PASSED [ 74%]
+tests/test_simulator.py::TestSimulatorLifecycle::test_start_invalid_track PASSED [ 74%]
+tests/test_simulator.py::TestSimulatorLifecycle::test_stop_idempotent PASSED [ 74%]
+tests/test_simulator.py::TestSimulatorLifecycle::test_max_laps_auto_stop PASSED [ 74%]
+tests/test_simulator.py::TestHandlerDispatch::test_add_handler_dedup PASSED [ 74%]
+tests/test_simulator.py::TestHandlerDispatch::test_remove_handler PASSED [ 74%]
+tests/test_simulator.py::TestHandlerDispatch::test_remove_handler_not_registered PASSED [ 74%]
+tests/test_simulator.py::TestHandlerDispatch::test_handler_exception_isolated PASSED [ 74%]
+tests/test_simulator.py::TestHandlerDispatch::test_dispatch_no_handlers PASSED [ 74%]
+tests/test_simulator.py::TestHandlerDispatch::test_handler_receives_frames PASSED [ 74%]
+tests/test_simulator.py::TestFrameFormat::test_frame_fields_present PASSED [ 74%]
+tests/test_simulator.py::TestFrameFormat::test_frame_field_types PASSED  [ 74%]
+tests/test_simulator.py::TestFrameFormat::test_frame_value_ranges PASSED [ 74%]
+tests/test_simulator.py::TestFrameFormat::test_corner_event_format PASSED [ 74%]
+tests/test_simulator.py::TestTrackSwitching::test_all_24_tracks_exist PASSED [ 74%]
+tests/test_simulator.py::TestTrackSwitching::test_start_each_track[melbourne] PASSED [ 74%]
+tests/test_simulator.py::TestTrackSwitching::test_start_each_track[shanghai] PASSED [ 74%]
+tests/test_simulator.py::TestTrackSwitching::test_start_each_track[suzuka] PASSED [ 74%]
+tests/test_simulator.py::TestTrackSwitching::test_start_each_track[sakhir] PASSED [ 75%]
+tests/test_simulator.py::TestTrackSwitching::test_start_each_track[jeddah] PASSED [ 75%]
+tests/test_simulator.py::TestTrackSwitching::test_start_each_track[miami] PASSED [ 75%]
+tests/test_simulator.py::TestTrackSwitching::test_start_each_track[montreal] PASSED [ 75%]
+tests/test_simulator.py::TestTrackSwitching::test_start_each_track[monaco] PASSED [ 75%]
+tests/test_simulator.py::TestTrackSwitching::test_start_each_track[barcelona] PASSED [ 75%]
+tests/test_simulator.py::TestTrackSwitching::test_start_each_track[spielberg] PASSED [ 75%]
+tests/test_simulator.py::TestTrackSwitching::test_start_each_track[silverstone] PASSED [ 75%]
+tests/test_simulator.py::TestTrackSwitching::test_start_each_track[spa] PASSED [ 75%]
+tests/test_simulator.py::TestTrackSwitching::test_start_each_track[hungaroring] PASSED [ 75%]
+tests/test_simulator.py::TestTrackSwitching::test_start_each_track[zandvoort] PASSED [ 75%]
+tests/test_simulator.py::TestTrackSwitching::test_start_each_track[monza] PASSED [ 75%]
+tests/test_simulator.py::TestTrackSwitching::test_start_each_track[madrid] PASSED [ 75%]
+tests/test_simulator.py::TestTrackSwitching::test_start_each_track[baku] PASSED [ 75%]
+tests/test_simulator.py::TestTrackSwitching::test_start_each_track[singapore] PASSED [ 75%]
+tests/test_simulator.py::TestTrackSwitching::test_start_each_track[austin] PASSED [ 75%]
+tests/test_simulator.py::TestTrackSwitching::test_start_each_track[mexico_city] PASSED [ 75%]
+tests/test_simulator.py::TestTrackSwitching::test_start_each_track[sao_paulo] PASSED [ 75%]
+tests/test_simulator.py::TestTrackSwitching::test_start_each_track[las_vegas] PASSED [ 75%]
+tests/test_simulator.py::TestTrackSwitching::test_start_each_track[lusail] PASSED [ 75%]
+tests/test_simulator.py::TestTrackSwitching::test_start_each_track[yas_marina] PASSED [ 75%]
+tests/test_simulator.py::TestGenerateLapSnapshot::test_snapshot_returns_frames PASSED [ 75%]
+tests/test_simulator.py::TestGenerateLapSnapshot::test_snapshot_custom_lap_time PASSED [ 75%]
+tests/test_simulator.py::TestGenerateLapSnapshot::test_snapshot_min_60_frames PASSED [ 76%]
+tests/test_simulator.py::TestGenerateLapSnapshot::test_snapshot_invalid_track_raises PASSED [ 76%]
+tests/test_simulator.py::TestGenerateLapSnapshot::test_snapshot_reproducible_with_seed PASSED [ 76%]
+tests/test_simulator.py::TestGenerateLapSnapshot::test_snapshot_frame_fields PASSED [ 76%]
+tests/test_simulator.py::TestSimulatorEdgeCases::test_invalid_track_id PASSED [ 76%]
+tests/test_simulator.py::TestSimulatorEdgeCases::test_zero_fps_clamped_to_one PASSED [ 76%]
+tests/test_simulator.py::TestSimulatorEdgeCases::test_negative_fps_clamped PASSED [ 76%]
+tests/test_simulator.py::TestSimulatorEdgeCases::test_default_constants PASSED [ 76%]
+tests/test_simulator.py::TestSimulatorEdgeCases::test_concurrent_start_stop PASSED [ 76%]
+tests/test_simulator.py::TestSimulatorEdgeCases::test_corner_influence_straight_vs_corner PASSED [ 76%]
+tests/test_simulator_chain.py::TestPacketHandlerInState::test_packet_handler_stored_in_state PASSED [ 76%]
+tests/test_simulator_chain.py::TestSimulatorHandlerWiring::test_simulator_gets_handler_on_create PASSED [ 76%]
+tests/test_simulator_chain.py::TestSimulatorHandlerWiring::test_simulator_feeds_aggregator PASSED [ 76%]
