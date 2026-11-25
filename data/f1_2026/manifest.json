@@ -1,0 +1,84 @@
+{
+  "name": "f1_2026_telemetry_setups",
+  "built_at": "2026-11-25T01:28:07.686202+00:00",
+  "privacy": "原始逐点遥测留在本地 .ref/ 缓存，不入库；入库仅赛道级聚合统计（track_profile.jsonl），不含车手姓名/车号/圈号/逐弯明细。",
+  "sources": [
+    {
+      "id": "tracinginsights_2026",
+      "kind": "real 2026 telemetry (per-lap, per-point)",
+      "url": "https://github.com/TracingInsights/2026",
+      "license": "Apache-2.0",
+      "access": "GitHub raw + scripts/fetch_official_2026.py"
+    },
+    {
+      "id": "f1laps_f1_26",
+      "kind": "setup \u2192 lap time pairs (game F1 26)",
+      "url": "https://www.f1laps.com/f1-26/setups/",
+      "license": "public pages, robots.txt allows crawling; attribution kept",
+      "access": "scripts/fetch_setup_laps.py"
+    }
+  ],
+  "counts": {
+    "corner_rows": 6380,
+    "corner_rows_dropped_zero_speed": 142,
+    "corner_stats_rows": 100,
+    "setup_rows_2026": 899,
+    "profile_tracks": 24
+  },
+  "coverage": {
+    "telemetry_tracks": [
+      "melbourne",
+      "monaco",
+      "monza",
+      "silverstone",
+      "singapore",
+      "spa"
+    ],
+    "setup_tracks": [
+      "austin",
+      "baku",
+      "barcelona",
+      "hungaroring",
+      "jeddah",
+      "las_vegas",
+      "lusail",
+      "madrid",
+      "melbourne",
+      "mexico_city",
+      "miami",
+      "monaco",
+      "montreal",
+      "monza",
+      "sakhir",
+      "sao_paulo",
+      "shanghai",
+      "silverstone",
+      "singapore",
+      "spa",
+      "spielberg",
+      "suzuka",
+      "yas_marina",
+      "zandvoort"
+    ]
+  },
+  "files": {
+    "telemetry_corners.jsonl": {
+      "rows": 100,
+      "bytes": 75506,
+      "sha256": "6f9df417e6d36492f7daf94f28e69f5891ad5050969d213b05b0c8f76d7ed8f9",
+      "committed": false
+    },
+    "setups_f1_26.jsonl": {
+      "rows": 899,
+      "bytes": 927619,
+      "sha256": "da848cfe7900ca9c4bb16b49e4e595e3947e867c58be9768353c3a4b9959f083",
+      "committed": false
+    },
+    "track_profile.jsonl": {
+      "rows": 24,
+      "bytes": 35599,
+      "sha256": "23e5b50449d9c3e2b51c291a1cc770c3a5627cd1434c9f74dcd0979fc8c1a3d2",
+      "committed": true
+    }
+  }
+}

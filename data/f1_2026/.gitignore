@@ -1,0 +1,5 @@
+# 逐弯明细（telemetry_corners.jsonl）与逐条调教（setups_f1_26.jsonl）
+# 体积较大且可由 scripts/build_f1_2026_bundle.py 重新生成；
+# 同时遵循仓库「车手真实遥测/训练数据不入库」的隐私口径，仅本地保留。
+telemetry_corners.jsonl
+setups_f1_26.jsonl
