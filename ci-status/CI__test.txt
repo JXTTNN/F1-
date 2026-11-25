@@ -1,115 +1,71 @@
 workflow : CI
 job      : test
-sha      : fdfa921590379f7cdaddc1d26d10ce2c52a79471
+sha      : 98cb59ebc8a4931aef6af830399e48ceb1d5c5a1
 ref      : main
 event    : push
-run      : https://github.com/JXTTNN/F1-/actions/runs/45529552438
-time     : 2026-11-25T02:05:12Z
-steps    : install=success lint=success js=success pytest=success usage=success
+run      : https://github.com/JXTTNN/F1-/actions/runs/45534737675
+time     : 2026-11-25T02:42:04Z
+steps    : install=success lint=success js=success pytest=cancelled usage=skipped
 
 ================ .ci/pytest.log ================
 ---- 失败 / 错误用例 ----
 ---- 断言摘要 ----
 ---- 最慢用例 ----
-============================= slowest 15 durations =============================
-4.17s call     tests/test_feedback_lifecycle.py::TestSuggestConsumesFeedback::test_next_round_only_sees_its_own_feedback
-2.47s call     tests/deep_integration/test_concurrent.py::TestConcurrentApiRequests::test_concurrent_mixed_api_operations
-2.35s call     tests/deep_slice/test_slice_02_telemetry_listener.py::TestSmoke::test_smoke_real_udp_short_packet_skipped
-2.26s call     tests/test_car_status.py::TestSimulatorCoverage::test_simulator_emits_car_status
-2.21s call     tests/test_svg_markers.py::TestStaticCacheRevalidation::test_track_svg_served_with_no_cache
-2.20s call     tests/deep_integration/test_concurrent.py::TestConcurrentApiRequests::test_concurrent_suggest_no_deadlock
-2.17s call     tests/test_car_status.py::TestEndToEnd::test_simulated_lap_reaches_suggestion
-2.17s call     tests/deep_integration/test_e2e_business.py::TestMultiRoundConvergence::test_multi_round_iteration_history_grows
-2.15s call     tests/test_api_contract.py::TestExperimentEndpointWorks::test_split_telemetry_makes_dx_diff_informative
-2.14s call     tests/test_api_contract.py::TestRecordingTrainingExport::test_export_produces_samples
-2.14s call     tests/deep_integration/test_e2e_business.py::TestFullClosedLoop::test_full_6_step_loop
-2.14s call     tests/deep_integration/test_e2e_business.py::TestMultiRoundConvergence::test_repeated_suggest_is_deterministic
-2.12s call     tests/test_api_edge_cases.py::test_multiple_suggestions_generate_iterations
-2.11s call     tests/test_telemetry_surrogate.py::TestSuggestApiTelemetryOnly::test_suggest_works_without_driver_feedback
-2.11s call     tests/deep_integration/test_e2e_business.py::TestMultiRoundConvergence::test_increasing_strength_increases_delta_magnitude
-=========================== short test summary info ============================
-SKIPPED [1] tests/test_telemetry_importer.py:484: 未设置 F1OPT_REAL_DATA_DIR（或目录不存在）
-SKIPPED [1] tests/test_telemetry_importer.py:500: 未设置 F1OPT_REAL_DATA_DIR（或目录不存在）
-SKIPPED [1] tests/test_telemetry_importer.py:512: 未设置 F1OPT_REAL_DATA_DIR（或目录不存在）
-=========== 2253 passed, 3 skipped, 2 warnings in 403.57s (0:06:43) ============
----- 结果行 ----
-=========== 2253 passed, 3 skipped, 2 warnings in 403.57s (0:06:43) ============
----- 超时 / 崩溃痕迹 ----
----- 日志尾部 ----
-tests/test_ui_theme.py::TestThemeInventory::test_every_theme_has_a_chip PASSED [ 98%]
-tests/test_ui_theme.py::TestThemeInventory::test_default_theme_is_applied_in_markup PASSED [ 99%]
-tests/test_ui_theme.py::TestThemeInventory::test_themes_css_is_linked_after_style PASSED [ 99%]
-tests/test_ui_theme.py::TestThemeVariables::test_all_required_vars_defined[pitwall] PASSED [ 99%]
-tests/test_ui_theme.py::TestThemeVariables::test_all_required_vars_defined[carbon] PASSED [ 99%]
-tests/test_ui_theme.py::TestThemeVariables::test_all_required_vars_defined[nightrace] PASSED [ 99%]
-tests/test_ui_theme.py::TestThemeVariables::test_no_empty_values[pitwall] PASSED [ 99%]
-tests/test_ui_theme.py::TestThemeVariables::test_no_empty_values[carbon] PASSED [ 99%]
-tests/test_ui_theme.py::TestThemeVariables::test_no_empty_values[nightrace] PASSED [ 99%]
-tests/test_ui_theme.py::TestThemeVariables::test_light_theme_declares_color_scheme PASSED [ 99%]
-tests/test_ui_theme.py::TestThemeVariables::test_dark_themes_declare_color_scheme[carbon] PASSED [ 99%]
-tests/test_ui_theme.py::TestThemeVariables::test_dark_themes_declare_color_scheme[nightrace] PASSED [ 99%]
-tests/test_ui_theme.py::TestThemeContrast::test_body_text_readable_on_card[carbon] PASSED [ 99%]
-tests/test_ui_theme.py::TestThemeContrast::test_body_text_readable_on_card[nightrace] PASSED [ 99%]
-tests/test_ui_theme.py::TestThemeContrast::test_body_text_readable_on_card[pitwall] PASSED [ 99%]
-tests/test_ui_theme.py::TestThemeContrast::test_accent_label_readable[carbon] PASSED [ 99%]
-tests/test_ui_theme.py::TestThemeContrast::test_accent_label_readable[nightrace] PASSED [ 99%]
-tests/test_ui_theme.py::TestThemeContrast::test_accent_label_readable[pitwall] PASSED [ 99%]
-tests/test_ui_theme.py::TestThemeContrast::test_data_color_readable[carbon] PASSED [ 99%]
-tests/test_ui_theme.py::TestThemeContrast::test_data_color_readable[nightrace] PASSED [ 99%]
-tests/test_ui_theme.py::TestThemeContrast::test_data_color_readable[pitwall] PASSED [ 99%]
-tests/test_ui_theme.py::TestNoHardcodedThemeColors::test_accent_hover_literals_only_in_tokens PASSED [ 99%]
-tests/test_ui_theme.py::TestNoHardcodedThemeColors::test_theme_vars_exist_in_root PASSED [ 99%]
-tests/test_ui_theme.py::TestNoHardcodedThemeColors::test_primary_button_uses_theme_vars PASSED [100%]
-
-=============================== warnings summary ===============================
-../../../../../opt/hostedtoolcache/Python/3.11.18/x64/lib/python3.11/site-packages/fastapi/testclient.py:1
-  /opt/hostedtoolcache/Python/3.11.18/x64/lib/python3.11/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
-    from starlette.testclient import TestClient as TestClient  # noqa
-
-tests/test_real_lap_calibration.py::TestCorpusMetadata::test_every_row_has_year_and_surface
-  /opt/hostedtoolcache/Python/3.11.18/x64/lib/python3.11/site-packages/_pytest/fixtures.py:1392: PytestRemovedIn10Warning: Class-scoped fixtures defined as instance methods are deprecated.
-  Instance attributes set in the 'rows' fixture will NOT be visible to test methods,
-  as each test gets a new instance while the fixture runs only once per class.
-  Use a @classmethod decorator below @pytest.fixture and set attributes on cls instead.
-  See https://docs.pytest.org/en/stable/deprecations.html#class-scoped-fixture-as-instance-method
-    fixturefunc = resolve_fixture_function(fixturedef, request)
-
--- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
-============================= slowest 15 durations =============================
-4.17s call     tests/test_feedback_lifecycle.py::TestSuggestConsumesFeedback::test_next_round_only_sees_its_own_feedback
-2.47s call     tests/deep_integration/test_concurrent.py::TestConcurrentApiRequests::test_concurrent_mixed_api_operations
-2.35s call     tests/deep_slice/test_slice_02_telemetry_listener.py::TestSmoke::test_smoke_real_udp_short_packet_skipped
-2.26s call     tests/test_car_status.py::TestSimulatorCoverage::test_simulator_emits_car_status
-2.21s call     tests/test_svg_markers.py::TestStaticCacheRevalidation::test_track_svg_served_with_no_cache
-2.20s call     tests/deep_integration/test_concurrent.py::TestConcurrentApiRequests::test_concurrent_suggest_no_deadlock
-2.17s call     tests/test_car_status.py::TestEndToEnd::test_simulated_lap_reaches_suggestion
-2.17s call     tests/deep_integration/test_e2e_business.py::TestMultiRoundConvergence::test_multi_round_iteration_history_grows
-2.15s call     tests/test_api_contract.py::TestExperimentEndpointWorks::test_split_telemetry_makes_dx_diff_informative
-2.14s call     tests/test_api_contract.py::TestRecordingTrainingExport::test_export_produces_samples
-2.14s call     tests/deep_integration/test_e2e_business.py::TestFullClosedLoop::test_full_6_step_loop
-2.14s call     tests/deep_integration/test_e2e_business.py::TestMultiRoundConvergence::test_repeated_suggest_is_deterministic
-2.12s call     tests/test_api_edge_cases.py::test_multiple_suggestions_generate_iterations
-2.11s call     tests/test_telemetry_surrogate.py::TestSuggestApiTelemetryOnly::test_suggest_works_without_driver_feedback
-2.11s call     tests/deep_integration/test_e2e_business.py::TestMultiRoundConvergence::test_increasing_strength_increases_delta_magnitude
-=========================== short test summary info ============================
-SKIPPED [1] tests/test_telemetry_importer.py:484: 未设置 F1OPT_REAL_DATA_DIR（或目录不存在）
-SKIPPED [1] tests/test_telemetry_importer.py:500: 未设置 F1OPT_REAL_DATA_DIR（或目录不存在）
-SKIPPED [1] tests/test_telemetry_importer.py:512: 未设置 F1OPT_REAL_DATA_DIR（或目录不存在）
-=========== 2253 passed, 3 skipped, 2 warnings in 403.57s (0:06:43) ============
-
-================ .ci/usage.log ================
----- 失败 / 错误用例 ----
----- 断言摘要 ----
----- 最慢用例 ----
 ---- 结果行 ----
 ---- 超时 / 崩溃痕迹 ----
 ---- 日志尾部 ----
-使用流程评测完成（0.8s，3 赛道 × 5 场景）
-  模型生效率   : 100.0%（未覆盖 0 条：[]）
-  采纳率       : 100.0%（至少采纳 1 步）
-  模拟收益     : 中位 82.2 ms | p10 75.0 | p90 104.8
-  平均改动参数 : 9.2（含规则层）| 模型采纳 3.0 步
-  可用性违规   : 0 条 | 无输入改车：0 处
-  门禁         : PASS
-写出: /home/runner/work/F1-/F1-/setup_tuner/resources/models/usage_flow_eval.json / /home/runner/work/F1-/F1-/setup_tuner/resources/models/usage_flow_eval.md
+/opt/hostedtoolcache/Python/3.11.18/x64/lib/python3.11/site-packages/pytest_asyncio/plugin.py:306: PytestDeprecationWarning: The configuration option "asyncio_default_fixture_loop_scope" is unset.
+The event loop scope for asynchronous fixtures will default to the fixture scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to "function" scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: "function", "class", "module", "package", "session". Set it to "fixture-scope" to keep the current behavior.
 
+  warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))
+============================= test session starts ==============================
+platform linux -- Python 3.11.18, pytest-9.2.0, pluggy-1.7.0 -- /opt/hostedtoolcache/Python/3.11.18/x64/bin/python
+cachedir: .pytest_cache
+rootdir: /home/runner/work/F1-/F1-
+configfile: pyproject.toml
+plugins: anyio-4.16.0, timeout-2.4.0, asyncio-1.5.0, cov-7.1.0
+timeout: 300.0s
+timeout method: signal
+timeout func_only: False
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 2256 items
+
+tests/deep_integration/test_concurrent.py::TestConcurrentStoreWrite::test_concurrent_import_setup_no_loss PASSED [  0%]
+tests/deep_integration/test_concurrent.py::TestConcurrentStoreWrite::test_concurrent_submit_feedback_no_loss PASSED [  0%]
+tests/deep_integration/test_concurrent.py::TestConcurrentStoreWrite::test_concurrent_mixed_write_read_consistent PASSED [  0%]
+tests/deep_integration/test_concurrent.py::TestConcurrentTelemetryStream::test_concurrent_update_and_read PASSED [  0%]
+tests/deep_integration/test_concurrent.py::TestConcurrentTelemetryStream::test_concurrent_get_all_latest_snapshot PASSED [  0%]
+tests/deep_integration/test_concurrent.py::TestConcurrentTelemetryStream::test_concurrent_update_different_packet_ids PASSED [  0%]
+tests/deep_integration/test_concurrent.py::TestConcurrentApiRequests::test_concurrent_feedback_submission PASSED [  0%]
+tests/deep_integration/test_concurrent.py::TestConcurrentApiRequests::test_concurrent_suggest_no_deadlock PASSED [  0%]
+tests/deep_integration/test_concurrent.py::TestConcurrentApiRequests::test_concurrent_mixed_api_operations PASSED [  0%]
+tests/deep_integration/test_concurrent.py::TestConcurrentDataIntegrity::test_concurrent_setup_import_integrity PASSED [  0%]
+tests/deep_integration/test_concurrent.py::TestConcurrentDataIntegrity::test_concurrent_feedback_then_suggest_consistent PASSED [  0%]
+tests/deep_integration/test_concurrent.py::TestConcurrentDataIntegrity::test_no_deadlock_under_stress PASSED [  0%]
+tests/deep_integration/test_data_flow.py::TestTelemetryToEngine::test_packet5_to_setup_dict_covers_20_params PASSED [  0%]
+tests/deep_integration/test_data_flow.py::TestTelemetryToEngine::test_packet5_field_values_preserved_through_pipeline PASSED [  0%]
+tests/deep_integration/test_data_flow.py::TestTelemetryToEngine::test_parsed_setup_is_valid_engine_input PASSED [  0%]
+tests/deep_integration/test_data_flow.py::TestDxToSetupDelta::test_symptoms_to_dx_covers_9_dims PASSED [  0%]
+tests/deep_integration/test_data_flow.py::TestDxToSetupDelta::test_dx_to_setup_delta_covers_20_params PASSED [  0%]
+tests/deep_integration/test_data_flow.py::TestDxToSetupDelta::test_dx_to_setup_delta_respects_bounds PASSED [  0%]
+tests/deep_integration/test_data_flow.py::TestDxToSetupDelta::test_zero_dx_produces_zero_delta PASSED [  0%]
+tests/deep_integration/test_data_flow.py::TestDxToSetupDelta::test_dx_is_deterministic PASSED [  0%]
+tests/deep_integration/test_data_flow.py::TestDxToSetupDelta::test_setup_delta_is_deterministic PASSED [  0%]
+tests/deep_integration/test_data_flow.py::TestFeedbackToReport::test_submit_feedback_persisted_and_retrievable PASSED [  0%]
+tests/deep_integration/test_data_flow.py::TestFeedbackToReport::test_feedbacks_to_symptoms_preserves_strength PASSED [  1%]
+tests/deep_integration/test_data_flow.py::TestFeedbackToReport::test_full_pipeline_feedback_to_report PASSED [  1%]
+tests/deep_integration/test_data_flow.py::TestFeedbackToReport::test_report_persisted_via_store PASSED [  1%]
+tests/deep_integration/test_data_flow.py::TestTrackSetupConsistency::test_track_id_preserved_through_pipeline PASSED [  1%]
+tests/deep_integration/test_data_flow.py::TestTrackSetupConsistency::test_setup_dict_matches_carsetup_fields PASSED [  1%]
+tests/deep_integration/test_data_flow.py::TestTrackSetupConsistency::test_all_symptoms_produce_valid_dx PASSED [  1%]
+tests/deep_integration/test_data_flow.py::TestTrackSetupConsistency::test_all_tracks_have_valid_setup_default PASSED [  1%]
+tests/deep_integration/test_data_flow.py::TestTrackSetupConsistency::test_track_lookup_by_id_consistent PASSED [  1%]
+tests/deep_integration/test_data_flow.py::TestTelemetrySummaryFlow::test_multi_packet_to_telemetry_summary PASSED [  1%]
+tests/deep_integration/test_e2e_business.py::TestSelectTrack::test_list_tracks_returns_24 PASSED [  1%]
+tests/deep_integration/test_e2e_business.py::TestSelectTrack::test_select_track_success PASSED [  1%]
+tests/deep_integration/test_e2e_business.py::TestSelectTrack::test_select_unknown_track_404 PASSED [  1%]
+tests/deep_integration/test_e2e_business.py::TestSelectTrack::test_track_detail_with_corners PASSED [  1%]
+tests/deep_integration/test_e2e_business.py::TestImportSetup::test_import_without_telemetry_409 PASSED [  1%]
+tests/deep_integration/test_e2e_business.py::TestImportSetup::test_import_with_telemetry_success PASSED [  1%]
+tests/deep_integration/test_e2e_business.py::TestImportSetup::test_get_current_setup_after_import PASSED [  1%]
+tests/deep_integration/test_e2e_business.py::TestSubmitFeedback::test_submit_single_feedback 
