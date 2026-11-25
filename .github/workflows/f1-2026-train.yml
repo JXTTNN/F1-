@@ -1,0 +1,60 @@
+name: F1 2026 Clean Training Set
+
+# 在 GitHub 侧抓取全部 Race 圈（不再每位车手只取前 10 圈），
+# 用 session_laptimes 元数据过滤出干净圈，产训练集并提交。
+# 原始逐点全量不入 git（约 1.2GB tar）；只提交训练用明细。
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/f1-2026-train.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: f1-2026-train
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install package
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+
+      - name: Fetch ALL Race laps (all drivers, all laps)
+        run: |
+          python - <<'PY'
+          from scripts.fetch_official_2026 import active_races, main
+          for race in active_races():
+              main(["--race", race, "--session", "Race", "--workers", "12"])
+          PY
+
+      - name: Build all corner samples
+        run: |
+          python scripts/build_corner_dataset.py --max-laps 2000
+
+      - name: Build clean training set
+        run: |
+          python scripts/build_clean_training.py
+
+      - name: Commit training set
+        run: |
+          git config user.name "f1opt-data-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/f1_2026/train scripts/build_clean_training.py
+          git status --short | head -40
+          git diff --cached --stat | tail -30
+          git commit -m "data: 全量干净圈训练集（Race 全圈清洗 + 21 站逐弯样本 + 调教表）" || echo "no changes"
+          git push origin HEAD:main
