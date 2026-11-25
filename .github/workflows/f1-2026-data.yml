@@ -1,0 +1,76 @@
+name: F1 2026 Data Bundle
+
+# 在 GitHub 侧重建「全量 2026 遥测」并直接提交，避免本地到仓库的大文件传输限制。
+# 触发：手动 workflow_dispatch，或本文件自身被推送时。
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/f1-2026-data.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: f1-2026-data
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install package
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+
+      - name: Fix upstream Sao Paulo naming
+        run: |
+          python - <<'PY'
+          import pathlib
+          f = pathlib.Path("scripts/fetch_official_2026.py")
+          s = f.read_text(encoding="utf-8")
+          s = s.replace('"Sao Paulo Grand Prix",', '"São Paulo Grand Prix",')
+          f.write_text(s, encoding="utf-8")
+          f = pathlib.Path("scripts/build_corner_dataset.py")
+          s = f.read_text(encoding="utf-8")
+          s = s.replace(
+              '"Barcelona Grand Prix": "barcelona",',
+              '"Barcelona Grand Prix": "barcelona",\n    "São Paulo Grand Prix": "sao_paulo",',
+          )
+          f.write_text(s, encoding="utf-8")
+          PY
+          python -m py_compile scripts/fetch_official_2026.py scripts/build_corner_dataset.py
+
+      - name: Fetch 2026 telemetry (all rounds)
+        run: |
+          python - <<'PY'
+          from scripts.fetch_official_2026 import active_races, main
+          for race in active_races():
+              main(["--race", race, "--session", "Race", "--max-laps", "10", "--workers", "12"])
+          PY
+
+      - name: Build corner samples + bundle + extras + raw pack
+        run: |
+          python scripts/build_corner_dataset.py --max-laps 400
+          python scripts/build_f1_2026_bundle.py
+          python scripts/f1_2026_extras.py
+          python scripts/pack_raw_telemetry.py
+
+      - name: Commit data
+        run: |
+          git config user.name "f1opt-data-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/f1_2026 scripts/f1_2026_extras.py scripts/pack_raw_telemetry.py \
+                  scripts/fetch_official_2026.py scripts/build_corner_dataset.py
+          git status --short | head -40
+          git diff --cached --stat | tail -30
+          git commit -m "data: 全量 F1 2026 遥测（21 站逐点+逐圈+逐弯）+ 899 条调教入库" || echo "no changes"
+          git push origin HEAD:main
