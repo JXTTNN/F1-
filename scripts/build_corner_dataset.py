@@ -65,6 +65,7 @@ MIN_POINTS_IN_WINDOW = 4
 RACE_ALIASES: dict[str, str] = {
     "Barcelona Grand Prix": "barcelona",
     "São Paulo Grand Prix": "sao_paulo",
+    "São Paulo Grand Prix": "sao_paulo",
 }
 
 

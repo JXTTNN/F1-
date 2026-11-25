@@ -120,3 +120,6 @@ promo/
 
 # 本地测试残留数据目录（运行期生成的 SQLite 库）
 data_test_*/
+
+# F1 2026 raw 逐点遥测（必须入库）
+!data/f1_2026/raw_telemetry/*.tar.gz
