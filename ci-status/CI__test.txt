@@ -1,76 +1,115 @@
 workflow : CI
 job      : test
-sha      : 9808657f13f54b887bab10ef95f02f1f0e890817
+sha      : 112f4ec36a8150c588c4f06147cf6f4cf88d8e32
 ref      : main
 event    : push
-run      : https://github.com/JXTTNN/F1-/actions/runs/45534846316
-time     : 2026-11-25T02:48:20Z
-steps    : install=success lint=success js=success pytest=cancelled usage=skipped
+run      : https://github.com/JXTTNN/F1-/actions/runs/45535523078
+time     : 2026-11-25T02:55:36Z
+steps    : install=success lint=success js=success pytest=success usage=success
 
 ================ .ci/pytest.log ================
+---- 失败 / 错误用例 ----
+---- 断言摘要 ----
+---- 最慢用例 ----
+============================= slowest 15 durations =============================
+4.17s call     tests/test_feedback_lifecycle.py::TestSuggestConsumesFeedback::test_next_round_only_sees_its_own_feedback
+2.42s call     tests/deep_integration/test_concurrent.py::TestConcurrentApiRequests::test_concurrent_mixed_api_operations
+2.35s call     tests/deep_slice/test_slice_02_telemetry_listener.py::TestSmoke::test_smoke_real_udp_short_packet_skipped
+2.34s call     tests/test_car_status.py::TestEndToEnd::test_simulated_lap_reaches_suggestion
+2.28s teardown tests/deep_slice/test_slice_07_api.py::TestBoundary::test_get_track_unknown
+2.25s call     tests/test_telemetry_surrogate.py::TestSuggestApiTelemetryOnly::test_suggest_works_without_driver_feedback
+2.23s call     tests/test_svg_markers.py::TestStaticCacheRevalidation::test_track_svg_served_with_no_cache
+2.19s call     tests/deep_integration/test_concurrent.py::TestConcurrentApiRequests::test_concurrent_suggest_no_deadlock
+2.17s call     tests/test_api_contract.py::TestExperimentEndpointWorks::test_split_telemetry_makes_dx_diff_informative
+2.16s call     tests/deep_integration/test_e2e_business.py::TestMultiRoundConvergence::test_multi_round_iteration_history_grows
+2.14s call     tests/test_api_contract.py::TestRecordingTrainingExport::test_export_produces_samples
+2.14s call     tests/deep_integration/test_e2e_business.py::TestGenerateSuggestion::test_get_latest_suggestion
+2.13s call     tests/test_car_status.py::TestSimulatorCoverage::test_simulator_emits_car_status
+2.13s call     tests/deep_integration/test_e2e_business.py::TestFullClosedLoop::test_full_6_step_loop
+2.13s call     tests/test_api_edge_cases.py::test_multiple_suggestions_generate_iterations
+=========================== short test summary info ============================
+SKIPPED [1] tests/test_telemetry_importer.py:484: 未设置 F1OPT_REAL_DATA_DIR（或目录不存在）
+SKIPPED [1] tests/test_telemetry_importer.py:500: 未设置 F1OPT_REAL_DATA_DIR（或目录不存在）
+SKIPPED [1] tests/test_telemetry_importer.py:512: 未设置 F1OPT_REAL_DATA_DIR（或目录不存在）
+=========== 2253 passed, 3 skipped, 2 warnings in 401.88s (0:06:41) ============
+---- 结果行 ----
+=========== 2253 passed, 3 skipped, 2 warnings in 401.88s (0:06:41) ============
+---- 超时 / 崩溃痕迹 ----
+---- 日志尾部 ----
+tests/test_ui_theme.py::TestThemeInventory::test_every_theme_has_a_chip PASSED [ 98%]
+tests/test_ui_theme.py::TestThemeInventory::test_default_theme_is_applied_in_markup PASSED [ 99%]
+tests/test_ui_theme.py::TestThemeInventory::test_themes_css_is_linked_after_style PASSED [ 99%]
+tests/test_ui_theme.py::TestThemeVariables::test_all_required_vars_defined[pitwall] PASSED [ 99%]
+tests/test_ui_theme.py::TestThemeVariables::test_all_required_vars_defined[carbon] PASSED [ 99%]
+tests/test_ui_theme.py::TestThemeVariables::test_all_required_vars_defined[nightrace] PASSED [ 99%]
+tests/test_ui_theme.py::TestThemeVariables::test_no_empty_values[pitwall] PASSED [ 99%]
+tests/test_ui_theme.py::TestThemeVariables::test_no_empty_values[carbon] PASSED [ 99%]
+tests/test_ui_theme.py::TestThemeVariables::test_no_empty_values[nightrace] PASSED [ 99%]
+tests/test_ui_theme.py::TestThemeVariables::test_light_theme_declares_color_scheme PASSED [ 99%]
+tests/test_ui_theme.py::TestThemeVariables::test_dark_themes_declare_color_scheme[carbon] PASSED [ 99%]
+tests/test_ui_theme.py::TestThemeVariables::test_dark_themes_declare_color_scheme[nightrace] PASSED [ 99%]
+tests/test_ui_theme.py::TestThemeContrast::test_body_text_readable_on_card[carbon] PASSED [ 99%]
+tests/test_ui_theme.py::TestThemeContrast::test_body_text_readable_on_card[nightrace] PASSED [ 99%]
+tests/test_ui_theme.py::TestThemeContrast::test_body_text_readable_on_card[pitwall] PASSED [ 99%]
+tests/test_ui_theme.py::TestThemeContrast::test_accent_label_readable[carbon] PASSED [ 99%]
+tests/test_ui_theme.py::TestThemeContrast::test_accent_label_readable[nightrace] PASSED [ 99%]
+tests/test_ui_theme.py::TestThemeContrast::test_accent_label_readable[pitwall] PASSED [ 99%]
+tests/test_ui_theme.py::TestThemeContrast::test_data_color_readable[carbon] PASSED [ 99%]
+tests/test_ui_theme.py::TestThemeContrast::test_data_color_readable[nightrace] PASSED [ 99%]
+tests/test_ui_theme.py::TestThemeContrast::test_data_color_readable[pitwall] PASSED [ 99%]
+tests/test_ui_theme.py::TestNoHardcodedThemeColors::test_accent_hover_literals_only_in_tokens PASSED [ 99%]
+tests/test_ui_theme.py::TestNoHardcodedThemeColors::test_theme_vars_exist_in_root PASSED [ 99%]
+tests/test_ui_theme.py::TestNoHardcodedThemeColors::test_primary_button_uses_theme_vars PASSED [100%]
+
+=============================== warnings summary ===============================
+../../../../../opt/hostedtoolcache/Python/3.11.18/x64/lib/python3.11/site-packages/fastapi/testclient.py:1
+  /opt/hostedtoolcache/Python/3.11.18/x64/lib/python3.11/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+tests/test_real_lap_calibration.py::TestCorpusMetadata::test_every_row_has_year_and_surface
+  /opt/hostedtoolcache/Python/3.11.18/x64/lib/python3.11/site-packages/_pytest/fixtures.py:1392: PytestRemovedIn10Warning: Class-scoped fixtures defined as instance methods are deprecated.
+  Instance attributes set in the 'rows' fixture will NOT be visible to test methods,
+  as each test gets a new instance while the fixture runs only once per class.
+  Use a @classmethod decorator below @pytest.fixture and set attributes on cls instead.
+  See https://docs.pytest.org/en/stable/deprecations.html#class-scoped-fixture-as-instance-method
+    fixturefunc = resolve_fixture_function(fixturedef, request)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+============================= slowest 15 durations =============================
+4.17s call     tests/test_feedback_lifecycle.py::TestSuggestConsumesFeedback::test_next_round_only_sees_its_own_feedback
+2.42s call     tests/deep_integration/test_concurrent.py::TestConcurrentApiRequests::test_concurrent_mixed_api_operations
+2.35s call     tests/deep_slice/test_slice_02_telemetry_listener.py::TestSmoke::test_smoke_real_udp_short_packet_skipped
+2.34s call     tests/test_car_status.py::TestEndToEnd::test_simulated_lap_reaches_suggestion
+2.28s teardown tests/deep_slice/test_slice_07_api.py::TestBoundary::test_get_track_unknown
+2.25s call     tests/test_telemetry_surrogate.py::TestSuggestApiTelemetryOnly::test_suggest_works_without_driver_feedback
+2.23s call     tests/test_svg_markers.py::TestStaticCacheRevalidation::test_track_svg_served_with_no_cache
+2.19s call     tests/deep_integration/test_concurrent.py::TestConcurrentApiRequests::test_concurrent_suggest_no_deadlock
+2.17s call     tests/test_api_contract.py::TestExperimentEndpointWorks::test_split_telemetry_makes_dx_diff_informative
+2.16s call     tests/deep_integration/test_e2e_business.py::TestMultiRoundConvergence::test_multi_round_iteration_history_grows
+2.14s call     tests/test_api_contract.py::TestRecordingTrainingExport::test_export_produces_samples
+2.14s call     tests/deep_integration/test_e2e_business.py::TestGenerateSuggestion::test_get_latest_suggestion
+2.13s call     tests/test_car_status.py::TestSimulatorCoverage::test_simulator_emits_car_status
+2.13s call     tests/deep_integration/test_e2e_business.py::TestFullClosedLoop::test_full_6_step_loop
+2.13s call     tests/test_api_edge_cases.py::test_multiple_suggestions_generate_iterations
+=========================== short test summary info ============================
+SKIPPED [1] tests/test_telemetry_importer.py:484: 未设置 F1OPT_REAL_DATA_DIR（或目录不存在）
+SKIPPED [1] tests/test_telemetry_importer.py:500: 未设置 F1OPT_REAL_DATA_DIR（或目录不存在）
+SKIPPED [1] tests/test_telemetry_importer.py:512: 未设置 F1OPT_REAL_DATA_DIR（或目录不存在）
+=========== 2253 passed, 3 skipped, 2 warnings in 401.88s (0:06:41) ============
+
+================ .ci/usage.log ================
 ---- 失败 / 错误用例 ----
 ---- 断言摘要 ----
 ---- 最慢用例 ----
 ---- 结果行 ----
 ---- 超时 / 崩溃痕迹 ----
 ---- 日志尾部 ----
-tests/test_simulator.py::TestPhysicsHelpers::test_speed_to_gear_all_gears PASSED [ 73%]
-tests/test_simulator.py::TestPhysicsHelpers::test_speed_to_rpm_idle PASSED [ 73%]
-tests/test_simulator.py::TestPhysicsHelpers::test_speed_to_rpm_within_range PASSED [ 74%]
-tests/test_simulator.py::TestPhysicsHelpers::test_estimate_lap_time_positive PASSED [ 74%]
-tests/test_simulator.py::TestSimulatorLifecycle::test_initial_state PASSED [ 74%]
-tests/test_simulator.py::TestSimulatorLifecycle::test_start_stop PASSED  [ 74%]
-tests/test_simulator.py::TestSimulatorLifecycle::test_start_idempotent PASSED [ 74%]
-tests/test_simulator.py::TestSimulatorLifecycle::test_start_invalid_track PASSED [ 74%]
-tests/test_simulator.py::TestSimulatorLifecycle::test_stop_idempotent PASSED [ 74%]
-tests/test_simulator.py::TestSimulatorLifecycle::test_max_laps_auto_stop PASSED [ 74%]
-tests/test_simulator.py::TestHandlerDispatch::test_add_handler_dedup PASSED [ 74%]
-tests/test_simulator.py::TestHandlerDispatch::test_remove_handler PASSED [ 74%]
-tests/test_simulator.py::TestHandlerDispatch::test_remove_handler_not_registered PASSED [ 74%]
-tests/test_simulator.py::TestHandlerDispatch::test_handler_exception_isolated PASSED [ 74%]
-tests/test_simulator.py::TestHandlerDispatch::test_dispatch_no_handlers PASSED [ 74%]
-tests/test_simulator.py::TestHandlerDispatch::test_handler_receives_frames PASSED [ 74%]
-tests/test_simulator.py::TestFrameFormat::test_frame_fields_present PASSED [ 74%]
-tests/test_simulator.py::TestFrameFormat::test_frame_field_types PASSED  [ 74%]
-tests/test_simulator.py::TestFrameFormat::test_frame_value_ranges PASSED [ 74%]
-tests/test_simulator.py::TestFrameFormat::test_corner_event_format PASSED [ 74%]
-tests/test_simulator.py::TestTrackSwitching::test_all_24_tracks_exist PASSED [ 74%]
-tests/test_simulator.py::TestTrackSwitching::test_start_each_track[melbourne] PASSED [ 74%]
-tests/test_simulator.py::TestTrackSwitching::test_start_each_track[shanghai] PASSED [ 74%]
-tests/test_simulator.py::TestTrackSwitching::test_start_each_track[suzuka] PASSED [ 74%]
-tests/test_simulator.py::TestTrackSwitching::test_start_each_track[sakhir] PASSED [ 75%]
-tests/test_simulator.py::TestTrackSwitching::test_start_each_track[jeddah] PASSED [ 75%]
-tests/test_simulator.py::TestTrackSwitching::test_start_each_track[miami] PASSED [ 75%]
-tests/test_simulator.py::TestTrackSwitching::test_start_each_track[montreal] PASSED [ 75%]
-tests/test_simulator.py::TestTrackSwitching::test_start_each_track[monaco] PASSED [ 75%]
-tests/test_simulator.py::TestTrackSwitching::test_start_each_track[barcelona] PASSED [ 75%]
-tests/test_simulator.py::TestTrackSwitching::test_start_each_track[spielberg] PASSED [ 75%]
-tests/test_simulator.py::TestTrackSwitching::test_start_each_track[silverstone] PASSED [ 75%]
-tests/test_simulator.py::TestTrackSwitching::test_start_each_track[spa] PASSED [ 75%]
-tests/test_simulator.py::TestTrackSwitching::test_start_each_track[hungaroring] PASSED [ 75%]
-tests/test_simulator.py::TestTrackSwitching::test_start_each_track[zandvoort] PASSED [ 75%]
-tests/test_simulator.py::TestTrackSwitching::test_start_each_track[monza] PASSED [ 75%]
-tests/test_simulator.py::TestTrackSwitching::test_start_each_track[madrid] PASSED [ 75%]
-tests/test_simulator.py::TestTrackSwitching::test_start_each_track[baku] PASSED [ 75%]
-tests/test_simulator.py::TestTrackSwitching::test_start_each_track[singapore] PASSED [ 75%]
-tests/test_simulator.py::TestTrackSwitching::test_start_each_track[austin] PASSED [ 75%]
-tests/test_simulator.py::TestTrackSwitching::test_start_each_track[mexico_city] PASSED [ 75%]
-tests/test_simulator.py::TestTrackSwitching::test_start_each_track[sao_paulo] PASSED [ 75%]
-tests/test_simulator.py::TestTrackSwitching::test_start_each_track[las_vegas] PASSED [ 75%]
-tests/test_simulator.py::TestTrackSwitching::test_start_each_track[lusail] PASSED [ 75%]
-tests/test_simulator.py::TestTrackSwitching::test_start_each_track[yas_marina] PASSED [ 75%]
-tests/test_simulator.py::TestGenerateLapSnapshot::test_snapshot_returns_frames PASSED [ 75%]
-tests/test_simulator.py::TestGenerateLapSnapshot::test_snapshot_custom_lap_time PASSED [ 75%]
-tests/test_simulator.py::TestGenerateLapSnapshot::test_snapshot_min_60_frames PASSED [ 76%]
-tests/test_simulator.py::TestGenerateLapSnapshot::test_snapshot_invalid_track_raises PASSED [ 76%]
-tests/test_simulator.py::TestGenerateLapSnapshot::test_snapshot_reproducible_with_seed PASSED [ 76%]
-tests/test_simulator.py::TestGenerateLapSnapshot::test_snapshot_frame_fields PASSED [ 76%]
-tests/test_simulator.py::TestSimulatorEdgeCases::test_invalid_track_id PASSED [ 76%]
-tests/test_simulator.py::TestSimulatorEdgeCases::test_zero_fps_clamped_to_one PASSED [ 76%]
-tests/test_simulator.py::TestSimulatorEdgeCases::test_negative_fps_clamped PASSED [ 76%]
-tests/test_simulator.py::TestSimulatorEdgeCases::test_default_constants PASSED [ 76%]
-tests/test_simulator.py::TestSimulatorEdgeCases::test_concurrent_start_stop PASSED [ 76%]
-tests/test_simulator.py::TestSimulatorEdgeCases::test_corner_influence_straight_vs_corner PASSED [ 76%]
-tests/test_simulator_chain.py::TestPacketHandlerInState::test_packet_handler_stored_in_state PASSED [ 76%]
-tests/test_simulator_chain.py::TestSimulatorHandlerWiring::test_simulator_gets_handler_on_create PASSED [ 76%]
-tests/test_simulator_chain.py::TestSimulatorHandlerWiring::test_simulator_feeds_aggregator PASSED [ 76%]
+使用流程评测完成（0.7s，3 赛道 × 5 场景）
+  模型生效率   : 100.0%（未覆盖 0 条：[]）
+  采纳率       : 100.0%（至少采纳 1 步）
+  模拟收益     : 中位 82.2 ms | p10 75.0 | p90 104.8
+  平均改动参数 : 9.2（含规则层）| 模型采纳 3.0 步
+  可用性违规   : 0 条 | 无输入改车：0 处
+  门禁         : PASS
+写出: /home/runner/work/F1-/F1-/setup_tuner/resources/models/usage_flow_eval.json / /home/runner/work/F1-/F1-/setup_tuner/resources/models/usage_flow_eval.md
+
