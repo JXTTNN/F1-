@@ -12,7 +12,7 @@
 
 | 文件 | 行数/数量 | 大小 | 内容 |
 |------|-----------|------|------|
-| `raw_telemetry/*.tar.gz` | 21 站 / 4 518 文件 | 259 MB | 逐点原始遥测（每圈 600+ 采样点、14 通道），解压即还原上游目录结构 |
+| `raw_telemetry/*.tar.gz` | 21 站 / 4 518 文件 | 259 MB | 逐点原始遥测**抽样**（每车手前 10 圈，每圈 600+ 采样点、14 通道），解压即还原上游目录结构 |
 | `corner_samples.jsonl.gz` | 71 222 | 3.3 MB | 逐弯训练样本（每行一个 赛道×弯×圈 样本） |
 | `telemetry_laps.jsonl` | 4 334 | 1.7 MB | 逐圈汇总：圈速/胎/天气/弯速极值/油门刹车占比 |
 | `telemetry_corners.jsonl` | 344 | 254 KB | 21 站 × 弯道的遥测聚合：`n_laps` + 每项指标 `median/p10/p90` |
@@ -27,7 +27,8 @@
 
 ## 覆盖度
 
-- 遥测：**21 / 24 站**，Race 会话，每位车手最多 10 圈，共 **4 334 圈 / 71 222 条逐弯样本**。
+- 遥测（父目录，**原始抽样**）：**21 / 24 站**，Race 会话，每位车手最多 10 圈，共 **4 334 圈 / 71 222 条逐弯样本**。
+  - **全量 Race 干净圈训练集见 `train/`：19 459 圈 / 314 891 条逐弯样本**（从 24 612 个可计时圈清洗而来）。
   - 缺 3 站：`jeddah`（2026 官方取消）、`lusail`（Qatar，赛历未到、上游无数据）、
     `yas_marina`（Abu Dhabi，赛历未到、上游无数据）。
   - 5 场比赛各有 1 圈在上游 404（Bahrain / Azerbaijan / Miami / Mexico City / Singapore），
@@ -127,3 +128,17 @@ CI 也可以用 `.github/workflows/f1-2026-data.yml` 一键重建（手动 dispa
   调教取各参数中位数），比全局缺省更贴近真实玩家分布；
 - `setups_f1_26.jsonl` 已是 `train_real_lap_model.py` 的输入口径子集，
   可直接替换/补充 `data/setup_laps/f1laps_setups.jsonl` 中 2026 的部分。
+
+## 训练集（`train/`，全量干净圈）
+
+父目录的逐点原始包 `raw_telemetry/*.tar.gz` 是「每位车手前 10 圈」的抽样，
+适合点级核查；**训练请用 `train/`**：
+
+- `train/laps_clean.jsonl`：19,459 圈（21 站 Race，已剔除发车/进站/黄旗/删除/计时不准圈）
+- `train/corner_samples_clean.jsonl.gz`：314,891 条逐弯样本
+- `train/setups_f1_26.jsonl`：899 条调教（独立任务）
+- `train/splits.json`：按分站 train/val/test = 15/3/3，防同场泄漏
+- 清洗口径、字段与训练命令见 `train/DATASET_CARD.md`、`train/TRAINING.md`
+
+> 公开真实遥测不含车队调教，所以“同一圈同时有遥测+调教”的数据不存在；
+> 遥测代理与调教→圈速是两个独立任务，不能强行逐圈配对。
