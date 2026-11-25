@@ -1,35 +1,46 @@
 # F1 2026 遥测 + 调教数据包
 
-本目录是本项目用于 **F1 2026** 的外部数据落地层：一边是真实 2026 赛季遥测的
-**去标识化聚合**，一边是 F1 26 游戏版的 **调教 → 圈速** 配对。两边共用
-`track_id`（与 `setup_tuner.domain.track` 的 24 站一致），可以直接 join。
+本目录是项目用于 **F1 2026** 的外部数据落地层：真实 2026 赛季遥测（全部已举办赛站，
+逐点原始文件 + 逐圈 + 逐弯）与 F1 26 游戏版调教。两边共用 `track_id`
+（与 `setup_tuner.domain.track` 的 24 站一致），可直接 join。
 
-> ⚠️ 隐私口径：仓库 `.gitignore` 明确规定「车手真实遥测与训练数据（个人数据，
-> 绝不入库）」。因此**原始逐点遥测不入库**，只留在本地 `.ref/tracing_2026/`；
-> 入库的只有赛道级聚合统计（无车手、无车号、无圈号），逐弯明细留在本地。
+> 入库口径（repo owner 要求）：**全部入库，不做裁剪/降采样**。
+> 原始逐点遥测按赛道打成 `raw_telemetry/<track_id>.tar.gz`（上游原文件逐字节一致），
+> 逐弯样本、逐圈汇总、聚合、调教也全部提交；`.ref/` 只是本机抓取缓存，不入库。
 
 ## 文件
 
-| 文件 | 行数 | 入库 | 内容 |
-|------|------|------|------|
-| `track_profile.jsonl` | 24 | ✅ | 每站一行：遥测画像 + 调教参数分布 + 最优/典型圈速 |
-| `manifest.json` | — | ✅ | 来源、许可、抓取时间、覆盖度、行数、sha256 |
-| `telemetry_corners.jsonl` | 100 | ❌ 本地 | 6 站 × 弯道的真实遥测聚合：`n_laps` + 每项指标的 `median / p10 / p90` |
-| `setups_f1_26.jsonl` | 899 | ❌ 本地 | F1 26 调教（20 项）+ 圈速 + 作者/车队/工况/来源链接 |
+| 文件 | 行数/数量 | 大小 | 内容 |
+|------|-----------|------|------|
+| `raw_telemetry/*.tar.gz` | 21 站 / 4 518 文件 | 259 MB | 逐点原始遥测（每圈 600+ 采样点、14 通道），解压即还原上游目录结构 |
+| `corner_samples.jsonl.gz` | 71 222 | 3.3 MB | 逐弯训练样本（每行一个 赛道×弯×圈 样本） |
+| `telemetry_laps.jsonl` | 4 334 | 1.7 MB | 逐圈汇总：圈速/胎/天气/弯速极值/油门刹车占比 |
+| `telemetry_corners.jsonl` | 344 | 254 KB | 21 站 × 弯道的遥测聚合：`n_laps` + 每项指标 `median/p10/p90` |
+| `setups_f1_26.jsonl` | 899 | 906 KB | F1 26 调教（20 项）+ 圈速 + 作者/车队/工况/来源链接 |
+| `track_profile.jsonl` | 24 | 37 KB | 每站一行：遥测画像 + 调教参数分布 + 最优/典型圈速 |
+| `manifest.json` | — | 3 KB | 来源、许可、构建时间、覆盖度、行数、sha256 |
 
-逐弯明细与逐条调教被 `data/f1_2026/.gitignore` 排除：它们体积较大、可由
-`scripts/build_f1_2026_bundle.py` 重建，且源头是个人录制/公开页面，按仓库
-「个人数据不入库」的既有口径只保留在本地。入库的 `track_profile.jsonl`
-只含**赛道级**统计（不含车手、圈号、逐弯明细）。
+`raw_telemetry/manifest.json` 记录每站包的文件数、原始字节、包字节与 sha256。
 
-> 想入库完整明细时，把 `data/f1_2026/.gitignore` 里对应两行删掉并重跑
-> `python scripts/build_f1_2026_bundle.py` 即可（脚本会刷新 manifest 的
-> `committed` 标记与 sha256）。
+`corner_samples.jsonl.gz` 解压后与 `data/training/corner_dataset.jsonl` 完全同构，
+可直接喂 `train_telemetry_surrogate.py` / `train_real_lap_model.py`。
 
-`telemetry_corners.jsonl` 一行示例（数值已四舍五入）：
+## 覆盖度
+
+- 遥测：**21 / 24 站**，Race 会话，每位车手最多 10 圈，共 **4 334 圈 / 71 222 条逐弯样本**。
+  - 缺 3 站：`jeddah`（2026 官方取消）、`lusail`（Qatar，赛历未到、上游无数据）、
+    `yas_marina`（Abu Dhabi，赛历未到、上游无数据）。
+  - 5 场比赛各有 1 圈在上游 404（Bahrain / Azerbaijan / Miami / Mexico City / Singapore），
+    已记为 missing，不影响其他圈。
+  - 21 场 Race 会话全部通过 2026 年检（`session_laptimes.lSD` 时间戳 100% 落在 2026）。
+- 调教：**24 / 24 站**，899 条 2026 干/湿配对（干 547 / 湿 352）。
+
+## 字段口径
+
+`telemetry_corners.jsonl` 一行示例（数值四舍五入）：
 
 ```json
-{"track_id":"monza","corner":1,"corner_class":"slow","n_laps":63,
+{"track_id":"monza","corner":1,"corner_class":"slow","n_laps":220,
  "min_speed":{"median":86.4,"p10":78.1,"p90":95.2},
  "entry_speed":{"median":242.7,"p10":190.4,"p90":280.9},
  "corner_time_s":{"median":5.86,"p10":5.52,"p90":6.31},
@@ -39,9 +50,19 @@
  "max_lateral_g":{"median":2.41},"max_long_g":{"median":-2.18}}
 ```
 
-指标口径：`entry_speed / min_speed / exit_speed / avg_speed` 单位 km/h；
-`corner_time_s` 为该弯通过时间（秒）；`throttle_full_pct` 为全油门采样占比；
-`brake_pct` 为刹车采样占比；G 值为绝对值峰值（`max_long_g` 取负峰）。
+速度单位 km/h；`corner_time_s` 为该弯通过时间（秒）；`throttle_full_pct` 为全油门采样占比；
+`brake_pct` 为刹车采样占比；`n_laps` 是该弯的有效样本数（车手×圈），不是整圈数。
+
+`telemetry_laps.jsonl` 一行示例：
+
+```json
+{"race":"Chinese Grand Prix","track_id":"shanghai","driver":"ALO","lap":12,
+ "lap_time_s":97.418,"tyre_class":"medium","tyre_softness":0.5,"wet":0.0,
+ "track_temp":24.1,"air_temp":16.2,"n_corners":16,
+ "corner_time_sum_s":62.9,"min_speed_kmh":84.0,"max_speed_kmh":331.2,
+ "throttle_full_pct":63.4,"brake_pct":14.2,
+ "max_lateral_g":3.91,"max_long_g":-2.84}
+```
 
 `setups_f1_26.jsonl` 一行示例：
 
@@ -58,47 +79,43 @@
 | 来源 | 用途 | 许可 / 合规 |
 |------|------|-------------|
 | [TracingInsights/2026](https://github.com/TracingInsights/2026) | 真实 2026 逐圈逐点遥测（FastF1 标准化） | Apache-2.0；GitHub raw 公开文件 |
-| [F1Laps · F1 26 Setups](https://www.f1laps.com/f1-26/setups/) | 调教 + 圈速配对 | 公开 HTML 页面；robots.txt `Allow: /`（`/api/` 与登录区不触碰）；默认 1.2s/请求限速 |
+| [F1Laps · F1 26 Setups](https://www.f1laps.com/f1-26/setups/) | 调教 + 圈速配对 | 公开 HTML 页面；robots.txt `Allow: /`（`/api/` 与登录区不触碰）；1.2s/请求限速 |
 
 两个上游都不是 F1 官方，商标归 Formula One Licensing B.V.；本目录仅作研究/训练用途。
-
-## 覆盖度
-
-- 遥测：**6 / 24 站**（melbourne、monaco、silverstone、monza、singapore、spa），
-  每站 Race 会话、每位车手最多 3 圈，2026 年检通过 0 条非 2026 记录。
-- 调教：**24 / 24 站**，899 条 2026 干/湿配对（干 547 / 湿 352）。
-
-之所以只取 6 站：全量 24 站逐点遥测约数百 MB～GB 级，不适合入库；6 站已覆盖
-街道（monaco/singapore）、高速低下压（monza）、高下压（silverstone）、
-混合（spa/melbourne）四类工况，足以做弯速画像与工况分层。
 
 ## 刷新方式
 
 ```bash
-# 1) 抓真实遥测（可续传；缓存落 .ref/，不入库）
-python scripts/fetch_official_2026.py --race "Italian Grand Prix" --session Race --max-laps 3
-# 或全量（体积大，慎用）
-python scripts/fetch_official_2026.py --full --max-minutes 120
+# 1) 抓真实遥测（可续传；缓存落 .ref/）
+python - <<'PY'
+from scripts.fetch_official_2026 import active_races, main
+for race in active_races():
+    main(["--race", race, "--session", "Race", "--max-laps", "10", "--workers", "12"])
+PY
 
-# 2) 切成逐弯样本（data/training/ 已被 gitignore，属本地训练数据）
-python scripts/build_corner_dataset.py --races "Italian Grand Prix" ...
+# 2) 切成逐弯样本（data/training/ 被 gitignore，属本地训练中间产物）
+python scripts/build_corner_dataset.py --max-laps 400
 
 # 3) 抓调教 + 圈速（可续传）
 python scripts/fetch_setup_laps.py --all-slices
 
-# 4) 生成可入库的聚合包（本目录）
+# 4) 生成数据包（聚合/逐条调教）+ 补齐逐圈/逐弯明细 + 打包原始遥测
 python scripts/build_f1_2026_bundle.py
+python scripts/f1_2026_extras.py
+python scripts/pack_raw_telemetry.py
 ```
+
+CI 也可以用 `.github/workflows/f1-2026-data.yml` 一键重建（手动 dispatch）。
 
 ## 已知口径问题（构建时已处理）
 
-1. **1 号弯零速帧**：上游 `build_corner_dataset.py` 的 1 号弯窗口包含记圈点
-   的零速帧（实测 142 / 6380 条，其中 135 条在 1 号弯），会把 `entry/min/avg
-   speed` 的 p10 拉成 0。本包聚合时**剔除**这类样本，并在
+1. **1 号弯零速帧**：上游 `build_corner_dataset.py` 的 1 号弯窗口会包含记圈点零速帧，
+   把 `entry/min/avg speed` 的 p10 拉成 0。本包聚合与逐圈汇总都**剔除**这类样本
+   （实测 474 / 71 222，0.67%），并在
    `manifest.counts.corner_rows_dropped_zero_speed` 里如实记数；上游未改，
    训练侧若直接用 `data/training/corner_dataset.jsonl` 需自行过滤。
-2. **样本数与 `n_laps`**：`n_laps` 是该弯有效样本数（车手×圈），不是整圈数；
-   同一弯不同车手的窗口点数不同，已按样本计。
+2. **G 值尖峰**：上游 `acc_x/y/z` 偶有尖峰（个别弯 `max_lateral_g` 可到数十 G），
+   聚合用中位数/分位数抗噪；逐圈汇总的 `max_*_g` 是原始峰值，建模时建议先截尾。
 3. **调教单位**：与项目 20 项参数完全一致（翼片为档位、胎压 bar、车高 mm 等），
    可直接喂 `CarSetup`。
 
