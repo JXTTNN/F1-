@@ -1,0 +1,25 @@
+round,track_id,race,status,raw_files,raw_bytes,tar_bytes,laps,corner_samples
+1,melbourne,Australian Grand Prix,held,204,26337960,11035014,200,2800
+2,shanghai,Chinese Grand Prix,held,184,26841952,10833015,179,2864
+3,suzuka,Japanese Grand Prix,held,224,31088851,12769872,220,3960
+4,sakhir,Bahrain Grand Prix,held,222,44089143,18011521,217,3255
+5,jeddah,Saudi Arabian Grand Prix,canceled,0,0,0,0,0
+6,miami,Miami Grand Prix,held,208,35600463,14695413,201,3819
+7,montreal,Canadian Grand Prix,held,214,25954477,10879701,210,2940
+8,monaco,Monaco Grand Prix,held,215,17390450,6603371,210,3900
+9,barcelona,Barcelona Grand Prix,held,219,28253239,12089389,215,3010
+10,spielberg,Austrian Grand Prix,held,210,23302448,9770889,206,2060
+11,silverstone,British Grand Prix,held,224,32322603,13511707,220,3960
+12,spa,Belgian Grand Prix,held,215,40963327,17128505,210,3990
+13,hungaroring,Hungarian Grand Prix,held,224,28598762,11750026,220,3080
+14,zandvoort,Dutch Grand Prix,held,207,32352275,12757252,136,1904
+15,monza,Italian Grand Prix,held,216,36978009,14536140,211,2321
+16,madrid,Spanish Grand Prix,held,220,33539485,13926536,216,4752
+17,baku,Azerbaijan Grand Prix,held,222,36550344,15136752,217,4340
+18,singapore,Singapore Grand Prix,held,222,34330021,14243724,217,4123
+19,austin,United States Grand Prix,held,224,34355260,14453355,220,4400
+20,mexico_city,Mexico City Grand Prix,held,215,31375868,12081284,210,3570
+21,sao_paulo,São Paulo Grand Prix,held,214,28628296,12041766,210,3150
+22,las_vegas,Las Vegas Grand Prix,held,215,31285645,12848685,189,3024
+23,lusail,Qatar Grand Prix,upcoming,0,0,0,0,0
+24,yas_marina,Abu Dhabi Grand Prix,upcoming,0,0,0,0,0
