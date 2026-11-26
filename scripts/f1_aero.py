@@ -227,6 +227,55 @@ def aero_drag_ms(track: dict[str, Any], n: dict[str, float]) -> float:
     return total * DRAG_MS_PER_CD * drag_scale
 
 
+#: 机械/可靠性代价开关：悬挂软硬、刹车压力、防倾杆、外倾这些参数在旧模型里
+#: 只有"好处"没有"代价"，优化器会把它们全部推到极限（实测 monza/monaco/spa
+#: 给出同一套模板改动）。这里补上真实世界的代价窗口。
+#: 默认关闭：开启会改变训练标签，必须重训并过门禁后才能与模型一起发布。
+MECH_V2 = False
+#: 平台失稳：软悬挂 + 低车高，高速弯最吃亏
+MECH_PLATFORM_K = 0.45
+#: 刹车压力过高 → 抱死/平斑（超过该归一化值开始罚）
+BRAKE_PRESSURE_SOFT_CAP = 0.45
+MECH_BRAKE_K = 0.35
+#: 防倾杆两端过软/过硬都会牺牲一致性
+ARB_WINDOW = 0.55
+MECH_ARB_K = 0.20
+#: 后轴外倾过负 → 胎温与磨损（高速弯）
+REAR_CAMBER_SOFT_CAP = -0.40
+MECH_CAMBER_K = 0.25
+
+
+def mech_penalty_s(track: dict[str, Any], n: dict[str, float]) -> float:
+    """机械/可靠性代价（秒，正 = 更慢；默认调教为 0）。
+
+    这是"大幅提升"能不能站得住的关键：没有它，优化器只会把所有无代价参数
+    推到极限，收益看着很大，但每站给的是同一套模板，真实赛车会因此丢胎、
+    抱死、失去气动平台。
+    """
+    lap = float(track.get("lap_time_s", 90.0) or 90.0) / 90.0
+    fast = float(track.get("fast_share", 0.3) or 0.3)
+    soft = max(0.0, -_avg(n, _SUSP_KEYS))
+    h = _avg(n, _RH_KEYS)
+    pen = MECH_PLATFORM_K * soft * max(0.0, 0.60 - h) * (0.4 + 0.6 * fast) * lap
+
+    bp = float(n.get("brake_pressure", 0.0))
+    if bp > BRAKE_PRESSURE_SOFT_CAP:
+        over = (bp - BRAKE_PRESSURE_SOFT_CAP) / max(1e-6, 1.0 - BRAKE_PRESSURE_SOFT_CAP)
+        pen += MECH_BRAKE_K * over * over * lap
+
+    for key in ("front_anti_roll_bar", "rear_anti_roll_bar"):
+        x = abs(float(n.get(key, 0.0)))
+        if x > ARB_WINDOW:
+            over = (x - ARB_WINDOW) / max(1e-6, 1.0 - ARB_WINDOW)
+            pen += MECH_ARB_K * over * over * lap
+
+    rc = float(n.get("rear_camber", 0.0))
+    if rc < REAR_CAMBER_SOFT_CAP:
+        over = (REAR_CAMBER_SOFT_CAP - rc) / max(1e-6, 1.0 + REAR_CAMBER_SOFT_CAP)
+        pen += MECH_CAMBER_K * over * over * lap
+    return pen
+
+
 def self_test() -> dict[str, Any]:
     """常数自检：返回关键敏感性，供回归对比。"""
     base = {k: 0.0 for k in (

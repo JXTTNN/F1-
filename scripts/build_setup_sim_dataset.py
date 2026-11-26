@@ -673,6 +673,9 @@ def simulate_lap_delta_ms(
     delta_s += _SPEED_HALF * d_d * float(track["straight_share"]) * _DRAG_K * t_lap
     # 刮底罚
     delta_s += bottoming_penalty(setup_norm)
+    if f1_aero.MECH_V2:
+        # 机械/可靠性代价（悬挂、刹车压力、防倾杆、外倾的极限）
+        delta_s += f1_aero.mech_penalty_s(track, setup_norm)
     if f1_aero.AERO_V2:
         # 气动平衡偏差 / 失速 / 平台失稳
         delta_s += f1_aero.aero_penalty_s(track, setup_norm)
