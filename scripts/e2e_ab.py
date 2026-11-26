@@ -26,6 +26,7 @@ sys.path.insert(0, str(REPO / "scripts"))
 from setup_tuner.domain.setup import ALL_SETUP_FIELDS  # noqa: E402
 from setup_tuner.domain.track import ALL_TRACKS, get_track_by_id  # noqa: E402
 from setup_tuner.engine import surrogate as surrogate_mod  # noqa: E402
+from setup_tuner.engine import setup_sim as sim_mod  # noqa: E402
 from setup_tuner.engine.engine import generate_suggestion  # noqa: E402
 from setup_tuner.engine.setup_sim import normalize_setup  # noqa: E402
 from build_setup_sim_dataset import load_corner_stats, simulate_lap_delta_ms  # noqa: E402
@@ -61,10 +62,14 @@ def fake_telemetry(track_id: str, wet: bool) -> dict:
     }
 
 
-def run(model_path: Path) -> dict:
+def run(model_path: Path, sim_path: str | None = None) -> dict:
     # 必须先 reset：逐弯评价按赛道缓存，热替换模型后不清缓存会读到上一版的重要度
     surrogate_mod.reset_surrogate()
     surrogate_mod._SURROGATE = surrogate_mod.SurrogateModel(model_path)
+    if sim_path:
+        # 调教性能模型同样是单例：换模型必须重建，否则仍用上一版权重
+        sim_mod.reset_setup_sim()
+        sim_mod._SIM = sim_mod.SetupSimModel(sim_path)
     sur = surrogate_mod._SURROGATE
     out = {"model": str(model_path), "available": sur.available,
            "tracks_with_importance": len(sur.importance),
@@ -111,9 +116,11 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--old", default=str(ROOT / "work" / "telemetry_surrogate.old.json"))
     ap.add_argument("--new", default=str(REPO / "setup_tuner" / "resources" / "models" / "telemetry_surrogate.json"))
+    ap.add_argument("--old-sim", default=None, help="旧调教性能模型（setup_sim_nn.json）")
+    ap.add_argument("--new-sim", default=None, help="新调教性能模型（setup_sim_nn.json）")
     args = ap.parse_args()
-    old = run(Path(args.old))
-    new = run(Path(args.new))
+    old = run(Path(args.old), args.old_sim)
+    new = run(Path(args.new), args.new_sim)
     result = {"old": old, "new": new}
 
     paired = {}

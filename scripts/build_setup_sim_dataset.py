@@ -89,6 +89,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+import f1_aero  # 同目录：2026 气动模型（地效曲线 / 气动平衡 / 诱导阻力）
+
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
@@ -202,8 +204,15 @@ def capability_deltas(setup_norm: dict[str, float]) -> dict[str, float]:
     """归一化调教 → 五项能力增量 {A, M, T, B, D}。"""
     caps = {"A": 0.0, "M": 0.0, "T": 0.0, "B": 0.0, "D": 0.0}
     for name, row in EFFECTS.items():
+        if f1_aero.AERO_V2 and name in ("front_ride_height", "rear_ride_height"):
+            # 离地间隙交给 f1_aero 的地效曲线（峰值 + 失速），不再线性叠加
+            continue
         n = setup_norm.get(name, 0.0)
         for cap, coef in row.items():
+            if f1_aero.AERO_V2 and name in ("front_wing", "rear_wing"):
+                # 翼角的下压力与后轴稳定性都由 f1_aero 统一计算（含气动平衡），
+                # 这里不再线性叠加 A/M，否则"加尾翼永远更快"会变成一个假内点。
+                continue
             caps[cap] += coef * n
     # 胎压工作窗口（双侧罚，非线性的来源之一）
     for name in (
@@ -625,6 +634,9 @@ def simulate_lap_delta_ms(
         刮底：+ bottoming_penalty（离地间隙过低罚）
     """
     caps = capability_deltas(setup_norm)
+    if f1_aero.AERO_V2:
+        # 地效/翼角/车高的非线性下压力，统一由气动模型给出
+        caps["A"] += f1_aero.aero_capability(setup_norm)
     d_m, d_a, d_t, d_b, d_d = (
         caps["M"], caps["A"], caps["T"], caps["B"], caps["D"],
     )
@@ -650,7 +662,10 @@ def simulate_lap_delta_ms(
         setup_norm.get("front_ride_height", 0.0) + setup_norm.get("rear_ride_height", 0.0)
     )
     drag_scale = float(track.get("drag_scale", 0.0))
-    if drag_scale > 0.0:
+    if f1_aero.AERO_V2:
+        # 诱导阻力 CD = CD0 + k·CL²（含底板份额），并按 2026 主动气动折减翼角部分
+        delta_s += f1_aero.aero_drag_ms(track, setup_norm) / 1000.0
+    elif drag_scale > 0.0:
         delta_s += (_C_LIN * wings_df + _C_IND * wings_df * wings_df) * drag_scale / 1000.0
         delta_s += _RIDE_DRAG_LIN * ride_df * drag_scale / 1000.0
     # 其余线性阻力（前束等）
@@ -658,6 +673,9 @@ def simulate_lap_delta_ms(
     delta_s += _SPEED_HALF * d_d * float(track["straight_share"]) * _DRAG_K * t_lap
     # 刮底罚
     delta_s += bottoming_penalty(setup_norm)
+    if f1_aero.AERO_V2:
+        # 气动平衡偏差 / 失速 / 平台失稳
+        delta_s += f1_aero.aero_penalty_s(track, setup_norm)
     return round(delta_s * 1000.0, 3)
 
 

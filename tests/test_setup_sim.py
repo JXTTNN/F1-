@@ -430,6 +430,10 @@ class TestSimRefineEndToEnd:
 
         setup = CarSetup.default().to_dict()
         delta0 = {f.name: 0.0 for f in ALL_SETUP_FIELDS}
+        # 只留一步的预算：本用例考的是"单步记账封顶"，不是预算总额，
+        # 所以把总预算压到刚好一步，避免以后调参把这个断言带崩。
+        monkeypatch.setattr(opt_mod, "_MAX_TOTAL_GAIN_S",
+                            opt_mod._MAX_STEP_GAIN_S + 1e-6)
         r = opt_mod.sim_refine(delta0, setup, "alpha", dx=None, max_passes=6)
 
         assert r.accepted == 1

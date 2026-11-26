@@ -1,0 +1,152 @@
+{
+  "aero_v2": true,
+  "constants": {
+    "FLOOR_PEAK_H": -0.3,
+    "FLOOR_STALL_H": -0.78,
+    "FLOOR_CL_SHARE": 0.5,
+    "INDUCED_DRAG_K": 0.13,
+    "FLOOR_DRAG_K": 0.06,
+    "DRAG_MS_PER_CD": 90000.0,
+    "ACTIVE_AERO_DRAG": 0.65,
+    "AERO_GAIN_SCALE": 0.35
+  },
+  "floor_curve": [
+    {
+      "h": -1.0,
+      "floor": 0.469,
+      "stall": 1.0
+    },
+    {
+      "h": -0.9,
+      "floor": 0.643,
+      "stall": 0.55
+    },
+    {
+      "h": -0.8,
+      "floor": 0.818,
+      "stall": 0.09
+    },
+    {
+      "h": -0.7,
+      "floor": 0.898,
+      "stall": 0.0
+    },
+    {
+      "h": -0.6,
+      "floor": 0.942,
+      "stall": 0.0
+    },
+    {
+      "h": -0.5,
+      "floor": 0.974,
+      "stall": 0.0
+    },
+    {
+      "h": -0.4,
+      "floor": 0.994,
+      "stall": 0.0
+    },
+    {
+      "h": -0.3,
+      "floor": 1.0,
+      "stall": 0.0
+    },
+    {
+      "h": -0.2,
+      "floor": 0.994,
+      "stall": 0.0
+    },
+    {
+      "h": -0.1,
+      "floor": 0.974,
+      "stall": 0.0
+    },
+    {
+      "h": 0.0,
+      "floor": 0.942,
+      "stall": 0.0
+    },
+    {
+      "h": 0.1,
+      "floor": 0.898,
+      "stall": 0.0
+    },
+    {
+      "h": 0.2,
+      "floor": 0.84,
+      "stall": 0.0
+    },
+    {
+      "h": 0.3,
+      "floor": 0.77,
+      "stall": 0.0
+    },
+    {
+      "h": 0.4,
+      "floor": 0.686,
+      "stall": 0.0
+    },
+    {
+      "h": 0.5,
+      "floor": 0.59,
+      "stall": 0.0
+    },
+    {
+      "h": 0.6,
+      "floor": 0.482,
+      "stall": 0.0
+    },
+    {
+      "h": 0.7,
+      "floor": 0.36,
+      "stall": 0.0
+    },
+    {
+      "h": 0.8,
+      "floor": 0.226,
+      "stall": 0.0
+    },
+    {
+      "h": 0.9,
+      "floor": 0.078,
+      "stall": 0.0
+    },
+    {
+      "h": 1.0,
+      "floor": 0.0,
+      "stall": 0.0
+    }
+  ],
+  "wings_full_range_ms": {
+    "monza": 1.5,
+    "spa": 16.6,
+    "monaco": -52.2,
+    "silverstone": -35.7
+  },
+  "ride_height_minus_0_4_ms": {
+    "monza": -80.1,
+    "spa": -43.0,
+    "monaco": -119.3,
+    "silverstone": -105.9
+  },
+  "ride_height_minus_1_0_ms": {
+    "monza": 841.5,
+    "spa": 1060.9,
+    "monaco": 736.2,
+    "silverstone": 1020.3
+  },
+  "default_zero_ms": {
+    "monza": 0.0,
+    "spa": 0.0,
+    "monaco": 0.0,
+    "silverstone": 0.0
+  },
+  "checks": {
+    "default_is_zero": true,
+    "wings_full_range_in_band": true,
+    "ride_height_peak_gain": true,
+    "stall_must_be_slower": true,
+    "stall_worse_than_peak": true
+  },
+  "passed": true
+}
