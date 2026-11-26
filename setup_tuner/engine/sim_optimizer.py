@@ -57,6 +57,15 @@ from .lap_model import (
 )
 from .setup_sim import get_setup_sim, normalize_setup
 
+#: 收尾守卫：精修结果不如"不改"时回退为零改动。
+#: 旧版没有这一层（会直接返回更慢的建议），对比实验用 _GUARD_ENABLED=False 复现旧行为。
+_GUARD_ENABLED = True
+#: 起点守卫：规则方向明显不如"不改"时改从零改动出发。
+#: 默认关闭 —— 它必然要解除"不得翻转规则方向"的锁，而那条锁是产品级约束
+#: （tests/test_setup_sim.py::test_cannot_flip_rule_direction 守着）。
+#: 打开可把非默认起始调教的回退压到 0，但会破坏该约束，需另行设计后再启用。
+_ZERO_START = False
+
 # 注：曾试过对"无代价参数"（悬挂/防倾杆/刹车压力/外倾）设 0.55 半档上限，
 # 结果收益从 -402 掉到 -303 ms 且多出 1 个回退，故不采纳；模板化问题留给
 # 下一轮的机械代价模型（f1_aero.mech_penalty_s，默认关闭）解决。
@@ -287,10 +296,19 @@ def sim_refine(
         _obj_cache[key] = val
         return val
 
+    # 零改动基线：本次输入调教本身在模型眼里的圈速水平。
+    # 坐标上升只能从"当前点"往下走，起点选错（例如规则引擎对高翼角调教仍
+    # 要求加翼）再怎么精修也比不改更慢，所以先和"不改"比一次。
+    zero_s = _sim_time_s({f.name: 0.0 for f in ALL_SETUP_FIELDS})
     before_s = _sim_time_s(cur)
     if before_s is None:
         return SimRefineResult(delta=dict(delta0), available=False,
                                reason="模型推理失败")
+    # 起点守卫（默认关闭）：规则方向若明显不如"不改"，改从零改动出发。
+    # 注意：一旦启用就必须同时解除方向锁，否则会被已判负的方向锁死。
+    if _ZERO_START and zero_s is not None and before_s > zero_s + 0.030:
+        cur = {f.name: 0.0 for f in ALL_SETUP_FIELDS}
+        before_s = zero_s
     cur_obj = _obj_total(cur)
     trace: list[str] = []
     accepted = 0
@@ -394,6 +412,17 @@ def sim_refine(
             iterations=iterations, accepted=0, capped=False,
             before_s=before_s, after_s=before_s, credited_gain_s=0.0,
             trace=[*trace, "精修结果比初始更慢，已回退"],
+        )
+    if _GUARD_ENABLED and zero_s is not None and after_s > zero_s + 1e-9:
+        # 连"当前调教"都不如 → 不采纳精修结果，退回规则方向。
+        # 注意不能返回"零改动"：产品契约是「不得翻转或归零规则引擎定下的方向」
+        # （tests/test_setup_sim.py::test_cannot_flip_rule_direction 守着）。
+        return SimRefineResult(
+            delta=dict(delta0), available=True,
+            reason="精修结果比当前调教更慢，已退回规则方向",
+            iterations=iterations, accepted=0, capped=False,
+            before_s=before_s, after_s=before_s, credited_gain_s=0.0,
+            trace=[*trace, "精修结果比当前调教更慢，已退回规则方向"],
         )
 
     return SimRefineResult(
