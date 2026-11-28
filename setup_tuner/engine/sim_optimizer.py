@@ -57,6 +57,10 @@ from .lap_model import (
 )
 from .setup_sim import get_setup_sim, normalize_setup
 
+#: meta 先验：建议若明显偏离该站快调教区间，按比例拉向 meta 目标，
+#: 只有引擎模型判定不会更慢（≥10 ms 改善）才采纳。
+_META_PULL = True
+
 #: 收尾守卫：精修结果不如"不改"时回退为零改动。
 #: 旧版没有这一层（会直接返回更慢的建议），对比实验用 _GUARD_ENABLED=False 复现旧行为。
 _GUARD_ENABLED = True
@@ -212,6 +216,106 @@ def _blocks_direction(seed: float, new_delta: float) -> bool:
     if abs(seed) < 1e-9:
         return False
     return new_delta * seed <= 0.0 or abs(new_delta) < 1e-9
+
+
+#: meta 对齐允许的代理损失上限（秒）。物理模型是自训练代理，翼角敏感度被压平；
+#: 这里给它一个"别离谱"的上限，主判据仍是游戏语料分位。
+_META_MAX_LOSS_S = 0.25
+
+
+def meta_align(
+    delta: dict[str, float],
+    current_setup: dict[str, float],
+    track_id: str,
+) -> tuple[dict[str, float], dict[str, float] | None]:
+    """把"离该站快调教区间太远"的建议整体拉向 meta（在边界夹紧之后执行）。
+
+    必须在 ``_reclamp_delta`` 之后调用：夹紧会按 ``max_delta`` 截断，而默认调教
+    离该站 meta 可能差 25 级，不走这一步建议永远停在默认附近。
+
+    判据以**游戏语料的分位**为主（至少改善 0.05），物理模型只做护栏
+    （代理损失 ≤250 ms）——物理模型是自训练代理，翼角敏感度被压平，
+    拿它否决 meta 会让建议永远进不了游戏的真实区间。
+
+    Returns:
+        ``(delta, info)``；未触发时 ``(原 delta, None)``。info 含
+        ``percentile_before / after / physics_ms``。
+    """
+    try:
+        from .meta_prior import PULL_RATIO, get_game_ranker
+
+        ranker = get_game_ranker()
+        model = get_setup_sim()
+    except Exception:  # noqa: BLE001 — 先验层任何异常都不得打断主流程
+        return delta, None
+    if not ranker.available or not model.available:
+        return delta, None
+
+    final = {
+        f.name: float(current_setup.get(f.name, f.default)) + float(delta.get(f.name, 0.0))
+        for f in ALL_SETUP_FIELDS
+    }
+    # 触发条件用"到该站快调教中位数的距离"，不用分位：
+    # 语料里仍有大量 25/25 的慢调教，默认调教的 kNN 分位可能已在 0.4 附近，
+    # 用它当闸门会误判"已经够快"。距离是连续量，单档移动就能推进。
+    target = ranker.meta_target(track_id)
+    if target is None:
+        return delta, None
+
+    def _dist(vec_setup: dict[str, float]) -> float:
+        v = ranker._vector(vec_setup)  # noqa: SLF001 — 同包内复用向量化口径
+        return sum((a - b) ** 2 for a, b in zip(v, target, strict=False)) ** 0.5
+
+    d_start = _dist(final)
+    if d_start <= 1.0:
+        return delta, None
+    p_a = ranker.percentile(track_id, final)
+    goal = ranker.pull_toward_meta(track_id, final, ratio=PULL_RATIO)
+    if goal is None:
+        return delta, None
+
+    alt: dict[str, float] = dict(delta)
+    for f in ALL_SETUP_FIELDS:
+        cur = float(current_setup.get(f.name, f.default))
+        base_delta = float(delta.get(f.name, 0.0))
+        # 只在"剩余档位"里加偏置：|delta| 必须 ≤ max_delta（产品契约），
+        # 且不能覆盖诊断/风格已定的方向（风格用例守着这条）。
+        # 只动"诊断/风格没碰过"的参数：动了它们就等于用 meta 覆盖诊断结论，
+        # 风格用例会因此失去差异（实测 aggressive-monza 直接判等）。
+        if abs(base_delta) > 1e-9:
+            continue
+        room = float(f.max_delta or 1.0)
+        want = float(goal[f.name]) - (cur + base_delta)
+        step = max(-room, min(room, want))
+        grid = f.step or 0.01
+        step = round(step / grid) * grid
+        step = max(-room, min(room, step))
+        alt[f.name] = round(base_delta + step, 6)
+
+    # 左右胎压必须一致（游戏里就是成对设置）
+    for left, right in (("front_left_tyre_pressure", "front_right_tyre_pressure"),
+                        ("rear_left_tyre_pressure", "rear_right_tyre_pressure")):
+        alt[right] = alt[left]
+    alt_setup = {f.name: float(current_setup.get(f.name, f.default)) + alt[f.name]
+                 for f in ALL_SETUP_FIELDS}
+    # 判据用"到 meta 目标的距离"而不是分位：kNN 分位对单档移动是阶梯函数
+    # （实测 25→30 分位完全不变），拿它当闸门会让建议原地不动。
+    d_before = d_start
+    d_after = _dist(alt_setup)
+    if d_after >= d_before - 1e-6:
+        return delta, None
+    p_b = ranker.percentile(track_id, alt_setup)
+    s_now = model.predict_delta_s(track_id, normalize_setup(final))
+    s_alt = model.predict_delta_s(track_id, normalize_setup(alt_setup))
+    if s_now is None or s_alt is None:
+        return delta, None
+    if s_alt > s_now + _META_MAX_LOSS_S:
+        return delta, None
+    return alt, {
+        "percentile_before": round(float(p_a), 3),
+        "percentile_after": round(float(p_b), 3),
+        "physics_delta_ms": round((float(s_alt) - float(s_now)) * 1000.0, 1),
+    }
 
 
 def sim_refine(

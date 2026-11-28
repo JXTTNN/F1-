@@ -57,7 +57,7 @@ from .diagnostic import (
 from .holistic import class_weighted_dx, holistic_coherence, track_demand
 from .optimizer import describe_tradeoff, optimize_setup
 from .setup_sim import get_setup_sim, normalize_setup
-from .sim_optimizer import SimRefineResult, sim_refine
+from .sim_optimizer import SimRefineResult, meta_align, sim_refine
 from .sim_optimizer import limits as sim_limits
 from .surrogate import get_surrogate
 from .telemetry_diagnosis import (
@@ -1304,6 +1304,7 @@ def generate_suggestion(
     #   model_type="rule" 时不跑（纯规则路径）；模型不可用/赛道未覆盖时
     #   自动跳过（available=False），行为与纯规则路径逐位一致。
     # ------------------------------------------------------------------ #
+    meta_applied: dict[str, float] | None = None
     sim_result = SimRefineResult(
         delta=dict(final_delta), available=False,
         reason="model_type=rule（未启用模拟优化）",
@@ -1323,9 +1324,20 @@ def generate_suggestion(
             )
             if sim_result.available:
                 final_delta = _reclamp_delta(sim_result.delta, current_setup)
+                # meta 对齐必须在夹紧之后：夹紧按 max_delta 截断，会把"拉向该站
+                # 快调教区间"的大幅调整全部削掉（默认调教离 meta 可能差 25 级）。
+                # 湿地把方向交给遥测诊断：干地 meta 不能拿来评湿地建议
+                # （产品契约：雨天总调整幅度不得大于干地）。
+                pulled, meta_info = (final_delta, None)
+                if not _is_wet_weather(telemetry):
+                    pulled, meta_info = meta_align(final_delta, current_setup, track_id)
+                if meta_info is not None:
+                    final_delta = pulled
+                    meta_applied = meta_info
     sim_model = get_setup_sim()
     holistic_block["simulation"] = {
         "available": sim_result.available,
+        "meta_align": meta_applied,
         "reason": sim_result.reason,
         "model": sim_model.describe(),
         # 该站锚点来源：telemetry=真实遥测；authored=赛道几何+全局常数推定。
